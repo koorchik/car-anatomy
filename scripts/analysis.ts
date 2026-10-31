@@ -1,4 +1,4 @@
-import { ENGINES } from '../src/data/engines.ts';
+import { engineById } from '../src/data/engines.ts';
 import { render } from './render-audio.ts';
 
 const FS = 48000;
@@ -28,7 +28,7 @@ export interface OrderRow {
 
 /** Level of each half engine order at a fixed crank speed, in dB relative to the strongest. */
 export function engineOrders(id: string, rpmArg?: number, pedal = 0.8, channel: 'l' | 'r' = 'l', maxOrder = 16): OrderRow[] {
-  const spec = ENGINES.find((e) => e.id === id)!;
+  const spec = engineById(id)!;
   const rpm = rpmArg ?? spec.redlineRpm * 0.5;
   const settle = 0.8;
   const out = render(id, [

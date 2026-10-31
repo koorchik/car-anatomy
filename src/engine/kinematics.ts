@@ -6,7 +6,7 @@
 //   Crank pin of cylinder i sits at theta + pin_i. Piston i is at TDC when theta + pin_i = alpha_i.
 //   phi_i = theta - fire_i is the cylinder's own cycle position: phi = 0 is TDC at ignition.
 
-import type { EngineSpec, LayoutDef } from './spec.ts';
+import type { EngineSpec, LayoutDef, ValveTiming } from './spec.ts';
 
 export const DEG = Math.PI / 180;
 
@@ -66,6 +66,7 @@ export interface Engine {
   /** Smallest and largest gap between successive firings. */
   intervals: number[];
   isRotary: boolean;
+  timing: ValveTiming;
 }
 
 interface Slot {
@@ -241,9 +242,11 @@ function buildRotary(spec: EngineSpec, layout: Extract<LayoutDef, { kind: 'wanke
     rodWidth: layout.width,
     zMin: -halfLen,
     zMax: halfLen,
-    displacementCc: spec.cylinders * 654,
+    // Swept volume of one chamber of a Wankel: 3 sqrt(3) R e b.
+    displacementCc: (spec.cylinders * 3 * Math.sqrt(3) * layout.R * layout.e * layout.width) / 1000,
     intervals,
     isRotary: true,
+    timing: DEFAULT_TIMING,
   };
 }
 
@@ -277,13 +280,15 @@ export function buildEngine(spec: EngineSpec): Engine {
     throws: buildThrows(cylinders, rodWidth),
     r,
     l,
-    deck: l + r + spec.stroke * 0.42 + 2,
+    // Crown height plus the room the compression ratio leaves above the piston.
+    deck: l + r + spec.stroke * 0.42 + Math.max(2, (spec.stroke / Math.max(spec.compression - 1, 1)) * 0.55),
     rodWidth,
     zMin: Math.min(...zs) - zMargin,
     zMax: Math.max(...zs) + zMargin,
     displacementCc: (((Math.PI / 4) * spec.bore * spec.bore * spec.stroke) / 1000) * count,
     intervals,
     isRotary: false,
+    timing: spec.timing ?? DEFAULT_TIMING,
   };
 }
 
@@ -328,7 +333,7 @@ export function strokeAt(phase: number): Stroke {
   return 'compression';
 }
 
-const liftWindow = (phi: number, open: number, close: number): number => {
+export const liftWindow = (phi: number, open: number, close: number): number => {
   const span = close - open;
   const x = mod(phi - open, 720) / span;
   if (x <= 0 || x >= 1) return 0;
@@ -344,8 +349,15 @@ export const INTAKE_CLOSE = 590;
 export const EXHAUST_PEAK = (EXHAUST_OPEN + EXHAUST_CLOSE) / 2;
 export const INTAKE_PEAK = (INTAKE_OPEN + INTAKE_CLOSE) / 2;
 
-export const exhaustLift = (phi: number): number => liftWindow(phi, EXHAUST_OPEN, EXHAUST_CLOSE);
-export const intakeLift = (phi: number): number => liftWindow(phi, INTAKE_OPEN, INTAKE_CLOSE);
+export const DEFAULT_TIMING: ValveTiming = {
+  exhaustOpen: EXHAUST_OPEN,
+  exhaustClose: EXHAUST_CLOSE,
+  intakeOpen: INTAKE_OPEN,
+  intakeClose: INTAKE_CLOSE,
+};
+
+export const exhaustLift = (phi: number, t: ValveTiming = DEFAULT_TIMING): number => liftWindow(phi, t.exhaustOpen, t.exhaustClose);
+export const intakeLift = (phi: number, t: ValveTiming = DEFAULT_TIMING): number => liftWindow(phi, t.intakeOpen, t.intakeClose);
 
 /** Gaps between firings seen by one collector group, crank degrees. */
 export function groupIntervals(engine: Engine, group: number[]): number[] {

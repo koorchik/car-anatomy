@@ -50,6 +50,9 @@ export class Stage {
   private slowFrames = 0;
   private idleSince = 0;
   private orbitAllowed = true;
+  /** How tightly the model fills the free area. Below 1 it may reach under the panels when turned. */
+  fitScale = 0.68;
+  private frameScale = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -122,7 +125,19 @@ export class Stage {
   /** Direction the camera looks from when a new engine appears. */
   private homeDirection = new THREE.Vector3(0.82, 0.42, 0.92).normalize();
 
-  setModel(model: EngineModel, home?: [number, number, number]): void {
+  /** Pixels on screen for one world unit (100 mm) at the depth of the engine. */
+  get pixelsPerUnit(): number {
+    const distance = this.camera.position.distanceTo(this.controls.target);
+    return this.height / (2 * distance * Math.tan((this.camera.fov * Math.PI) / 360));
+  }
+
+  /**
+   * @param keepScale Stay at the same distance, so that a smaller engine looks smaller. It only refits if the new
+   *   model stops fitting or would be lost in the frame.
+   * @param frameScale How much larger than this model to frame for: the biggest engine this one is compared with.
+   */
+  setModel(model: EngineModel, home?: [number, number, number], keepCamera = false, keepScale = false, frameScale = 1): void {
+    this.frameScale = frameScale;
     this.homeDirection.set(...(home ?? [0.82, 0.42, 0.92])).normalize();
     if (this.model) {
       this.scene.remove(this.model.group);
@@ -130,12 +145,12 @@ export class Stage {
     }
     this.model = model;
     this.scene.add(model.group);
-    this.fit(true);
+    this.fit(!keepCamera, keepCamera && keepScale);
     model.group.updateMatrixWorld(true);
   }
 
   /** Frames the current model in the free part of the window. */
-  fit(resetAngle: boolean): void {
+  fit(resetAngle: boolean, keepScale = false): void {
     if (!this.model) return;
     this.model.group.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(this.model.group);
@@ -144,10 +159,13 @@ export class Stage {
     const freeH = Math.max(120, this.height - this.insets.top - this.insets.bottom);
     const vFov = (this.camera.fov * Math.PI) / 180;
     // Fit using the smaller free side, scaled to the full frustum.
-    const heightLimit = sphere.radius / Math.sin((vFov * (freeH / this.height)) / 2);
+    const framed = sphere.radius * this.frameScale;
+    const heightLimit = framed / Math.sin((vFov * (freeH / this.height)) / 2);
     const hFovFree = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect * (freeW / this.width));
-    const widthLimit = sphere.radius / Math.sin(hFovFree / 2);
-    const distance = Math.max(heightLimit, widthLimit) * 0.68;
+    const widthLimit = framed / Math.sin(hFovFree / 2);
+    const fitted = Math.max(heightLimit, widthLimit) * this.fitScale;
+    const current = this.camera.position.distanceTo(this.controls.target);
+    const distance = keepScale && current > fitted * 0.8 && current < fitted * 1.8 ? current : fitted;
     const target = sphere.center.clone();
     const direction = resetAngle
       ? this.homeDirection.clone()
@@ -155,7 +173,7 @@ export class Stage {
     this.controls.target.copy(target);
     this.camera.position.copy(target).addScaledVector(direction, distance);
     this.controls.minDistance = sphere.radius * 0.6;
-    this.controls.maxDistance = distance * 2.2;
+    this.controls.maxDistance = Math.max(fitted * 2.2, distance);
 
     const s = sphere.radius * 1.7;
     const cam = this.key.shadow.camera;

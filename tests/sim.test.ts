@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { ENGINES } from '../src/data/engines.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import { EngineSim } from '../src/engine/sim.ts';
+import { resolveDesign } from '../src/designer/constraints.ts';
+import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
+import { evaluate } from '../src/designer/physics.ts';
+import { designToSpec } from '../src/designer/to-spec.ts';
 import { synthConfig } from '../src/audio/synth.ts';
 
 const DT = 1 / 3000;
@@ -79,6 +83,65 @@ describe.each(ENGINES.map((e) => [e.id, e] as const))('%s', (id, spec) => {
   });
 });
 
+describe('with a torque table from the designer', () => {
+  const designed = (over: Partial<Design>): EngineSim => {
+    const d = resolveDesign({ ...DEFAULT_DESIGN, throws: [], ...over });
+    return new EngineSim(synthConfig(buildEngine(designToSpec(d, evaluate(d)))).sim);
+  };
+
+  it('pulls all the way to the rev limit at full throttle', () => {
+    const sim = designed({ rpmLimit: 7000 });
+    sim.start();
+    run(sim, 3);
+    sim.pedal = 1;
+    let peak = 0;
+    run(sim, 8, () => {
+      peak = Math.max(peak, sim.rpm);
+    });
+    expect(peak).toBeGreaterThan(sim.params.redlineRpm * 0.98);
+  });
+
+  it('settles at idle, holds part throttle, and falls back', () => {
+    const sim = designed({});
+    sim.start();
+    run(sim, 4);
+    expect(Math.abs(sim.rpm - sim.params.idleRpm)).toBeLessThan(sim.params.idleRpm * 0.15);
+    sim.pedal = 0.35;
+    run(sim, 6);
+    const held = sim.rpm;
+    expect(held).toBeGreaterThan(sim.params.idleRpm * 1.3);
+    expect(held).toBeLessThan(sim.params.redlineRpm * 0.98);
+    sim.pedal = 0;
+    run(sim, 8);
+    expect(Math.abs(sim.rpm - sim.params.idleRpm)).toBeLessThan(sim.params.idleRpm * 0.25);
+  });
+
+  it('an over-revving design can really reach its failure speed', () => {
+    const d = resolveDesign({ ...DEFAULT_DESIGN, throws: [], rpmLimit: 21000, springForce: 2200, intakeValve: 36, lift: 11 });
+    const perf = evaluate(d);
+    expect(perf.topRpm).toBeGreaterThan(perf.failureRpm);
+    const sim = new EngineSim(synthConfig(buildEngine(designToSpec(d, perf))).sim);
+    sim.start();
+    run(sim, 3);
+    sim.pedal = 1;
+    let peak = 0;
+    run(sim, 10, () => {
+      peak = Math.max(peak, sim.rpm);
+    });
+    expect(peak).toBeGreaterThan(perf.failureRpm);
+  });
+
+  it('a design that cannot run cranks and then gives up', () => {
+    const sim = designed({ fuel: 'diesel', lambda: 1.5, compression: 9 });
+    expect(sim.params.catches).toBe(false);
+    sim.start();
+    run(sim, 1.5);
+    expect(sim.state).toBe('cranking');
+    run(sim, 5);
+    expect(sim.state).not.toBe('running');
+  });
+});
+
 it('pedal position maps to a usable range of steady speeds', () => {
   const sim = simFor('v8-cross');
   sim.start();
@@ -113,4 +176,11 @@ it('a turbo spools up under load and back down', () => {
   sim.pedal = 0;
   run(sim, 5);
   expect(sim.boost).toBeLessThan(spooled * 0.3);
+});
+
+it('the start is short: the engine catches within half a second', () => {
+  const sim = simFor('i4');
+  sim.start();
+  run(sim, 0.5);
+  expect(sim.state).toBe('running');
 });

@@ -21,6 +21,8 @@ export class Tacho {
   private readout!: SVGTextElement;
   private lamp!: SVGCircleElement;
   private maxRpm = 8000;
+  private wearArc: SVGPathElement | null = null;
+  private breakArc: SVGPathElement | null = null;
   private shown = -100;
   private shownText = '';
 
@@ -51,9 +53,13 @@ export class Tacho {
     const angleOf = (rpm: number): number => SWEEP_START + (rpm / this.maxRpm) * SWEEP;
 
     this.add(svg, 'path', { d: arc(cx, cy, 80, angleOf(redline), SWEEP_START + SWEEP), class: 'tacho-red' });
-    const k = this.maxRpm / 1000;
-    for (let i = 0; i <= k * 2; i++) {
-      const rpm = i * 500;
+    this.wearArc = this.add(svg, 'path', { d: '', class: 'tacho-wear' });
+    this.breakArc = this.add(svg, 'path', { d: '', class: 'tacho-break' });
+    // Numbered marks stay readable however high the scale goes: every 1000, 2000 or 5000 rpm.
+    const majorStep = this.maxRpm > 22000 ? 5000 : this.maxRpm > 11000 ? 2000 : 1000;
+    const minorStep = majorStep / 2;
+    for (let i = 0; i <= this.maxRpm / minorStep; i++) {
+      const rpm = i * minorStep;
       const major = i % 2 === 0;
       const deg = angleOf(rpm);
       const [x0, y0] = polar(cx, cy, 87, deg);
@@ -83,6 +89,18 @@ export class Tacho {
     this.add(svg, 'circle', { cx, cy, r: 8.5, class: 'needle-hub' });
     this.shown = -100;
     this.update(0, false);
+  }
+
+  /**
+   * Adds what the parts can take to the usual dial, whose red zone starts at the rev limit.
+   * Wear shows only below that limit, and breakage only where it fits on the scale.
+   */
+  setZones(safe: number, failure: number, cut: number): void {
+    if (!this.wearArc || !this.breakArc) return;
+    const angle = (rpm: number): number => SWEEP_START + (Math.min(rpm, this.maxRpm) / this.maxRpm) * SWEEP;
+    const wearTo = Math.min(cut, failure);
+    this.wearArc.setAttribute('d', safe < wearTo ? arc(100, 100, 80, angle(safe), angle(wearTo)) : '');
+    this.breakArc.setAttribute('d', failure < this.maxRpm ? arc(100, 100, 80, angle(failure), angle(this.maxRpm)) : '');
   }
 
   update(rpm: number, limiter: boolean): void {

@@ -5,7 +5,7 @@ import '@fontsource/fira-sans-extra-condensed/600.css';
 import '@fontsource/fira-sans-extra-condensed/700.css';
 import '@fontsource/fira-sans-extra-condensed/800.css';
 import './style.css';
-import { ENGINES, engineById } from './data/engines.ts';
+import { ENGINES, engineById, pageChoices } from './data/engines.ts';
 import { Drive } from './audio/drive.ts';
 import type { ListenPosition } from './audio/synth.ts';
 import { buildEngine, type Engine } from './engine/kinematics.ts';
@@ -15,6 +15,7 @@ import { PistonEngineModel } from './scene/piston-engine.ts';
 import { RotaryEngineModel } from './scene/rotary-engine.ts';
 import { Stage } from './scene/stage.ts';
 import { articleHtml } from './ui/article.ts';
+import { DesignerPage } from './ui/designer/designer-page.ts';
 import { FiringDiagram, legendHtml } from './ui/firing-diagram.ts';
 import { Spectrum } from './ui/spectrum.ts';
 import { tableHtml } from './ui/table.ts';
@@ -23,6 +24,7 @@ import { Tacho } from './ui/tacho.ts';
 type SpeedMode = 'slow' | 'readable' | 'real';
 
 const DEFAULT_ENGINE = 'v8-cross';
+const ENGINE_COUNT = ENGINES.reduce((count, page) => count + pageChoices(page.id).length, 0);
 const SLOW_RPM_DEFAULT = 40;
 
 const app = document.getElementById('app')!;
@@ -37,12 +39,14 @@ app.innerHTML = `
   <header class="topbar">
     <div class="brand">Анатомія авто</div>
     <nav class="sections" aria-label="Розділи">
-      <a class="current" href="#/engines/${DEFAULT_ENGINE}">Двигуни</a>
+      <a class="current" id="nav-engines" href="#/engines/${DEFAULT_ENGINE}">Двигуни</a>
+      <a id="nav-designer" href="#/designer">Свій двигун</a>
       <span>Коробки передач <small>готуємо</small></span>
       <span>Підвіски <small>готуємо</small></span>
     </nav>
     <div class="grow"></div>
-    <button class="btn" id="open-table" type="button">Усі двигуни</button>
+    <button class="btn btn-catalogue" id="open-table" type="button">Усі двигуни: ${ENGINE_COUNT}</button>
+    <button class="btn" id="results-open" type="button" hidden>Показники</button>
     <button class="btn" id="panel-open" type="button" hidden>Про двигун</button>
   </header>
 
@@ -52,7 +56,10 @@ app.innerHTML = `
     <div class="engine-nav">
       <button class="btn" id="prev" type="button" aria-label="Попередній двигун">Попередній</button>
       <button class="btn" id="next" type="button" aria-label="Наступний двигун">Наступний</button>
+      <a class="btn" id="to-designer" href="#/designer">Змінити в конструкторі</a>
+      <a class="btn" id="to-catalog" href="#/engines/${DEFAULT_ENGINE}" hidden>До каталогу</a>
     </div>
+    <nav class="variant-list" id="variants" aria-label="Двигуни цієї компоновки" hidden></nav>
   </div>
 
   <div class="view-tools">
@@ -88,10 +95,18 @@ app.innerHTML = `
 
   <div class="hint" id="hint">
     Перетягни модель, щоб покрутити<br />
-    Клацни деталь, щоб дізнатись, що це<br />
+    Наведи на деталь, щоб побачити назву, клацни, щоб дізнатись більше<br />
     <kbd>Пробіл</kbd> газ, <kbd>S</kbd> запуск, <kbd>←</kbd> <kbd>→</kbd> інший двигун
   </div>
+  <div class="scale-bar" title="У межах однієї сторінки всі двигуни показано в однаковому масштабі">
+    <span class="scale-line" id="scale-line"></span>
+    <span id="scale-label"></span>
+  </div>
+  <div class="wreck" id="wreck" role="status" hidden></div>
+  <div class="strain" id="strain" role="status" hidden></div>
   <div class="part-card" id="part-card" hidden></div>
+  <div class="part-tip" id="part-tip" hidden></div>
+  <div class="parts-callout" id="parts-callout" hidden></div>
   <div class="tooltip" id="tooltip" hidden></div>
 
   <button class="btn panel-toggle" id="panel-toggle-closed" type="button" hidden>Про двигун</button>
@@ -101,11 +116,23 @@ app.innerHTML = `
       <button class="btn" id="panel-close" type="button">Сховати</button>
     </div>
     <div class="panel-scroll" id="article" tabindex="0"></div>
+    <div class="panel-scroll" id="designer-host" tabindex="0" hidden></div>
+  </aside>
+
+  <aside class="results-panel" id="results-panel" aria-label="Показники двигуна" hidden>
+    <div class="panel-head results-head">
+      <h2>Показники</h2>
+      <button class="btn" id="results-close" type="button">Закрити</button>
+    </div>
+    <div class="panel-scroll" id="results-host" tabindex="0"></div>
   </aside>
 
   <footer class="dash">
     <section class="control-col">
       <button class="ignition" id="ignition" type="button">Запустити двигун</button>
+      <div class="health" id="health" role="meter" aria-label="Стан двигуна" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" hidden>
+        <span>Стан</span><i><u id="health-bar"></u></i><b id="health-value">100%</b>
+      </div>
       <div class="volume-row">
         <button class="btn icon-btn" id="mute" type="button" aria-label="Вимкнути звук" aria-pressed="false">${SVG_SOUND_ON}</button>
         <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="Гучність" />
@@ -139,7 +166,7 @@ app.innerHTML = `
     <div class="table-head">
       <div>
         <h2>Усі двигуни</h2>
-        <p>Рядки показують, як розміщені циліндри, стовпці показують, скільки їх. На значках видно напрям циліндрів, якщо дивитись на двигун спереду.</p>
+        <p>Кожна компоновка зі своїми реальними двигунами. На значках видно напрям циліндрів, якщо дивитись на двигун спереду.</p>
       </div>
       <button class="btn" id="table-close" type="button">Закрити</button>
     </div>
@@ -159,9 +186,13 @@ try {
   throw error;
 }
 
+const onDesignerRoute = (): boolean => location.hash.startsWith('#/designer');
+
 const resolveEngine = (): Engine => {
-  const match = /^#\/engines\/([\w-]+)/.exec(location.hash);
-  const spec = (match && engineById(match[1]!)) || engineById(DEFAULT_ENGINE)!;
+  const match = /^#\/engines\/([\w-]+(?:\/[\w-]+)?)/.exec(location.hash);
+  const wanted = match?.[1];
+  // A variant that no longer exists falls back to its page rather than to another engine.
+  const spec = (wanted && (engineById(wanted) ?? engineById(wanted.split('/')[0]!))) || engineById(DEFAULT_ENGINE)!;
   return buildEngine(spec);
 };
 
@@ -191,21 +222,75 @@ let keyValue = 0;
 let volume = 0.8;
 let muted = false;
 let panelOpen = window.innerWidth > 860;
+let resultsOpen = window.innerWidth > 860;
+let onDesigner = false;
+let wasSmall = window.innerWidth <= 860;
 
-function loadEngine(next: Engine, keepRunning: boolean): void {
+/** How much bigger the largest engine of this page is. Size goes as the cube root of displacement, near enough to frame by. */
+function pageFrameScale(next: Engine): number {
+  const largest = Math.max(...pageChoices(next.spec.id).map((c) => buildEngine(engineById(c.id)!).displacementCc));
+  return Math.cbrt(largest / next.displacementCc);
+}
+
+const SCALE_STEPS_CM = [2, 5, 10, 20, 50, 100];
+let shownScale = 0;
+
+/** A ruler under the hints: the only way to compare engines across pages, and to see what the zoom has done. */
+function updateScaleBar(): void {
+  const perCm = stage.pixelsPerUnit / 10;
+  if (Math.abs(perCm - shownScale) < 0.02) return;
+  shownScale = perCm;
+  const cm = SCALE_STEPS_CM.filter((v) => v * perCm <= 150).pop() ?? SCALE_STEPS_CM[0]!;
+  $('scale-line').style.width = `${Math.round(cm * perCm)}px`;
+  $('scale-label').textContent = `${cm} см`;
+}
+
+/** Everything drawn from the engine's geometry. Shared by the catalogue and the designer. */
+function showEngine(next: Engine, keepCamera: boolean): void {
   engine = next;
   const spec = engine.spec;
-  drive.setEngine(engine);
   const newModel: EngineModel = engine.isRotary ? new RotaryEngineModel(engine) : new PistonEngineModel(engine);
   // A rotary explains itself from the front, a piston engine from a three-quarter view.
-  stage.setModel(newModel, engine.isRotary ? [0.34, 0.22, 1] : undefined);
+  // The same scale for a whole page, or for a design as its sliders move, so that size can be seen.
+  stage.setModel(newModel, engine.isRotary ? [0.34, 0.22, 1] : undefined, keepCamera, true, onDesigner ? 1 : pageFrameScale(next));
   model = newModel;
   model.setView(view);
   model.setExplode(explode);
   tacho.configure(spec.redlineRpm);
+  tachoScale = spec.redlineRpm;
+  applyZones();
   firing.setEngine(engine);
   $('badge').textContent = spec.badge;
   $('badge').style.setProperty('--badge-fit', String(spec.badge.length > 2 ? 0.46 : 0.62));
+  $('part-card').hidden = true;
+}
+
+/** The real engines of this layout, to click through and hear. */
+function renderVariants(id: string): void {
+  const list = $('variants');
+  const choices = pageChoices(id);
+  list.hidden = choices.length < 2;
+  list.replaceChildren(
+    ...choices.map((choice) => {
+      const link = document.createElement('a');
+      link.href = `#/engines/${choice.id}`;
+      link.textContent = choice.name;
+      link.className = `variant${choice.id === id ? ' active' : ''}`;
+      if (choice.id === id) link.setAttribute('aria-current', 'true');
+      return link;
+    }),
+    Object.assign(document.createElement('a'), { href: '#/designer', textContent: 'Сконструювати свій', className: 'variant variant-own' }),
+  );
+  // On a phone the list is a row: the chosen engine may be out of sight.
+  const active = list.querySelector<HTMLElement>('.active');
+  if (active) list.scrollLeft = active.offsetLeft - list.offsetLeft - 8;
+}
+
+function loadEngine(next: Engine, keepRunning: boolean, keepCamera = false): void {
+  drive.setEngine(next);
+  showEngine(next, keepCamera);
+  const spec = engine.spec;
+  renderVariants(spec.id);
   $('engine-title').textContent = spec.title;
   const asp = spec.aspiration === 'na' ? '' : `, ${ASPIRATION_NAMES[spec.aspiration]}`;
   $('engine-sub').textContent = `${spec.example}${asp}`;
@@ -215,28 +300,149 @@ function loadEngine(next: Engine, keepRunning: boolean): void {
   document.title = `${spec.title}. Анатомія авто`;
   $('table-body').innerHTML = tableHtml(spec.id);
   $('table-overlay').hidden = true;
-  $('part-card').hidden = true;
+  $<HTMLAnchorElement>('to-designer').href = `#/designer/from/${spec.id}`;
+  $<HTMLAnchorElement>('to-catalog').href = `#/engines/${spec.id}`;
   if (!keepRunning) visualTheta = 0;
+}
+
+let tachoScale = 0;
+let lastDistress = 0;
+let lastZones: { safe: number; failure: number; cut: number } | null = null;
+
+/** The rev limit draws the dial, exactly as in the catalogue. Zones are added on top of it. */
+function applyZones(): void {
+  if (!lastZones || !onDesigner) return;
+  const { safe, failure, cut } = lastZones;
+  if (cut !== tachoScale) {
+    tachoScale = cut;
+    tacho.configure(cut);
+  }
+  tacho.setZones(safe, failure, cut);
+}
+
+const designer = new DesignerPage({
+  showEngine(next) {
+    showEngine(next, true);
+  },
+  heading() {
+    syncDesignerHeading();
+  },
+  soundEngine(next, perf) {
+    const running = drive.snapshot().state === 'running';
+    drive.setEngine(next);
+    if (running && !perf.catches) drive.stop();
+  },
+  setTrim(trim) {
+    drive.setTrim(trim);
+  },
+  wreck() {
+    drive.bang();
+    drive.setDistress(0);
+    drive.stop();
+    $('wreck').textContent = designer.wreckMessage;
+    $('wreck').hidden = false;
+    $('strain').hidden = true;
+  },
+  zones(safe, failure, cut) {
+    lastZones = { safe, failure, cut };
+    applyZones();
+  },
+  health(share, suffering, distress) {
+    const percent = Math.round(share * 100);
+    $('health-bar').style.width = `${percent}%`;
+    $('health-bar').classList.toggle('low', share < 0.35);
+    $('health-value').textContent = `${percent}%`;
+    $('health').setAttribute('aria-valuenow', String(percent));
+    $('strain').hidden = !suffering;
+    if (suffering) $('strain').textContent = `Зношується: ${suffering.toLowerCase()}`;
+    if (distress !== lastDistress) {
+      lastDistress = distress;
+      drive.setDistress(distress);
+    }
+    if (share === 1) $('wreck').hidden = true;
+  },
+  showFailure(part) {
+    model?.setFailure(part);
+  },
+});
+$('designer-host').append(designer.controlsHost);
+$('results-host').append(designer.results.root);
+
+function syncDesignerHeading(): void {
+  $('engine-title').textContent = designer.title;
+  $('engine-sub').textContent = designer.summary;
+  document.title = `${designer.title}. Анатомія авто`;
+}
+
+/** Switches the panels and the engine between the catalogue and the designer. */
+function applyRoute(): void {
+  const wantsDesigner = onDesignerRoute();
+  const small = window.innerWidth <= 860;
+  if (wantsDesigner !== onDesigner) {
+    onDesigner = wantsDesigner;
+    document.body.classList.toggle('designer-mode', onDesigner);
+    stage.fitScale = onDesigner ? 0.82 : 0.68;
+    $('nav-engines').classList.toggle('current', !onDesigner);
+    $('nav-designer').classList.toggle('current', onDesigner);
+    $('article').hidden = onDesigner;
+    $('designer-host').hidden = !onDesigner;
+    $('results-panel').hidden = !onDesigner;
+    for (const id of ['prev', 'next', 'to-designer']) $(id).hidden = onDesigner;
+    if (onDesigner) $('variants').hidden = true;
+    $('health').hidden = !onDesigner;
+    $('strain').hidden = true;
+    $('to-catalog').hidden = !onDesigner;
+    $('wreck').hidden = true;
+    if (onDesigner) {
+      panelOpen = !small;
+      resultsOpen = !small;
+      $('panel-title').textContent = 'Конструкція';
+      $('table-body').innerHTML = tableHtml('');
+    } else {
+      designer.leave();
+      panelOpen = !small;
+      loadEngine(resolveEngine(), true);
+    }
+    layoutPanels();
+  }
+  if (onDesigner) {
+    designer.enter(DesignerPage.designFromRoute(location.hash));
+    syncDesignerHeading();
+    $('table-overlay').hidden = true;
+  }
 }
 
 function layoutPanels(): void {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const small = width <= 860;
-  const panelW = panelOpen && !small ? 400 : 0;
+  // Crossing the phone width: a side panel would otherwise become a sheet covering the engine.
+  if (small !== wasSmall) {
+    wasSmall = small;
+    panelOpen = !small;
+    resultsOpen = !small;
+  }
+  const narrowDesk = width < 1500;
+  const panelSize = onDesigner ? (narrowDesk ? 360 : 420) : 400;
+  const panelW = panelOpen && !small ? panelSize : 0;
+  const leftW = onDesigner && resultsOpen && !small ? (narrowDesk ? 300 : 340) : 0;
   const dashH = $('tacho-wrap').parentElement!.offsetHeight;
+  $('results-panel').classList.toggle('closed', !resultsOpen);
+  $('results-open').hidden = !(small && onDesigner);
+  $('panel-open').textContent = onDesigner ? 'Параметри' : 'Про двигун';
+  document.documentElement.style.setProperty('--left-w', `${leftW}px`);
   $('panel').classList.toggle('closed', !panelOpen);
   document.body.classList.toggle('panel-closed', !panelOpen);
   $('panel-toggle-closed').hidden = panelOpen || small;
   $('panel-open').hidden = !small;
   $('panel-close').textContent = small ? 'Закрити' : 'Сховати';
   document.documentElement.style.setProperty('--stage-right', `${panelW}px`);
-  document.documentElement.style.setProperty('--stage-left', '0px');
+  document.documentElement.style.setProperty('--stage-left', `${leftW}px`);
   document.documentElement.style.setProperty('--panel-w', `${panelW}px`);
-  document.documentElement.style.setProperty('--stage-x', `${((width - panelW) / 2 / width) * 100}%`);
+  document.documentElement.style.setProperty('--stage-x', `${((leftW + (width - leftW - panelW) / 2) / width) * 100}%`);
   const toolsH = 70;
   const topH = small ? 90 : 60;
-  stage.resize(width, height, { left: 0, right: panelW, top: topH, bottom: dashH + (small ? 30 : toolsH * 0.4) });
+  stage.resize(width, height, { left: leftW, right: panelW, top: topH, bottom: dashH + (small ? 30 : toolsH * 0.4) });
   const fb = $('firing-body');
   firing.resize(fb.clientWidth, fb.clientHeight);
   const sb = $('spectrum-body');
@@ -275,6 +481,8 @@ async function toggleIgnition(): Promise<void> {
   }
   demoMode = false;
   starting = true;
+  $('wreck').hidden = true;
+  if (onDesigner && designer.isBroken) designer.repair();
   button.textContent = 'Заглушити';
   button.classList.add('on');
   await drive.ensureAudio();
@@ -415,16 +623,26 @@ const setPanel = (open: boolean): void => {
 $('panel-close').addEventListener('click', () => setPanel(false));
 $('panel-toggle-closed').addEventListener('click', () => setPanel(true));
 $('panel-open').addEventListener('click', () => setPanel(true));
+const setResults = (open: boolean): void => {
+  resultsOpen = open;
+  layoutPanels();
+};
+$('results-open').addEventListener('click', () => setResults(true));
+$('results-close').addEventListener('click', () => setResults(false));
 
 const openTable = (open: boolean): void => {
   $('table-overlay').hidden = !open;
   if (open) $('table-close').focus();
 };
 $('open-table').addEventListener('click', () => openTable(true));
+// A link to where we already are changes no route, and the list must still close.
+$('table-body').addEventListener('click', (event) => {
+  if ((event.target as HTMLElement).closest('a')) openTable(false);
+});
 $('table-close').addEventListener('click', () => openTable(false));
 
 const stepEngine = (delta: number): void => {
-  const i = ENGINES.findIndex((e) => e.id === engine.spec.id);
+  const i = ENGINES.findIndex((e) => e.id === engine.spec.id.split('/')[0]);
   const next = ENGINES[(i + delta + ENGINES.length) % ENGINES.length]!;
   location.hash = `#/engines/${next.id}`;
 };
@@ -432,14 +650,86 @@ $('prev').addEventListener('click', () => stepEngine(-1));
 $('next').addEventListener('click', () => stepEngine(1));
 
 window.addEventListener('hashchange', () => {
+  if (onDesignerRoute() || onDesigner) {
+    applyRoute();
+    return;
+  }
   const next = resolveEngine();
   if (next.spec.id !== engine.spec.id) {
-    loadEngine(next, true);
+    // Within one layout the camera stays where it is, so one engine next to another shows its real size.
+    loadEngine(next, true, next.spec.id.split('/')[0] === engine.spec.id.split('/')[0]);
     if (window.innerWidth <= 860) setPanel(false);
   } else {
     $('table-overlay').hidden = true;
   }
 });
+
+const PARTS_LEARNED_KEY = 'parts-learned';
+
+/** Storage can be blocked. Then the callout just comes back next time. */
+function partsLearned(): void {
+  $('parts-callout').hidden = true;
+  try {
+    localStorage.setItem(PARTS_LEARNED_KEY, '1');
+  } catch {
+    // Nothing to do: the note is only a convenience.
+  }
+}
+
+{
+  const callout = $('parts-callout');
+  const touch = window.matchMedia('(hover: none)').matches;
+  callout.textContent = touch ? 'Торкнись будь-якої деталі, щоб дізнатися, що це' : 'Наведи на будь-яку деталь, щоб побачити її назву. Клацни, щоб дізнатися, що вона робить';
+  let learned = false;
+  try {
+    learned = localStorage.getItem(PARTS_LEARNED_KEY) === '1';
+  } catch {
+    learned = false;
+  }
+  callout.hidden = learned;
+}
+
+// The name of a part follows the pointer, so it's plain that parts can be asked about.
+{
+  const tip = $('part-tip');
+  let lastPick = 0;
+  let dragging = false;
+  canvas.addEventListener('pointerdown', () => {
+    dragging = true;
+    tip.hidden = true;
+  });
+  window.addEventListener('pointerup', () => {
+    dragging = false;
+  });
+  canvas.addEventListener('pointerleave', () => {
+    tip.hidden = true;
+    canvas.style.cursor = '';
+  });
+  canvas.addEventListener('pointermove', (event) => {
+    if (event.pointerType !== 'mouse' || dragging) return;
+    // Casting a ray through a whole engine is too slow to do on every move.
+    const now = performance.now();
+    if (now - lastPick < 90) {
+      if (!tip.hidden) {
+        tip.style.left = `${event.clientX + 14}px`;
+        tip.style.top = `${event.clientY + 16}px`;
+      }
+      return;
+    }
+    lastPick = now;
+    const info = stage.pick(event.clientX, event.clientY);
+    canvas.style.cursor = info ? 'pointer' : '';
+    if (!info) {
+      tip.hidden = true;
+      return;
+    }
+    tip.innerHTML = `<strong>${info.name}</strong><span>клацни, щоб дізнатись більше</span>`;
+    tip.hidden = false;
+    const width = tip.offsetWidth;
+    tip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - width - 8)}px`;
+    tip.style.top = `${event.clientY + 16}px`;
+  });
+}
 
 // Clicking a part without dragging explains what it is.
 {
@@ -458,6 +748,8 @@ window.addEventListener('hashchange', () => {
       card.hidden = true;
       return;
     }
+    $('part-tip').hidden = true;
+    partsLearned();
     card.innerHTML = `<strong>${info.name}</strong><p>${info.text}</p>`;
     card.hidden = false;
     const rect = card.getBoundingClientRect();
@@ -474,13 +766,21 @@ const typing = (target: EventTarget | null): boolean => {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
 };
 
+/** Keys belong to the field: typing a number or a name must not rev the engine. */
+const enteringText = (target: EventTarget | null): boolean => {
+  const el = target as HTMLInputElement | null;
+  if (!el) return false;
+  if (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.isContentEditable) return true;
+  return el.tagName === 'INPUT' && el.type !== 'range' && el.type !== 'checkbox';
+};
+
 window.addEventListener('keydown', (event) => {
   if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
   if (event.key === 'Escape') {
     openTable(false);
     return;
   }
-  if (!$('table-overlay').hidden) return;
+  if (!$('table-overlay').hidden || enteringText(event.target)) return;
   const onRange = typing(event.target);
   if (event.code === 'Space' || (event.code === 'ArrowUp' && !onRange)) {
     event.preventDefault();
@@ -496,10 +796,10 @@ window.addEventListener('keydown', (event) => {
       void toggleIgnition();
       break;
     case 'ArrowRight':
-      stepEngine(1);
+      if (!onDesigner) stepEngine(1);
       break;
     case 'ArrowLeft':
-      stepEngine(-1);
+      if (!onDesigner) stepEngine(-1);
       break;
     case 'KeyT':
       openTable(true);
@@ -600,8 +900,10 @@ function frame(now: number): void {
     shake: demoMode ? 0 : shake,
   });
   stage.render(dt);
+  updateScaleBar();
 
   tacho.update(snap.rpm, running && snap.fuelCut && snap.rpm > spec.redlineRpm - 200);
+  if (onDesigner) designer.frame(snap.rpm, running, snap.load, dt);
   firing.draw(theta);
 
   const firesPerSecond = ((snap.rpm / 60) * 720 * spec.cylinders) / 720 / 2;
@@ -629,12 +931,13 @@ function frame(now: number): void {
 
 loadEngine(engine, false);
 layoutPanels();
+applyRoute();
 requestAnimationFrame(frame);
 
 // Handy for manual checks in the browser console.
 declare global {
   interface Window {
-    __engine: { drive: Drive; stage: Stage };
+    __engine: { drive: Drive; stage: Stage; designer: DesignerPage };
   }
 }
-window.__engine = { drive, stage };
+window.__engine = { drive, stage, designer };

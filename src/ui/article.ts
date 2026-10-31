@@ -1,6 +1,7 @@
 // The knowledge panel: figures, explanation, and charts computed from the engine's own geometry.
 
-import { ENGINES } from '../data/engines.ts';
+import { ENGINES, engineFacts } from '../data/engines.ts';
+import type { EngineFacts } from '../designer/catalogue.ts';
 import { balance, groupIntervals, torqueCurve, type Engine } from '../engine/kinematics.ts';
 import { ASPIRATION_NAMES, VALVETRAIN_NAMES, type EngineSpec } from '../engine/spec.ts';
 
@@ -103,7 +104,53 @@ const torqueSvg = (engine: Engine): string => {
 
 const list = (items: string[]): string => items.map((t) => `<li>${escapeHtml(t)}</li>`).join('');
 
-export const siblingsOf = (spec: EngineSpec): EngineSpec[] => ENGINES.filter((e) => e.cylinders === spec.cylinders && e.id !== spec.id);
+export const siblingsOf = (spec: EngineSpec): EngineSpec[] => ENGINES.filter((e) => e.cylinders === spec.cylinders && e.id !== spec.id.split('/')[0]);
+
+const FIELD_NAMES: Record<string, string> = {
+  bore: 'діаметр', stroke: 'хід', compression: 'ступінь стиснення', rodLength: 'довжину шатуна', valvesPerCyl: 'кількість клапанів',
+  valvetrain: 'привод клапанів', charger: 'тип наддуву', boostBar: 'тиск наддуву', directInjection: 'тип упорскування', blockMaterial: 'матеріал блока',
+  fuel: 'паливо', years: 'роки випуску', redline: 'межу обертів', idle: 'холостий хід', powerHp: 'потужність', powerRpm: 'оберти потужності', torqueNm: 'момент', torqueRpm: 'оберти моменту',
+  firingOrder: 'порядок запалювання', numbering: 'нумерацію циліндрів', veeAngle: 'кут розвалу', firingIntervals: 'інтервали спалахів', exhaust: 'характер вихлопу',
+  rotorR: 'радіус ротора', rotorE: 'ексцентриситет', rotorWidth: 'ширину ротора',
+};
+
+/** What this engine's exhaust is set to, in words, so the difference between engines of a page can be read as well as heard. */
+function voiceText(s: EngineSpec): string {
+  const open = s.exhaust.open;
+  const silencer = open < 0.25 ? 'тихий дорожній випуск' : open < 0.45 ? 'звичайний дорожній випуск' : open < 0.7 ? 'спортивний випуск' : 'майже прямий гоночний випуск';
+  const parts = [silencer];
+  const turbo = s.aspiration === 'turbo' || s.aspiration === 'twin-turbo' || s.aspiration === 'quad-turbo';
+  if (turbo) parts.push(s.turboWhine >= 0.8 ? 'гучний свист турбіни' : s.turboWhine >= 0.3 ? 'чутний свист турбіни' : 'свист турбіни ледь чутний');
+  if (turbo && s.fuel !== 'diesel') parts.push(s.blowoff >= 0.8 ? 'скид тиску в атмосферу' : s.blowoff > 0 ? 'тихий скид тиску' : 'скид тиску назад у впуск, без пшику');
+  if (s.exhaust.groups.length > 1) parts.push('випускні групи розділені');
+  if (s.fuel !== 'diesel') parts.push(s.pops >= 0.7 ? 'часті прострели' : s.pops >= 0.3 ? 'заводські прострели у спортивному режимі' : s.pops > 0 ? 'зрідка хлопки на скиданні газу' : 'без прострелів');
+  return `Голос: ${parts.join(', ')}.`;
+}
+
+/** The block about this exact engine, with the real figures it's compared against. */
+const VOICE_EVIDENCE: Record<EngineFacts['voiceEvidence'], string> = {
+  sourced: 'Свист, скид тиску й прострели взято з оглядів цього авто.',
+  owner: 'Свист, скид тиску й прострели взято зі слів власника цього авто.',
+  estimate: 'Свист, скид тиску й прострели оцінено за типом двигуна: окремих оглядів про це не знайшлося.',
+  default: 'Окремих свідчень про свист, скид тиску й прострели не знайшлося, тому взято тихе значення, типове для заводського авто.',
+};
+
+function factsHtml(facts: EngineFacts, voice: string): string {
+  const line = [facts.cars.join(', '), facts.years, facts.engineCode].filter(Boolean).join('; ');
+  const figure = (value: number | null, unit: string, rpm: number | null): string =>
+    value === null ? '' : `${num(value)} ${unit}${rpm === null ? '' : ` при ${num(rpm)} об/хв`}`;
+  const figures = [figure(facts.powerHp, 'к.с.', facts.powerRpm), figure(facts.torqueNm, 'Н·м', facts.torqueRpm)].filter(Boolean).join(', ');
+  const about = [line, `Заводські дані: ${figures}`].filter(Boolean).join('. ');
+  const unknown = facts.unverified.map((f) => FIELD_NAMES[f]).filter(Boolean);
+  const verify = unknown.length ? `<p class="verify">Не вдалося звірити з першоджерелом: ${unknown.join(', ')}.</p>` : '';
+  const sources = facts.sources.length
+    ? `<p class="note small">Джерела: ${facts.sources.slice(0, 5).map((url, i) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${i + 1}</a>`).join(', ')}</p>`
+    : '';
+  return `<h3>${escapeHtml(facts.name)}</h3>
+    ${facts.note ? `<p>${escapeHtml(facts.note)}</p>` : ''}
+    <p>${escapeHtml(voice)} <span class="note small">${VOICE_EVIDENCE[facts.voiceEvidence]}</span></p>
+    <p class="note">${escapeHtml(about)}.</p>${verify}${sources}`;
+}
 
 export function articleHtml(engine: Engine): string {
   const s = engine.spec;
@@ -115,15 +162,20 @@ export function articleHtml(engine: Engine): string {
        <div class="sibling-list">${siblings.map((o) => `<a class="sibling" href="#/engines/${o.id}">${escapeHtml(o.title)}</a>`).join('')}</div>`
     : '';
   const verify = s.verifyNote ? `<p class="verify">${escapeHtml(s.verifyNote)}</p>` : '';
+  const facts = engineFacts(s.id);
+  const isVariant = s.id.includes('/');
   return `
-    <p class="lead">${escapeHtml(a.lead)}</p>
+    ${isVariant ? '' : `<p class="lead">${escapeHtml(a.lead)}</p>`}
     <dl class="figures">${figures(engine)
       .map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`)
       .join('')}</dl>
     ${verify}
+    ${facts ? factsHtml(facts, voiceText(s)) : ''}
+    <p><a class="sibling" href="#/designer/from/${s.id}">Відкрити цей двигун у конструкторі</a> і подивитись, що зміниться.</p>
+    ${isVariant ? `<h2 class="layout-general">Про цю компоновку загалом</h2><p class="lead">${escapeHtml(a.lead)}</p>` : ''}
     <h3>Як це влаштовано</h3>
     <p>${escapeHtml(a.how)}</p>
-    <h3>Чому він так звучить</h3>
+    <h3>${isVariant ? 'Чому так звучить ця компоновка' : 'Чому він так звучить'}</h3>
     <p>${escapeHtml(a.sound)}</p>
     ${compare}
     <h3>Вібрації</h3>

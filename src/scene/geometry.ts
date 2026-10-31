@@ -215,13 +215,14 @@ export interface LobeDef {
   z: number;
   /** Rotation of the lobe on the shaft, radians. */
   rotation: number;
+  /** Half the lobe's opening, in cam degrees. */
+  halfSpan: number;
 }
 
-export function camshaftGeometry(lobes: LobeDef[], baseR: number, lift: number, width: number, shaftR: number, zMin: number, zMax: number, halfSpanCamDeg: number): THREE.BufferGeometry {
+export function camshaftGeometry(lobes: LobeDef[], baseR: number, lift: number, width: number, shaftR: number, zMin: number, zMax: number): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [zCylinder(shaftR, zMax - zMin, 16, 0, 0, (zMin + zMax) / 2)];
-  const lobe = extrude(lobeShape(baseR, lift, halfSpanCamDeg), width);
   for (const def of lobes) {
-    const g = lobe.clone();
+    const g = extrude(lobeShape(baseR, lift, def.halfSpan), width);
     g.rotateZ(def.rotation);
     g.translate(0, 0, def.z);
     parts.push(g);

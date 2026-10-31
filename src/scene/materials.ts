@@ -143,6 +143,9 @@ export interface EngineMaterials {
   plastic: THREE.MeshStandardMaterial;
   turboHot: THREE.MeshStandardMaterial;
   turboCold: THREE.MeshStandardMaterial;
+  turboWheel: THREE.MeshStandardMaterial;
+  turboHotGlass: THREE.MeshStandardMaterial;
+  turboColdGlass: THREE.MeshStandardMaterial;
   housing: THREE.MeshStandardMaterial;
 }
 
@@ -170,6 +173,8 @@ export function createMaterials(coverColor: string, blockMaterial: 'aluminium' |
     }),
     sump: new THREE.MeshStandardMaterial({ color: '#8d9093', metalness: 0.85, roughness: 0.5, bumpMap: cast, bumpScale: 0.3 }),
     blockGlass: glassMaterial('#bcd9e4', 0.025, 0.34),
+    turboHotGlass: glassMaterial('#d9925f', 0.07, 0.55),
+    turboColdGlass: glassMaterial('#dbe4e7', 0.05, 0.5),
     coverGlass: glassMaterial(coverColor, 0.03, 0.34),
     sumpGlass: glassMaterial('#8fa7b0', 0.025, 0.3),
     linerGlass: glassMaterial('#d8e8ee', 0.02, 0.22),
@@ -190,6 +195,7 @@ export function createMaterials(coverColor: string, blockMaterial: 'aluminium' |
     plastic: new THREE.MeshStandardMaterial({ color: '#232527', metalness: 0.05, roughness: 0.62 }),
     turboHot: new THREE.MeshStandardMaterial({ color: '#70615a', metalness: 0.85, roughness: 0.62 }),
     turboCold: new THREE.MeshStandardMaterial({ color: '#b2b4b4', metalness: 0.92, roughness: 0.42 }),
+    turboWheel: new THREE.MeshStandardMaterial({ color: '#e0e3e4', metalness: 1, roughness: 0.25, side: THREE.DoubleSide }),
     housing: new THREE.MeshStandardMaterial({ color: '#8e9193', metalness: 0.85, roughness: 0.55, bumpMap: cast, bumpScale: 0.4 }),
   };
 }

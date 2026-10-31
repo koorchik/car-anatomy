@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { DEG, cyclePhase, mod, strokeAt, type Cylinder, type Engine } from '../engine/kinematics.ts';
 import { MM, extrude, flywheelGeometry, gearShape, merge, pulleyGeometry, tubeAlong, zCylinder } from './geometry.ts';
 import { createMaterials, glowTexture, hotPipeMaterial, type EngineMaterials, type HotPipeUniforms } from './materials.ts';
-import { GAS, disposeTree, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
+import { GAS, disposeTree, markDamaged, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
 
 /** Point on the housing's inner surface, parameter in degrees. Matches the apex path. */
 export function housingPoint(psiDeg: number, R: number, e: number): [number, number] {
@@ -358,6 +358,14 @@ export class RotaryEngineModel implements EngineModel {
   private chamberMesh(c: Chamber): THREE.Object3D | null {
     const section = c.rotor.group.parent;
     return section?.children.find((o) => (o as THREE.Mesh).material === c.material) ?? null;
+  }
+
+  private undoFailure: (() => void) | null = null;
+
+  setFailure(part: string | null): void {
+    this.undoFailure?.();
+    this.undoFailure = null;
+    if (part) this.undoFailure = markDamaged(part === 'exhaust' ? this.materials.turboHot : this.materials.piston);
   }
 
   setExplode(amount: number): void {

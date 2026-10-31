@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { ENGINES } from '../src/data/engines.ts';
+import { ENGINES, engineById } from '../src/data/engines.ts';
 import { engineOrders, type OrderRow } from '../scripts/analysis.ts';
 import { peak, render, rmsDb } from '../scripts/render-audio.ts';
+import { EngineSynth, synthConfig } from '../src/audio/synth.ts';
+import { measureTrim } from '../src/designer/loudness.ts';
+import { evaluate } from '../src/designer/physics.ts';
+import { resolveDesign } from '../src/designer/constraints.ts';
+import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
+import { randomDesign, withLayout } from '../src/designer/presets.ts';
+import { designToSpec } from '../src/designer/to-spec.ts';
+import { buildEngine } from '../src/engine/kinematics.ts';
 
 const energy = (rows: OrderRow[], test: (order: number) => boolean): number =>
   rows.filter((r) => test(r.order)).reduce((sum, r) => sum + r.amp * r.amp, 0);
@@ -103,6 +111,42 @@ describe('what makes the famous sounds differ', () => {
   });
 });
 
+describe('designed engines sound sane', () => {
+  it('a weird engine is finite, bounded and audible, and its measured trim sets the level', () => {
+    const random = (() => {
+      let s = 1234;
+      return () => {
+        s = (s * 16807) % 2147483647;
+        return s / 2147483647;
+      };
+    })();
+    const levels: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = randomDesign(random);
+      const perf = evaluate(d);
+      const spec = designToSpec(d, perf);
+      const trim = measureTrim(spec);
+      expect(Number.isFinite(trim)).toBe(true);
+      expect(trim).toBeGreaterThan(0);
+      const engine = buildEngine(spec);
+      const synth = new EngineSynth(synthConfig(engine, trim), 48000);
+      const rpm = spec.redlineRpm * 0.8;
+      synth.sim.state = 'running';
+      synth.sim.rpm = rpm;
+      synth.sim.load = 1;
+      synth.sim.pedal = 1;
+      synth.sim.lockedRpm = rpm;
+      const l = new Float32Array(48000);
+      const r = new Float32Array(48000);
+      synth.process(l, r);
+      for (let k = 0; k < l.length; k++) expect(Number.isFinite(l[k]!)).toBe(true);
+      levels.push(rmsDb(l, 12000));
+    }
+    expect(Math.max(...levels) - Math.min(...levels)).toBeLessThan(14);
+    expect(Math.min(...levels)).toBeGreaterThan(-32);
+  });
+});
+
 describe('loudness behaves like an engine', () => {
   it.each(ENGINES.map((e) => [e.id, e] as const))('%s is louder under full throttle than at idle', (id, spec) => {
     const db = (pedal: number, rpm: number): number => rmsDb(render(id, [{ seconds: 0.5, pedal, rpm }, { seconds: 1, pedal, rpm }]).l, 24000);
@@ -119,5 +163,94 @@ describe('loudness behaves like an engine', () => {
   it('individual firing pulses are clearly audible in slow motion', () => {
     const out = render('v8-cross', [{ seconds: 0.5, pedal: 0.2, rpm: 40 }, { seconds: 3, pedal: 0.2, rpm: 40 }]);
     expect(peak(out.l.subarray(24000))).toBeGreaterThan(0.04);
+  });
+});
+
+describe('switching layout in the designer changes the sound', () => {
+  const orderLevels = (d: Design): number[] => {
+    const spec = designToSpec(d, evaluate(d));
+    const rpm = 2400;
+    const synth = new EngineSynth(synthConfig(buildEngine(spec), 0.4), 48000);
+    Object.assign(synth.sim, { state: 'running', rpm, load: 0.8, pedal: 0.8, lockedRpm: rpm });
+    const total = 96000;
+    const l = new Float32Array(total);
+    const r = new Float32Array(total);
+    synth.process(l, r);
+    const out: number[] = [];
+    for (let k = 1; k <= 32; k++) {
+      const hz = ((rpm / 60) * k) / 2;
+      let re = 0;
+      let im = 0;
+      for (let i = 24000; i < total; i++) {
+        const a = (2 * Math.PI * hz * i) / 48000;
+        re += l[i]! * Math.cos(a);
+        im += l[i]! * Math.sin(a);
+      }
+      out.push(Math.hypot(re, im));
+    }
+    const top = Math.max(...out);
+    return out.map((v) => Math.max(-50, 20 * Math.log10(v / top + 1e-9)));
+  };
+  const distance = (a: number[], b: number[]): number => a.reduce((sum, v, i) => sum + Math.abs(v - b[i]!), 0) / a.length;
+
+  it('gives each layout of six cylinders its own voice', () => {
+    const start = resolveDesign({ ...DEFAULT_DESIGN, throws: [], cylinders: 6 });
+    const voices = (['inline', 'vee', 'boxer', 'vr'] as const).map((layout) => ({ layout, levels: orderLevels(withLayout(start, layout)) }));
+    for (let i = 0; i < voices.length; i++) {
+      for (let j = i + 1; j < voices.length; j++) {
+        const gap = distance(voices[i]!.levels, voices[j]!.levels);
+        expect(gap, `${voices[i]!.layout} vs ${voices[j]!.layout}`).toBeGreaterThan(3);
+      }
+    }
+  });
+
+  it('a V or a flat engine gets a collector per bank, a Subaru-style flat four its unequal pipes', () => {
+    const start = resolveDesign({ ...DEFAULT_DESIGN, throws: [], cylinders: 4 });
+    expect(withLayout(start, 'vee').collector).toBe('bybank');
+    expect(withLayout(start, 'flatvee').collector).toBe('bybank');
+    expect(withLayout(start, 'boxer').headerSpread).toBeGreaterThan(0);
+    expect(withLayout(withLayout(start, 'vee'), 'inline').collector).toBe('single');
+    expect(withLayout(withLayout(start, 'boxer'), 'inline').headerSpread).toBe(0);
+  });
+
+  it('keeps everything that has nothing to do with the exhaust', () => {
+    const start = resolveDesign({ ...DEFAULT_DESIGN, throws: [], bore: 92, compression: 11.5, fuel: 'ai98' });
+    const changed = withLayout(start, 'vee');
+    expect(changed.bore).toBe(92);
+    expect(changed.compression).toBe(11.5);
+    expect(changed.fuel).toBe('ai98');
+    expect(changed.muffler).toBe(start.muffler);
+  });
+
+  it('a custom crank gives way, because its table belongs to the old cylinder layout', () => {
+    const start = resolveDesign({ ...DEFAULT_DESIGN, throws: [], crankPreset: 'custom' });
+    expect(withLayout(start, 'vee').crankPreset).toBe('even');
+  });
+});
+
+describe('starting', () => {
+  it('is silent while the engine turns over, and audible once it catches', () => {
+    const synth = new EngineSynth(synthConfig(buildEngine(engineById('i4')!)), 48000);
+    synth.sim.start();
+    const block = (seconds: number): number => {
+      const l = new Float32Array(Math.floor(seconds * 48000));
+      const r = new Float32Array(l.length);
+      synth.process(l, r);
+      return Math.max(...l.map(Math.abs));
+    };
+    expect(block(0.25)).toBeLessThan(0.002);
+    block(0.3);
+    expect(block(0.5)).toBeGreaterThan(0.02);
+  });
+
+  it('an engine that will not catch keeps its pumping sound, so the failed start is heard', () => {
+    const spec = engineById('i4')!;
+    const config = synthConfig(buildEngine(spec));
+    const synth = new EngineSynth({ ...config, sim: { ...config.sim, catches: false } }, 48000);
+    synth.sim.start();
+    const l = new Float32Array(48000);
+    const r = new Float32Array(48000);
+    synth.process(l, r);
+    expect(Math.max(...l.map(Math.abs))).toBeGreaterThan(0.002);
   });
 });

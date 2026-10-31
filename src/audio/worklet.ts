@@ -15,7 +15,10 @@ export type WorkletCommand =
   | { type: 'start' }
   | { type: 'stop' }
   | { type: 'lock'; rpm: number | null; running: boolean }
-  | { type: 'listen'; position: ListenPosition };
+  | { type: 'listen'; position: ListenPosition }
+  | { type: 'trim'; value: number }
+  | { type: 'distress'; value: number }
+  | { type: 'bang' };
 
 export interface WorkletReport {
   angle: number;
@@ -61,6 +64,15 @@ class EngineProcessor extends AudioWorkletProcessor {
         break;
       case 'listen':
         this.synth?.setListen(cmd.position);
+        break;
+      case 'trim':
+        this.synth?.setTrim(cmd.value);
+        break;
+      case 'distress':
+        this.synth?.setDistress(cmd.value);
+        break;
+      case 'bang':
+        this.synth?.bang();
         break;
     }
   }

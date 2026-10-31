@@ -1,9 +1,11 @@
-// The engine chooser: a table of layout family against cylinder count, drawn from the data,
-// with a small plan of each engine computed from its own bank angles.
+// The engine chooser: every layout with every real engine of it, drawn from the data,
+// with a small plan of each layout computed from its own bank angles.
 
-import { ENGINES } from '../data/engines.ts';
+import { ENGINES, pageChoices } from '../data/engines.ts';
 import { DEG, buildEngine } from '../engine/kinematics.ts';
 import { FAMILY_NAMES, type EngineSpec, type Family } from '../engine/spec.ts';
+
+const escapeHtml = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const FAMILIES: Family[] = ['inline', 'vee', 'flat', 'narrow', 'rotary'];
 
@@ -32,46 +34,32 @@ export function layoutGlyph(spec: EngineSpec): string {
   return `<svg viewBox="0 0 ${size} ${size}" class="glyph" aria-hidden="true">${parts.join('')}<circle cx="${c}" cy="${cy}" r="4" class="glyph-fill" /></svg>`;
 }
 
+/** Every layout as a card, with every real engine of it. Sorted by cylinders within each family. */
 export function tableHtml(activeId: string): string {
-  const cylinderCounts = [...new Set(ENGINES.map((e) => e.cylinders))].sort((a, b) => a - b);
-  const head = cylinderCounts.map((n) => `<th scope="col">${n}</th>`).join('');
-  const rows = FAMILIES.map((family) => {
-    const cells = cylinderCounts
-      .map((n) => {
-        const engines = ENGINES.filter((e) => e.family === family && e.cylinders === n);
-        if (!engines.length) return '<td class="empty"></td>';
-        return `<td>${engines
-          .map(
-            (e) => `<a class="cell${e.id === activeId ? ' active' : ''}" href="#/engines/${e.id}" data-engine="${e.id}">
-              ${layoutGlyph(e)}
-              <span class="cell-name">${e.badge}${e.fuel === 'diesel' ? ' дизель' : ''}</span>
-              <span class="cell-note">${tableNote(e)}</span>
-            </a>`,
-          )
-          .join('')}</td>`;
+  const pageId = activeId.split('/')[0];
+  const sections = FAMILIES.map((family) => {
+    const pages = ENGINES.filter((e) => e.family === family).sort((a, b) => a.cylinders - b.cylinders);
+    if (!pages.length) return '';
+    const cards = pages
+      .map((page) => {
+        const engines = pageChoices(page.id)
+          .map((choice) => `<li><a class="card-engine${choice.id === activeId ? ' active' : ''}" href="#/engines/${choice.id}">${escapeHtml(choice.name)}</a></li>`)
+          .join('');
+        return `<section class="layout-card${page.id === pageId ? ' current' : ''}">
+          <a class="layout-head" href="#/engines/${page.id}">
+            ${layoutGlyph(page)}
+            <span class="layout-name">${page.badge}${page.fuel === 'diesel' ? ' дизель' : ''}</span>
+            <span class="layout-title">${escapeHtml(page.title)}</span>
+          </a>
+          <ul class="card-engines">${engines}</ul>
+        </section>`;
       })
       .join('');
-    return `<tr><th scope="row">${FAMILY_NAMES[family]}</th>${cells}</tr>`;
-  }).join('');
-  return `<table class="engine-table"><thead><tr><th scope="col" class="corner">Циліндри</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+    return `<h3 class="family-name">${FAMILY_NAMES[family]}</h3><div class="layout-grid">${cards}</div>`;
+  });
+  const own = `<a class="own-engine" href="#/designer">
+    <strong>Сконструюй свій двигун</strong>
+    <span>Обери циліндри, поршні, наддув і вихлоп, а тоді заведи його й послухай, що вийшло.</span>
+  </a>`;
+  return own + sections.join('');
 }
-
-const tableNote = (e: EngineSpec): string => {
-  const notes: Record<string, string> = {
-    i8: 'Duesenberg J',
-    'v8-cross': 'хрестовий вал',
-    'v8-flat': 'плоский вал',
-    'v6-60': '60°',
-    'v6-90': '90°, нерівний',
-    v2: '45°',
-    v10: '72°',
-    v12: '60°',
-    f12: '180°',
-    vr6: '15°',
-    w12: 'два VR6',
-    w16: 'чотири турбіни',
-    r2: '2 секції',
-    r4: '4 секції',
-  };
-  return notes[e.id] ?? e.example.split(' ').slice(0, 2).join(' ');
-};

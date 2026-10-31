@@ -150,6 +150,20 @@ export class Drive {
     this.post({ type: 'config', config: this.config, running });
   }
 
+  /** Loudness correction for the current engine, without touching its sound otherwise. */
+  setTrim(value: number): void {
+    this.config.trim = value;
+    this.post({ type: 'trim', value });
+  }
+
+  setDistress(value: number): void {
+    this.post({ type: 'distress', value });
+  }
+
+  bang(): void {
+    this.post({ type: 'bang' });
+  }
+
   setPedal(value: number): void {
     this.pedal = value;
     this.local.pedal = value;

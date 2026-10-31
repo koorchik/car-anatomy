@@ -7,7 +7,7 @@
 // This follows the structure of the pipe models in the Sound Design Toolkit and of
 // Baldan et al., "Physically informed car engine sound synthesis" (2015).
 
-import { EXHAUST_OPEN, INTAKE_OPEN, mod, type Engine } from '../engine/kinematics.ts';
+import { mod, type Engine } from '../engine/kinematics.ts';
 import { EngineSim, type SimParams } from '../engine/sim.ts';
 import { LOUDNESS_TRIM } from './loudness-trim.ts';
 import { Biquad, Noise, OnePoleHP, OnePoleLP, Pipe, softClip } from './dsp.ts';
@@ -40,9 +40,17 @@ export interface SynthConfig {
   sharpPort: boolean;
   rough: number;
   pops: number;
+  /** Audible share of the turbo's whistle. */
+  turboWhine: number;
+  /** Audible share of the boost dumped when the throttle closes. */
+  blowoff: number;
   displacementCc: number;
   /** Number of turbochargers, 0 for none. */
   turbos: number;
+  /** Mechanical supercharger, a whine locked to the crank. */
+  supercharger: boolean;
+  /** Intake runner length, metres. */
+  intakeM: number;
 }
 
 export function synthConfig(engine: Engine, trimOverride?: number): SynthConfig {
@@ -53,7 +61,8 @@ export function synthConfig(engine: Engine, trimOverride?: number): SynthConfig 
   groups.forEach((g, i) => g.forEach((n) => groupOf.set(n, i)));
   const pans = spec.exhaust.pans ?? groups.map(() => 0);
   const isRotary = engine.isRotary;
-  const turbos = { na: 0, turbo: 1, 'twin-turbo': 2, 'quad-turbo': 4 }[spec.aspiration];
+  const turbos = { na: 0, turbo: 1, 'twin-turbo': 2, 'quad-turbo': 4, supercharged: 0 }[spec.aspiration];
+  const tuning = spec.tuning;
   return {
     sim: {
       cylinders: spec.cylinders,
@@ -64,12 +73,15 @@ export function synthConfig(engine: Engine, trimOverride?: number): SynthConfig 
       revTimeS: spec.revTimeS,
       rough: spec.rough,
       turbo: turbos > 0,
+      torqueTable: tuning?.torqueTable,
+      boostLagS: tuning?.boostLagS,
+      catches: tuning?.catches,
     },
     cylinders: engine.cylinders.map((c) => ({
       fire: c.fire,
       // A Wankel chamber is at 25 % of its cycle when its flank uncovers the port.
-      evo: mod(c.fire + (isRotary ? 0.22 * engine.cycle : EXHAUST_OPEN), engine.cycle),
-      ivo: mod(c.fire + (isRotary ? 0.48 * engine.cycle : INTAKE_OPEN), engine.cycle),
+      evo: mod(c.fire + (isRotary ? 0.22 * engine.cycle : engine.timing.exhaustOpen), engine.cycle),
+      ivo: mod(c.fire + (isRotary ? 0.48 * engine.cycle : engine.timing.intakeOpen), engine.cycle),
       group: groupOf.get(c.n) ?? 0,
       headerM: typeof header === 'number' ? header : (header[c.n - 1] ?? 0.6),
     })),
@@ -77,13 +89,17 @@ export function synthConfig(engine: Engine, trimOverride?: number): SynthConfig 
     pipeM: spec.exhaust.pipeM,
     open: spec.exhaust.open,
     rasp: spec.exhaust.rasp,
-    trim: trimOverride ?? LOUDNESS_TRIM[spec.id] ?? 1,
+    trim: trimOverride ?? tuning?.trim ?? LOUDNESS_TRIM[spec.id] ?? 0.4,
     isDiesel: spec.fuel === 'diesel',
     sharpPort: isRotary,
     rough: spec.rough,
     pops: spec.pops,
+    turboWhine: spec.turboWhine,
+    blowoff: spec.blowoff,
     displacementCc: engine.displacementCc,
     turbos,
+    supercharger: tuning?.supercharger ?? false,
+    intakeM: tuning?.intakeM ?? 0.32,
   };
 }
 
@@ -178,7 +194,9 @@ export class EngineSynth {
   private readonly cabinBoomR = new Biquad();
 
   // Intake path.
-  private readonly runner: Pipe;
+  private runner: Pipe;
+  private blowerPhase = 0;
+  private distress = 0;
   private readonly plenum = new Biquad();
   private readonly snorkel = new Biquad();
   private readonly hiss = new Biquad();
@@ -208,8 +226,8 @@ export class EngineSynth {
   private readonly popFilter = new Biquad();
   private popDelay = 0;
 
-  // Starter motor.
-  private starterPhase = 0;
+  // The start itself isn't modelled: the engine turns over in silence and is heard from the moment it catches.
+  private startGate = 0;
 
   private readonly dcL = new OnePoleHP();
   private readonly dcR = new OnePoleHP();
@@ -248,6 +266,7 @@ export class EngineSynth {
     const groupCount = cfg.groupPans.length;
     this.groups = Array.from({ length: groupCount }, (_, i) => new GroupVoice(cfg.pipeM, cfg.groupPans[i] ?? 0, fs, cfg.open));
     this.ampScale = pulseScale(cfg.sim.cylinders, cfg.displacementCc) * 2.1 * cfg.trim;
+    this.runner = new Pipe(cfg.intakeM, COLD_SOUND_SPEED, 0.55, 3200, fs);
     const perCylinder = cfg.displacementCc / cfg.sim.cylinders;
     this.blowdownTau = 0.00042 * Math.pow(perCylinder / 500, 0.33) * (cfg.sharpPort ? 0.38 : 1);
 
@@ -269,6 +288,25 @@ export class EngineSynth {
       v.ivoPrev = mod(dir - v.cfg.ivo, cfg.sim.cycle);
       v.firePrev = mod(dir - v.cfg.fire, cfg.sim.cycle);
     }
+  }
+
+  /** 0 to 1: how much the engine is suffering. Heard as irregular knocks from the block. */
+  setDistress(value: number): void {
+    this.distress = Math.max(0, Math.min(1, value));
+  }
+
+  /** The moment something lets go. */
+  bang(): void {
+    this.popAmp = 1.6;
+    this.popDelay = 1;
+    this.mechExcite += 14;
+  }
+
+  /** Loudness only, with no interruption of the sound. */
+  setTrim(trim: number): void {
+    const cfg = this.cfg;
+    cfg.trim = trim;
+    this.ampScale = pulseScale(cfg.sim.cylinders, cfg.displacementCc) * 2.1 * trim;
   }
 
   /** Switch to another engine. A brief fade hides the swap of delay lines. */
@@ -435,6 +473,8 @@ export class EngineSynth {
       const snork = this.snorkel.process(run);
       const air = this.airLp.process(plen * 0.9 + snork * 1.2 + run * 0.25 + hiss);
 
+      if (this.distress > 0 && rpm > 100 && noise.unit() < this.distress * 0.0022) this.mechExcite += 0.8 + 2.2 * this.distress * noise.unit();
+
       // Block: combustion rings the structure, valvegear ticks at high frequency.
       this.mechExcite += ignitionKick;
       const exciteNoise = this.mechExcite * (0.6 + noise.next() * 0.4);
@@ -460,9 +500,9 @@ export class EngineSynth {
         if (this.whinePhase > 1) this.whinePhase -= 1;
         const tone = Math.sin(2 * Math.PI * this.whinePhase);
         const tone2 = Math.sin(2 * Math.PI * this.whinePhase * 2.01);
-        turbo = this.whineLp.process(tone * 0.7 + tone2 * 0.3) * boost * boost * 0.06 * (0.4 + 0.6 * Math.sqrt(this.cfg.turbos));
+        turbo = this.whineLp.process(tone * 0.7 + tone2 * 0.3) * boost * boost * 0.1 * this.cfg.turboWhine * (0.4 + 0.6 * Math.sqrt(this.cfg.turbos));
         const throttleDrop = this.bovPrevThrottle - sim.throttle;
-        if (throttleDrop > 0.0012 && boost > 0.22 && this.bovArmed <= 0) {
+        if (this.cfg.blowoff > 0 && throttleDrop > 0.0012 && boost > 0.22 && this.bovArmed <= 0) {
           this.bov = boost;
           this.bovArmed = fs * 0.35;
         }
@@ -472,20 +512,19 @@ export class EngineSynth {
           this.bovFlutter += (22 * dt) % 1;
           if (this.bovFlutter > 1) this.bovFlutter -= 1;
           const flutter = 0.7 + 0.3 * Math.sin(2 * Math.PI * this.bovFlutter);
-          turbo += this.bovFilter.process(noise.next()) * this.bov * flutter * 0.32;
+          turbo += this.bovFilter.process(noise.next()) * this.bov * flutter * 0.32 * this.cfg.blowoff;
           this.bov *= 0.99988 - 0.00005;
         }
       }
 
-      // Starter motor while cranking.
-      let starter = 0;
-      if (sim.state === 'cranking') {
-        const hz = 110 + rpm * 0.7;
-        this.starterPhase += hz * dt;
-        if (this.starterPhase > 1) this.starterPhase -= 1;
-        const saw = this.starterPhase * 2 - 1;
-        const buzz = saw * 0.5 + Math.sin(2 * Math.PI * this.starterPhase * 3) * 0.3;
-        starter = buzz * 0.11;
+      // A belt-driven supercharger sings in step with the crank.
+      if (this.cfg.supercharger && running) {
+        const hz = (rpm / 60) * 8;
+        this.blowerPhase += hz * dt;
+        if (this.blowerPhase > 1) this.blowerPhase -= 1;
+        const s1 = Math.sin(2 * Math.PI * this.blowerPhase);
+        const s2 = Math.sin(4 * Math.PI * this.blowerPhase);
+        turbo += (s1 * 0.7 + s2 * 0.3) * (0.015 + 0.075 * sim.throttle * Math.min(1, nRpm * 1.8));
       }
 
       // Slowly crossfade the listening position.
@@ -495,7 +534,7 @@ export class EngineSynth {
       this.mixMech += (this.targetMech - this.mixMech) * k;
       this.mixCabin += (this.targetCabin - this.mixCabin) * k;
 
-      const centre = air * 0.8 * this.mixIntake + (mech + starter) * this.mixMech + turbo * Math.max(this.mixIntake, 0.45);
+      const centre = air * 0.8 * this.mixIntake + mech * this.mixMech + turbo * Math.max(this.mixIntake, 0.45);
       let outL = exL * this.mixExhaust + centre;
       let outR = exR * this.mixExhaust + centre;
 
@@ -506,8 +545,11 @@ export class EngineSynth {
         outR += (cabinR * 0.9 - outR) * this.mixCabin;
       }
 
-      outL = softClip(this.dcL.process(outL) * this.fade);
-      outR = softClip(this.dcR.process(outR) * this.fade);
+      // An engine that won't catch keeps its pumping sound, or the failed start would seem like a dead button.
+      const silent = sim.state === 'cranking' && this.cfg.sim.catches !== false;
+      this.startGate += ((silent ? 0 : 1) - this.startGate) * (silent ? 0.02 : 0.0009);
+      outL = softClip(this.dcL.process(outL) * this.fade * this.startGate);
+      outR = softClip(this.dcR.process(outR) * this.fade * this.startGate);
       left[s] = outL;
       right[s] = outR;
     }

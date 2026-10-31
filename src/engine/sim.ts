@@ -12,6 +12,12 @@ export interface SimParams {
   revTimeS: number;
   rough: number;
   turbo: boolean;
+  /** Net torque over normalised speed from 0 to 1.2, peak = 1. A built-in curve is used without it. */
+  torqueTable?: number[];
+  /** Time for the turbo to come up to speed. */
+  boostLagS?: number;
+  /** False: the starter turns the engine but it never runs. */
+  catches?: boolean;
 }
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -84,6 +90,14 @@ export class EngineSim {
     return (1.5 * (redlineRpm - idleRpm)) / revTimeS;
   }
 
+  private torque(n: number): number {
+    const table = this.params.torqueTable;
+    if (!table) return torqueAt(n);
+    const x = (clamp(n, 0, 1.2) / 1.2) * (table.length - 1);
+    const i = Math.min(Math.floor(x), table.length - 2);
+    return table[i]! + (table[i + 1]! - table[i]!) * (x - i);
+  }
+
   private drag(n: number): number {
     return this.accelWot * 0.42 * (0.2 + 0.8 * n * n);
   }
@@ -125,7 +139,9 @@ export class EngineSim {
         this.load = 0.04;
         this.fuelCut = true;
         // Catches after a moment; a large or diesel engine would take longer, the exact value is cosmetic.
-        if (this.stateTime > 0.75) {
+        if (p.catches === false) {
+          if (this.stateTime > 2.6) this.stop();
+        } else if (this.stateTime > 0.3) {
           this.state = 'running';
           this.stateTime = 0;
           this.catchFlare = 1;
@@ -146,7 +162,10 @@ export class EngineSim {
         // Idle controller: opens the throttle just enough to hold idle speed.
         const err = (p.idleRpm - this.rpm) / p.idleRpm;
         this.idleIntegral = clamp(this.idleIntegral + err * dt * 0.8, -0.1, 0.2);
-        const hold = this.drag(p.idleRpm / p.redlineRpm) / (this.accelWot * torqueAt(p.idleRpm / p.redlineRpm));
+        const idleN = p.idleRpm / p.redlineRpm;
+        const idleDrag = this.drag(idleN);
+        const idleThrust = this.accelWot * Math.max(this.torque(idleN), 0.08);
+        const hold = p.torqueTable ? idleDrag / (idleThrust + idleDrag) : idleDrag / idleThrust;
         const idleOpen = clamp(hold + err * 0.9 + this.idleIntegral, 0, 0.55);
         const shaped = Math.pow(this.throttle, 1.5);
         requested = Math.max(shaped, idleOpen);
@@ -158,8 +177,10 @@ export class EngineSim {
 
         const closedThrottleOverrun = shaped < 0.02 && this.rpm > p.idleRpm * 1.25;
         this.fuelCut = this.limiter || closedThrottleOverrun;
-        const thrust = this.fuelCut ? 0 : this.accelWot * torqueAt(n) * requested;
-        accel = thrust - this.drag(n) - (this.fuelCut ? this.pumping : 0);
+        const thrust = this.fuelCut ? 0 : this.accelWot * this.torque(n) * requested;
+        // A measured torque table is already net of friction, so wide open it adds no drag of its own.
+        const dragShare = p.torqueTable && !this.fuelCut ? 1 - requested : 1;
+        accel = thrust - this.drag(n) * dragShare - (this.fuelCut ? this.pumping : 0);
         this.rpm = Math.max(0, this.rpm + accel * dt);
         const targetLoad = this.fuelCut ? 0 : clamp(requested + Math.max(0, thrust / this.accelWot) * 0.25, 0, 1);
         this.load += (targetLoad - this.load) * Math.min(1, 14 * dt);
@@ -170,7 +191,7 @@ export class EngineSim {
     if (p.turbo) {
       const running = this.state === 'running';
       const target = running ? clamp(this.load * Math.pow(n * 1.15, 0.8), 0, 1) : 0;
-      const rate = target > this.boost ? 1.4 : 0.9;
+      const rate = target > this.boost ? 1 / (p.boostLagS ?? 0.7) : 0.9;
       this.boost += (target - this.boost) * Math.min(1, rate * dt);
     }
 

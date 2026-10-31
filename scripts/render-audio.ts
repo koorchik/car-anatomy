@@ -2,7 +2,7 @@
 // Writes WAV files and a loudness table to .tmp/audio.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { ENGINES } from '../src/data/engines.ts';
+import { ENGINES, engineById } from '../src/data/engines.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import { EngineSynth, synthConfig } from '../src/audio/synth.ts';
 
@@ -40,7 +40,7 @@ export interface Step {
 }
 
 export function render(id: string, steps: Step[], trim?: number): { l: Float32Array; r: Float32Array; rpm: Float32Array } {
-  const spec = ENGINES.find((e) => e.id === id);
+  const spec = engineById(id);
   if (!spec) throw new Error(`Unknown engine ${id}`);
   const synth = new EngineSynth(synthConfig(buildEngine(spec), trim), FS);
   synth.sim.start();
@@ -96,7 +96,7 @@ if (process.argv[1]?.endsWith('render-audio.ts')) {
   const list = ids.length ? ids : ENGINES.map((e) => e.id);
   console.log('engine      idle   mid   wot  peak  crest  maxRpm');
   for (const id of list) {
-    const spec = ENGINES.find((e) => e.id === id)!;
+    const spec = engineById(id)!;
     const { l, r, rpm } = render(id, STORY);
     writeFileSync(`${OUT}/${id}.wav`, floatToWav(l, r, FS));
     const hold = render(id, [

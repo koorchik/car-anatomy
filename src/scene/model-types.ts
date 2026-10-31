@@ -23,6 +23,8 @@ export interface EngineModel {
   setView(view: ViewMode): void;
   /** 0 = assembled, 1 = fully pulled apart. */
   setExplode(amount: number): void;
+  /** Marks the part that failed. Null clears it. */
+  setFailure(part: string | null): void;
   dispose(): void;
 }
 
@@ -40,6 +42,18 @@ export const GAS = {
   fire: new THREE.Color('#ff7a1a'),
   smoke: new THREE.Color('#8a6a55'),
   exhaust: new THREE.Color('#6a635c'),
+};
+
+/** Tints a material to show damage, and gives back a way to undo it. */
+export const markDamaged = (material: THREE.MeshStandardMaterial): (() => void) => {
+  const { emissive, emissiveIntensity } = material;
+  const before = emissive.clone();
+  material.emissive.set('#ff2a10');
+  material.emissiveIntensity = 1.3;
+  return () => {
+    material.emissive.copy(before);
+    material.emissiveIntensity = emissiveIntensity;
+  };
 };
 
 export const disposeTree = (root: THREE.Object3D): void => {

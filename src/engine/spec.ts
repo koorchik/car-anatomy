@@ -2,7 +2,7 @@
 // the charts need is derived from these fields (see kinematics.ts).
 
 export type Fuel = 'petrol' | 'diesel';
-export type Aspiration = 'na' | 'turbo' | 'twin-turbo' | 'quad-turbo';
+export type Aspiration = 'na' | 'turbo' | 'twin-turbo' | 'quad-turbo' | 'supercharged';
 export type Valvetrain = 'dohc' | 'sohc' | 'ohv';
 
 export type Family = 'inline' | 'vee' | 'flat' | 'narrow' | 'rotary';
@@ -52,6 +52,38 @@ export interface Article {
   cars: string[];
 }
 
+/** Crank degrees after firing TDC. Defaults to a typical road cam. */
+export interface ValveTiming {
+  exhaustOpen: number;
+  exhaustClose: number;
+  intakeOpen: number;
+  intakeClose: number;
+}
+
+/** Only engines from the designer set these. The catalogue derives sizes from the bore. */
+export interface ValveSizes {
+  intake: number;
+  exhaust: number;
+  lift: number;
+}
+
+/** Behaviour computed by the designer's performance model. */
+export interface EngineTuning {
+  /** Net torque over normalised speed, 0 to 1.2 of redline, peak = 1. */
+  torqueTable?: number[];
+  boostLagS?: number;
+  /** False when the engine can't sustain itself: the starter turns it and nothing happens. */
+  catches?: boolean;
+  intakeM?: number;
+  supercharger?: boolean;
+  flywheelKg?: number;
+  /** Multiplies the visible shake, for balance shafts. */
+  vibrationGain?: number;
+  counterweightMm?: number;
+  /** Loudness correction measured for this exact engine. */
+  trim?: number;
+}
+
 export interface EngineSpec {
   id: string;
   family: Family;
@@ -84,6 +116,12 @@ export interface EngineSpec {
   rough: number;
   /** Lift-off pops from the exhaust. */
   pops: number;
+  /** Audible share of the turbo's whistle, 0 to 1. */
+  turboWhine: number;
+  /** Power one turbo is sized for, drawn to scale. Zero without a turbo. */
+  turboHp: number;
+  /** Audible share of the boost dumped when the throttle closes, 0 to 1. */
+  blowoff: number;
   exhaust: ExhaustDef;
   /** Paint on the cam covers. */
   coverColor: string;
@@ -91,6 +129,9 @@ export interface EngineSpec {
   article: Article;
   /** Short note when a figure could not be confirmed against a primary source. */
   verifyNote?: string;
+  timing?: ValveTiming;
+  valves?: ValveSizes;
+  tuning?: EngineTuning;
 }
 
 export const FAMILY_NAMES: Record<Family, string> = {
@@ -106,6 +147,7 @@ export const ASPIRATION_NAMES: Record<Aspiration, string> = {
   turbo: 'турбо',
   'twin-turbo': 'два турбіни',
   'quad-turbo': 'чотири турбіни',
+  supercharged: 'механічний нагнітач',
 };
 
 export const VALVETRAIN_NAMES: Record<Valvetrain, string> = {

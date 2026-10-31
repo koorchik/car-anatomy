@@ -1,10 +1,7 @@
 import * as THREE from 'three';
+import { turboParts, turboSize } from './turbo.ts';
 import {
   DEG,
-  EXHAUST_CLOSE,
-  EXHAUST_OPEN,
-  EXHAUST_PEAK,
-  INTAKE_PEAK,
   cyclePhase,
   exhaustLift,
   intakeLift,
@@ -38,7 +35,7 @@ import {
   type LobeDef,
 } from './geometry.ts';
 import { createMaterials, glowTexture, hotPipeMaterial, type EngineMaterials, type HotPipeUniforms } from './materials.ts';
-import { GAS, disposeTree, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
+import { GAS, disposeTree, markDamaged, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
 
 interface CylinderParts {
   def: Cylinder;
@@ -71,6 +68,9 @@ interface Explodable {
 }
 
 const scratch = new THREE.Color();
+
+/** A heavier flywheel is drawn larger, within what fits under the engine. */
+const clampScale = (ratio: number): number => Math.min(1.25, Math.max(0.72, Math.cbrt(ratio)));
 
 /** Colour and opacity of the gas for a given cycle position. Also tells if the spark is visible. */
 function gasAppearance(phase: number, firing: boolean): { color: THREE.Color; opacity: number } {
@@ -113,6 +113,8 @@ export class PistonEngineModel implements EngineModel {
   private readonly flash: THREE.PointLight[] = [];
   private readonly shellMeshes: Array<{ mesh: THREE.Mesh; solid: THREE.Material; glass: THREE.Material }> = [];
   private readonly peripheral: THREE.Object3D[] = [];
+  private readonly collectors: Array<{ point: THREE.Vector3; sign: number; z: number; downFrom: Engine['cylinders'][number] }> = [];
+  private plenumEnd = new THREE.Vector3();
   private readonly solidOnly: THREE.Object3D[] = [];
   private readonly explodables: Explodable[] = [];
   private readonly chainMaterials: THREE.Texture[] = [];
@@ -121,6 +123,7 @@ export class PistonEngineModel implements EngineModel {
   private roll = 0;
   private rollVel = 0;
   private readonly valveLift: number;
+  private readonly shakeGain: number;
 
   private readonly deck: number;
   private readonly bore: number;
@@ -132,7 +135,8 @@ export class PistonEngineModel implements EngineModel {
     this.materials = createMaterials(spec.coverColor, spec.blockMaterial);
     this.bore = spec.bore * MM;
     this.deck = engine.deck * MM;
-    this.valveLift = this.bore * 0.115;
+    this.valveLift = spec.valves ? spec.valves.lift * MM : this.bore * 0.115;
+    this.shakeGain = spec.tuning?.vibrationGain ?? 1;
     this.group.add(this.mounted);
 
     this.crank = this.buildCrank();
@@ -166,7 +170,8 @@ export class PistonEngineModel implements EngineModel {
     const mainR = b * 0.27;
     const webWidth = e.rodWidth * MM * 0.58;
     const throws = e.throws.map((t) => ({ angle: t.angle, z: t.z * MM, length: t.length * MM }));
-    const geo = crankGeometry(throws, r, pinR, mainR, r + b * 0.3, webWidth, e.zMin * MM - b * 0.3, e.zMax * MM + b * 0.3);
+    const counterweight = e.spec.tuning?.counterweightMm ? e.spec.tuning.counterweightMm * MM : r + b * 0.3;
+    const geo = crankGeometry(throws, r, pinR, mainR, counterweight, webWidth, e.zMin * MM - b * 0.3, e.zMax * MM + b * 0.3);
     const mesh = tag(new THREE.Mesh(geo, this.materials.crank), 'crank');
     mesh.castShadow = true;
     this.mounted.add(mesh);
@@ -352,6 +357,15 @@ export class PistonEngineModel implements EngineModel {
     return groups;
   }
 
+  /** Pipes from one collector can't cross the engine, so each bank gets its own set in the picture. */
+  private visualExhaustGroups(): Cylinder[][] {
+    const e = this.engine;
+    return e.spec.exhaust.groups.flatMap((group) => {
+      const cyls = group.map((n) => e.cylinders.find((c) => c.n === n)!);
+      return e.banks.map((_, bank) => cyls.filter((c) => c.bank === bank)).filter((list) => list.length > 0);
+    });
+  }
+
   private exhaustSide(bankIndex: number): number {
     return this.engine.banks[bankIndex]!.alpha >= 0 ? 1 : -1;
   }
@@ -364,20 +378,27 @@ export class PistonEngineModel implements EngineModel {
     const count = spec.valvesPerCyl;
     const dohc = spec.valvetrain === 'dohc';
     const ohv = spec.valvetrain === 'ohv';
-    const valveR = b * (count === 2 ? 0.2 : 0.155);
+    const sizes = spec.valves;
+    const intakeR = sizes ? (sizes.intake * MM) / 2 : b * (count === 2 ? 0.2 : 0.155) * 1.06;
+    const exhaustR = sizes ? (sizes.exhaust * MM) / 2 : b * (count === 2 ? 0.2 : 0.155) * 0.92;
+    const timing = e.timing;
     const stemLen = b * (dohc ? 0.72 : 0.62);
     const stemR = b * 0.024;
     const crossOffset = dohc ? b * 0.2 : 0;
     const tilt = dohc ? 15 * DEG : 0;
-    const zOffsets = count === 2 ? [0] : [b * 0.2, -b * 0.2];
+    const intakeCount = count === 2 ? 1 : count === 3 ? 2 : count === 4 ? 2 : 3;
+    const exhaustCount = count - intakeCount;
+    const spread = (n: number, width: number): number[] => (n === 1 ? [0] : n === 2 ? [width, -width] : [width * 1.35, 0, -width * 1.35]);
     const rowOffsets = (exhaust: boolean): number[] => {
-      if (dohc) return zOffsets;
-      if (count === 2) return [exhaust ? b * 0.2 : -b * 0.2];
-      return exhaust ? [b * 0.31, b * 0.1] : [-b * 0.1, -b * 0.31];
+      if (dohc) return spread(exhaust ? exhaustCount : intakeCount, b * 0.2);
+      // One cam: all valves stand in a line along the engine.
+      const n = exhaust ? exhaustCount : intakeCount;
+      const centre = exhaust ? b * 0.2 : -b * 0.2;
+      return n === 1 ? [centre] : spread(n, b * 0.1).map((z) => z + centre);
     };
 
     const camBase = b * 0.115;
-    const halfSpan = (EXHAUST_CLOSE - EXHAUST_OPEN) / 4;
+    const halfSpanFor = (exhaust: boolean): number => (exhaust ? timing.exhaustClose - timing.exhaustOpen : timing.intakeClose - timing.intakeOpen) / 4;
     const lobeWidth = b * 0.11;
     const camsByKey = new Map<string, { group: THREE.Group; lobes: LobeDef[]; zs: number[]; x: number; y: number }>();
 
@@ -417,7 +438,7 @@ export class PistonEngineModel implements EngineModel {
           const valve: ValveDef = { cyl, exhaust, base };
           this.valves.push(valve);
 
-          const peak = exhaust ? EXHAUST_PEAK : INTAKE_PEAK;
+          const peak = exhaust ? (timing.exhaustOpen + timing.exhaustClose) / 2 : (timing.intakeOpen + timing.intakeClose) / 2;
           const thetaPeak = cyl.fire + peak;
 
           if (ohv) {
@@ -434,7 +455,7 @@ export class PistonEngineModel implements EngineModel {
             const camDir = rodEnd.clone().sub(camCenter).setZ(0).normalize();
             // Nose must aim at the lifter when this valve is at full lift. Nose at rest points to -Y.
             const aim = Math.atan2(camDir.x, -camDir.y);
-            blockLobes.push({ z: tipLocal.z, rotation: (thetaPeak / 2) * DEG + aim });
+            blockLobes.push({ z: tipLocal.z, rotation: (thetaPeak / 2) * DEG + aim, halfSpan: halfSpanFor(exhaust) });
             valve.ohv = { pivot, camDir, camCenter, rodEnd, valveTip: tipLocal, camBase };
             pushrodValves.push(valve);
           } else {
@@ -451,15 +472,15 @@ export class PistonEngineModel implements EngineModel {
             cam.y = camPos.y;
             cam.zs.push(tipBank.z);
             const aim = -Math.atan2(dirBank.x, dirBank.y);
-            cam.lobes.push({ z: tipBank.z, rotation: (thetaPeak / 2) * DEG + aim });
+            cam.lobes.push({ z: tipBank.z, rotation: (thetaPeak / 2) * DEG + aim, halfSpan: halfSpanFor(exhaust) });
           }
         }
       }
     }
 
     // Shared instanced meshes for valves and springs.
-    const valveGeoIn = valveGeometry(valveR * 1.06, stemR, stemLen);
-    const valveGeoEx = valveGeometry(valveR * 0.92, stemR, stemLen);
+    const valveGeoIn = valveGeometry(intakeR, stemR, stemLen);
+    const valveGeoEx = valveGeometry(exhaustR, stemR, stemLen);
     const inCount = this.valves.filter((v) => !v.exhaust).length;
     const exCount = this.valves.length - inCount;
     this.valveMeshIn = tag(new THREE.InstancedMesh(valveGeoIn, m.valveIntake, inCount), 'valveIn');
@@ -476,7 +497,7 @@ export class PistonEngineModel implements EngineModel {
         const [bankIndex] = key.split('/');
         const zMin = Math.min(...cam.zs) - b * 0.5;
         const zMax = Math.max(...cam.zs) + b * 0.5;
-        const geo = camshaftGeometry(cam.lobes, camBase, this.valveLift, lobeWidth, b * 0.078, zMin, zMax, halfSpan);
+        const geo = camshaftGeometry(cam.lobes, camBase, this.valveLift, lobeWidth, b * 0.078, zMin, zMax);
         const mesh = tag(new THREE.Mesh(geo, m.cam), 'cam');
         mesh.position.set(cam.x, cam.y, 0);
         mesh.castShadow = true;
@@ -485,7 +506,7 @@ export class PistonEngineModel implements EngineModel {
       }
     } else if (blockCam) {
       const zs = blockLobes.map((l) => l.z);
-      const geo = camshaftGeometry(blockLobes, camBase, this.valveLift, lobeWidth, b * 0.078, Math.min(...zs) - b * 0.4, Math.max(...zs) + b * 0.4, halfSpan);
+      const geo = camshaftGeometry(blockLobes, camBase, this.valveLift, lobeWidth, b * 0.078, Math.min(...zs) - b * 0.4, Math.max(...zs) + b * 0.4);
       const mesh = tag(new THREE.Mesh(geo, m.cam), 'cam');
       mesh.position.set(blockCam.x, blockCam.y, 0);
       this.mounted.add(mesh);
@@ -533,7 +554,8 @@ export class PistonEngineModel implements EngineModel {
     const rear = e.zMin * MM - b * 0.2;
 
     // Flywheel at the rear.
-    const flyR = Math.max(b * 1.28, r + b * 1.05);
+    const flyKg = e.spec.tuning?.flywheelKg;
+    const flyR = Math.max(b * 1.28, r + b * 1.05) * (flyKg ? clampScale(flyKg / 10) : 1);
     const flywheel = tag(new THREE.Mesh(flywheelGeometry(flyR, b * 0.26), m.flywheel), 'flywheel');
     flywheel.position.z = rear - b * 0.22;
     flywheel.castShadow = true;
@@ -661,6 +683,7 @@ export class PistonEngineModel implements EngineModel {
     } else {
       plenumPos = new THREE.Vector3(-this.bore * 1.5, this.deck + b * 0.25, 0);
     }
+    this.plenumEnd = new THREE.Vector3(plenumPos.x, plenumPos.y, zMin);
     const plenumGeo = zCylinder(plenumR, zMax - zMin, 24, plenumPos.x, plenumPos.y, (zMin + zMax) / 2);
     const plenumCaps = [new THREE.SphereGeometry(plenumR, 20, 12), new THREE.SphereGeometry(plenumR, 20, 12)];
     plenumCaps.forEach((cap) => cap.scale(1, 1, 0.42));
@@ -678,6 +701,15 @@ export class PistonEngineModel implements EngineModel {
       const pts = [port, port.clone().add(outward.clone().multiplyScalar(0.5)), port.clone().add(outward).lerp(start, 0.25), start];
       runnerParts.push(tubeAlong(pts, runnerR, 18, 10));
     }
+    if (spec.aspiration === 'supercharged') {
+      // A Roots blower on top of the plenum, belt-driven from the crank.
+      const blowerW = b * 0.62;
+      const body = extrude(roundedRect(-blowerW, 0, blowerW, b * 0.72, b * 0.2), (zMax - zMin) * 0.75, { thickness: 0.012, segments: 1 });
+      body.translate(plenumPos.x, plenumPos.y + plenumR * 0.8, (zMin + zMax) / 2);
+      runnerParts.push(body);
+      const pulley = zCylinder(b * 0.2, b * 0.14, 24, plenumPos.x, plenumPos.y + plenumR * 0.8 + b * 0.36, (zMin + zMax) / 2 + (zMax - zMin) * 0.375 + b * 0.09);
+      runnerParts.push(pulley);
+    }
     const intake = tag(new THREE.Mesh(merge(runnerParts), m.intake), 'intake');
     intake.castShadow = true;
     this.mounted.add(intake);
@@ -687,8 +719,7 @@ export class PistonEngineModel implements EngineModel {
     // Exhaust: one primary per cylinder into a collector per group.
     const pipeR = b * 0.1;
     const maxY = -e.r * MM - b * 0.2;
-    spec.exhaust.groups.forEach((group) => {
-      const cyls = group.map((n) => e.cylinders.find((c) => c.n === n)!);
+    this.visualExhaustGroups().forEach((cyls) => {
       const bankIdx = cyls[0]!.bank;
       const sign = this.exhaustSide(bankIdx);
       const bankFrame = heads[bankIdx]!;
@@ -713,6 +744,9 @@ export class PistonEngineModel implements EngineModel {
         this.peripheral.push(pipe);
         this.headers.push({ cyl, uniforms });
       }
+      this.collectors.push({ point: collector, sign, z: zEnd, downFrom: cyls[0]! });
+      // A turbo takes the exhaust from here and has its own down-pipe.
+      if (spec.aspiration.includes('turbo')) return;
       // Collector down-pipe heading to the rear of the car.
       const outPoints = [collector, collector.clone().add(new THREE.Vector3(0, -b * 0.15, -b * 0.55)), collector.clone().add(new THREE.Vector3(0, -b * 0.35, -b * 1.5))];
       const { material: downMaterial, uniforms: downUniforms } = hotPipeMaterial();
@@ -726,54 +760,64 @@ export class PistonEngineModel implements EngineModel {
 
   private buildTurbos(): void {
     const spec = this.engine.spec;
-    const turbos = { na: 0, turbo: 1, 'twin-turbo': 2, 'quad-turbo': 4 }[spec.aspiration];
+    const turbos = { na: 0, turbo: 1, 'twin-turbo': 2, 'quad-turbo': 4, supercharged: 0 }[spec.aspiration];
     if (turbos === 0) return;
-    const e = this.engine;
     const b = this.bore;
     const m = this.materials;
-    const groupCount = spec.exhaust.groups.length;
-    const flat = e.banks.length === 2 && Math.abs(e.banks[0]!.alpha - e.banks[1]!.alpha) > 150;
-
-    const snail = new THREE.TorusGeometry(b * 0.36, b * 0.16, 12, 36);
-    const hub = zCylinder(b * 0.27, b * 0.26, 28);
-    const coreGeo = zCylinder(b * 0.14, b * 0.44, 18);
-    const bladeGeo = new THREE.BufferGeometry();
-    const blades: THREE.BufferGeometry[] = [];
-    for (let i = 0; i < 9; i++) {
-      const blade = new THREE.BoxGeometry(b * 0.26, b * 0.012, b * 0.12);
-      blade.translate(b * 0.14, 0, 0);
-      blade.rotateZ((i / 9) * Math.PI * 2);
-      blades.push(blade);
-    }
-    bladeGeo.copy(merge(blades));
+    const groupCount = this.collectors.length;
+    const size = turboSize(spec.turboHp || 200);
+    const parts = turboParts(size);
 
     for (let i = 0; i < turbos; i++) {
-      const groupIndex = i % groupCount;
-      const group = spec.exhaust.groups[groupIndex]!;
-      const cyls = group.map((n) => e.cylinders.find((c) => c.n === n)!);
-      const bank = cyls[0]!.bank;
-      const sign = this.exhaustSide(bank);
-      const al = e.banks[bank]!.alpha * DEG;
-      const outer = Math.max(Math.abs(Math.sin(al)) * (this.deck + b * 0.5), b * 0.6) + b * 0.75;
-      const y = flat ? -b * 1.4 : -b * 0.2;
+      const { point, sign, z, downFrom } = this.collectors[i % groupCount]!;
       const stack = Math.floor(i / groupCount);
       const unit = new THREE.Group();
-      unit.position.set(sign * outer, y + stack * b * 0.9, Math.min(...cyls.map((c) => c.z * MM)) - b * 0.65 - b * 0.1);
-      const hot = tag(new THREE.Mesh(snail, m.turboHot), 'turbo');
-      const hotHub = tag(new THREE.Mesh(hub, m.turboHot), 'turbo');
-      const wheelHot = tag(new THREE.Mesh(bladeGeo, m.sprocket), 'turbo');
-      const core = tag(new THREE.Mesh(coreGeo, m.turboCold), 'turbo');
-      core.position.z = b * 0.3;
-      const cold = tag(new THREE.Mesh(snail, m.turboCold), 'turbo');
-      cold.position.z = b * 0.56;
-      const coldHub = tag(new THREE.Mesh(hub, m.turboCold), 'turbo');
-      coldHub.position.z = b * 0.56;
-      unit.add(hot, hotHub, wheelHot, core, cold, coldHub);
+      // The scroll's neck meets the collector; further turbos of the group stack below it, on the outside.
+      unit.scale.set(-sign, 1, 1);
+      unit.position.set(point.x + sign * parts.inlet.x + sign * stack * size * 0.95, point.y - parts.inlet.y - stack * size * 0.3, z);
+      const hot = tag(new THREE.Mesh(parts.hot, m.turboHot), 'turbo');
+      const cold = tag(new THREE.Mesh(parts.cold, m.turboCold), 'turbo');
+      const fittings = tag(new THREE.Mesh(parts.fittings, m.sprocket), 'turbo');
+      const rotor = tag(new THREE.Mesh(parts.rotor, m.turboWheel), 'turbo');
       hot.castShadow = cold.castShadow = true;
+      unit.add(hot, cold, fittings, rotor);
+      this.shellMeshes.push({ mesh: hot, solid: m.turboHot, glass: m.turboHotGlass }, { mesh: cold, solid: m.turboCold, glass: m.turboColdGlass });
       this.mounted.add(unit);
       this.peripheral.push(unit);
-      this.spinners.push({ object: wheelHot, ratio: 18 });
+      // The mirrored side turns the other way, as it would seen from its own end.
+      this.spinners.push({ object: rotor, ratio: 18 });
       this.explodables.push({ object: unit, direction: new THREE.Vector3(sign * 1.5, -0.5, 0) });
+      unit.updateMatrix();
+
+      // Exhaust leaves along the shaft and turns towards the rear of the car.
+      const out = parts.outlet.clone().applyMatrix4(unit.matrix);
+      const downPoints = [out, out.clone().add(new THREE.Vector3(0, -b * 0.1, -b * 0.3)), out.clone().add(new THREE.Vector3(0, -b * 0.6, -b * 1.1))];
+      const { material: downMaterial, uniforms: downUniforms } = hotPipeMaterial();
+      const down = tag(new THREE.Mesh(tubeAlong(downPoints, size * 0.17, 16, 12), downMaterial), 'header');
+      down.castShadow = true;
+      this.mounted.add(down);
+      this.peripheral.push(down);
+      this.headers.push({ cyl: downFrom, uniforms: downUniforms });
+
+      // Compressed air on its way round to the plenum. Turbos stacked in a group share their first one's pipe.
+      if (stack > 0) continue;
+      const air = parts.chargeOut.clone().applyMatrix4(unit.matrix);
+      const end = this.plenumEnd;
+      // It runs past the end of the engine, so it only has to clear the plenum.
+      const clearance = Math.max(end.y, air.y) + b * 0.3;
+      const chargePoints = [
+        air,
+        air.clone().add(new THREE.Vector3(0, b * 0.5, 0)),
+        new THREE.Vector3(air.x * 0.75 + sign * b * 0.2, clearance, Math.min(air.z, end.z - b * 0.55)),
+        new THREE.Vector3((air.x + end.x) * 0.5, clearance, end.z - b * 0.7),
+        new THREE.Vector3(end.x, end.y + b * 0.1, end.z - b * 0.5),
+        end,
+      ];
+      const charge = tag(new THREE.Mesh(tubeAlong(chargePoints, Math.min(size * 0.09, b * 0.11), 44, 12), m.intake), 'charge-pipe');
+      charge.castShadow = true;
+      this.mounted.add(charge);
+      this.peripheral.push(charge);
+      this.explodables.push({ object: charge, direction: new THREE.Vector3(sign * 0.6, 1.2, -0.4) });
     }
   }
 
@@ -868,6 +912,17 @@ export class PistonEngineModel implements EngineModel {
   private viewMode: ViewMode = 'xray';
   private explodeAmount = 0;
 
+  private undoFailure: (() => void) | null = null;
+
+  setFailure(part: string | null): void {
+    this.undoFailure?.();
+    this.undoFailure = null;
+    if (!part) return;
+    const m = this.materials;
+    const target = { rod: m.rod, piston: m.piston, valve: m.valveExhaust, exhaust: m.valveExhaust, gasket: m.head, turbo: m.turboHot, mounts: m.sump }[part];
+    if (target) this.undoFailure = markDamaged(target);
+  }
+
   setExplode(amount: number): void {
     this.explodeAmount = amount;
     for (const { object, direction } of this.explodables) {
@@ -947,7 +1002,7 @@ export class PistonEngineModel implements EngineModel {
 
     for (const v of this.valves) {
       const phi = mod(theta - v.cyl.fire, 720);
-      const l = (v.exhaust ? exhaustLift(phi) : intakeLift(phi)) * this.valveLift;
+      const l = (v.exhaust ? exhaustLift(phi, e.timing) : intakeLift(phi, e.timing)) * this.valveLift;
       lift.makeTranslation(0, -l, 0);
       const bankAlpha = e.banks[v.cyl.bank]!.alpha * DEG;
       offset.makeTranslation(Math.sin(bankAlpha) * exploded * 2.6 * b, Math.cos(bankAlpha) * exploded * 2.6 * b, 0);
@@ -1013,7 +1068,7 @@ export class PistonEngineModel implements EngineModel {
     for (const h of this.headers) {
       h.uniforms.uHeat.value = this.heat;
       const phi = mod(state.theta - h.cyl.fire, 720);
-      const x = (phi - EXHAUST_OPEN) / 150;
+      const x = (phi - e.timing.exhaustOpen) / 150;
       if (firing && x >= 0 && x <= 1.2) {
         h.uniforms.uPulsePos.value = x;
         h.uniforms.uPulseAmp.value = (1 - x * 0.7) * (0.25 + state.load * 0.75);
@@ -1059,7 +1114,7 @@ export class PistonEngineModel implements EngineModel {
     const i = Math.floor(mod(state.theta, 360));
     const vib = this.vib;
     const speed = Math.min(1, state.rpm / e.spec.idleRpm);
-    const a = state.shake * 0.0075 * speed;
+    const a = state.shake * 0.0075 * speed * this.shakeGain;
     const x = (vib.fx[i] ?? 0) * a;
     const y = (vib.fy[i] ?? 0) * a;
     const pitch = (vib.pitch[i] ?? 0) * a * 0.28;
