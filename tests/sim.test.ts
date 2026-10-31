@@ -239,3 +239,26 @@ it('the start is short: the engine catches within half a second', () => {
   run(sim, 0.5);
   expect(sim.state).toBe('running');
 });
+
+describe('the crank speed ripple follows the firing pulses', () => {
+  // A piston engine fires every cylinder once in two turns. A rotor fires once per shaft turn.
+  it.each([['i1', 0.5], ['i3', 1.5], ['i4', 2], ['v8-cross', 4], ['r2', 2], ['r4', 4]] as const)('%s pulses %s times a turn', (id, expected) => {
+    const sim = simFor(id);
+    sim.startImmediately();
+    sim.lockedRpm = sim.rpm;
+    const dt = 1 / 48000;
+    const cycle = sim.params.cycle;
+    let previous = sim.angle;
+    let turned = 0;
+    const steps: number[] = [];
+    while (turned < 360 * 60) {
+      sim.step(dt);
+      const moved = (sim.angle - previous + cycle) % cycle;
+      previous = sim.angle;
+      turned += moved;
+      steps.push(moved);
+    }
+    const peaks = steps.filter((v, i) => i > 0 && i < steps.length - 1 && v > steps[i - 1]! && v >= steps[i + 1]!).length;
+    expect(peaks / 60).toBeCloseTo(expected, 1);
+  });
+});

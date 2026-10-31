@@ -7,6 +7,8 @@ export interface SimParams {
   cylinders: number;
   /** Crank degrees per chamber cycle. */
   cycle: number;
+  /** Firing pulses per crank turn. */
+  firesPerRev: number;
   idleRpm: number;
   redlineRpm: number;
   revTimeS: number;
@@ -220,11 +222,10 @@ export class EngineSim {
   private advance(dt: number): void {
     const p = this.params;
     // Crank speed ripples with the firing pulses, more so with fewer cylinders and at low speed.
-    const pulsesPerRev = (p.cylinders * 720) / p.cycle / 2;
     const speedShare = clamp(1.4 - this.rpm / (p.idleRpm * 4), 0.05, 1);
     const baseRipple = this.state === 'cranking' ? 0.32 : 0.16;
     const ripple = (baseRipple / Math.sqrt(p.cylinders)) * speedShare * (0.5 + 0.5 * p.rough);
-    const inst = this.rpm * (1 + ripple * Math.sin(this.angle * (Math.PI / 180) * pulsesPerRev));
+    const inst = this.rpm * (1 + ripple * Math.sin(this.angle * (Math.PI / 180) * p.firesPerRev));
     this.angle = (this.angle + inst * 6 * dt) % p.cycle;
   }
 

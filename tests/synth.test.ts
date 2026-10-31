@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ENGINES, engineById } from '../src/data/engines.ts';
 import { engineOrders, type OrderRow } from '../scripts/analysis.ts';
 import { peak, render, rmsDb } from '../scripts/render-audio.ts';
-import { EngineSynth, synthConfig } from '../src/audio/synth.ts';
+import { EngineSynth, synthConfig, type SynthConfig } from '../src/audio/synth.ts';
 import { measureTrim } from '../src/designer/loudness.ts';
 import { evaluate } from '../src/designer/physics.ts';
 import { resolveDesign } from '../src/designer/constraints.ts';
@@ -144,6 +144,63 @@ describe('designed engines sound sane', () => {
     }
     expect(Math.max(...levels) - Math.min(...levels)).toBeLessThan(14);
     expect(Math.min(...levels)).toBeGreaterThan(-32);
+  });
+});
+
+describe('a turbine softens the exhaust pulses', () => {
+  const FS = 48000;
+  const rendered = (config: SynthConfig): { l: Float32Array; r: Float32Array } => {
+    const synth = new EngineSynth(config, FS);
+    synth.sim.start();
+    synth.sim.state = 'running';
+    synth.sim.pedal = 1;
+    synth.sim.lockedRpm = 4000;
+    synth.sim.rpm = 4000;
+    synth.sim.load = 1;
+    const l = new Float32Array(FS * 2);
+    const r = new Float32Array(FS * 2);
+    for (let at = 0; at < l.length; at += 128) {
+      // A locked speed lets the boost fall, and a turbine smooths most when it is working hard.
+      synth.sim.boost = 0.8;
+      synth.process(l.subarray(at, at + 128), r.subarray(at, at + 128));
+    }
+    return { l: l.subarray(FS), r: r.subarray(FS) };
+  };
+  /** The same engine with only the turbine in the exhaust path changed: no whistle, no dump valve. */
+  const voiced = (id: string, turbos: number): SynthConfig => ({ ...synthConfig(buildEngine(engineById(id)!)), turbos, turboWhine: 0, blowoff: 0 });
+  const bands = (x: Float32Array): { low: number; high: number } => {
+    const a = 1 - Math.exp((-2 * Math.PI * 1500) / FS);
+    const b = 1 - Math.exp((-2 * Math.PI * 300) / FS);
+    let lp = 0;
+    let lpLow = 0;
+    let high = 0;
+    let low = 0;
+    for (const v of x) {
+      lp += a * (v - lp);
+      lpLow += b * (v - lpLow);
+      high += (v - lp) ** 2;
+      low += lpLow ** 2;
+    }
+    return { low: 10 * Math.log10(low), high: 10 * Math.log10(high) };
+  };
+
+  it.each(['i4', 'i6', 'v8-cross'])('%s loses its sharp edge but keeps its note', (id) => {
+    const plain = bands(rendered(voiced(id, 0)).l);
+    const turbo = bands(rendered(voiced(id, 1)).l);
+    const highLoss = plain.high - turbo.high;
+    const lowLoss = plain.low - turbo.low;
+    expect(highLoss - lowLoss).toBeGreaterThan(1);
+    expect(lowLoss).toBeLessThan(3);
+  });
+
+  it('each exhaust collector goes through its own turbine', () => {
+    // Every cylinder on the left collector: nothing from the exhaust may reach the hard-right one.
+    const base = voiced('v8-cross', 0);
+    const config = (turbos: number): SynthConfig => ({ ...base, turbos, groupPans: [-1, 1], cylinders: base.cylinders.map((c) => ({ ...c, group: 0 })) });
+    const plain = rendered(config(0)).r;
+    const turbo = rendered(config(1)).r;
+    const leak = turbo.reduce((sum, v, i) => sum + (v - plain[i]!) ** 2, 0);
+    expect(leak).toBeLessThan(1e-9);
   });
 });
 
