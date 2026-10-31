@@ -1,9 +1,17 @@
 // Strip chart of the engine cycle: one row per chamber, in firing order.
 // Each row shows the four strokes, so uneven firing is visible at a glance.
 
-import { STROKE_NAMES, cyclePhase, strokeAt, type Cylinder, type Engine, type Stroke } from '../engine/kinematics.ts';
+import { cyclePhase, strokeAt, type Cylinder, type Engine, type Stroke } from '../engine/kinematics.ts';
+import { t } from '../i18n/t.ts';
 
-export const STROKE_COLORS: Record<Stroke, string> = {
+export const STROKE_NAMES: Record<Stroke, string> = {
+  intake: t('Впуск'),
+  compression: t('Стиснення'),
+  power: t('Робочий хід'),
+  exhaust: t('Випуск'),
+};
+
+const STROKE_COLORS: Record<Stroke, string> = {
   power: '#ea6a15',
   exhaust: '#a96ca2',
   intake: '#45a4d0',
@@ -57,8 +65,8 @@ export class FiringDiagram {
     this.rows = [...engine.cylinders].sort((a, b) => a.fire - b.fire);
     this.background = null;
     const description = engine.isRotary
-      ? 'Діаграма циклу: кожна камера ротора в порядку спалахів.'
-      : `Діаграма циклу в порядку запалювання ${engine.spec.firingOrder.join('-')}.`;
+      ? t('Діаграма циклу: кожна камера ротора в порядку спалахів.')
+      : t('Діаграма циклу в порядку запалювання {order}.', { order: engine.spec.firingOrder.join('-') });
     this.element.setAttribute('aria-label', description);
   }
 
@@ -125,11 +133,11 @@ export class FiringDiagram {
   private showTooltip(clientX: number, clientY: number): void {
     const engine = this.engine;
     if (!engine || !this.hover) return;
-    const { l, r, t, b } = this.pad;
+    const { l, r, t: top, b } = this.pad;
     const plotW = this.width - l - r;
-    const plotH = this.height - t - b;
+    const plotH = this.height - top - b;
     const px = this.hover.x - l;
-    const py = this.hover.y - t;
+    const py = this.hover.y - top;
     if (px < 0 || px > plotW || py < 0 || py > plotH) {
       this.tooltip.hidden = true;
       return;
@@ -137,8 +145,8 @@ export class FiringDiagram {
     const row = this.rows[Math.min(this.rows.length - 1, Math.floor((py / plotH) * this.rows.length))]!;
     const theta = (px / plotW) * engine.cycle;
     const phase = cyclePhase(engine, row, theta);
-    const name = engine.isRotary ? `Камера ${label(engine, row)}` : `Циліндр ${row.n}`;
-    this.tooltip.textContent = `${name}, ${Math.round(theta)}° вала: ${STROKE_NAMES[strokeAt(phase)].toLowerCase()}`;
+    const name = engine.isRotary ? t('Камера {label}', { label: label(engine, row) }) : t('Циліндр {n}', { n: row.n });
+    this.tooltip.textContent = t('{name}, {deg}° вала: {stroke}', { name, deg: Math.round(theta), stroke: STROKE_NAMES[strokeAt(phase)].toLowerCase() });
     this.tooltip.hidden = false;
     this.tooltip.style.left = `${clientX}px`;
     this.tooltip.style.top = `${clientY - 12}px`;

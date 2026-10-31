@@ -3,6 +3,7 @@
 import { ENGINE_VARIANTS } from '../data/engine-variants.ts';
 import { CATALOGUE, ENGINES } from '../data/engines.ts';
 import type { EngineSpec } from '../engine/spec.ts';
+import { t } from '../i18n/t.ts';
 import { resolveDesign } from './constraints.ts';
 import { catalogueDesign } from './catalogue.ts';
 import { DEFAULT_DESIGN, type ChargerKind, type Design, type DesignLayout, type Muffler } from './design.ts';
@@ -103,51 +104,51 @@ const make = (over: Partial<Design>): (() => Design) => () => resolveDesign({ ..
 export const ODD_PRESETS: DesignPreset[] = [
   {
     id: 'big-single',
-    name: 'Трилітровий сингл',
-    note: 'Один циліндр на три літри: вагон моменту, а маховик ледве встигає.',
-    design: make({ name: 'Трилітровий сингл', cylinders: 1, bore: 150, stroke: 170, rodLength: 340, compression: 9, flywheelKg: 45, rpmLimit: 3200, fuel: 'ai95', intakeValve: 72, exhaustValve: 62, valvesPerCyl: 2, lift: 18, valvetrain: 'ohv', springForce: 900, intakeDuration: 235, exhaustDuration: 235, runnerDia: 70, headerDia: 70, pipeDia: 90, muffler: 'sport', catalyst: false }),
+    name: t('Трилітровий сингл'),
+    note: t('Один циліндр на три літри: вагон моменту, а маховик ледве встигає.'),
+    design: make({ name: t('Трилітровий сингл'), cylinders: 1, bore: 150, stroke: 170, rodLength: 340, compression: 9, flywheelKg: 45, rpmLimit: 3200, fuel: 'ai95', intakeValve: 72, exhaustValve: 62, valvesPerCyl: 2, lift: 18, valvetrain: 'ohv', springForce: 900, intakeDuration: 235, exhaustDuration: 235, runnerDia: 70, headerDia: 70, pipeDia: 90, muffler: 'sport', catalyst: false }),
   },
   {
     id: 'tiny-v12',
-    name: 'Крихітний V12',
-    note: 'Літр робочого об’єму на дванадцять циліндрів і дуже високі оберти.',
-    design: make({ name: 'Крихітний V12 на літр', layout: 'vee', cylinders: 12, veeAngle: 60, bore: 50, stroke: 42, rodLength: 88, compression: 12.5, intakeValve: 19, exhaustValve: 16, lift: 6, intakeDuration: 280, exhaustDuration: 275, lobeSeparation: 108, springForce: 340, rpmLimit: 16000, fuel: 'ai98', runnerLength: 130, runnerDia: 20, headerLength: 320, headerDia: 18, pipeDia: 60, muffler: 'open', catalyst: false, flywheelKg: 2, collector: 'bybank', pistonMaterial: 'forged', rodMaterial: 'titanium' }),
+    name: t('Крихітний V12'),
+    note: t('Літр робочого об’єму на дванадцять циліндрів і дуже високі оберти.'),
+    design: make({ name: t('Крихітний V12 на літр'), layout: 'vee', cylinders: 12, veeAngle: 60, bore: 50, stroke: 42, rodLength: 88, compression: 12.5, intakeValve: 19, exhaustValve: 16, lift: 6, intakeDuration: 280, exhaustDuration: 275, lobeSeparation: 108, springForce: 340, rpmLimit: 16000, fuel: 'ai98', runnerLength: 130, runnerDia: 20, headerLength: 320, headerDia: 18, pipeDia: 60, muffler: 'open', catalyst: false, flywheelKg: 2, collector: 'bybank', pistonMaterial: 'forged', rodMaterial: 'titanium' }),
   },
   {
     id: 'bigbang-v4',
-    name: 'V4 «великий удар»',
-    note: 'Усі спалахи скупчені разом, а потім тиша. Рівний за балансом, рваний за звуком.',
-    design: make({ name: 'V4 великий удар', layout: 'vee', cylinders: 4, veeAngle: 90, crankPreset: 'bigbang', bore: 86, stroke: 64, rodLength: 125, compression: 12.5, intakeDuration: 270, exhaustDuration: 265, lift: 11, rpmLimit: 11500, fuel: 'ai98', springForce: 900, pistonMaterial: 'forged', muffler: 'open', catalyst: false, flywheelKg: 4, runnerLength: 220, headerLength: 700, pipeDia: 58 }),
+    name: t('V4 «великий удар»'),
+    note: t('Усі спалахи скупчені разом, а потім тиша. Рівний за балансом, рваний за звуком.'),
+    design: make({ name: t('V4 великий удар'), layout: 'vee', cylinders: 4, veeAngle: 90, crankPreset: 'bigbang', bore: 86, stroke: 64, rodLength: 125, compression: 12.5, intakeDuration: 270, exhaustDuration: 265, lift: 11, rpmLimit: 11500, fuel: 'ai98', springForce: 900, pistonMaterial: 'forged', muffler: 'open', catalyst: false, flywheelKg: 4, runnerLength: 220, headerLength: 700, pipeDia: 58 }),
   },
   {
     id: 'flat-i6',
-    name: 'I6 із плоским колінвалом',
-    note: 'Зрівноважену від природи шістку зіпсовано плоским валом: подивись на вібрації.',
-    design: make({ name: 'I6 із плоским валом', cylinders: 6, crankPreset: 'flat', bore: 84, stroke: 90, rodLength: 150, pipeDia: 70 }),
+    name: t('I6 із плоским колінвалом'),
+    note: t('Зрівноважену від природи шістку зіпсовано плоским валом: подивись на вібрації.'),
+    design: make({ name: t('I6 із плоским валом'), cylinders: 6, crankPreset: 'flat', bore: 84, stroke: 90, rodLength: 150, pipeDia: 70 }),
   },
   {
     id: 'turbo-diesel-twin',
-    name: 'Турбодизельна двійка',
-    note: 'Висока ступінь стиснення, велика турбіна і дуже мало циліндрів.',
-    design: make({ name: 'Турбодизельна двійка', cylinders: 2, fuel: 'diesel', lambda: 1.5, compression: 19, bore: 95, stroke: 110, rodLength: 185, charger: 'turbo', boostBar: 1.6, turboSizeHp: 170, intercooler: 0.7, intakeDuration: 215, exhaustDuration: 220, rpmLimit: 4200, flywheelKg: 30, balanceShafts: 2, springForce: 420, valvesPerCyl: 2, valvetrain: 'sohc', intakeValve: 44, exhaustValve: 38, lift: 9.5, pipeDia: 60 }),
+    name: t('Турбодизельна двійка'),
+    note: t('Високий ступінь стиснення, велика турбіна і дуже мало циліндрів.'),
+    design: make({ name: t('Турбодизельна двійка'), cylinders: 2, fuel: 'diesel', lambda: 1.5, compression: 19, bore: 95, stroke: 110, rodLength: 185, charger: 'turbo', boostBar: 1.6, turboSizeHp: 170, intercooler: 0.7, intakeDuration: 215, exhaustDuration: 220, rpmLimit: 4200, flywheelKg: 30, balanceShafts: 2, springForce: 420, valvesPerCyl: 2, valvetrain: 'sohc', intakeValve: 44, exhaustValve: 38, lift: 9.5, pipeDia: 60 }),
   },
   {
     id: 'hyper-i3',
-    name: 'Гіпернаддувний I3',
-    note: 'Літр, три циліндри і 3 бари наддуву на метанолі. Подивись, чим це закінчується.',
-    design: make({ name: 'Гіпернаддувний I3', cylinders: 3, bore: 74, stroke: 77, rodLength: 130, compression: 8.5, charger: 'turbo', boostBar: 3, turboSizeHp: 240, intercooler: 0.85, fuel: 'methanol', lambda: 0.82, intakeDuration: 255, exhaustDuration: 255, rpmLimit: 8200, springForce: 950, pistonMaterial: 'forged', muffler: 'sport', catalyst: false, pipeDia: 70, flywheelKg: 5 }),
+    name: t('Гіпернаддувний I3'),
+    note: t('Літр, три циліндри і 3 бари наддуву на метанолі. Подивись, чим це закінчується.'),
+    design: make({ name: t('Гіпернаддувний I3'), cylinders: 3, bore: 74, stroke: 77, rodLength: 130, compression: 8.5, charger: 'turbo', boostBar: 3, turboSizeHp: 240, intercooler: 0.85, fuel: 'methanol', lambda: 0.82, intakeDuration: 255, exhaustDuration: 255, rpmLimit: 8200, springForce: 950, pistonMaterial: 'forged', muffler: 'sport', catalyst: false, pipeDia: 70, flywheelKg: 5 }),
   },
   {
     id: 'bad-cam',
-    name: 'Гоночний кулачок у місті',
-    note: 'Дуже широкі фази на високому стисненні: холостий хід гуляє, а клапани можуть зустрітись із поршнем.',
-    design: make({ name: 'Гоночний кулачок у місті', cylinders: 4, bore: 86, stroke: 86, compression: 13.5, intakeDuration: 320, exhaustDuration: 320, lobeSeparation: 100, lift: 14, rpmLimit: 8500, intakeValve: 36, springForce: 1100 }),
+    name: t('Гоночний кулачок у місті'),
+    note: t('Дуже широкі фази на високому стисненні: холостий хід гуляє, а клапани можуть зустрітись із поршнем.'),
+    design: make({ name: t('Гоночний кулачок у місті'), cylinders: 4, bore: 86, stroke: 86, compression: 13.5, intakeDuration: 320, exhaustDuration: 320, lobeSeparation: 100, lift: 14, rpmLimit: 8500, intakeValve: 36, springForce: 1100 }),
   },
   {
     id: 'mega-rotary',
-    name: 'Чотирироторний наддув',
-    note: 'Чотири секції та дві турбіни: компактно, гучно і дуже спрагло.',
-    design: make({ name: 'Чотирироторний із наддувом', layout: 'rotary', cylinders: 4, charger: 'twinturbo', boostBar: 1, turboSizeHp: 500, fuel: 'race', lambda: 0.85, compression: 9, rpmLimit: 9000, muffler: 'open', catalyst: false, pipeDia: 90, flywheelKg: 6 }),
+    name: t('Чотирироторний наддув'),
+    note: t('Чотири секції та дві турбіни: компактно, гучно і дуже спрагло.'),
+    design: make({ name: t('Чотирироторний із наддувом'), layout: 'rotary', cylinders: 4, charger: 'twinturbo', boostBar: 1, turboSizeHp: 500, fuel: 'race', lambda: 0.85, compression: 9, rpmLimit: 9000, muffler: 'open', catalyst: false, pipeDia: 90, flywheelKg: 6 }),
   },
 ];
 
@@ -170,7 +171,7 @@ export function randomDesign(random: () => number = Math.random): Design {
   const stroke = Math.round(bore * between(0.6, 1.45));
   return resolveDesign({
     ...DEFAULT_DESIGN,
-    name: 'Випадковий двигун',
+    name: t('Випадковий двигун'),
     layout,
     cylinders,
     veeAngle: Math.round(between(45, 150)),

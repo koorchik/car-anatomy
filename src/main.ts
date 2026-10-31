@@ -19,6 +19,8 @@ import { DesignerPage } from './ui/designer/designer-page.ts';
 import { FiringDiagram, legendHtml } from './ui/firing-diagram.ts';
 import { Spectrum } from './ui/spectrum.ts';
 import { tableHtml } from './ui/table.ts';
+import { LANGUAGE_GROUP_LABEL, LANGUAGE_LABELS, locale, switchLocale, type Locale } from './i18n/locale.ts';
+import { t } from './i18n/t.ts';
 import { Tacho } from './ui/tacho.ts';
 
 type SpeedMode = 'slow' | 'readable' | 'real';
@@ -27,6 +29,9 @@ const DEFAULT_ENGINE = 'v8-cross';
 const ENGINE_COUNT = ENGINES.reduce((count, page) => count + pageChoices(page.id).length, 0);
 const SLOW_RPM_DEFAULT = 40;
 
+document.documentElement.lang = locale;
+document.title = t('Анатомія авто');
+document.querySelector('meta[name="description"]')?.setAttribute('content', t('Інтерактивна база знань про будову автомобіля: 3D-моделі двигунів, які можна крутити, запускати і слухати.'));
 const app = document.getElementById('app')!;
 
 const SVG_SOUND_ON = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 6.5h3l4-3.5v12l-4-3.5H2z" fill="currentColor"/><path d="M12 6c1.5 1.6 1.5 4.4 0 6M14.2 3.8c2.8 3 2.8 7.4 0 10.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
@@ -34,71 +39,75 @@ const SVG_SOUND_OFF = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidd
 
 app.innerHTML = `
   <div class="backdrop"><div class="badge" id="badge" aria-hidden="true"></div></div>
-  <canvas class="stage-canvas" id="stage" aria-label="Тривимірна модель двигуна. Перетягуй, щоб обертати, коліщатком наближай."></canvas>
+  <canvas class="stage-canvas" id="stage" aria-label="${t('Тривимірна модель двигуна. Перетягуй, щоб обертати, коліщатком наближай.')}"></canvas>
 
   <header class="topbar">
-    <div class="brand">Анатомія авто</div>
-    <nav class="sections" aria-label="Розділи">
-      <a class="current" id="nav-engines" href="#/engines/${DEFAULT_ENGINE}">Двигуни</a>
-      <a id="nav-designer" href="#/designer">Свій двигун</a>
-      <span>Коробки передач <small>готуємо</small></span>
-      <span>Підвіски <small>готуємо</small></span>
+    <div class="brand">${t('Анатомія авто')}</div>
+    <nav class="sections" aria-label="${t('Розділи')}">
+      <a class="current" id="nav-engines" href="#/engines/${DEFAULT_ENGINE}">${t('Двигуни')}</a>
+      <a id="nav-designer" href="#/designer">${t('Свій двигун')}</a>
+      <span>${t('Коробки передач')} <small>${t('готуємо')}</small></span>
+      <span>${t('Підвіски')} <small>${t('готуємо')}</small></span>
     </nav>
     <div class="grow"></div>
-    <button class="btn btn-catalogue" id="open-table" type="button">Усі двигуни: ${ENGINE_COUNT}</button>
-    <button class="btn" id="results-open" type="button" hidden>Показники</button>
-    <button class="btn" id="panel-open" type="button" hidden>Про двигун</button>
+    <div class="lang-switch" role="group" aria-label="${LANGUAGE_GROUP_LABEL}">
+      <button type="button" data-lang="uk" lang="uk">${LANGUAGE_LABELS.uk}</button>
+      <button type="button" data-lang="en" lang="en">${LANGUAGE_LABELS.en}</button>
+    </div>
+    <button class="btn btn-catalogue" id="open-table" type="button">${t('Усі двигуни')}<span class="btn-count">: ${ENGINE_COUNT}</span></button>
+    <button class="btn" id="results-open" type="button" hidden>${t('Показники')}</button>
+    <button class="btn" id="panel-open" type="button" hidden>${t('Про двигун')}</button>
   </header>
 
   <div class="engine-name">
     <h1 id="engine-title"></h1>
     <p id="engine-sub"></p>
     <div class="engine-nav">
-      <button class="btn" id="prev" type="button" aria-label="Попередній двигун">Попередній</button>
-      <button class="btn" id="next" type="button" aria-label="Наступний двигун">Наступний</button>
-      <a class="btn" id="to-designer" href="#/designer">Змінити в конструкторі</a>
-      <a class="btn" id="to-catalog" href="#/engines/${DEFAULT_ENGINE}" hidden>До каталогу</a>
+      <button class="btn" id="prev" type="button" aria-label="${t('Попередній двигун')}">${t('Попередній')}</button>
+      <button class="btn" id="next" type="button" aria-label="${t('Наступний двигун')}">${t('Наступний')}</button>
+      <a class="btn" id="to-designer" href="#/designer">${t('Змінити в конструкторі')}</a>
+      <a class="btn" id="to-catalog" href="#/engines/${DEFAULT_ENGINE}" hidden>${t('До каталогу')}</a>
     </div>
-    <nav class="variant-list" id="variants" aria-label="Двигуни цієї компоновки" hidden></nav>
+    <nav class="variant-list" id="variants" aria-label="${t('Двигуни цієї компоновки')}" hidden></nav>
   </div>
 
   <div class="view-tools">
     <div class="tool">
-      <span class="tool-label">Вигляд</span>
-      <div class="segmented" role="group" aria-label="Вигляд" id="view">
-        <button type="button" data-v="solid" aria-pressed="false">Двигун</button>
-        <button type="button" data-v="xray" aria-pressed="true">Рентген</button>
-        <button type="button" data-v="mechanism" aria-pressed="false">Механізм</button>
+      <span class="tool-label">${t('Вигляд')}</span>
+      <div class="segmented" role="group" aria-label="${t('Вигляд')}" id="view">
+        <button type="button" data-v="solid" aria-pressed="false">${t('Двигун')}</button>
+        <button type="button" data-v="xray" aria-pressed="true">${t('Рентген')}</button>
+        <button type="button" data-v="mechanism" aria-pressed="false">${t('Механізм')}</button>
       </div>
     </div>
     <div class="tool">
-      <span class="tool-label">Швидкість рухів</span>
-      <div class="segmented" role="group" aria-label="Швидкість" id="speed">
-        <button type="button" data-v="slow" aria-pressed="false">Повільно</button>
-        <button type="button" data-v="readable" aria-pressed="true">Наочно</button>
-        <button type="button" data-v="real" aria-pressed="false">Реально</button>
+      <span class="tool-label">${t('Швидкість рухів')}</span>
+      <div class="segmented" role="group" aria-label="${t('Швидкість')}" id="speed">
+        <button type="button" data-v="slow" aria-pressed="false">${t('Повільно')}</button>
+        <button type="button" data-v="readable" aria-pressed="true">${t('Наочно')}</button>
+        <button type="button" data-v="real" aria-pressed="false">${t('Реально')}</button>
       </div>
     </div>
     <label class="tool tool-slow" id="slow-tool" hidden>
-      <span class="tool-label">Оберти: <span id="slow-value">${SLOW_RPM_DEFAULT}</span> об/хв</span>
+      <span class="tool-label">${t('Оберти: {value} об/хв', { value: `<span id="slow-value">${SLOW_RPM_DEFAULT}</span>` })}</span>
       <input type="range" id="slow-rpm" min="10" max="300" step="5" value="${SLOW_RPM_DEFAULT}" />
     </label>
     <label class="tool tool-explode">
-      <span class="tool-label">Розібрати</span>
+      <span class="tool-label">${t('Розібрати')}</span>
       <input type="range" id="explode" min="0" max="1" step="0.01" value="0" />
     </label>
     <label class="check tool-shake">
       <input type="checkbox" id="shake" />
-      Перебільшити вібрації
+      ${t('Перебільшити вібрації')}
     </label>
   </div>
 
   <div class="hint" id="hint">
-    Перетягни модель, щоб покрутити<br />
-    Наведи на деталь, щоб побачити назву, клацни, щоб дізнатись більше<br />
-    <kbd>Пробіл</kbd> газ, <kbd>S</kbd> запуск, <kbd>←</kbd> <kbd>→</kbd> інший двигун
+    ${t('Перетягни модель, щоб покрутити')}<br />
+    ${t('Наведи на деталь, щоб побачити назву, клацни, щоб дізнатись більше')}<br />
+    ${t('<kbd>Пробіл</kbd> газ, <kbd>S</kbd> запуск, <kbd>←</kbd> <kbd>→</kbd> інший двигун')}
   </div>
-  <div class="scale-bar" title="У межах однієї сторінки всі двигуни показано в однаковому масштабі">
+  <div class="scale-bar" title="${t('У межах однієї сторінки всі двигуни показано в однаковому масштабі')}">
     <span class="scale-line" id="scale-line"></span>
     <span id="scale-label"></span>
   </div>
@@ -109,66 +118,66 @@ app.innerHTML = `
   <div class="parts-callout" id="parts-callout" hidden></div>
   <div class="tooltip" id="tooltip" hidden></div>
 
-  <button class="btn panel-toggle" id="panel-toggle-closed" type="button" hidden>Про двигун</button>
-  <aside class="panel" id="panel" aria-label="Про двигун">
+  <button class="btn panel-toggle" id="panel-toggle-closed" type="button" hidden>${t('Про двигун')}</button>
+  <aside class="panel" id="panel" aria-label="${t('Про двигун')}">
     <div class="panel-head">
       <h2 id="panel-title"></h2>
-      <button class="btn" id="panel-close" type="button">Сховати</button>
+      <button class="btn" id="panel-close" type="button">${t('Сховати')}</button>
     </div>
     <div class="panel-scroll" id="article" tabindex="0"></div>
     <div class="panel-scroll" id="designer-host" tabindex="0" hidden></div>
   </aside>
 
-  <aside class="results-panel" id="results-panel" aria-label="Показники двигуна" hidden>
+  <aside class="results-panel" id="results-panel" aria-label="${t('Показники двигуна')}" hidden>
     <div class="panel-head results-head">
-      <h2>Показники</h2>
-      <button class="btn" id="results-close" type="button">Закрити</button>
+      <h2>${t('Показники')}</h2>
+      <button class="btn" id="results-close" type="button">${t('Закрити')}</button>
     </div>
     <div class="panel-scroll" id="results-host" tabindex="0"></div>
   </aside>
 
   <footer class="dash">
     <section class="control-col">
-      <button class="ignition" id="ignition" type="button">Запустити двигун</button>
-      <div class="health" id="health" role="meter" aria-label="Стан двигуна" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" hidden>
-        <span>Стан</span><i><u id="health-bar"></u></i><b id="health-value">100%</b>
+      <button class="ignition" id="ignition" type="button">${t('Запустити двигун')}</button>
+      <div class="health" id="health" role="meter" aria-label="${t('Стан двигуна')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" hidden>
+        <span>${t('Стан')}</span><i><u id="health-bar"></u></i><b id="health-value">100%</b>
       </div>
       <div class="volume-row">
-        <button class="btn icon-btn" id="mute" type="button" aria-label="Вимкнути звук" aria-pressed="false">${SVG_SOUND_ON}</button>
-        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="Гучність" />
+        <button class="btn icon-btn" id="mute" type="button" aria-label="${t('Вимкнути звук')}" aria-pressed="false">${SVG_SOUND_ON}</button>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="${t('Гучність')}" />
       </div>
-      <div class="listen-select" role="group" aria-label="Звідки слухати" id="listen">
-        <button type="button" data-v="exhaust" aria-pressed="true">Біля вихлопу</button>
-        <button type="button" data-v="bay" aria-pressed="false">Під капотом</button>
-        <button type="button" data-v="cabin" aria-pressed="false">У салоні</button>
+      <div class="listen-select" role="group" aria-label="${t('Звідки слухати')}" id="listen">
+        <button type="button" data-v="exhaust" aria-pressed="true">${t('Біля вихлопу')}</button>
+        <button type="button" data-v="bay" aria-pressed="false">${t('Під капотом')}</button>
+        <button type="button" data-v="cabin" aria-pressed="false">${t('У салоні')}</button>
       </div>
     </section>
     <section class="tacho-wrap" id="tacho-wrap"></section>
     <section class="pedal-col">
-      <div class="pedal" id="pedal" role="slider" tabindex="0" aria-label="Педаль газу" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="pedal" id="pedal" role="slider" tabindex="0" aria-label="${t('Педаль газу')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
         <div class="pedal-fill" id="pedal-fill"></div>
-        <div class="pedal-text">Газ<small>тисни і тримай</small></div>
+        <div class="pedal-text">${t('Газ')}<small>${t('тисни і тримай')}</small></div>
       </div>
-      <button class="latch" id="latch" type="button" aria-pressed="false">Утримувати</button>
+      <button class="latch" id="latch" type="button" aria-pressed="false">${t('Утримувати')}</button>
     </section>
     <section class="chart-col firing-col">
-      <h4>Цикл у порядку спалахів <span id="firing-text"></span></h4>
+      <h4>${t('Цикл у порядку спалахів')} <span id="firing-text"></span></h4>
       <div class="chart-body" id="firing-body"></div>
       <div class="legend">${legendHtml()}</div>
     </section>
     <section class="chart-col spectrum-col">
-      <h4>Спектр звуку <span id="spectrum-text"></span></h4>
+      <h4>${t('Спектр звуку')} <span id="spectrum-text"></span></h4>
       <div class="chart-body" id="spectrum-body"></div>
     </section>
   </footer>
 
-  <div class="table-overlay" id="table-overlay" hidden role="dialog" aria-modal="true" aria-label="Усі двигуни">
+  <div class="table-overlay" id="table-overlay" hidden role="dialog" aria-modal="true" aria-label="${t('Усі двигуни')}">
     <div class="table-head">
       <div>
-        <h2>Усі двигуни</h2>
-        <p>Кожна компоновка зі своїми реальними двигунами. На значках видно напрям циліндрів, якщо дивитись на двигун спереду.</p>
+        <h2>${t('Усі двигуни')}</h2>
+        <p>${t('Кожна компоновка зі своїми реальними двигунами. На значках видно напрям циліндрів, якщо дивитись на двигун спереду.')}</p>
       </div>
-      <button class="btn" id="table-close" type="button">Закрити</button>
+      <button class="btn" id="table-close" type="button">${t('Закрити')}</button>
     </div>
     <div class="table-scroll" id="table-body"></div>
   </div>
@@ -182,7 +191,7 @@ try {
   stage = new Stage(canvas);
 } catch (error) {
   console.error(error);
-  app.innerHTML = '<div class="no-webgl"><p>Ця сторінка показує двигуни у 3D, а браузер не зміг увімкнути WebGL. Спробуй увімкнути апаратне прискорення або відкрий сторінку в іншому браузері.</p></div>';
+  app.innerHTML = `<div class="no-webgl"><p>${t('Ця сторінка показує двигуни у 3D, а браузер не зміг увімкнути WebGL. Спробуй увімкнути апаратне прискорення або відкрий сторінку в іншому браузері.')}</p></div>`;
   throw error;
 }
 
@@ -242,7 +251,7 @@ function updateScaleBar(): void {
   shownScale = perCm;
   const cm = SCALE_STEPS_CM.filter((v) => v * perCm <= 150).pop() ?? SCALE_STEPS_CM[0]!;
   $('scale-line').style.width = `${Math.round(cm * perCm)}px`;
-  $('scale-label').textContent = `${cm} см`;
+  $('scale-label').textContent = t('{cm} см', { cm });
 }
 
 /** Everything drawn from the engine's geometry. Shared by the catalogue and the designer. */
@@ -279,7 +288,7 @@ function renderVariants(id: string): void {
       if (choice.id === id) link.setAttribute('aria-current', 'true');
       return link;
     }),
-    Object.assign(document.createElement('a'), { href: '#/designer', textContent: 'Сконструювати свій', className: 'variant variant-own' }),
+    Object.assign(document.createElement('a'), { href: '#/designer', textContent: t('Сконструювати свій'), className: 'variant variant-own' }),
   );
   // On a phone the list is a row: the chosen engine may be out of sight.
   const active = list.querySelector<HTMLElement>('.active');
@@ -294,10 +303,10 @@ function loadEngine(next: Engine, keepRunning: boolean, keepCamera = false): voi
   $('engine-title').textContent = spec.title;
   const asp = spec.aspiration === 'na' ? '' : `, ${ASPIRATION_NAMES[spec.aspiration]}`;
   $('engine-sub').textContent = `${spec.example}${asp}`;
-  $('panel-title').textContent = 'Про цей двигун';
+  $('panel-title').textContent = t('Про цей двигун');
   $('article').innerHTML = articleHtml(engine);
   $('article').scrollTop = 0;
-  document.title = `${spec.title}. Анатомія авто`;
+  document.title = t('{title}. Анатомія авто', { title: spec.title });
   $('table-body').innerHTML = tableHtml(spec.id);
   $('table-overlay').hidden = true;
   $<HTMLAnchorElement>('to-designer').href = `#/designer/from/${spec.id}`;
@@ -339,6 +348,11 @@ const designer = new DesignerPage({
     drive.bang();
     drive.setDistress(0);
     drive.stop();
+    // A repaired engine must not start at the throttle that just killed it.
+    latched = false;
+    pedalHeld = 0;
+    $('latch').setAttribute('aria-pressed', 'false');
+    applyPedal();
     $('wreck').textContent = designer.wreckMessage;
     $('wreck').hidden = false;
     $('strain').hidden = true;
@@ -354,7 +368,7 @@ const designer = new DesignerPage({
     $('health-value').textContent = `${percent}%`;
     $('health').setAttribute('aria-valuenow', String(percent));
     $('strain').hidden = !suffering;
-    if (suffering) $('strain').textContent = `Зношується: ${suffering.toLowerCase()}`;
+    if (suffering) $('strain').textContent = t('Зношується: {part}', { part: suffering.toLowerCase() });
     if (distress !== lastDistress) {
       lastDistress = distress;
       drive.setDistress(distress);
@@ -371,7 +385,7 @@ $('results-host').append(designer.results.root);
 function syncDesignerHeading(): void {
   $('engine-title').textContent = designer.title;
   $('engine-sub').textContent = designer.summary;
-  document.title = `${designer.title}. Анатомія авто`;
+  document.title = t('{title}. Анатомія авто', { title: designer.title });
 }
 
 /** Switches the panels and the engine between the catalogue and the designer. */
@@ -396,7 +410,7 @@ function applyRoute(): void {
     if (onDesigner) {
       panelOpen = !small;
       resultsOpen = !small;
-      $('panel-title').textContent = 'Конструкція';
+      $('panel-title').textContent = t('Конструкція');
       $('table-body').innerHTML = tableHtml('');
     } else {
       designer.leave();
@@ -429,13 +443,13 @@ function layoutPanels(): void {
   const dashH = $('tacho-wrap').parentElement!.offsetHeight;
   $('results-panel').classList.toggle('closed', !resultsOpen);
   $('results-open').hidden = !(small && onDesigner);
-  $('panel-open').textContent = onDesigner ? 'Параметри' : 'Про двигун';
+  $('panel-open').textContent = onDesigner ? t('Параметри') : t('Про двигун');
   document.documentElement.style.setProperty('--left-w', `${leftW}px`);
   $('panel').classList.toggle('closed', !panelOpen);
   document.body.classList.toggle('panel-closed', !panelOpen);
   $('panel-toggle-closed').hidden = panelOpen || small;
   $('panel-open').hidden = !small;
-  $('panel-close').textContent = small ? 'Закрити' : 'Сховати';
+  $('panel-close').textContent = small ? t('Закрити') : t('Сховати');
   document.documentElement.style.setProperty('--stage-right', `${panelW}px`);
   document.documentElement.style.setProperty('--stage-left', `${leftW}px`);
   document.documentElement.style.setProperty('--panel-w', `${panelW}px`);
@@ -475,7 +489,7 @@ async function toggleIgnition(): Promise<void> {
   const state = drive.snapshot().state;
   if (state === 'running' || state === 'cranking') {
     drive.stop();
-    button.textContent = 'Запустити двигун';
+    button.textContent = t('Запустити двигун');
     button.classList.remove('on');
     return;
   }
@@ -483,13 +497,13 @@ async function toggleIgnition(): Promise<void> {
   starting = true;
   $('wreck').hidden = true;
   if (onDesigner && designer.isBroken) designer.repair();
-  button.textContent = 'Заглушити';
+  button.textContent = t('Заглушити');
   button.classList.add('on');
   await drive.ensureAudio();
   drive.start();
   starting = false;
   if (drive.audioFailed) {
-    $('spectrum-text').textContent = 'звук недоступний у цьому браузері';
+    $('spectrum-text').textContent = t('звук недоступний у цьому браузері');
   }
 }
 
@@ -608,7 +622,7 @@ function syncSound(): void {
   const button = $('mute');
   button.innerHTML = muted ? SVG_SOUND_OFF : SVG_SOUND_ON;
   button.setAttribute('aria-pressed', String(muted));
-  button.setAttribute('aria-label', muted ? 'Увімкнути звук' : 'Вимкнути звук');
+  button.setAttribute('aria-label', muted ? t('Увімкнути звук') : t('Вимкнути звук'));
 }
 
 $('mute').addEventListener('click', () => {
@@ -634,6 +648,13 @@ const openTable = (open: boolean): void => {
   $('table-overlay').hidden = !open;
   if (open) $('table-close').focus();
 };
+for (const button of document.querySelectorAll<HTMLButtonElement>('.lang-switch button')) {
+  const language = button.dataset.lang as Locale;
+  button.classList.toggle('active', language === locale);
+  button.setAttribute('aria-pressed', String(language === locale));
+  if (language !== locale) button.addEventListener('click', () => switchLocale(language));
+}
+
 $('open-table').addEventListener('click', () => openTable(true));
 // A link to where we already are changes no route, and the list must still close.
 $('table-body').addEventListener('click', (event) => {
@@ -679,7 +700,7 @@ function partsLearned(): void {
 {
   const callout = $('parts-callout');
   const touch = window.matchMedia('(hover: none)').matches;
-  callout.textContent = touch ? 'Торкнись будь-якої деталі, щоб дізнатися, що це' : 'Наведи на будь-яку деталь, щоб побачити її назву. Клацни, щоб дізнатися, що вона робить';
+  callout.textContent = touch ? t('Торкнись будь-якої деталі, щоб дізнатися, що це') : t('Наведи на будь-яку деталь, щоб побачити її назву. Клацни, щоб дізнатися, що вона робить');
   let learned = false;
   try {
     learned = localStorage.getItem(PARTS_LEARNED_KEY) === '1';
@@ -723,7 +744,7 @@ function partsLearned(): void {
       tip.hidden = true;
       return;
     }
-    tip.innerHTML = `<strong>${info.name}</strong><span>клацни, щоб дізнатись більше</span>`;
+    tip.innerHTML = `<strong>${info.name}</strong><span>${t('клацни, щоб дізнатись більше')}</span>`;
     tip.hidden = false;
     const width = tip.offsetWidth;
     tip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - width - 8)}px`;
@@ -910,12 +931,12 @@ function frame(now: number): void {
   const rotaryFires = (snap.rpm / 60) * spec.cylinders;
   const firingHz = engine.isRotary ? rotaryFires : firesPerSecond;
   spectrum.draw(drive.audioReady ? drive.analyser : null, drive.sampleRate, snap.state === 'off' ? 0 : firingHz);
-  const firingText = snap.state === 'off' ? '' : `${Math.round(firingHz)} спалахів за секунду`;
+  const firingText = snap.state === 'off' ? '' : t('{count} спалахів за секунду', { count: Math.round(firingHz) });
   if (firingText !== firingTextShown) {
     $('firing-text').textContent = firingText;
     firingTextShown = firingText;
   }
-  const spectrumText = snap.state === 'off' || drive.audioFailed ? (drive.audioFailed ? 'звук недоступний' : '') : `основний тон ${Math.round(firingHz)} Гц`;
+  const spectrumText = snap.state === 'off' || drive.audioFailed ? (drive.audioFailed ? t('звук недоступний') : '') : t('основний тон {hz} Гц', { hz: Math.round(firingHz) });
   if (spectrumText !== spectrumTextShown) {
     $('spectrum-text').textContent = spectrumText;
     spectrumTextShown = spectrumText;
@@ -925,7 +946,7 @@ function frame(now: number): void {
   const shouldBeOn = snap.state === 'running' || snap.state === 'cranking';
   if (shouldBeOn !== button.classList.contains('on') && !demoMode && !starting) {
     button.classList.toggle('on', shouldBeOn);
-    button.textContent = shouldBeOn ? 'Заглушити' : 'Запустити двигун';
+    button.textContent = shouldBeOn ? t('Заглушити') : t('Запустити двигун');
   }
 }
 

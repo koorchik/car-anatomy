@@ -1,5 +1,8 @@
 // Single-metric chart over engine speed. Two of these stacked replace a dual-axis power and torque plot.
 
+import { numberLocale } from '../../i18n/locale.ts';
+import { t } from '../../i18n/t.ts';
+
 export interface ChartSeries {
   /** x = rpm */
   x: number[];
@@ -133,7 +136,7 @@ export class RpmChart {
   }
 
   private format(v: number): string {
-    return v.toLocaleString('uk-UA', { maximumFractionDigits: this.digits, minimumFractionDigits: this.digits });
+    return v.toLocaleString(numberLocale, { maximumFractionDigits: this.digits, minimumFractionDigits: this.digits });
   }
 
   private valueAt(s: ChartSeries, rpm: number): number {
@@ -166,7 +169,7 @@ export class RpmChart {
       ctx.lineTo(width - pad.r, y);
       ctx.stroke();
       ctx.fillStyle = DIM;
-      ctx.fillText(v.toLocaleString('uk-UA', { maximumFractionDigits: yStep < 1 ? 1 : 0 }), pad.l - 5, y);
+      ctx.fillText(v.toLocaleString(numberLocale, { maximumFractionDigits: yStep < 1 ? 1 : 0 }), pad.l - 5, y);
     }
     const xStep = niceStep(this.xMax, Math.max(3, Math.floor(plotW / 42)));
     ctx.textAlign = 'center';
@@ -234,8 +237,10 @@ export class RpmChart {
       ctx.stroke();
       const value = this.valueAt(this.series, rpm);
       const ghost = this.baseline ? this.valueAt(this.baseline, rpm) : null;
-      const shown = (Math.round(rpm / 50) * 50).toLocaleString('uk-UA');
-      this.tip.textContent = `${shown} об/хв: ${this.format(value)} ${this.unit}${ghost !== null ? `, було ${this.format(ghost)}` : ''}`;
+      const shown = (Math.round(rpm / 50) * 50).toLocaleString(numberLocale);
+      this.tip.textContent = ghost !== null
+        ? t('{rpm} об/хв: {value} {unit}, було {before}', { rpm: shown, value: this.format(value), unit: this.unit, before: this.format(ghost) })
+        : t('{rpm} об/хв: {value} {unit}', { rpm: shown, value: this.format(value), unit: this.unit });
       this.tip.hidden = false;
       const tipW = this.tip.offsetWidth;
       this.tip.style.left = `${Math.max(0, Math.min(width - tipW, x - tipW / 2))}px`;

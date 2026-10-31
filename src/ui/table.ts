@@ -4,6 +4,7 @@
 import { ENGINES, pageChoices } from '../data/engines.ts';
 import { DEG, buildEngine } from '../engine/kinematics.ts';
 import { FAMILY_NAMES, type EngineSpec, type Family } from '../engine/spec.ts';
+import { t } from '../i18n/t.ts';
 
 const escapeHtml = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -48,7 +49,7 @@ export function tableHtml(activeId: string): string {
         return `<section class="layout-card${page.id === pageId ? ' current' : ''}">
           <a class="layout-head" href="#/engines/${page.id}">
             ${layoutGlyph(page)}
-            <span class="layout-name">${page.badge}${page.fuel === 'diesel' ? ' дизель' : ''}</span>
+            <span class="layout-name">${page.fuel === 'diesel' ? t('{badge} дизель', { badge: page.badge }) : page.badge}</span>
             <span class="layout-title">${escapeHtml(page.title)}</span>
           </a>
           <ul class="card-engines">${engines}</ul>
@@ -58,8 +59,8 @@ export function tableHtml(activeId: string): string {
     return `<h3 class="family-name">${FAMILY_NAMES[family]}</h3><div class="layout-grid">${cards}</div>`;
   });
   const own = `<a class="own-engine" href="#/designer">
-    <strong>Сконструюй свій двигун</strong>
-    <span>Обери циліндри, поршні, наддув і вихлоп, а тоді заведи його й послухай, що вийшло.</span>
+    <strong>${t('Сконструюй свій двигун')}</strong>
+    <span>${t('Обери циліндри, поршні, наддув і вихлоп, а тоді заведи його й послухай, що вийшло.')}</span>
   </a>`;
   return own + sections.join('');
 }

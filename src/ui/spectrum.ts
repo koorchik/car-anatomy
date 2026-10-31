@@ -1,5 +1,7 @@
 // Live sound spectrum with the firing frequency marked: what you hear, drawn against what the engine does.
 
+import { t } from '../i18n/t.ts';
+
 const MIN_HZ = 20;
 const MAX_HZ = 8000;
 const FLOOR_DB = -90;
@@ -19,7 +21,7 @@ export class Spectrum {
     this.element = document.createElement('canvas');
     this.element.className = 'spectrum-canvas';
     this.element.setAttribute('role', 'img');
-    this.element.setAttribute('aria-label', 'Спектр звуку двигуна наживо. Відмітка показує частоту спалахів.');
+    this.element.setAttribute('aria-label', t('Спектр звуку двигуна наживо. Відмітка показує частоту спалахів.'));
     this.ctx = this.element.getContext('2d')!;
   }
 
@@ -56,14 +58,14 @@ export class Spectrum {
       ctx.lineTo(x + 0.5, plotH);
       ctx.stroke();
       ctx.fillStyle = '#a9b7b3';
-      ctx.fillText(hz >= 1000 ? `${hz / 1000} кГц` : `${hz}`, x, this.height - 3);
+      ctx.fillText(hz >= 1000 ? t('{value} кГц', { value: hz / 1000 }) : `${hz}`, x, this.height - 3);
     }
 
     if (!analyser) {
       ctx.fillStyle = '#a9b7b3';
       ctx.textAlign = 'center';
       ctx.font = '13px "Fira Sans", sans-serif';
-      ctx.fillText('Спектр зʼявиться після запуску', this.width / 2, plotH / 2 + 4);
+      ctx.fillText(t('Спектр зʼявиться після запуску'), this.width / 2, plotH / 2 + 4);
       return;
     }
 

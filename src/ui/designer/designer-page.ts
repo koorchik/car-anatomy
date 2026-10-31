@@ -5,15 +5,17 @@ import { synthConfig } from '../../audio/synth.ts';
 import { decodeDesign, encodeDesign } from '../../designer/codec.ts';
 import { adjustedKeys, resolveDesign } from '../../designer/constraints.ts';
 import { DEFAULT_DESIGN, displacementL, isRotary, type Design } from '../../designer/design.ts';
-import { FUELS } from '../../designer/fuels.ts';
+import type { FuelId } from '../../designer/fuels.ts';
 import { measureTrim } from '../../designer/loudness.ts';
 import { evaluate, type Performance } from '../../designer/physics.ts';
 import { CATALOGUE_CHOICES, designFromSpec, editDesign, ODD_PRESETS, randomDesign } from '../../designer/presets.ts';
 import { designToSpec } from '../../designer/to-spec.ts';
 import { engineById } from '../../data/engines.ts';
 import { buildEngine, type Engine } from '../../engine/kinematics.ts';
-import { assessReliability, wearNow, type LimitItem, type Reliability } from '../../designer/reliability.ts';
+import { assessReliability, restartOutlook, wearNow, type LimitItem, type Reliability } from '../../designer/reliability.ts';
 import { compareMetrics, snapshot, type Metric } from '../../designer/sensitivity.ts';
+import { numberLocale } from '../../i18n/locale.ts';
+import { t } from '../../i18n/t.ts';
 import { probesFor } from './probes.ts';
 import { DesignerControls, type DesignPatch } from './controls.ts';
 import { DesignerResults } from './results.ts';
@@ -42,17 +44,28 @@ export interface DesignerHost {
 }
 
 const CHARGER_WORDS: Record<Design['charger'], string> = {
-  none: 'атмосферний',
-  turbo: 'турбо',
-  twinturbo: 'дві турбіни',
-  quadturbo: 'чотири турбіни',
-  roots: 'нагнітач Roots',
-  centrifugal: 'відцентровий нагнітач',
+  none: t('атмосферний'),
+  turbo: t('турбо'),
+  twinturbo: t('дві турбіни'),
+  quadturbo: t('чотири турбіни'),
+  roots: t('нагнітач Roots'),
+  centrifugal: t('відцентровий нагнітач'),
+};
+
+// Written out rather than lower-cased from the fuel's name, which would spoil "E85" and "RON" in English.
+const FUEL_WORDS: Record<FuelId, string> = {
+  ai92: t('бензин а-92'),
+  ai95: t('бензин а-95'),
+  ai98: t('бензин а-98'),
+  race: t('гоночний бензин'),
+  e85: t('етанол e85'),
+  methanol: t('метанол'),
+  diesel: t('дизель'),
 };
 
 const summaryOf = (d: Design): string => {
-  const litres = displacementL(d).toLocaleString('uk-UA', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
-  const parts = [isRotary(d) ? `${litres} л, ${d.cylinders} секц.` : `${litres} л`, FUELS[d.fuel].name.toLowerCase(), CHARGER_WORDS[d.charger]];
+  const litres = displacementL(d).toLocaleString(numberLocale, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+  const parts = [isRotary(d) ? t('{litres} л, {count} секц.', { litres, count: d.cylinders }) : t('{litres} л', { litres }), FUEL_WORDS[d.fuel], CHARGER_WORDS[d.charger]];
   return parts.join(', ');
 };
 
@@ -123,23 +136,23 @@ export class DesignerPage {
     const nameLabel = document.createElement('label');
     nameLabel.className = 'param-label';
     nameLabel.htmlFor = 'design-name';
-    nameLabel.textContent = 'Назва';
+    nameLabel.textContent = t('Назва');
     this.nameInput.id = 'design-name';
     this.nameInput.className = 'param-text';
     this.nameInput.maxLength = 60;
-    this.nameInput.addEventListener('input', () => this.apply({ name: this.nameInput.value || 'Мій двигун' }));
+    this.nameInput.addEventListener('input', () => this.apply({ name: this.nameInput.value || t('Мій двигун') }));
 
     const presetLabel = document.createElement('label');
     presetLabel.className = 'param-label';
     presetLabel.htmlFor = 'design-preset';
-    presetLabel.textContent = 'Почати з';
+    presetLabel.textContent = t('Почати з');
     this.presetSelect.id = 'design-preset';
     this.presetSelect.className = 'param-select';
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = 'Обери заготовку';
+    placeholder.textContent = t('Обери заготовку');
     const odd = document.createElement('optgroup');
-    odd.label = 'Дивні двигуни';
+    odd.label = t('Дивні двигуни');
     for (const preset of ODD_PRESETS) {
       const option = document.createElement('option');
       option.value = `odd:${preset.id}`;
@@ -147,7 +160,7 @@ export class DesignerPage {
       odd.append(option);
     }
     const real = document.createElement('optgroup');
-    real.label = 'Справжні двигуни';
+    real.label = t('Справжні двигуни');
     for (const item of CATALOGUE_CHOICES) {
       const option = document.createElement('option');
       option.value = `real:${item.id}`;
@@ -165,21 +178,21 @@ export class DesignerPage {
     const random = document.createElement('button');
     random.type = 'button';
     random.className = 'btn';
-    random.textContent = 'Випадковий';
+    random.textContent = t('Випадковий');
     random.addEventListener('click', () => this.setDesign(randomDesign()));
     const reset = document.createElement('button');
     reset.type = 'button';
     reset.className = 'btn';
-    reset.textContent = 'Скинути';
+    reset.textContent = t('Скинути');
     reset.addEventListener('click', () => this.setDesign(resolveDesign({ ...DEFAULT_DESIGN, throws: [] })));
     this.copyButton.type = 'button';
     this.copyButton.className = 'btn';
-    this.copyButton.textContent = 'Копіювати посилання';
+    this.copyButton.textContent = t('Копіювати посилання');
     this.copyButton.addEventListener('click', () => void this.copyLink());
     actions.append(random, reset, this.copyButton);
 
     this.factoryNote.className = 'factory-note';
-    this.factoryNote.textContent = 'Точна копія двигуна з каталогу: той самий механізм, звук і поведінка. Перша зміна вмикає розрахунок за моделлю.';
+    this.factoryNote.textContent = t('Точна копія двигуна з каталогу: той самий механізм, звук і поведінка. Перша зміна вмикає розрахунок за моделлю.');
 
     header.append(nameLabel, this.nameInput, presetLabel, this.presetSelect, actions, this.factoryNote);
     this.controlsHost.append(header);
@@ -201,14 +214,14 @@ export class DesignerPage {
     const link = `${base}#/designer/${encodeDesign(this.design)}`;
     try {
       await navigator.clipboard.writeText(link);
-      this.copyButton.textContent = 'Посилання скопійовано';
+      this.copyButton.textContent = t('Посилання скопійовано');
     } catch {
       // Without clipboard access the link is still in the address bar.
       history.replaceState(null, '', link);
-      this.copyButton.textContent = 'Скопіюй з адресного рядка';
+      this.copyButton.textContent = t('Скопіюй з адресного рядка');
     }
     window.setTimeout(() => {
-      this.copyButton.textContent = 'Копіювати посилання';
+      this.copyButton.textContent = t('Копіювати посилання');
     }, 2200);
   }
 
@@ -397,6 +410,17 @@ export class DesignerPage {
   /** Short sentence for the banner shown when the engine has just destroyed itself. */
   get wreckMessage(): string {
     const item = this.failedItem ?? this.reliability.worst;
-    return `${item.failure} ${item.fix} Запуск полагодить двигун.`;
+    const values = { failure: item.failure, fix: item.fix };
+    const perf = evaluate({ ...this.design, factory: null });
+    switch (restartOutlook(this.reliability, perf.idleRpm, this.design.rpmLimit)) {
+      case 'idle':
+        return t('{failure} {fix} З такою конфігурацією двигун не витримує навіть холостого ходу, тож запуск зламає його знову.', values);
+      case 'throttle':
+        return t('{failure} {fix} Запуск полагодить двигун, але з такою конфігурацією він зламається знову, щойно дати повний газ.', values);
+      case 'revs':
+        return t('{failure} {fix} Запуск полагодить двигун, але відсічка стоїть вище, ніж він витримує, тож на повному газу він зламається знову.', values);
+      case 'fine':
+        return t('{failure} {fix} Запуск полагодить двигун.', values);
+    }
   }
 }

@@ -6,35 +6,37 @@ import { FUELS } from '../../designer/fuels.ts';
 import { brakeEfficiency, type Performance, type RpmPoint } from '../../designer/physics.ts';
 import { SAFE_LOAD, type Reliability } from '../../designer/reliability.ts';
 import { causesOf, type Cause, type Probe } from '../../designer/sensitivity.ts';
+import { numberLocale } from '../../i18n/locale.ts';
+import { t } from '../../i18n/t.ts';
 import { RpmChart, type ChartSeries } from './chart.ts';
 
-const num = (v: number, digits = 0): string => v.toLocaleString('uk-UA', { maximumFractionDigits: digits, minimumFractionDigits: digits });
-const rpmText = (v: number): string => (Math.round(v / 50) * 50).toLocaleString('uk-UA');
+const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { maximumFractionDigits: digits, minimumFractionDigits: digits });
+const rpmText = (v: number): string => (Math.round(v / 50) * 50).toLocaleString(numberLocale);
 
 type MetricId = 'boost' | 'fill' | 'bsfc' | 'fuel' | 'egt' | 'backpressure';
 
 const METRICS: Record<MetricId, { name: string; unit: string; digits: number; of: (p: RpmPoint) => number }> = {
-  fill: { name: 'Наповнення', unit: '%', digits: 0, of: (p) => p.fillRatio * 100 },
-  fuel: { name: 'Витрата', unit: 'л/год', digits: 1, of: (p) => p.fuelLh },
-  bsfc: { name: 'Питома витрата', unit: 'г/кВт·год', digits: 0, of: (p) => (p.bsfc < 2000 ? p.bsfc : Number.NaN) },
-  boost: { name: 'Наддув', unit: 'бар', digits: 2, of: (p) => p.boostBar },
-  backpressure: { name: 'Протитиск', unit: 'бар', digits: 2, of: (p) => p.backpressureBar },
-  egt: { name: 'Температура газів', unit: '°C', digits: 0, of: (p) => p.egtC },
+  fill: { name: t('Наповнення'), unit: '%', digits: 0, of: (p) => p.fillRatio * 100 },
+  fuel: { name: t('Витрата'), unit: t('л/год'), digits: 1, of: (p) => p.fuelLh },
+  bsfc: { name: t('Питома витрата'), unit: t('г/кВт·год'), digits: 0, of: (p) => (p.bsfc < 2000 ? p.bsfc : Number.NaN) },
+  boost: { name: t('Наддув'), unit: t('бар'), digits: 2, of: (p) => p.boostBar },
+  backpressure: { name: t('Протитиск'), unit: t('бар'), digits: 2, of: (p) => p.backpressureBar },
+  egt: { name: t('Температура газів'), unit: '°C', digits: 0, of: (p) => p.egtC },
 };
 
 const ENERGY: Array<{ key: keyof RpmPoint['energy']; name: string; color: string }> = [
-  { key: 'brake', name: 'На вал', color: '#ece6d6' },
-  { key: 'exhaust', name: 'У вихлоп', color: '#ea6a15' },
-  { key: 'coolant', name: 'В охолодження', color: '#1e9274' },
-  { key: 'friction', name: 'Тертя', color: '#45a4d0' },
-  { key: 'pumping', name: 'Прокачування', color: '#a96ca2' },
-  { key: 'unburned', name: 'Незгоріле', color: '#7a8a8f' },
+  { key: 'brake', name: t('На вал'), color: '#ece6d6' },
+  { key: 'exhaust', name: t('У вихлоп'), color: '#ea6a15' },
+  { key: 'coolant', name: t('В охолодження'), color: '#1e9274' },
+  { key: 'friction', name: t('Тертя'), color: '#45a4d0' },
+  { key: 'pumping', name: t('Прокачування'), color: '#a96ca2' },
+  { key: 'unburned', name: t('Незгоріле'), color: '#7a8a8f' },
 ];
 
 const SEVERITY: Record<Diagnostic['severity'], { sign: string; word: string }> = {
-  fatal: { sign: '✕', word: 'Критично' },
-  warning: { sign: '!', word: 'Увага' },
-  note: { sign: 'i', word: 'Цікаво' },
+  fatal: { sign: '✕', word: t('Критично') },
+  warning: { sign: '!', word: t('Увага') },
+  note: { sign: 'i', word: t('Цікаво') },
 };
 
 const seriesOf = (perf: Performance, of: (p: RpmPoint) => number): ChartSeries => ({
@@ -57,9 +59,9 @@ export class DesignerResults {
   private readonly stats = document.createElement('dl');
   private readonly energy = document.createElement('div');
   private readonly shake = document.createElement('div');
-  private readonly power = new RpmChart('Потужність за обертами');
-  private readonly torque = new RpmChart('Момент за обертами');
-  private readonly extra = new RpmChart('Додатковий показник за обертами');
+  private readonly power = new RpmChart(t('Потужність за обертами'));
+  private readonly torque = new RpmChart(t('Момент за обертами'));
+  private readonly extra = new RpmChart(t('Додатковий показник за обертами'));
   private readonly compareButton = document.createElement('button');
   private readonly legend = document.createElement('div');
   private readonly metricSelect = document.createElement('select');
@@ -105,7 +107,7 @@ export class DesignerResults {
       this.metricSelect.append(option);
     }
     this.metricSelect.className = 'param-select metric-select';
-    this.metricSelect.setAttribute('aria-label', 'Показник на третьому графіку');
+    this.metricSelect.setAttribute('aria-label', t('Показник на третьому графіку'));
     this.metricSelect.addEventListener('change', () => {
       this.metric = this.metricSelect.value as MetricId;
       this.refresh();
@@ -123,7 +125,7 @@ export class DesignerResults {
 
     const axisNote = document.createElement('p');
     axisNote.className = 'note axis-note';
-    axisNote.textContent = 'По горизонталі тисячі обертів за хвилину, повний газ. Помаранчева лінія показує оберти зараз.';
+    axisNote.textContent = t('По горизонталі тисячі обертів за хвилину, повний газ. Помаранчева лінія показує оберти зараз.');
 
     this.heroCauses.className = 'cause-panel';
     this.verdict.className = 'reliability';
@@ -144,17 +146,17 @@ export class DesignerResults {
       this.verdict,
       this.compareButton,
       this.legend,
-      labelled('Потужність', this.power, 'chart-unit-power'),
-      labelled('Момент', this.torque, 'chart-unit-torque'),
+      labelled(t('Потужність'), this.power, 'chart-unit-power'),
+      labelled(t('Момент'), this.torque, 'chart-unit-torque'),
       extraBlock,
       axisNote,
-      heading('Діагноз'),
+      heading(t('Діагноз')),
       this.diagnostics,
-      heading('Куди йде енергія палива'),
+      heading(t('Куди йде енергія палива')),
       this.energy,
-      heading('Вібрації'),
+      heading(t('Вібрації')),
       this.shake,
-      heading('Цифри'),
+      heading(t('Цифри')),
       this.stats,
       this.modelNote(),
     );
@@ -163,7 +165,7 @@ export class DesignerResults {
   private modelNote(): HTMLElement {
     const p = document.createElement('p');
     p.className = 'note small';
-    p.textContent = 'Це модель для розуміння, а не розрахунок для виробництва. На реальних двигунах каталогу вона помиляється приблизно на 10–30%, а напрям впливу кожного параметра надійніший за абсолютні цифри.';
+    p.textContent = t('Це модель для розуміння, а не розрахунок для виробництва. На реальних двигунах каталогу вона помиляється приблизно на 10–30%, а напрям впливу кожного параметра надійніший за абсолютні цифри.');
     return p;
   }
 
@@ -189,12 +191,12 @@ export class DesignerResults {
   }
 
   private causesHtml(): string {
-    if (!this.causeList) return '<p class="note">Рахую, що на це впливає…</p>';
-    if (!this.causeList.length) return '<p class="note">На цьому двигуні майже нічого на це не впливає.</p>';
+    if (!this.causeList) return `<p class="note">${t('Рахую, що на це впливає…')}</p>`;
+    if (!this.causeList.length) return `<p class="note">${t('На цьому двигуні майже нічого на це не впливає.')}</p>`;
     const rows = this.causeList
       .map((c) => `<button type="button" class="cause" data-jump="${String(c.key)}"><span>${escapeHtml(c.name)}: ${escapeHtml(c.label)}</span><b>${escapeHtml(c.effect.text)}</b></button>`)
       .join('');
-    return `<p class="note">Що найбільше змінює цей показник, якщо рухати контрол на десяту частину його діапазону:</p>${rows}`;
+    return `<p class="note">${t('Що найбільше змінює цей показник, якщо рухати контрол на десяту частину його діапазону:')}</p>${rows}`;
   }
 
   private toggleBaseline(): void {
@@ -248,19 +250,19 @@ export class DesignerResults {
     this.heroCauses.hidden = !heroOpen;
     this.heroCauses.innerHTML = heroOpen ? this.causesHtml() : '';
     this.verdict.innerHTML = this.reliabilityHtml();
-    this.compareButton.textContent = baseline ? 'Прибрати порівняння' : 'Зафіксувати для порівняння';
+    this.compareButton.textContent = baseline ? t('Прибрати порівняння') : t('Зафіксувати для порівняння');
     this.legend.hidden = !baseline;
     if (baseline) {
-      this.legend.innerHTML = `<span class="legend-item"><i class="swatch-now"></i>Зараз</span><span class="legend-item"><i class="swatch-then"></i>${escapeHtml(this.baselineName)}</span>`;
+      this.legend.innerHTML = `<span class="legend-item"><i class="swatch-now"></i>${t('Зараз')}</span><span class="legend-item"><i class="swatch-then"></i>${escapeHtml(this.baselineName)}</span>`;
     }
     const peakPower = seriesOf(perf, (p) => p.powerHp);
     const ghost = (of: (p: RpmPoint) => number): ChartSeries | null => (baseline ? seriesOf(baseline, of) : null);
-    this.power.setData(peakPower, ghost((p) => p.powerHp), 'к.с.', 0, true);
-    this.torque.setData(seriesOf(perf, (p) => p.torqueNm), ghost((p) => p.torqueNm), 'Н·м', 0, true);
+    this.power.setData(peakPower, ghost((p) => p.powerHp), t('к.с.'), 0, true);
+    this.torque.setData(seriesOf(perf, (p) => p.torqueNm), ghost((p) => p.torqueNm), t('Н·м'), 0, true);
     const metric = METRICS[this.metric];
     this.extra.setData(seriesOf(perf, metric.of), ghost(metric.of), metric.unit, metric.digits, false);
-    document.getElementById('chart-unit-power')!.textContent = 'к.с.';
-    document.getElementById('chart-unit-torque')!.textContent = 'Н·м';
+    document.getElementById('chart-unit-power')!.textContent = t('к.с.');
+    document.getElementById('chart-unit-torque')!.textContent = t('Н·м');
     document.getElementById('chart-unit-extra')!.textContent = metric.unit;
 
     this.diagnostics.innerHTML = this.diagnosticsHtml(diagnose(design, perf));
@@ -273,16 +275,16 @@ export class DesignerResults {
     const delta = (now: number, then: number | undefined, unit: string): string => {
       if (then === undefined) return '';
       const d = now - then;
-      if (Math.abs(d) < 0.5) return '<span class="delta">без змін</span>';
+      if (Math.abs(d) < 0.5) return `<span class="delta">${t('без змін')}</span>`;
       return `<span class="delta">${d > 0 ? '+' : '−'}${num(Math.abs(d))} ${unit}</span>`;
     };
     const fig = (metric: string, value: string, unit: string, sub: string, extra = ''): string =>
       `<button type="button" class="hero-figure${this.openMetric === metric ? ' open' : ''}" data-metric="${metric}" aria-expanded="${this.openMetric === metric}"><b>${value}</b><span class="hero-unit">${unit}</span><span class="hero-sub">${sub}</span>${extra}</button>`;
     const usable = perf.peakPower.powerHp > 0;
     return (
-      fig('power', usable ? num(perf.peakPower.powerHp) : '0', 'к.с.', usable ? `при ${rpmText(perf.peakPower.rpm)} об/хв` : 'не їде', delta(perf.peakPower.powerHp, baseline?.peakPower.powerHp, 'к.с.')) +
-      fig('torque', usable ? num(perf.peakTorque.torqueNm) : '0', 'Н·м', usable ? `при ${rpmText(perf.peakTorque.rpm)} об/хв` : '', delta(perf.peakTorque.torqueNm, baseline?.peakTorque.torqueNm, 'Н·м')) +
-      fig('cruise', perf.cruise.reachable ? num(perf.cruise.fuelLh, 1) : '—', 'л/100 км', perf.cruise.reachable ? 'на 100 км/год, оцінка' : 'не витягує круїз', baseline?.cruise.reachable && perf.cruise.reachable ? deltaFuel(perf.cruise.fuelLh, baseline.cruise.fuelLh) : '')
+      fig('power', usable ? num(perf.peakPower.powerHp) : '0', t('к.с.'), usable ? t('при {rpm} об/хв', { rpm: rpmText(perf.peakPower.rpm) }) : t('не їде'), delta(perf.peakPower.powerHp, baseline?.peakPower.powerHp, t('к.с.'))) +
+      fig('torque', usable ? num(perf.peakTorque.torqueNm) : '0', t('Н·м'), usable ? t('при {rpm} об/хв', { rpm: rpmText(perf.peakTorque.rpm) }) : '', delta(perf.peakTorque.torqueNm, baseline?.peakTorque.torqueNm, t('Н·м'))) +
+      fig('cruise', perf.cruise.reachable ? num(perf.cruise.fuelLh, 1) : '—', t('л/100 км'), perf.cruise.reachable ? t('на 100 км/год, оцінка') : t('не витягує круїз'), baseline?.cruise.reachable && perf.cruise.reachable ? deltaFuel(perf.cruise.fuelLh, baseline.cruise.fuelLh) : '')
     );
   }
 
@@ -305,12 +307,12 @@ export class DesignerResults {
       })
       .join('');
     return `<div class="verdict verdict-${rel.verdict}"><b>${rel.verdictName}</b><span>${rel.lifeText}</span></div>
-      <p class="note verdict-why">Найслабше місце: ${escapeHtml(rel.worst.name.toLowerCase())}. Смужка показує, наскільки деталь близька до межі. Клацни, щоб побачити причини.</p>
+      <p class="note verdict-why">${t('Найслабше місце: {part}. Смужка показує, наскільки деталь близька до межі. Клацни, щоб побачити причини.', { part: escapeHtml(rel.worst.name.toLowerCase()) })}</p>
       <div class="limits">${rows}</div>`;
   }
 
   private diagnosticsHtml(list: Diagnostic[]): string {
-    if (!list.length) return '<p class="note">Нічого не зламається: двигун у межах розумного.</p>';
+    if (!list.length) return `<p class="note">${t('Нічого не зламається: двигун у межах розумного.')}</p>`;
     return list
       .map((d) => {
         const s = SEVERITY[d.severity];
@@ -332,22 +334,22 @@ export class DesignerResults {
       .map((c) => `<span class="legend-item"><i style="background:${c.color}"></i>${c.name} ${num((e[c.key] / total) * 100)}%</span>`)
       .join('');
     return `<div class="energy-bar">${segments}</div><div class="legend">${legend}</div>
-      <p class="note">На піку потужності. Лише частина енергії палива доходить до вала, решта стає теплом.</p>`;
+      <p class="note">${t('На піку потужності. Лише частина енергії палива доходить до вала, решта стає теплом.')}</p>`;
   }
 
   private shakeHtml(design: Design, perf: Performance): string {
-    if (isRotary(design)) return '<p class="note">Ротор обертається і зрівноважується противагами, тому вільних сил майже немає.</p>';
+    if (isRotary(design)) return `<p class="note">${t('Ротор обертається і зрівноважується противагами, тому вільних сил майже немає.')}</p>`;
     const b = designBalance(design, perf);
     const rows: Array<[string, number]> = [
-      ['Сила, 1-й порядок', b.force1],
-      ['Сила, 2-й порядок', b.force2],
-      ['Момент, 1-й порядок', b.couple1],
-      ['Момент, 2-й порядок', b.couple2],
+      [t('Сила, 1-й порядок'), b.force1],
+      [t('Сила, 2-й порядок'), b.force2],
+      [t('Момент, 1-й порядок'), b.couple1],
+      [t('Момент, 2-й порядок'), b.couple2],
     ];
     const bars = rows
       .map(([name, value]) => `<div class="bar-row"><span class="bar-name">${name}</span><span class="bar-track"><span class="bar-fill" style="width:${Math.min(100, (value / 3) * 100).toFixed(1)}%"></span></span><span class="bar-value">${value < 0.01 ? '0' : num(value, 2)}</span></div>`)
       .join('');
-    return `<div class="bars">${bars}</div><p class="note">Одиниця: сила інерції одного поршня. Увімкни «Перебільшити вібрації», щоб побачити це на моделі.</p>`;
+    return `<div class="bars">${bars}</div><p class="note">${t('Одиниця: сила інерції одного поршня. Увімкни «Перебільшити вібрації», щоб побачити це на моделі.')}</p>`;
   }
 
   private statsHtml(design: Design, perf: Performance): string {
@@ -356,25 +358,25 @@ export class DesignerResults {
     const row = (k: string, v: string): string => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
     const litres = perf.displacementL;
     return [
-      row('Робочий об’єм', `${num(litres, 2)} л`),
-      row('Питома потужність', `${num(peak.powerHp / Math.max(litres, 0.01))} к.с./л`),
-      row('Середній ефективний тиск', `${num(perf.peakTorque.bmepBar, 1)} бар`),
-      row('Найкраща питома витрата', perf.bestBsfc.bsfc < 2000 ? `${num(perf.bestBsfc.bsfc)} г/кВт·год` : 'немає'),
-      row('Найвищий ККД', perf.bestBsfc.bsfc < 2000 ? `${num(brakeEfficiency(perf.bestBsfc.bsfc, fuel.lhv) * 100)}%` : 'немає'),
-      row('Витрата на піку потужності', `${num(peak.fuelLh, 1)} л/год`),
-      row('Маса, оцінка', `${num(perf.massKg)} кг`),
-      row('Потужність на кілограм', `${num(peak.powerHp / perf.massKg, 2)} к.с./кг`),
-      row('Холостий хід', `${num(perf.idleRpm)} об/хв`),
-      row('Набір обертів без навантаження', `${num(perf.revTimeS, 1)} с`),
-      row('Запас до руйнування', Number.isFinite(perf.failureRpm) ? `${rpmText(perf.failureRpm)} об/хв` : 'немає'),
+      row(t('Робочий об’єм'), t('{value} л', { value: num(litres, 2) })),
+      row(t('Питома потужність'), t('{value} к.с./л', { value: num(peak.powerHp / Math.max(litres, 0.01)) })),
+      row(t('Середній ефективний тиск'), t('{value} бар', { value: num(perf.peakTorque.bmepBar, 1) })),
+      row(t('Найкраща питома витрата'), perf.bestBsfc.bsfc < 2000 ? t('{value} г/кВт·год', { value: num(perf.bestBsfc.bsfc) }) : t('немає')),
+      row(t('Найвищий ККД'), perf.bestBsfc.bsfc < 2000 ? `${num(brakeEfficiency(perf.bestBsfc.bsfc, fuel.lhv) * 100)}%` : t('немає')),
+      row(t('Витрата на піку потужності'), t('{value} л/год', { value: num(peak.fuelLh, 1) })),
+      row(t('Маса, оцінка'), t('{value} кг', { value: num(perf.massKg) })),
+      row(t('Потужність на кілограм'), t('{value} к.с./кг', { value: num(peak.powerHp / perf.massKg, 2) })),
+      row(t('Холостий хід'), t('{rpm} об/хв', { rpm: num(perf.idleRpm) })),
+      row(t('Набір обертів без навантаження'), t('{value} с', { value: num(perf.revTimeS, 1) })),
+      row(t('Запас до руйнування'), Number.isFinite(perf.failureRpm) ? t('{rpm} об/хв', { rpm: rpmText(perf.failureRpm) }) : t('немає')),
     ].join('');
   }
 }
 
 const deltaFuel = (now: number, then: number): string => {
   const d = now - then;
-  if (Math.abs(d) < 0.05) return '<span class="delta">без змін</span>';
-  return `<span class="delta">${d > 0 ? '+' : '−'}${num(Math.abs(d), 1)} л</span>`;
+  if (Math.abs(d) < 0.05) return `<span class="delta">${t('без змін')}</span>`;
+  return `<span class="delta">${t('{sign}{value} л', { sign: d > 0 ? '+' : '−', value: num(Math.abs(d), 1) })}</span>`;
 };
 
 const escapeHtml = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);

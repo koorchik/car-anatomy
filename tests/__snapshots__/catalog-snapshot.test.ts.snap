@@ -172,7 +172,7 @@ exports[`catalogue engine b2 has not changed 1`] = `
 
 exports[`catalogue engine b4 has not changed 1`] = `
 {
-  "article": "1083:b0babe26",
+  "article": "1083:6f2392b4",
   "aspiration": "turbo",
   "badge": "B4",
   "blockMaterial": "aluminium",
@@ -3183,7 +3183,7 @@ exports[`catalogue engine i8 has not changed 1`] = `
 
 exports[`catalogue engine r2 has not changed 1`] = `
 {
-  "article": "1063:de2fe44d",
+  "article": "1063:cda14307",
   "aspiration": "twin-turbo",
   "badge": "2R",
   "blockMaterial": "iron",
@@ -4200,7 +4200,7 @@ exports[`catalogue engine v6-60 has not changed 1`] = `
 
 exports[`catalogue engine v6-90 has not changed 1`] = `
 {
-  "article": "870:ff41e3b",
+  "article": "868:1c510bfb",
   "aspiration": "na",
   "badge": "V6",
   "blockMaterial": "iron",
@@ -4468,7 +4468,7 @@ exports[`catalogue engine v6-90 has not changed 1`] = `
 
 exports[`catalogue engine v8-cross has not changed 1`] = `
 {
-  "article": "1104:918abd09",
+  "article": "1131:842e6fd0",
   "aspiration": "na",
   "badge": "V8",
   "blockMaterial": "aluminium",
@@ -6165,7 +6165,7 @@ exports[`catalogue engine vr6 has not changed 1`] = `
 
 exports[`catalogue engine w12 has not changed 1`] = `
 {
-  "article": "852:f613d009",
+  "article": "848:6108b39d",
   "aspiration": "twin-turbo",
   "badge": "W12",
   "blockMaterial": "aluminium",
@@ -6622,11 +6622,11 @@ exports[`catalogue engine w12 has not changed 1`] = `
 
 exports[`catalogue engine w16 has not changed 1`] = `
 {
-  "article": "910:cfe0a484",
+  "article": "910:fe38d724",
   "aspiration": "quad-turbo",
   "badge": "W16",
   "blockMaterial": "aluminium",
-  "blowoff": 0,
+  "blowoff": 0.35,
   "bore": 86,
   "compression": 9,
   "counterweight": 65.66,
@@ -6970,7 +6970,7 @@ exports[`catalogue engine w16 has not changed 1`] = `
   "rodRatio": 1.65,
   "rough": 0.1,
   "sound": {
-    "blowoff": 0,
+    "blowoff": 0.35,
     "cylinders": [
       {
         "evo": 121.5,

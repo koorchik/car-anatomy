@@ -1,6 +1,8 @@
 // Declarative description of an engine. Everything the 3D model, the sound and
 // the charts need is derived from these fields (see kinematics.ts).
 
+import { t } from '../i18n/t.ts';
+
 export type Fuel = 'petrol' | 'diesel';
 export type Aspiration = 'na' | 'turbo' | 'twin-turbo' | 'quad-turbo' | 'supercharged';
 export type Valvetrain = 'dohc' | 'sohc' | 'ohv';
@@ -135,23 +137,23 @@ export interface EngineSpec {
 }
 
 export const FAMILY_NAMES: Record<Family, string> = {
-  inline: 'Рядні',
-  vee: 'V-подібні',
-  flat: 'Опозитні та плоскі',
-  narrow: 'VR і W',
-  rotary: 'Роторні',
+  inline: t('Рядні'),
+  vee: t('V-подібні'),
+  flat: t('Опозитні та плоскі'),
+  narrow: t('VR і W'),
+  rotary: t('Роторні'),
 };
 
 export const ASPIRATION_NAMES: Record<Aspiration, string> = {
-  na: 'атмосферний',
-  turbo: 'турбо',
-  'twin-turbo': 'два турбіни',
-  'quad-turbo': 'чотири турбіни',
-  supercharged: 'механічний нагнітач',
+  na: t('атмосферний'),
+  turbo: t('турбо'),
+  'twin-turbo': t('дві турбіни'),
+  'quad-turbo': t('чотири турбіни'),
+  supercharged: t('механічний нагнітач'),
 };
 
 export const VALVETRAIN_NAMES: Record<Valvetrain, string> = {
-  dohc: 'два розподільчі вали в головці',
-  sohc: 'один розподільчий вал у головці',
-  ohv: 'нижній розподільчий вал і штовхачі',
+  dohc: t('два розподільчі вали в головці'),
+  sohc: t('один розподільчий вал у головці'),
+  ohv: t('нижній розподільчий вал і штанги'),
 };

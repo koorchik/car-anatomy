@@ -1,5 +1,6 @@
 // The engine a visitor builds. Everything here is a choice they can make. Anything derived lives elsewhere.
 
+import { t } from '../i18n/t.ts';
 import type { FuelId } from './fuels.ts';
 
 export type DesignLayout = 'inline' | 'vee' | 'boxer' | 'flatvee' | 'vr' | 'w' | 'rotary';
@@ -130,7 +131,7 @@ export interface Design {
 }
 
 export const DEFAULT_DESIGN: Design = {
-  name: 'Мій двигун',
+  name: t('Мій двигун'),
   layout: 'inline',
   cylinders: 4,
   numbering: 'alternating',

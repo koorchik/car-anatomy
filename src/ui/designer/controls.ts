@@ -6,6 +6,8 @@ import { previewEffects, type Effect } from '../../designer/sensitivity.ts';
 import { axisAngle, firingFromCrank } from '../../designer/crank.ts';
 import { exhaustGroups, isRotary, type CrankThrow, type Design } from '../../designer/design.ts';
 import type { Performance } from '../../designer/physics.ts';
+import { numberLocale } from '../../i18n/locale.ts';
+import { t } from '../../i18n/t.ts';
 import { PARAM_GROUPS, type ChoiceParam, type ColorParam, type NumberParam, type Param, type ParamGroup, type ToggleParam } from './params.ts';
 
 export type DesignPatch = Partial<Design>;
@@ -43,9 +45,9 @@ const effectsHtml = (effects: Effect[]): string =>
 
 const nothingChanged = (param: Param): string => {
   const only = 'only' in param ? param.only : undefined;
-  if (only === 'sound') return 'На показники не впливає, змінює лише звук.';
-  if (only === 'looks') return 'На показники не впливає, змінює лише вигляд.';
-  return 'На цьому двигуні майже нічого не змінилось.';
+  if (only === 'sound') return t('На показники не впливає, змінює лише звук.');
+  if (only === 'looks') return t('На показники не впливає, змінює лише вигляд.');
+  return t('На цьому двигуні майже нічого не змінилось.');
 };
 
 /** A reveal for the explanation of one parameter. */
@@ -53,7 +55,7 @@ const helpLine = (help: string, preview?: () => string): { button: HTMLButtonEle
   const button = el('button', 'help-button', '?');
   button.type = 'button';
   button.setAttribute('aria-expanded', 'false');
-  button.setAttribute('aria-label', 'Що це');
+  button.setAttribute('aria-label', t('Що це'));
   const text = el('div', 'param-help');
   const words = el('p', undefined, help);
   const computed = el('div', 'param-preview');
@@ -85,7 +87,7 @@ function numberControl(param: NumberParam, onChange: (patch: DesignPatch) => voi
       const effects = previewEffects(d, param.key, to);
       return `<p><strong>${label}:</strong> ${effects.length ? effectsHtml(effects) : nothingChanged(param)}</p>`;
     };
-    return [value + step <= range.max ? line('Більше', value + step) : '', value - step >= range.min ? line('Менше', value - step) : ''].join('');
+    return [value + step <= range.max ? line(t('Більше'), value + step) : '', value - step >= range.min ? line(t('Менше'), value - step) : ''].join('');
   });
   const input = el('input', 'param-number');
   input.type = 'number';
@@ -280,7 +282,7 @@ class PipesWidget {
     this.onChange = onChange;
     this.onCommit = onCommit;
     this.toggle.type = 'checkbox';
-    this.toggleRow.append(this.toggle, document.createTextNode('Налаштувати кожну трубу окремо'));
+    this.toggleRow.append(this.toggle, document.createTextNode(t('Налаштувати кожну трубу окремо')));
     this.toggle.addEventListener('change', () => this.setCustom(this.toggle.checked));
     this.root.append(this.sketch, this.toggleRow, this.rows, this.pans);
   }
@@ -322,12 +324,12 @@ class PipesWidget {
     slider.min = '100';
     slider.max = '1600';
     slider.step = '10';
-    slider.setAttribute('aria-label', `Довжина первинної труби циліндра ${index + 1}`);
+    slider.setAttribute('aria-label', t('Довжина первинної труби циліндра {n}', { n: index + 1 }));
     const value = el('span', 'crank-value');
     const select = el('select', 'param-select pipe-group');
-    select.setAttribute('aria-label', `Збірник циліндра ${index + 1}`);
+    select.setAttribute('aria-label', t('Збірник циліндра {n}', { n: index + 1 }));
     for (const g of [0, 1, 2, 3]) {
-      const option = el('option', undefined, `Збірник ${g + 1}`);
+      const option = el('option', undefined, t('Збірник {n}', { n: g + 1 }));
       option.value = String(g);
       select.append(option);
     }
@@ -343,7 +345,7 @@ class PipesWidget {
 
   private makePan(index: number): HTMLElement {
     const row = el('label', 'pan-row');
-    row.append(el('span', 'crank-name', `Збірник ${index + 1}: зліва чи справа`));
+    row.append(el('span', 'crank-name', t('Збірник {n}: зліва чи справа', { n: index + 1 })));
     const slider = el('input');
     slider.type = 'range';
     slider.min = '-1';
@@ -409,7 +411,7 @@ class RevsWidget {
   private readonly broken = el('i', 'revs-broken');
   private readonly cut = el('b', 'revs-cut');
   private readonly text = el('p', 'revs-text');
-  private readonly button = el('button', 'btn', 'Поставити безпечну відсічку');
+  private readonly button = el('button', 'btn', t('Поставити безпечну відсічку'));
   private safeRpm = 0;
 
   constructor(onChange: (patch: DesignPatch) => void, onCommit: () => void) {
@@ -423,7 +425,7 @@ class RevsWidget {
   }
 
   sync(d: Design, rel: Reliability): void {
-    const words = (v: number): string => (Math.round(v / 50) * 50).toLocaleString('uk-UA');
+    const words = (v: number): string => (Math.round(v / 50) * 50).toLocaleString(numberLocale);
     const top = Math.max(d.rpmLimit, rel.failureRpm, rel.safeRpm) * 1.08;
     const share = (v: number): string => `${(Math.min(v, top) / top) * 100}%`;
     const safeEnd = Math.min(rel.safeRpm, rel.failureRpm);
@@ -432,8 +434,8 @@ class RevsWidget {
     this.broken.style.width = `${((top - rel.failureRpm) / top) * 100}%`;
     this.cut.style.left = share(d.rpmLimit);
     this.safeRpm = safeEnd;
-    const where = d.rpmLimit > rel.failureRpm ? 'Відсічка стоїть там, де двигун уже зруйнується.' : d.rpmLimit > safeEnd ? 'Відсічка стоїть у зоні зносу.' : 'Відсічка в безпечній зоні.';
-    this.text.textContent = `Безпечно до ${words(safeEnd)}, знос до ${words(rel.failureRpm)}, далі руйнування. ${where}`;
+    const where = d.rpmLimit > rel.failureRpm ? t('Відсічка стоїть там, де двигун уже зруйнується.') : d.rpmLimit > safeEnd ? t('Відсічка стоїть у зоні зносу.') : t('Відсічка в безпечній зоні.');
+    this.text.textContent = t('Безпечно до {safe}, знос до {failure}, далі руйнування. {where}', { safe: words(safeEnd), failure: words(rel.failureRpm), where });
     this.button.hidden = d.rpmLimit <= safeEnd;
   }
 }
@@ -455,7 +457,7 @@ class CrankWidget {
     this.svg.setAttribute('viewBox', '-60 -60 120 120');
     this.svg.setAttribute('class', 'crank-svg');
     this.svg.setAttribute('role', 'img');
-    this.svg.setAttribute('aria-label', 'Кути шатунних шийок, якщо дивитись на вал спереду');
+    this.svg.setAttribute('aria-label', t('Кути шатунних шийок, якщо дивитись на вал спереду'));
     const top = el('div', 'crank-top');
     top.append(this.svg, this.firing);
     this.root.append(top, this.rows);
@@ -496,7 +498,7 @@ class CrankWidget {
     const distinct = [...new Set(plan.intervals.map((v) => Math.round(v)))];
     const gaps = distinct.length === 1 ? `${distinct[0]}°` : plan.intervals.map((v) => Math.round(v)).join(', ') + '°';
     const row = (name: string, value: string): string => `<div><dt>${name}</dt><dd>${value}</dd></div>`;
-    this.firing.innerHTML = row('Порядок запалювання', plan.order.join('-')) + row('Проміжки', gaps);
+    this.firing.innerHTML = row(t('Порядок запалювання'), plan.order.join('-')) + row(t('Проміжки'), gaps);
   }
 
   private syncRows(d: Design): void {
@@ -507,14 +509,14 @@ class CrankWidget {
       this.rows.replaceChildren(...d.throws.map((_, i) => this.makeRow(i)));
       this.rowCount = d.cylinders;
     }
-    d.throws.forEach((t, i) => {
+    d.throws.forEach((crankThrow, i) => {
       const row = this.rows.children[i] as HTMLElement;
       const slider = row.querySelector<HTMLInputElement>('input[type=range]')!;
-      if (document.activeElement !== slider) slider.value = String(t.pin);
-      row.querySelector('.crank-value')!.textContent = `${Math.round(t.pin)}°`;
-      row.querySelector('.crank-tdc')!.textContent = `${Math.round(((axisAngle(d, i + 1) - t.pin) % 360 + 360) % 360) + (t.turn ? 360 : 0)}°`;
-      row.querySelector('button')!.textContent = t.turn ? 'другий' : 'перший';
-      row.querySelector('button')!.setAttribute('aria-pressed', String(t.turn === 1));
+      if (document.activeElement !== slider) slider.value = String(crankThrow.pin);
+      row.querySelector('.crank-value')!.textContent = `${Math.round(crankThrow.pin)}°`;
+      row.querySelector('.crank-tdc')!.textContent = `${Math.round(((axisAngle(d, i + 1) - crankThrow.pin) % 360 + 360) % 360) + (crankThrow.turn ? 360 : 0)}°`;
+      row.querySelector('button')!.textContent = crankThrow.turn ? t('другий') : t('перший');
+      row.querySelector('button')!.setAttribute('aria-pressed', String(crankThrow.turn === 1));
     });
     this.latest = d;
   }
@@ -536,13 +538,13 @@ class CrankWidget {
     slider.min = '0';
     slider.max = '355';
     slider.step = '5';
-    slider.setAttribute('aria-label', `Кут шийки циліндра ${index + 1}`);
+    slider.setAttribute('aria-label', t('Кут шийки циліндра {n}', { n: index + 1 }));
     const value = el('span', 'crank-value');
     const tdc = el('span', 'crank-tdc');
-    tdc.title = 'Кут вала, на якому цей циліндр спалахує';
+    tdc.title = t('Кут вала, на якому цей циліндр спалахує');
     const turn = el('button', 'btn crank-turn');
     turn.type = 'button';
-    turn.title = 'У якому з двох обертів циклу спалахує циліндр';
+    turn.title = t('У якому з двох обертів циклу спалахує циліндр');
     slider.addEventListener('input', () => this.patch(index, { pin: Number(slider.value) }));
     slider.addEventListener('change', this.onCommit);
     turn.addEventListener('click', () => {
@@ -580,7 +582,7 @@ function exhaustSketch(d: Design): string {
   const tail = `<line x1="${pipeStart.toFixed(1)}" y1="${y}" x2="${pipeEnd.toFixed(1)}" y2="${y}" class="sketch-pipe" stroke-width="${thick(d.pipeDia).toFixed(1)}"/>`;
   const cat = d.catalyst ? `<rect x="${catX.toFixed(1)}" y="${y - 11}" width="26" height="22" rx="3" class="sketch-box"/>` : '';
   const muffler = mufflerW ? `<rect x="${mufflerX.toFixed(1)}" y="${y - 14}" width="${mufflerW}" height="28" rx="4" class="sketch-box"/>` : '';
-  return `<svg viewBox="0 0 ${w} ${h}" class="exhaust-sketch" role="img" aria-label="Схема вихлопної системи в масштабі">${lines.join('')}${tail}${cat}${muffler}</svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="exhaust-sketch" role="img" aria-label="${t('Схема вихлопної системи в масштабі')}">${lines.join('')}${tail}${cat}${muffler}</svg>`;
 }
 
 export class DesignerControls {

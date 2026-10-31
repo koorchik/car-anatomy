@@ -1,3 +1,5 @@
+import { t } from '../i18n/t.ts';
+
 export type FuelId = 'ai92' | 'ai95' | 'ai98' | 'race' | 'e85' | 'methanol' | 'diesel';
 
 export interface FuelData {
@@ -19,13 +21,13 @@ export interface FuelData {
 // Stoichiometry, heating value and density follow published fuel tables. Methanol's and E85's octane
 // are effective values, because standard octane tests don't describe neat oxygenates well.
 export const FUELS: Record<FuelId, FuelData> = {
-  ai92: { name: 'Бензин А-92', afr: 14.7, lhv: 43, density: 0.74, octane: 92, chargeCooling: 6, diesel: false },
-  ai95: { name: 'Бензин А-95', afr: 14.7, lhv: 43, density: 0.75, octane: 95, chargeCooling: 6, diesel: false },
-  ai98: { name: 'Бензин А-98', afr: 14.7, lhv: 43, density: 0.75, octane: 98, chargeCooling: 6, diesel: false },
-  race: { name: 'Гоночний бензин', afr: 14.5, lhv: 43, density: 0.72, octane: 104, chargeCooling: 6, diesel: false },
-  e85: { name: 'Етанол E85', afr: 9.8, lhv: 29, density: 0.78, octane: 108, chargeCooling: 22, diesel: false },
-  methanol: { name: 'Метанол', afr: 6.4, lhv: 20, density: 0.79, octane: 112, chargeCooling: 45, diesel: false },
-  diesel: { name: 'Дизель', afr: 14.5, lhv: 42.7, density: 0.84, octane: 0, chargeCooling: 0, diesel: true },
+  ai92: { name: t('Бензин А-92'), afr: 14.7, lhv: 43, density: 0.74, octane: 92, chargeCooling: 6, diesel: false },
+  ai95: { name: t('Бензин А-95'), afr: 14.7, lhv: 43, density: 0.75, octane: 95, chargeCooling: 6, diesel: false },
+  ai98: { name: t('Бензин А-98'), afr: 14.7, lhv: 43, density: 0.75, octane: 98, chargeCooling: 6, diesel: false },
+  race: { name: t('Гоночний бензин'), afr: 14.5, lhv: 43, density: 0.72, octane: 104, chargeCooling: 6, diesel: false },
+  e85: { name: t('Етанол E85'), afr: 9.8, lhv: 29, density: 0.78, octane: 108, chargeCooling: 22, diesel: false },
+  methanol: { name: t('Метанол'), afr: 6.4, lhv: 20, density: 0.79, octane: 112, chargeCooling: 45, diesel: false },
+  diesel: { name: t('Дизель'), afr: 14.5, lhv: 42.7, density: 0.84, octane: 0, chargeCooling: 0, diesel: true },
 };
 
 /**

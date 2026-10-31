@@ -1,5 +1,7 @@
 // Round tachometer. Scale and red zone come from the engine.
 
+import { t } from '../i18n/t.ts';
+
 const SVG = 'http://www.w3.org/2000/svg';
 const SWEEP_START = -135;
 const SWEEP = 270;
@@ -31,7 +33,7 @@ export class Tacho {
     this.element.setAttribute('viewBox', '0 0 200 200');
     this.element.setAttribute('class', 'tacho');
     this.element.setAttribute('role', 'img');
-    this.element.setAttribute('aria-label', 'Тахометр');
+    this.element.setAttribute('aria-label', t('Тахометр'));
   }
 
   private add<K extends keyof SVGElementTagNameMap>(parent: Element, tag: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
@@ -79,7 +81,7 @@ export class Tacho {
     }
     this.readout = this.add(svg, 'text', { x: cx, y: cy + 50, class: 'tacho-rpm', 'text-anchor': 'middle' });
     const unit = this.add(svg, 'text', { x: cx, y: cy + 64, class: 'tacho-unit', 'text-anchor': 'middle' });
-    unit.textContent = 'об/хв';
+    unit.textContent = t('об/хв');
     const scale = this.add(svg, 'text', { x: cx, y: cy - 28, class: 'tacho-unit', 'text-anchor': 'middle' });
     scale.textContent = '× 1000';
     this.lamp = this.add(svg, 'circle', { cx: cx, cy: cy + 74, r: 3.5, class: 'tacho-lamp' });

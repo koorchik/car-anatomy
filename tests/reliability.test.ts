@@ -5,7 +5,7 @@ import { paramRange, resolveDesign } from '../src/designer/constraints.ts';
 import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
 import { evaluate } from '../src/designer/physics.ts';
 import { designFromSpec, editDesign, ODD_PRESETS } from '../src/designer/presets.ts';
-import { assessReliability, wearNow } from '../src/designer/reliability.ts';
+import { assessReliability, restartOutlook, wearNow } from '../src/designer/reliability.ts';
 import { causesOf, compareMetrics, previewEffects, snapshot } from '../src/designer/sensitivity.ts';
 import { designToSpec } from '../src/designer/to-spec.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
@@ -203,4 +203,28 @@ it('a design too bad to run never makes these tools throw', () => {
   const d = base({ fuel: 'diesel', lambda: 1.5, compression: 4, stroke: 280, bore: 30 });
   expect(() => causesOf(d, 'power', probesFor(d))).not.toThrow();
   expect(() => wearNow(assessReliability(d, evaluate(d)), 500, 1)).not.toThrow();
+});
+
+describe('what a restart will do', () => {
+  const outlook = (over: Partial<Design>): string => {
+    const d = base(over);
+    const perf = evaluate(d);
+    return restartOutlook(assessReliability(d, perf), perf.idleRpm, d.rpmLimit);
+  };
+
+  it('a sound engine is simply repaired', () => {
+    expect(outlook({})).toBe('fine');
+  });
+
+  it('a rev limit above what the parts take breaks it again at full throttle', () => {
+    expect(outlook({ rpmLimit: 16000 })).toBe('revs');
+  });
+
+  it('huge boost on high compression breaks it as soon as the throttle opens', () => {
+    expect(outlook({ charger: 'turbo', boostBar: 2.5, compression: 12, turboSizeHp: 300 })).toBe('throttle');
+  });
+
+  it('valves that hit the pistons break it at any speed', () => {
+    expect(outlook({ lift: 40, intakeDuration: 340, exhaustDuration: 340, lobeSeparation: 90 })).toBe('idle');
+  });
 });

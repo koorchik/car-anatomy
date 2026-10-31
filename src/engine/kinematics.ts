@@ -314,13 +314,6 @@ export function pistonAcceleration(engine: Engine, cyl: Cylinder, theta: number)
 
 export type Stroke = 'power' | 'exhaust' | 'intake' | 'compression';
 
-export const STROKE_NAMES: Record<Stroke, string> = {
-  intake: 'Впуск',
-  compression: 'Стиснення',
-  power: 'Робочий хід',
-  exhaust: 'Випуск',
-};
-
 /** Cycle position of a chamber at crank angle theta, 0..1. 0 = ignition. */
 export function cyclePhase(engine: Engine, cyl: Cylinder, theta: number): number {
   return mod(theta - cyl.fire, engine.cycle) / engine.cycle;

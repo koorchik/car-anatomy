@@ -2,6 +2,7 @@
 // past them the parts would physically occupy the same space. Poor engineering is allowed and diagnosed later.
 
 import { DEG } from '../engine/kinematics.ts';
+import { t } from '../i18n/t.ts';
 import { crankForPreset } from './crank.ts';
 import { DEFAULT_DESIGN, valveSplit, type Design, type DesignLayout } from './design.ts';
 
@@ -82,7 +83,7 @@ export function paramRange(d: Design, key: NumericKey): Range {
   switch (key) {
     case 'veeAngle': {
       const min = Math.max(40, minVeeAngle(d));
-      return { min, max: 170, minWhy: min > 40 ? 'Ближче головки блока зачеплять одна одну. Менший діаметр або довший шатун дозволять звузити розвал.' : undefined };
+      return { min, max: 170, minWhy: min > 40 ? t('Ближче головки блока зачеплять одна одну. Менший діаметр або довший шатун дозволять звузити розвал.') : undefined };
     }
     case 'narrowAngle':
       return fixed(8, 30);
@@ -96,7 +97,7 @@ export function paramRange(d: Design, key: NumericKey): Range {
       return fixed(20, 280);
     case 'rodLength': {
       const min = minRodLength(d.bore, d.stroke);
-      return { min, max: Math.max(min + 20, Math.round(d.stroke * 3.6)), minWhy: 'Коротший шатун упре спідницю поршня в противагу колінвала.' };
+      return { min, max: Math.max(min + 20, Math.round(d.stroke * 3.6)), minWhy: t('Коротший шатун упре спідницю поршня в противагу колінвала.') };
     }
     case 'compression':
       return fixed(4, 26);
@@ -105,16 +106,16 @@ export function paramRange(d: Design, key: NumericKey): Range {
     case 'intakeValve': {
       const shares = valveShares(d);
       const max = Math.max(12, Math.floor(Math.min(d.bore * shares.intake, d.bore * shares.sum - d.exhaustValve * 0.5) * 2) / 2);
-      return { min: 12, max, maxWhy: 'Більший клапан не вміститься в камері згоряння при такому діаметрі циліндра.' };
+      return { min: 12, max, maxWhy: t('Більший клапан не вміститься в камері згоряння при такому діаметрі циліндра.') };
     }
     case 'exhaustValve': {
       const shares = valveShares(d);
       const max = Math.max(10, Math.floor(Math.min(d.bore * shares.exhaust, d.bore * shares.sum - d.intakeValve * 0.5) * 2) / 2);
-      return { min: 10, max, maxWhy: 'Більший клапан не вміститься в камері згоряння при такому діаметрі циліндра.' };
+      return { min: 10, max, maxWhy: t('Більший клапан не вміститься в камері згоряння при такому діаметрі циліндра.') };
     }
     case 'lift': {
       const max = Math.max(4, Math.round(d.intakeValve * 0.55 * 2) / 2);
-      return { min: 3, max, maxWhy: 'Понад половину діаметра клапана вигравати вже нічого, а кулачок стає нереальним.' };
+      return { min: 3, max, maxWhy: t('Понад половину діаметра клапана вигравати вже нічого, а кулачок стає нереальним.') };
     }
     case 'intakeDuration':
     case 'exhaustDuration':
@@ -127,7 +128,7 @@ export function paramRange(d: Design, key: NumericKey): Range {
       return fixed(60, 900);
     case 'runnerDia': {
       const max = Math.round(d.bore * 0.72);
-      return { min: 14, max, maxWhy: 'Ширший патрубок не підійде до головки циліндра.' };
+      return { min: 14, max, maxWhy: t('Ширший патрубок не підійде до головки циліндра.') };
     }
     case 'boostBar':
       return fixed(0.1, 4);
@@ -143,7 +144,7 @@ export function paramRange(d: Design, key: NumericKey): Range {
       return fixed(100, 1600);
     case 'headerDia': {
       const max = Math.round(Math.max(20, d.exhaustValve * 1.8));
-      return { min: 15, max, maxWhy: 'Труба стає значно більшою за випускний отвір.' };
+      return { min: 15, max, maxWhy: t('Труба стає значно більшою за випускний отвір.') };
     }
     case 'headerSpread':
       return fixed(0, 0.8);
@@ -158,7 +159,7 @@ export function paramRange(d: Design, key: NumericKey): Range {
     case 'rotorE': {
       // A rotor needs its flanks to clear the housing: R/e of about 6.2 is the tightest that works.
       const max = Math.floor(d.rotorR / 6.2);
-      return { min: Math.ceil(d.rotorR / 10), max, maxWhy: 'Більший ексцентриситет не дає ротору розминутися з корпусом.' };
+      return { min: Math.ceil(d.rotorR / 10), max, maxWhy: t('Більший ексцентриситет не дає ротору розминутися з корпусом.') };
     }
     case 'rotorWidth':
       return fixed(30, 130);
@@ -284,5 +285,5 @@ export function adjustedKeys(before: Design, after: Design): NumericKey[] {
 
 export const valveCountLabel = (d: Design): string => {
   const { intake, exhaust } = valveSplit(d);
-  return `${intake} впускн., ${exhaust} випускн.`;
+  return t('{intake} впускн., {exhaust} випускн.', { intake, exhaust });
 };

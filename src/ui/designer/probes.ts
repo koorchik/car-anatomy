@@ -2,6 +2,7 @@
 
 import { numberProbe, choiceProbe, type Probe } from '../../designer/sensitivity.ts';
 import type { Design } from '../../designer/design.ts';
+import { t } from '../../i18n/t.ts';
 import { PARAM_GROUPS } from './params.ts';
 
 /** Changing these starts over from a different engine, so they aren't compared as a small move. */
@@ -20,7 +21,7 @@ export function probesFor(d: Design): Probe[] {
         const options = typeof param.options === 'function' ? param.options(d) : param.options;
         if (!param.only) probes.push(choiceProbe(param.key, param.label, options));
       } else if (param.kind === 'toggle') {
-        probes.push(choiceProbe(param.key, param.label, [[true as unknown as string, 'увімкнути'], [false as unknown as string, 'вимкнути']]));
+        probes.push(choiceProbe(param.key, param.label, [[true as unknown as string, t('увімкнути')], [false as unknown as string, t('вимкнути')]]));
       }
     }
   }

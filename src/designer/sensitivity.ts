@@ -1,6 +1,8 @@
 // Cause and effect, computed rather than written down. Every statement of the form "this changes that" on the page
 // comes from running the same model twice, so it stays true for the engine actually on screen.
 
+import { numberLocale } from '../i18n/locale.ts';
+import { t } from '../i18n/t.ts';
 import { paramRange, type NumericKey } from './constraints.ts';
 import type { Design } from './design.ts';
 import { evaluate, type Performance } from './physics.ts';
@@ -17,14 +19,14 @@ export interface Metric {
 
 export function metricsOf(perf: Performance, rel: Reliability): Metric[] {
   const metrics: Metric[] = [
-    { id: 'power', name: 'Потужність', value: perf.peakPower.powerHp, format: 'percent' },
-    { id: 'torque', name: 'Момент', value: perf.peakTorque.torqueNm, format: 'percent' },
-    { id: 'cruise', name: 'Витрата на трасі', value: perf.cruise.reachable ? perf.cruise.fuelLh : Number.NaN, format: 'percent' },
-    { id: 'bsfc', name: 'Питома витрата', value: perf.bestBsfc.bsfc < 2000 ? perf.bestBsfc.bsfc : Number.NaN, format: 'percent' },
-    { id: 'mass', name: 'Маса', value: perf.massKg, format: 'percent' },
-    { id: 'rev', name: 'Час набору обертів', value: perf.revTimeS, format: 'percent' },
-    { id: 'peakRpm', name: 'Оберти піку потужності', value: perf.peakPower.rpm, format: 'rpm' },
-    { id: 'safeRpm', name: 'Безпечні оберти', value: rel.safeRpm, format: 'rpm' },
+    { id: 'power', name: t('Потужність'), value: perf.peakPower.powerHp, format: 'percent' },
+    { id: 'torque', name: t('Момент'), value: perf.peakTorque.torqueNm, format: 'percent' },
+    { id: 'cruise', name: t('Витрата на трасі'), value: perf.cruise.reachable ? perf.cruise.fuelLh : Number.NaN, format: 'percent' },
+    { id: 'bsfc', name: t('Питома витрата'), value: perf.bestBsfc.bsfc < 2000 ? perf.bestBsfc.bsfc : Number.NaN, format: 'percent' },
+    { id: 'mass', name: t('Маса'), value: perf.massKg, format: 'percent' },
+    { id: 'rev', name: t('Час набору обертів'), value: perf.revTimeS, format: 'percent' },
+    { id: 'peakRpm', name: t('Оберти піку потужності'), value: perf.peakPower.rpm, format: 'rpm' },
+    { id: 'safeRpm', name: t('Безпечні оберти'), value: rel.safeRpm, format: 'rpm' },
   ];
   for (const item of rel.items) metrics.push({ id: item.id, name: item.name, value: item.load, format: 'load' });
   return metrics;
@@ -38,7 +40,7 @@ export interface Effect {
   size: number;
 }
 
-const rpmText = (v: number): string => (Math.round(v / 50) * 50).toLocaleString('uk-UA');
+const rpmText = (v: number): string => (Math.round(v / 50) * 50).toLocaleString(numberLocale);
 
 const describe = (before: Metric, after: Metric): Effect | null => {
   const a = before.value;
@@ -92,8 +94,8 @@ export function numberProbe(key: NumericKey, name: string): Probe {
       const range = paramRange(d, key);
       const step = (range.max - range.min) * 0.1;
       const out: Array<{ value: unknown; label: string }> = [];
-      if (value + step <= range.max) out.push({ value: value + step, label: 'більше' });
-      if (value - step >= range.min) out.push({ value: value - step, label: 'менше' });
+      if (value + step <= range.max) out.push({ value: value + step, label: t('більше') });
+      if (value - step >= range.min) out.push({ value: value - step, label: t('менше') });
       return out;
     },
   };
