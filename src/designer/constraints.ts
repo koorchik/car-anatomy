@@ -194,7 +194,7 @@ const ORDERED_KEYS: NumericKey[] = [
   'exhaustValve', 'intakeValve', 'exhaustValve', 'lift', 'intakeDuration', 'exhaustDuration', 'lobeSeparation', 'springForce',
   'runnerLength', 'runnerDia', 'boostBar', 'turboSizeHp', 'intercooler', 'lambda', 'ignitionOffset',
   'headerLength', 'headerDia', 'headerSpread', 'pipeDia', 'pipeLength', 'rpmLimit', 'rotorR', 'rotorE', 'rotorWidth',
-  'mufflerOpen', 'rasp', 'turboWhine',
+  'mufflerOpen', 'rasp', 'pops', 'turboWhine',
 ];
 
 /** Brings any design, however it arose, to a state that can be built. Pure and idempotent. */

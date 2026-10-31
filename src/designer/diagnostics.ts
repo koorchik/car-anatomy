@@ -69,7 +69,7 @@ export function diagnose(d: Design, perf: Performance): Diagnostic[] {
     add('piston-speed', 'warning', t('Поршень рухається надто швидко: {speed} м/с', { speed: atLimit.pistonSpeed.toFixed(1) }), t('Середня швидкість понад 25 м/с — територія гоночних двигунів, а понад 28 м/с швидко зношує кільця й підшипники.'), t('Зменш хід або межу обертів.'));
   }
   if (worstKnock.knockSeverity > 1.1 || mostRetard.knockRetard >= 22) {
-    add('knock', 'fatal', t('Сильна детонація близько {rpm} об/хв', { rpm: round(worstKnock.knockSeverity > 1.1 ? worstKnock.rpm : mostRetard.rpm) }), t('Паливо вибухає до приходу фронту полум’я навіть із максимально пізнім запалюванням. Поршень і прокладка такого довго не витримають.'), t('Вищий октан, менше стиснення чи наддуву або кращий інтеркулер.'));
+    add('knock', 'fatal', t('Сильна детонація близько {rpm} об/хв', { rpm: round(worstKnock.knockSeverity > 1.1 ? worstKnock.rpm : mostRetard.rpm) }), rotary ? t('Паливо вибухає до приходу фронту полум’я навіть із максимально пізнім запалюванням. Апексні ущільнення такого довго не витримають.') : t('Паливо вибухає до приходу фронту полум’я навіть із максимально пізнім запалюванням. Поршень і прокладка такого довго не витримають.'), t('Вищий октан, менше стиснення чи наддуву або кращий інтеркулер.'));
   } else if (mostRetard.knockRetard >= 8) {
     add('knock-limited', 'warning', t('Запалювання відкочено на {deg}° через детонацію', { deg: mostRetard.knockRetard }), t('Близько {rpm} об/хв блок керування запалює суміш пізніше, щоб не було детонації. Двигун уцілів, але віддає менше моменту і гріється сильніше.', { rpm: round(mostRetard.rpm) }), t('Вищий октан або менше стиснення повернуть цю втрату.'));
   }
@@ -78,10 +78,12 @@ export function diagnose(d: Design, perf: Performance): Diagnostic[] {
   }
   const pressureWarn = fuel.diesel ? 200 : 165;
   const pressureFatal = fuel.diesel ? 280 : 220;
+  const pressureBar = { bar: Math.round(highestPressure.peakPressureBar) };
+  const pressureTitle = rotary ? t('Тиск у камері {bar} бар', pressureBar) : t('Тиск у циліндрі {bar} бар', pressureBar);
   if (highestPressure.peakPressureBar > pressureFatal) {
-    add('cylinder-pressure', 'fatal', t('Тиск у циліндрі {bar} бар', { bar: Math.round(highestPressure.peakPressureBar) }), t('Такого не витримає ні прокладка головки, ні поршень. Двигун зруйнується від першого ж повного газу.'), t('Зменш наддув або ступінь стиснення.'));
+    add('cylinder-pressure', 'fatal', pressureTitle, rotary ? t('Такого не витримають ні апексні ущільнення, ні корпус. Двигун зруйнується від першого ж повного газу.') : t('Такого не витримає ні прокладка головки, ні поршень. Двигун зруйнується від першого ж повного газу.'), t('Зменш наддув або ступінь стиснення.'));
   } else if (highestPressure.peakPressureBar > pressureWarn) {
-    add('cylinder-pressure-high', 'warning', t('Тиск у циліндрі {bar} бар', { bar: Math.round(highestPressure.peakPressureBar) }), t('Це багато для такого двигуна: блок, шатуни й підшипники треба робити значно міцнішими.'));
+    add('cylinder-pressure-high', 'warning', pressureTitle, rotary ? t('Це багато для такого двигуна: ротор, ущільнення й підшипники треба робити значно міцнішими.') : t('Це багато для такого двигуна: блок, шатуни й підшипники треба робити значно міцнішими.'));
   }
   if (!fuel.diesel && d.lambda > 1.25) {
     add('lean-misfire', 'warning', t('Суміш надто бідна'), t('Бензинова суміш при такому λ горить повільно й нерівно: можливі пропуски спалахів, а гази виходять дуже гарячими.'), t('Для найбільшої потужності тримай λ близько 0,88, для економії близько 1,05.'));
@@ -90,7 +92,7 @@ export function diagnose(d: Design, perf: Performance): Diagnostic[] {
     add('too-rich', 'note', t('Суміш багатша, ніж потрібно'), t('Понад найкращу потужність паливо вже не додає моменту. Тепер воно просто летить у випуск і охолоджує циліндр.'));
   }
   if (hottest.egtC > 1020) {
-    add('egt', 'warning', t('Вихлопні гази {temp} °C', { temp: Math.round(hottest.egtC) }), t('Випускні клапани, турбіна й каталізатор такого довго не витримають.'), t('Трохи багатша суміш або менший наддув знизять температуру.'));
+    add('egt', 'warning', t('Вихлопні гази {temp} °C', { temp: Math.round(hottest.egtC) }), rotary ? t('Випускне вікно, турбіна й каталізатор такого довго не витримають.') : t('Випускні клапани, турбіна й каталізатор такого довго не витримають.'), t('Трохи багатша суміш або менший наддув знизять температуру.'));
   }
   if (isTurbo(d)) {
     // Only what the turbine itself adds: a choked pipe further along is a different problem.
@@ -111,7 +113,9 @@ export function diagnose(d: Design, perf: Performance): Diagnostic[] {
   }
   // At the rev limit, not at peak power: peak power itself slides down the range as breathing gets worse.
   if (atLimit.machIndex > 0.72) {
-    add('valve-choke', 'warning', t('Клапани не встигають пропускати повітря'), t('Індекс Маха на впуску на межі обертів {mach}, а наповнення падає вже після 0,6. На високих обертах двигун просто задихається.', { mach: atLimit.machIndex.toFixed(2) }), t('Більші клапани, більший підйом або більше клапанів на циліндр.'));
+    const breathing = t('Індекс Маха на впуску на межі обертів {mach}, а наповнення падає вже після 0,6. На високих обертах двигун просто задихається.', { mach: atLimit.machIndex.toFixed(2) });
+    if (rotary) add('valve-choke', 'warning', t('Впускне вікно не встигає пропускати повітря'), breathing, t('Ширший патрубок, менший ексцентриситет або нижча межа обертів.'));
+    else add('valve-choke', 'warning', t('Клапани не встигають пропускати повітря'), breathing, t('Більші клапани, більший підйом або більше клапанів на циліндр.'));
   }
   if (atLimit.runnerMach > 0.72) {
     add('runner-choke', 'warning', t('Впускний патрубок завузький'), t('Повітря в ньому рухається зі швидкістю {mach} Маха, і значна частина тиску йде на подолання опору.', { mach: atLimit.runnerMach.toFixed(2) }), t('Ширший патрубок прибере ці втрати.'));
@@ -120,7 +124,7 @@ export function diagnose(d: Design, perf: Performance): Diagnostic[] {
   const exhaustLoss = (p: (typeof perf.points)[number]): number => (isTurbo(d) ? p.pipeBackBar : p.backpressureBar);
   const worstExhaust = perf.points.reduce((a, b) => (exhaustLoss(b) > exhaustLoss(a) ? b : a), perf.points[0]!);
   if (exhaustLoss(worstExhaust) > 0.35) {
-    add('exhaust-choke', 'warning', t('Випуск душить двигун'), t('Протитиск вихлопної системи сягає {bar} бар. Поршень витрачає потужність, щоб виштовхнути гази.', { bar: exhaustLoss(worstExhaust).toFixed(2) }), t('Ширша труба, менш щільний глушник, більший випускний клапан або окрема труба на кожен ряд.'));
+    add('exhaust-choke', 'warning', t('Випуск душить двигун'), rotary ? t('Протитиск вихлопної системи сягає {bar} бар. Ротор витрачає потужність, щоб виштовхнути гази.', { bar: exhaustLoss(worstExhaust).toFixed(2) }) : t('Протитиск вихлопної системи сягає {bar} бар. Поршень витрачає потужність, щоб виштовхнути гази.', { bar: exhaustLoss(worstExhaust).toFixed(2) }), rotary ? t('Ширша труба або менш щільний глушник.') : t('Ширша труба, менш щільний глушник, більший випускний клапан або окрема труба на кожен ряд.'));
   }
   const ratio = d.rodLength / d.stroke;
   if (!rotary && ratio < 1.45) {

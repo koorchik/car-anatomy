@@ -62,6 +62,7 @@ export class RotaryEngineModel implements EngineModel {
   private readonly solidOnly: THREE.Object3D[] = [];
   private readonly sparks: THREE.Sprite[][] = [];
   private readonly pipes: HotPipeUniforms[] = [];
+  private readonly pipeMaterials: THREE.MeshStandardMaterial[] = [];
   private readonly flash: THREE.PointLight;
   private readonly explodables: Array<{ object: THREE.Object3D; direction: THREE.Vector3 }> = [];
   private viewMode: ViewMode = 'xray';
@@ -320,6 +321,7 @@ export class RotaryEngineModel implements EngineModel {
       this.mounted.add(pipe);
       this.peripheral.push(pipe);
       this.pipes.push(uniforms);
+      this.pipeMaterials.push(material);
       // Intake runner rises from the same side, above the port.
       const runner = [
         new THREE.Vector3(-half, R * 0.52, z),
@@ -365,7 +367,11 @@ export class RotaryEngineModel implements EngineModel {
   setFailure(part: string | null): void {
     this.undoFailure?.();
     this.undoFailure = null;
-    if (part) this.undoFailure = markDamaged(part === 'exhaust' ? this.materials.turboHot : this.materials.piston);
+    if (!part) return;
+    // No turbine is drawn here, so its failure shows on the pipes that would feed it.
+    const inExhaust = part === 'exhaust' || part === 'turbo';
+    const undo = (inExhaust ? this.pipeMaterials : [this.materials.piston]).map(markDamaged);
+    this.undoFailure = () => undo.forEach((restore) => restore());
   }
 
   setExplode(amount: number): void {

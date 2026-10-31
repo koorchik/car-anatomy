@@ -283,6 +283,14 @@ describe('links', () => {
     expect(Number.isFinite(evaluate(d!).peakPower.powerKw)).toBe(true);
   });
 
+  it('a link cannot push the pops outside their range', () => {
+    const decode = (pops: unknown): number | null | undefined => decodeDesign(btoa(JSON.stringify({ pops })))?.pops;
+    expect(decode(50)).toBe(1);
+    expect(decode(-3)).toBe(0);
+    expect(decode(0.4)).toBe(0.4);
+    expect(decode(null)).toBeNull();
+  });
+
   it('rejects garbage without throwing', () => {
     expect(decodeDesign('@@@not base64')).toBeNull();
     expect(decodeDesign('')).toBeNull();

@@ -213,7 +213,7 @@ export function assessReliability(d: Design, perf: Performance): Reliability {
           })
         : t('Паливо горить рівно на всіх обертах, запалювання не відкочується.'),
       fix: t('Вищий октан, менше стиснення чи наддуву, кращий інтеркулер.'),
-      failure: t('Прогорів поршень: детонація вибила кромку й кільця.'),
+      failure: rotary ? t('Детонація розбила апексні ущільнення: ротор втратив компресію.') : t('Прогорів поршень: детонація вибила кромку й кільця.'),
       part: 'piston',
       at: (rpm, throttle) => knockLoad(nearest(points, rpm)) * throttle * throttle,
     });
@@ -224,11 +224,15 @@ export function assessReliability(d: Design, perf: Performance): Reliability {
   items.push({
     id: 'exhaust-heat',
     name: t('Температура газів'),
-    detail: isTurbo(d)
-      ? t('До {temp} °C. Випускні клапани і турбіна живуть до приблизно 1200 °C.', { temp: n0(hottest.egtC) })
-      : t('До {temp} °C. Випускні клапани живуть до приблизно 1200 °C.', { temp: n0(hottest.egtC) }),
+    detail: rotary
+      ? isTurbo(d)
+        ? t('До {temp} °C. Випускне вікно, колектор і турбіна живуть до приблизно 1200 °C.', { temp: n0(hottest.egtC) })
+        : t('До {temp} °C. Випускне вікно й колектор живуть до приблизно 1200 °C.', { temp: n0(hottest.egtC) })
+      : isTurbo(d)
+        ? t('До {temp} °C. Випускні клапани і турбіна живуть до приблизно 1200 °C.', { temp: n0(hottest.egtC) })
+        : t('До {temp} °C. Випускні клапани живуть до приблизно 1200 °C.', { temp: n0(hottest.egtC) }),
     fix: t('Багатша суміш, менший наддув.'),
-    failure: t('Прогоріли випускні клапани: гази були надто гарячими.'),
+    failure: rotary ? t('Прогорів випускний колектор: гази були надто гарячими.') : t('Прогоріли випускні клапани: гази були надто гарячими.'),
     part: 'exhaust',
     at: (rpm, throttle) => egtLoad(nearest(points, rpm).egtC * (0.6 + 0.4 * throttle)),
   });

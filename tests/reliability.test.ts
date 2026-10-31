@@ -5,6 +5,7 @@ import { paramRange, resolveDesign } from '../src/designer/constraints.ts';
 import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
 import { evaluate } from '../src/designer/physics.ts';
 import { designFromSpec, editDesign, ODD_PRESETS } from '../src/designer/presets.ts';
+import { diagnose } from '../src/designer/diagnostics.ts';
 import { assessReliability, restartOutlook, wearNow } from '../src/designer/reliability.ts';
 import { causesOf, compareMetrics, previewEffects, snapshot } from '../src/designer/sensitivity.ts';
 import { designToSpec } from '../src/designer/to-spec.ts';
@@ -226,5 +227,29 @@ describe('what a restart will do', () => {
 
   it('valves that hit the pistons break it at any speed', () => {
     expect(outlook({ lift: 40, intakeDuration: 340, exhaustDuration: 340, lobeSeparation: 90 })).toBe('idle');
+  });
+});
+
+describe('a rotary is only told about parts it has', () => {
+  const PISTON_WORDS = /клапан|поршен|шатун|прокладк|циліндр|головк/i;
+  const rotary: Partial<Design> = { layout: 'rotary', cylinders: 2 };
+  const extremes: Array<Partial<Design>> = [
+    {},
+    { lambda: 1.5 },
+    { lambda: 0.8, ignitionOffset: 8 },
+    { fuel: 'ai92', compression: 12, charger: 'turbo', boostBar: 2, intercooler: 0 },
+    { charger: 'turbo', boostBar: 2.5, turboSizeHp: 80 },
+    { pipeDia: 25, muffler: 'road', rpmLimit: 11000 },
+    { rotorR: 130, rotorE: 21, rotorWidth: 130, rpmLimit: 11000, runnerDia: 25 },
+  ];
+
+  it.each(extremes.map((over) => [JSON.stringify(over), over] as const))('%s', (_name, over) => {
+    const d = base({ ...rotary, ...over });
+    const perf = evaluate(d);
+    const texts = [
+      ...assessReliability(d, perf).items.flatMap((i) => [i.name, i.detail, i.fix, i.failure]),
+      ...diagnose(d, perf).flatMap((x) => [x.title, x.text, x.fix ?? '']),
+    ];
+    expect(texts.filter((text) => PISTON_WORDS.test(text))).toEqual([]);
   });
 });

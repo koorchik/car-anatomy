@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { flankPoint, housingPoint } from '../src/scene/rotary-engine.ts';
+import * as THREE from 'three';
+import { describe, expect, it, vi } from 'vitest';
+import { RotaryEngineModel, flankPoint, housingPoint } from '../src/scene/rotary-engine.ts';
 import { engineById } from '../src/data/engines.ts';
 import { buildEngine, cyclePhase, strokeAt } from '../src/engine/kinematics.ts';
 
@@ -68,5 +69,33 @@ describe('Wankel geometry', () => {
     expect(eng.cylinders.length).toBe(6);
     expect(eng.intervals.every((v) => v === 180)).toBe(true);
     expect(buildEngine(engineById('r4')!).intervals.every((v) => v === 90)).toBe(true);
+  });
+});
+
+describe('a broken rotary shows what broke', () => {
+  // The model only draws its spark sprites on a canvas, which nothing here looks at.
+  const context = new Proxy({}, { get: () => () => ({ addColorStop: () => {} }), set: () => true });
+  vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => context }) });
+
+  const glowing = (model: RotaryEngineModel): Set<string> => {
+    const keys = new Set<string>();
+    model.group.traverse((object) => {
+      const material = (object as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (material?.emissive && material.emissive.getHexString() === 'ff2a10') keys.add(object.userData.part);
+    });
+    return keys;
+  };
+
+  it.each([
+    ['rotor', 'rotor'],
+    ['piston', 'rotor'],
+    ['exhaust', 'header'],
+    ['turbo', 'header'],
+  ])('%s lights up the %s', (part, key) => {
+    const model = new RotaryEngineModel(buildEngine(engineById('r2')!));
+    model.setFailure(part);
+    expect([...glowing(model)]).toEqual([key]);
+    model.setFailure(null);
+    expect([...glowing(model)]).toEqual([]);
   });
 });
