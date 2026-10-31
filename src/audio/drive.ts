@@ -210,7 +210,9 @@ export class Drive {
   /** Advance one frame and report the engine's state. */
   tick(dt: number): DriveSnapshot {
     if (!this.usingWorklet()) {
-      this.local.step(dt);
+      // A slow frame must not become one big step: the pedal's speed control would overshoot.
+      const steps = Math.max(1, Math.ceil(dt / 0.005));
+      for (let i = 0; i < steps; i++) this.local.step(dt / steps);
       this.shownAngle = this.local.angle;
       return this.snapshot();
     }

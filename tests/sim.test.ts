@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ENGINES } from '../src/data/engines.ts';
+import { ENGINES, engineById } from '../src/data/engines.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import { EngineSim } from '../src/engine/sim.ts';
 import { resolveDesign } from '../src/designer/constraints.ts';
@@ -154,6 +154,61 @@ it('pedal position maps to a usable range of steady speeds', () => {
   expect(speeds[0]!).toBeLessThan(speeds[1]!);
   expect(speeds[1]!).toBeLessThan(speeds[2]!);
   expect(speeds[0]!).toBeLessThan(3000);
+});
+
+describe('part throttle', () => {
+  const variantSim = (id: string): EngineSim => new EngineSim(synthConfig(buildEngine(engineById(id)!)).sim);
+  const designedSim = (): EngineSim => {
+    const d = resolveDesign({ ...DEFAULT_DESIGN, throws: [] });
+    return new EngineSim(synthConfig(buildEngine(designToSpec(d, evaluate(d)))).sim);
+  };
+  const cases: Array<[string, () => EngineSim]> = [
+    ...['b4/subaru-ej253', 'i4', 'i4d', 'i1', 'v8-cross', 'v12', 'r2'].map((id): [string, () => EngineSim] => [id, () => variantSim(id)]),
+    ['designer', designedSim],
+  ];
+
+  it.each(cases)('%s: every speed from idle upward has its own pedal position', (_name, make) => {
+    const sim = make();
+    sim.start();
+    run(sim, 3);
+    const { idleRpm, redlineRpm } = sim.params;
+    const steps = 8;
+    let previous = sim.rpm;
+    for (let i = 1; i <= steps; i++) {
+      sim.pedal = (i / steps) * 0.8;
+      run(sim, 2.5);
+      const gain = sim.rpm - previous;
+      // No cliff: each equal step of the pedal moves the speed by a similar amount.
+      const even = (0.8 * (redlineRpm - idleRpm)) / steps;
+      expect(gain).toBeGreaterThan(even * 0.5);
+      expect(gain).toBeLessThan(even * 1.6);
+      previous = sim.rpm;
+    }
+  });
+
+  it('an Outback can be held at 2000 rpm, and gets there without a long wait', () => {
+    // A fifth of the travel: well above the bottom edge, so a mouse can find it.
+    const sim = variantSim('b4/subaru-ej253');
+    sim.start();
+    run(sim, 3);
+    sim.pedal = 0.2;
+    run(sim, 1.5);
+    expect(sim.rpm).toBeGreaterThan(1800);
+    expect(sim.rpm).toBeLessThan(2300);
+  });
+
+  it('settles down to a lower pedal position from high speed', () => {
+    const sim = variantSim('b4/subaru-ej253');
+    sim.start();
+    run(sim, 3);
+    sim.pedal = 1;
+    run(sim, 2);
+    sim.pedal = 0.2;
+    run(sim, 4);
+    expect(sim.rpm).toBeGreaterThan(1500);
+    expect(sim.rpm).toBeLessThan(2500);
+    expect(sim.fuelCut).toBe(false);
+  });
 });
 
 it('slow motion holds the requested speed regardless of the pedal', () => {

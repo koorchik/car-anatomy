@@ -524,9 +524,8 @@ async function pressThrottle(): Promise<void> {
 
 function setPedalFromEvent(event: PointerEvent): void {
   const rect = $('pedal').getBoundingClientRect();
-  const y = (rect.bottom - event.clientY) / rect.height;
-  // The top third already gives some throttle so a simple tap is a useful blip.
-  pedalHeld = Math.max(0.3, Math.min(1, 0.3 + y * 0.9));
+  // The fill follows the cursor exactly, down to a closed throttle at the bottom edge.
+  pedalHeld = Math.max(0, Math.min(1, (rect.bottom - event.clientY) / rect.height));
   applyPedal();
 }
 
@@ -535,8 +534,6 @@ function setPedalFromEvent(event: PointerEvent): void {
   pedalEl.addEventListener('pointerdown', (event) => {
     pedalEl.setPointerCapture(event.pointerId);
     void pressThrottle();
-    latched = false;
-    $('latch').setAttribute('aria-pressed', 'false');
     setPedalFromEvent(event);
   });
   pedalEl.addEventListener('pointermove', (event) => {
@@ -554,7 +551,6 @@ function setPedalFromEvent(event: PointerEvent): void {
   pedalEl.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowDown') {
       pedalHeld = Math.max(0, pedalHeld - 0.1);
-      latched = pedalHeld > 0;
     } else if (event.key === 'ArrowUp') {
       pedalHeld = Math.min(1, pedalHeld + 0.1);
       latched = true;

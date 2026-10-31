@@ -22,6 +22,11 @@ export interface SimParams {
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
+/** Speed asked for by a full pedal, as a share of redline. Past 1, so the end of the travel reaches the limiter. */
+const PEDAL_TOP_SPEED = 1.1;
+/** Butterfly opening per unit of normalised speed still missing. */
+const PEDAL_GAIN = 10;
+
 /** Normalised torque curve over normalised rpm. Peak around 65 % of redline, falls off above. */
 const torqueAt = (n: number): number => {
   const x = clamp(n, 0, 1.2);
@@ -107,6 +112,24 @@ export class EngineSim {
     return this.accelWot * 0.14;
   }
 
+  /** Opening at which thrust exactly balances friction at this speed. */
+  private holdOpening(n: number): number {
+    const drag = this.drag(n);
+    const thrust = this.accelWot * Math.max(this.torque(n), 0.08);
+    return this.params.torqueTable ? drag / (thrust + drag) : drag / thrust;
+  }
+
+  /**
+   * With no load on the crank, the opening that holds a speed is almost the same from idle to a
+   * third of redline, so a fixed pedal-to-butterfly curve leaps across that whole range. The pedal
+   * therefore asks for a speed, and the butterfly settles at what holds it there. The pedal's
+   * position also limits how hard it pulls on the way, so full throttle stays fully open.
+   */
+  private pedalOpening(n: number, idleN: number): number {
+    const target = idleN + (PEDAL_TOP_SPEED - idleN) * this.throttle;
+    return clamp(this.holdOpening(n) + Math.min(PEDAL_GAIN * (target - n), this.throttle), 0, 1);
+  }
+
   step(dt: number): void {
     const p = this.params;
     this.stateTime += dt;
@@ -163,19 +186,15 @@ export class EngineSim {
         const err = (p.idleRpm - this.rpm) / p.idleRpm;
         this.idleIntegral = clamp(this.idleIntegral + err * dt * 0.8, -0.1, 0.2);
         const idleN = p.idleRpm / p.redlineRpm;
-        const idleDrag = this.drag(idleN);
-        const idleThrust = this.accelWot * Math.max(this.torque(idleN), 0.08);
-        const hold = p.torqueTable ? idleDrag / (idleThrust + idleDrag) : idleDrag / idleThrust;
-        const idleOpen = clamp(hold + err * 0.9 + this.idleIntegral, 0, 0.55);
-        const shaped = Math.pow(this.throttle, 1.5);
-        requested = Math.max(shaped, idleOpen);
+        const idleOpen = clamp(this.holdOpening(idleN) + err * 0.9 + this.idleIntegral, 0, 0.55);
+        requested = Math.max(this.pedalOpening(n, idleN), idleOpen);
         this.catchFlare *= Math.exp(-dt * 3.2);
         requested = Math.max(requested, this.catchFlare * 0.7);
 
         if (this.rpm >= p.redlineRpm) this.limiter = true;
         else if (this.rpm < p.redlineRpm - 180) this.limiter = false;
 
-        const closedThrottleOverrun = shaped < 0.02 && this.rpm > p.idleRpm * 1.25;
+        const closedThrottleOverrun = this.throttle < 0.02 && this.rpm > p.idleRpm * 1.25;
         this.fuelCut = this.limiter || closedThrottleOverrun;
         const thrust = this.fuelCut ? 0 : this.accelWot * this.torque(n) * requested;
         // A measured torque table is already net of friction, so wide open it adds no drag of its own.
