@@ -74,6 +74,7 @@ describe('real engines of each layout', () => {
     ['i3/fiesta-10-ecoboost', 'i3/fiesta-st-15-ecoboost'],
     ['v8-cross', 'v8-cross/amg-c63s-m177'],
     ['i6d/bmw-530d-b57', 'i6d/toyota-1hd-fte'],
+    ['b4/subaru-ej253', 'b4/subaru-fb25'],
   ])('%s and %s differ in sound, not only in loudness', (a, b) => {
     const clip = (id: string): Float32Array => {
       const rpm = 4000;

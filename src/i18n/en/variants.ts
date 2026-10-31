@@ -242,6 +242,18 @@ export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
     cars: ['Subaru Impreza GD/GG 2.0'],
     years: '2000-2005',
   },
+  'b4/subaru-ej253': {
+    name: 'Subaru Forester / Outback 2.5 EJ253',
+    note: 'The same bore and stroke as the STI, 99.5 by 79 mm, but with no turbo, one camshaft per cylinder head, a 10:1 compression ratio, and variable valve lift. The figures here are from the Forester SH; the Outback ranges from 167 to 173 hp depending on the market. The exhaust manifold of naturally aspirated cars is described as nearly equal in length, so the burble here is weaker than in turbocharged EJ engines.',
+    cars: ['Subaru Forester SG/SH', 'Subaru Outback BP/BR'],
+    years: '2005-2012',
+  },
+  'b4/subaru-fb25': {
+    name: 'Subaru Forester / Outback 2.5 FB25',
+    note: 'The successor to the EJ253, with the same displacement but different proportions: a smaller bore and a longer stroke, 94 by 90 mm, and two camshafts per cylinder head with variable timing on both intake and exhaust. Its 235 N·m arrives by 4100 rpm. The exhaust manifold was redesigned for faster catalytic converter warm-up and freer flow. It is set to equal length here, so the tone is more even than in the EJ253.',
+    cars: ['Subaru Forester SH (from 2011)', 'Subaru Forester SJ', 'Subaru Outback BR/BS (2013-2019)'],
+    years: '2011-2019',
+  },
   'b4/gr86-fa24': {
     name: 'Toyota GR86 / Subaru BRZ 2.4 FA24',
     note: 'The same firing order as the EJ, but with an equal-length 4-2-1 exhaust manifold. The pulses arrive evenly, so there is no burble, only a more even tone without pulsation. The injectors feed both the cylinder and the intake, and the compression ratio is 12.5.',
@@ -476,6 +488,12 @@ export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
     note: 'The same bore and stroke as the GT3 (102 by 81.5 mm), but a different design and a rev limit of 8000 rpm instead of 9000. There are 11% fewer firing events at the top of the range, so the naturally aspirated tone is lower than the GT3.',
     cars: ['Porsche 718 Cayman GT4', 'Porsche 718 Spyder'],
     years: '2019-2023',
+  },
+  'b6/porsche-cayman-981-3-4': {
+    name: 'Porsche Cayman S (981) 3.4',
+    note: 'A road-going naturally aspirated engine, 97 by 77.5 mm, with a 12.5 compression ratio, direct injection, variable intake timing and lift, and hydraulic lifters. Its 7800 rpm limit is 1200 rpm below the GT3, so the top-end tone is lower. This is the standard exhaust; the factory valved sport exhaust was an option. The figures are from the Cayman S, and the same engine makes 340 hp in the GTS.',
+    cars: ['Porsche Cayman S (981)', 'Porsche Cayman GTS (981, 340 hp)', 'Porsche Boxster S (981, 315 hp)'],
+    years: '2013-2016',
   },
   'b6/subaru-ez30-30r': {
     name: 'Subaru Legacy 3.0R EZ30D',
