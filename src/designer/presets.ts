@@ -62,7 +62,8 @@ export function withLayout(d: Design, layout: DesignLayout): Design {
   return resolveDesign({ ...moved, ...layoutExhaust(layout, moved.cylinders) });
 }
 
-const COSMETIC = new Set<keyof Design>(['name', 'coverColor']);
+// The same engine drawn or heard differently: the factory figures still hold.
+const COSMETIC = new Set<keyof Design>(['name', 'coverColor', 'switchKind', 'deactivateGroup']);
 
 /** One edit from the panel, with what that edit implies for the fields that depended on the old value. */
 export function editDesign(d: Design, patch: Partial<Design>): Design {
@@ -143,6 +144,18 @@ export const ODD_PRESETS: DesignPreset[] = [
     name: t('Гоночний кулачок у місті'),
     note: t('Дуже широкі фази на високому стисненні: холостий хід гуляє, а клапани можуть зустрітись із поршнем.'),
     design: make({ name: t('Гоночний кулачок у місті'), cylinders: 4, bore: 86, stroke: 86, compression: 13.5, intakeDuration: 320, exhaustDuration: 320, lobeSeparation: 100, lift: 14, rpmLimit: 8500, intakeValve: 36, springForce: 1100 }),
+  },
+  {
+    id: 'atkinson-hybrid',
+    name: t('Гібридний Аткінсон'),
+    note: t('Стиснення 13 на звичайному бензині: впуск закривається так пізно, що поршень виштовхує частину заряду назад. Мало моменту, зате високий ККД, як у гібридів Toyota.'),
+    design: make({ name: t('Гібридний Аткінсон'), cylinders: 4, bore: 80.5, stroke: 88.3, rodLength: 145, compression: 13, fuel: 'ai92', intakeValve: 31, exhaustValve: 26, lift: 9, intakeDuration: 290, exhaustDuration: 240, lobeSeparation: 112, camPhaser: 'intake', intakePhaseRange: 50, rpmLimit: 5600, springForce: 450, muffler: 'road' }),
+  },
+  {
+    id: 'miller-turbo',
+    name: t('Міллер із турбіною'),
+    note: t('Високе для наддуву стиснення й короткий впускний кулачок. Фазообертач може закрити впуск ще до нижньої мертвої точки, тож стискається менше, ніж розширюється. Volkswagen 1.5 TSI evo іде цим шляхом аж до 12,5 : 1.'),
+    design: make({ name: t('Міллер із турбіною'), cylinders: 4, bore: 74.5, stroke: 85.9, rodLength: 140, compression: 11.5, fuel: 'ai95', charger: 'turbo', boostBar: 0.8, turboSizeHp: 170, intercooler: 0.8, directInjection: true, intakeValve: 28, exhaustValve: 24, lift: 8.5, intakeDuration: 180, exhaustDuration: 220, lobeSeparation: 96, camPhaser: 'dual', intakePhaseRange: 80, exhaustPhaseRange: 40, rpmLimit: 6200, springForce: 500 }),
   },
   {
     id: 'mega-rotary',

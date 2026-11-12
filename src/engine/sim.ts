@@ -1,3 +1,5 @@
+import { ValveControl, type VariableValves } from './valve-control.ts';
+
 // Crankshaft speed as a small dynamic system. Runs on the audio thread when sound is on,
 // and on the main thread otherwise, so the code must stay free of DOM and Web Audio.
 
@@ -20,6 +22,8 @@ export interface SimParams {
   boostLagS?: number;
   /** False: the starter turns the engine but it never runs. */
   catches?: boolean;
+  /** Variable valve gear, run by its own controller on every step. */
+  valves?: VariableValves;
 }
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -53,6 +57,8 @@ export class EngineSim {
   boost = 0;
   /** Hold the crank at this speed, ignoring the pedal. Used for slow motion. */
   lockedRpm: number | null = null;
+  /** Cam phasers, cam profiles and resting cylinders, as the engine computer sets them. */
+  readonly valves = new ValveControl();
 
   private idleIntegral = 0;
   private stateTime = 0;
@@ -61,6 +67,7 @@ export class EngineSim {
 
   constructor(params: SimParams) {
     this.params = params;
+    this.valves.configure(params.valves, params.idleRpm, params.cylinders);
   }
 
   configure(params: SimParams): void {
@@ -69,6 +76,7 @@ export class EngineSim {
     this.idleIntegral = 0;
     if (this.state === 'running') this.rpm = clamp(this.rpm, params.idleRpm * 0.8, params.redlineRpm);
     this.limiter = false;
+    this.valves.configure(params.valves, params.idleRpm, params.cylinders);
   }
 
   start(): void {
@@ -221,11 +229,14 @@ export class EngineSim {
 
   private advance(dt: number): void {
     const p = this.params;
+    // Here rather than at the end of step(), so locked-speed playback runs the valve gear too.
+    this.valves.step(dt, this);
+    const firing = this.valves.state.active;
     // Crank speed ripples with the firing pulses, more so with fewer cylinders and at low speed.
     const speedShare = clamp(1.4 - this.rpm / (p.idleRpm * 4), 0.05, 1);
     const baseRipple = this.state === 'cranking' ? 0.32 : 0.16;
-    const ripple = (baseRipple / Math.sqrt(p.cylinders)) * speedShare * (0.5 + 0.5 * p.rough);
-    const inst = this.rpm * (1 + ripple * Math.sin(this.angle * (Math.PI / 180) * p.firesPerRev));
+    const ripple = (baseRipple / Math.sqrt(p.cylinders * firing)) * speedShare * (0.5 + 0.5 * p.rough);
+    const inst = this.rpm * (1 + ripple * Math.sin(this.angle * (Math.PI / 180) * p.firesPerRev * firing));
     this.angle = (this.angle + inst * 6 * dt) % p.cycle;
   }
 

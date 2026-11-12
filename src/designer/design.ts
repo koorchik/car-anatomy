@@ -14,6 +14,12 @@ export type Muffler = 'open' | 'sport' | 'road';
 export type CollectorKind = 'single' | 'bybank';
 export type BlowoffKind = 'recirculated' | 'soft' | 'vented';
 export type BlockMaterial = 'aluminium' | 'iron';
+export type CamPhaser = 'none' | 'intake' | 'dual' | 'coupled';
+export type CamSwitch = 'none' | 'intake' | 'exhaust' | 'both';
+export type SwitchKind = 'pin' | 'slide';
+export type LiftControl = 'cam' | 'continuous' | 'multiair';
+export type Deactivation = 'none' | 'valves' | 'fuel';
+export type DeactivateGroup = 'first' | 'second' | 'alternate';
 
 export interface CrankThrow {
   /** Crank pin angle, degrees. */
@@ -121,6 +127,25 @@ export interface Design {
 
   rpmLimit: number;
 
+  /** Cam phasers. The cam fields above describe the middle of their travel. */
+  camPhaser: CamPhaser;
+  /** Crank degrees the intake phaser moves; for a coupled phaser, the whole shaft. */
+  intakePhaseRange: number;
+  exhaustPhaseRange: number;
+  /** Which cams have a second, milder profile. The fields above are the high one. */
+  camSwitch: CamSwitch;
+  switchRpm: number;
+  /** Low cam lift, mm, and intake duration, crank degrees. The exhaust low cam keeps the same difference. */
+  lowLift: number;
+  lowDuration: number;
+  /** How the switch is built. Only drawn, the figures don't depend on it. */
+  switchKind: SwitchKind;
+  /** What sets the intake charge at part load: the throttle, or the intake valve itself. */
+  liftControl: LiftControl;
+  deactivation: Deactivation;
+  /** Which half of the firing order rests. Only heard and drawn. */
+  deactivateGroup: DeactivateGroup;
+
   /** Wankel only. */
   rotorR: number;
   rotorE: number;
@@ -188,6 +213,17 @@ export const DEFAULT_DESIGN: Design = {
   collectorOf: null,
   pans: null,
   rpmLimit: 6800,
+  camPhaser: 'none',
+  intakePhaseRange: 50,
+  exhaustPhaseRange: 40,
+  camSwitch: 'none',
+  switchRpm: 5500,
+  lowLift: 7,
+  lowDuration: 210,
+  switchKind: 'pin',
+  liftControl: 'cam',
+  deactivation: 'none',
+  deactivateGroup: 'first',
   rotorR: 105,
   rotorE: 15,
   rotorWidth: 80,

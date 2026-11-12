@@ -244,7 +244,7 @@ export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
   },
   'b4/subaru-ej253': {
     name: 'Subaru Forester / Outback 2.5 EJ253',
-    note: 'The same bore and stroke as the STI, 99.5 by 79 mm, but with no turbo, one camshaft per cylinder head, a 10:1 compression ratio, and variable valve lift. The figures here are from the Forester SH; the Outback ranges from 167 to 173 hp depending on the market. The exhaust manifold of naturally aspirated cars is described as nearly equal in length, so the burble here is weaker than in turbocharged EJ engines.',
+    note: 'The same bore and stroke as the STI, 99.5 by 79 mm, but with no turbo, one camshaft per cylinder head, a 10:1 compression ratio and, from 2006, two intake cam profiles (i-AVLS). The figures here are from the Forester SH; the Outback ranges from 167 to 173 hp depending on the market. The exhaust manifold of naturally aspirated cars is described as nearly equal in length, so the burble here is weaker than in turbocharged EJ engines.',
     cars: ['Subaru Forester SG/SH', 'Subaru Outback BP/BR'],
     years: '2005-2012',
   },
@@ -621,7 +621,7 @@ export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
   },
   'v10/huracan-lp610-4': {
     name: 'Lamborghini Huracan LP 610-4',
-    note: 'Mechanically the same 5.2 L as the R8, with the same 90° and 54° firing intervals, but 84 hp more and a power peak at 8250 rpm instead of 8000. The rhythm does not change, so the difference in sound comes only from slightly higher rpm and exhaust tuning.',
+    note: 'Mechanically the same 5.2 L as the R8, with the same 90° and 54° firing intervals, but 84 hp more and a power peak at 8250 rpm instead of 8000. The rhythm does not change, so the difference in sound comes only from slightly higher rpm and exhaust tuning. From model year 2016 one bank shuts off at light load and the V10 runs as a five-cylinder.',
     cars: ['Lamborghini Huracan LP 610-4'],
     years: '2014-2019',
   },

@@ -55,6 +55,7 @@ const describeEngine = (spec: EngineSpec): unknown => {
     exhaust: spec.exhaust,
     timing: spec.timing,
     valves: spec.valves,
+    vvt: spec.vvt,
     verifyNote: spec.verifyNote,
     flywheel: spec.tuning?.flywheelKg,
     counterweight: spec.tuning?.counterweightMm,

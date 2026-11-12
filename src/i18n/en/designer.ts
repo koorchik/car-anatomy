@@ -1,5 +1,8 @@
 // English for the designer and its model: Ukrainian source text to English.
+import { VALVETRAIN_EN } from './valvetrain.ts';
+
 export const DESIGNER_EN: Record<string, string> = {
+  ...VALVETRAIN_EN,
   'Полегшений поршень має менший запас і від детонації страждає першим.': 'A lightweight piston has less margin and is the first to suffer from knock.',
   '{failure} {fix} Запуск полагодить двигун, але відсічка стоїть вище, ніж він витримує, тож на повному газу він зламається знову.': '{failure} {fix} Starting will repair the engine, but the rev limiter is set above what it can take, so at full throttle it will break again.',
   '{failure} {fix} Запуск полагодить двигун, але з такою конфігурацією він зламається знову, щойно дати повний газ.': '{failure} {fix} Starting will repair the engine, but as configured it will break again as soon as you give it full throttle.',
