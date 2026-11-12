@@ -90,7 +90,7 @@ export class LoadedCrank {
     if (!active) {
       sim.inertiaShare = map.inertia / (map.inertia + load.inertia());
       this.engaged = false;
-      load.step({ omega, engineNm: 0, engineInertia: map.inertia, state: sim.state }, dt);
+      load.step({ omega, pedal: sim.pedal, engineNm: 0, engineInertia: map.inertia, state: sim.state }, dt);
       // The free path has no charge of its own: its load is close enough for a readout.
       const pressure = pressureForShaft(map, sim.boost);
       this.accumulate(false, 0, manifoldBar(map, sim.rpm, Math.max(sim.load, leakCharge(map, sim.rpm)), pressure), pressure, sim.rpm);
@@ -145,7 +145,7 @@ export class LoadedCrank {
     let engineNm = fuelOn ? brakeTorque(map, rpm, charge) : -motoringTorque(map, rpm, charge);
     if (fuelOn && request?.maxNm !== undefined) engineNm = Math.min(engineNm, request.maxNm);
 
-    const torque = load.step({ omega, engineNm: this.engineNm, engineInertia: map.inertia, state: sim.state }, dt);
+    const torque = load.step({ omega, pedal: sim.pedal, engineNm: this.engineNm, engineInertia: map.inertia, state: sim.state }, dt);
     const next = omega + (dt * (engineNm - torque.torqueNm)) / (inertia + dt * Math.max(0, torque.dTorque));
     sim.rpm = Math.max(0, next) / RAD;
     this.engineNm = engineNm;

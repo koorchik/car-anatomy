@@ -7,6 +7,8 @@ import type { EngineState } from './sim.ts';
 export interface CrankInput {
   /** Crank speed, rad/s. */
   omega: number;
+  /** The driver's pedal 0..1, for a load whose own actuator follows it. */
+  pedal: number;
   /** Engine brake torque on the previous step, N·m: what a dyno estimates from its load cell and the acceleration. */
   engineNm: number;
   /** Engine's own rotating inertia, kg·m². */

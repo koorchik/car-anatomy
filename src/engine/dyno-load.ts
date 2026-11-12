@@ -30,7 +30,6 @@ export type DynoCommand =
   | { kind: 'dyno'; action: 'hold'; rpm: number; throttle: number | null; keep: true }
   | { kind: 'dyno'; action: 'sweep'; fromRpm: number; toRpm: number; rate: number; throttle: number }
   | { kind: 'dyno'; action: 'free'; pedal: number }
-  | { kind: 'dyno'; action: 'pedal'; value: number }
   | { kind: 'dyno'; action: 'abort' };
 
 export type DynoPhase = 'off' | 'free' | 'hold' | 'settle' | 'ramp' | 'rampdown';
@@ -216,9 +215,6 @@ export class DynoLoad implements CrankLoad {
         this.phase = 'free';
         this.freePedal = clamp(cmd.pedal, 0, 1);
         break;
-      case 'pedal':
-        this.pedal = clamp(cmd.value, 0, 1);
-        break;
       case 'hold': {
         const { min, max } = holdRange(this.spec);
         this.phase = 'hold';
@@ -277,6 +273,7 @@ export class DynoLoad implements CrankLoad {
     const spec = this.spec;
     const omega = input.omega;
     const rpm = omega / RAD;
+    this.pedal = clamp(input.pedal, 0, 1);
     // Measurement over the step just finished: the absorber's torque then, plus what its rotor took to accelerate.
     const alpha = this.lastOmega === null ? 0 : (omega - this.lastOmega) / dt;
     this.lastOmega = omega;

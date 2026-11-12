@@ -4,7 +4,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { ENGINES, engineById } from '../src/data/engines.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
-import { EngineSynth, synthConfig } from '../src/audio/synth.ts';
+import { EngineSynth, synthConfig, type SynthConfig } from '../src/audio/synth.ts';
+import { DynoLoad, freePedalFor, sizeAbsorber, sweepEndRpm, sweepStartRpm, type AbsorberKind, type DynoCommand } from '../src/engine/dyno-load.ts';
+import { LoadedCrank } from '../src/engine/loaded-crank.ts';
+import { PEDAL_TOP_SPEED } from '../src/engine/sim.ts';
+import { catalogueTorqueMap } from '../src/ui/dyno/maps.ts';
 
 const FS = 48000;
 const OUT = '.tmp/audio';
@@ -32,17 +36,46 @@ export function floatToWav(left: Float32Array, right: Float32Array, fs: number):
   return Buffer.concat([header, data]);
 }
 
+/** What the dyno does from the start of a step: let go, hold a speed on the pedal, run a sweep, or listen free. */
+export type DynoStep = 'off' | { hold: number } | { sweep: { from: number; to: number; rate: number } } | { free: number };
+
 export interface Step {
   seconds: number;
   pedal: number;
   /** Hold at an exact speed, for measurements. */
   rpm?: number;
+  /** Puts the engine on the dyno, with its catalogue torque map. */
+  dyno?: DynoStep;
 }
 
-export function render(id: string, steps: Step[], trim?: number): { l: Float32Array; r: Float32Array; rpm: Float32Array } {
+export interface RenderOptions {
+  absorber?: AbsorberKind;
+  /** Changes to the synth's configuration, for experiments. */
+  config?: (cfg: SynthConfig) => SynthConfig;
+}
+
+export interface Rendered {
+  l: Float32Array;
+  r: Float32Array;
+  rpm: Float32Array;
+  /** The crank under load, when a step put the engine on the dyno. */
+  crank: LoadedCrank | null;
+  synth: EngineSynth;
+}
+
+export function render(id: string, steps: Step[], trim?: number, options: RenderOptions = {}): Rendered {
   const spec = engineById(id);
   if (!spec) throw new Error(`Unknown engine ${id}`);
-  const synth = new EngineSynth(synthConfig(buildEngine(spec), trim), FS);
+  const base = synthConfig(buildEngine(spec), trim);
+  const synth = new EngineSynth(options.config ? options.config(base) : base, FS);
+  let crank: LoadedCrank | null = null;
+  let load: DynoLoad | null = null;
+  if (steps.some((s) => s.dyno !== undefined)) {
+    const map = catalogueTorqueMap(spec);
+    load = new DynoLoad(sizeAbsorber(map, options.absorber ?? 'eddy'));
+    crank = new LoadedCrank(map, load);
+    synth.sim.attach(crank);
+  }
   synth.sim.start();
   const total = steps.reduce((a, s) => a + s.seconds, 0);
   const samples = Math.floor(total * FS);
@@ -54,6 +87,7 @@ export function render(id: string, steps: Step[], trim?: number): { l: Float32Ar
     const end = Math.min(samples, offset + Math.floor(step.seconds * FS));
     synth.sim.pedal = step.pedal;
     synth.sim.lockedRpm = step.rpm ?? null;
+    if (step.dyno !== undefined && load) load.command(dynoCommand(step.dyno, spec.idleRpm, spec.redlineRpm));
     if (step.rpm !== undefined) {
       synth.sim.state = 'running';
       synth.sim.rpm = step.rpm;
@@ -66,7 +100,29 @@ export function render(id: string, steps: Step[], trim?: number): { l: Float32Ar
       offset += n;
     }
   }
-  return { l, r, rpm };
+  return { l, r, rpm, crank, synth };
+}
+
+function dynoCommand(step: DynoStep, idleRpm: number, redlineRpm: number): DynoCommand {
+  if (step === 'off') return { kind: 'dyno', action: 'off' };
+  if ('hold' in step) return { kind: 'dyno', action: 'hold', rpm: step.hold, throttle: null, keep: true };
+  if ('free' in step) return { kind: 'dyno', action: 'free', pedal: freePedalFor(step.free, idleRpm, redlineRpm, PEDAL_TOP_SPEED) };
+  return { kind: 'dyno', action: 'sweep', fromRpm: step.sweep.from, toRpm: step.sweep.to, rate: step.sweep.rate, throttle: 1 };
+}
+
+/** Idle, a held full-load point at half the limit, a 300 rpm/s sweep, the ramp down and idle again. */
+export function dynoStory(id: string, rate = 300): Step[] {
+  const spec = engineById(id)!;
+  const map = catalogueTorqueMap(spec);
+  const dyno = sizeAbsorber(map, 'eddy');
+  const from = sweepStartRpm(map, dyno);
+  const to = sweepEndRpm(dyno);
+  return [
+    { seconds: 2, pedal: 0, dyno: 'off' },
+    { seconds: 8, pedal: 1, dyno: { hold: Math.round((0.5 * map.limitRpm) / 50) * 50 } },
+    { seconds: 3 + (to - from) / rate + (to - from) / 1000, pedal: 0, dyno: { sweep: { from, to, rate } } },
+    { seconds: 2, pedal: 0, dyno: 'off' },
+  ];
 }
 
 export const rmsDb = (x: Float32Array, from = 0, to = x.length): number => {
@@ -90,7 +146,15 @@ const STORY: Step[] = [
   { seconds: 2.5, pedal: 0 }, // back to idle
 ];
 
-if (process.argv[1]?.endsWith('render-audio.ts')) {
+if (process.argv[1]?.endsWith('render-audio.ts') && process.argv.includes('--dyno')) {
+  // The same engines under load: `npm run render-audio -- --dyno i3 v8-cross`.
+  mkdirSync(OUT, { recursive: true });
+  for (const id of process.argv.slice(2).filter((a) => a !== '--dyno')) {
+    const { l, r } = render(id, dynoStory(id));
+    writeFileSync(`${OUT}/${id.replace('/', '-')}-dyno.wav`, floatToWav(l, r, FS));
+    console.log(`${OUT}/${id.replace('/', '-')}-dyno.wav`, (l.length / FS).toFixed(1), 's, peak', Math.max(peak(l), peak(r)).toFixed(2));
+  }
+} else if (process.argv[1]?.endsWith('render-audio.ts')) {
   mkdirSync(OUT, { recursive: true });
   const ids = process.argv.slice(2);
   const list = ids.length ? ids : ENGINES.map((e) => e.id);

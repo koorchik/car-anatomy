@@ -159,7 +159,7 @@ describe('steady state: the absorber holds the speed and equals the engine', () 
     const r = rig(id);
     const target = Math.round((0.5 * r.map.limitRpm) / 50) * 50;
     hold(r, target);
-    cmd(r, { action: 'pedal', value: 1 });
+    r.sim.pedal = 1;
     run(r.sim, 7);
     let worst = 0;
     run(r.sim, 3, () => {
@@ -282,7 +282,7 @@ describe('a water brake cannot hold full load at low speed', () => {
   it('lets the engine climb until its square-law torque meets the engine', () => {
     const r = rig('v8-cross', 'water');
     hold(r, 1500);
-    cmd(r, { action: 'pedal', value: 1 });
+    r.sim.pedal = 1;
     run(r.sim, 8);
     r.crank.readings();
     run(r.sim, 1);
@@ -353,9 +353,9 @@ describe('idle under the loaded crank', () => {
   it.each(['i4', 'v8-cross', 'i1/honda-cg125', 'r2', 'i4d'])('%s drops to idle when the pedal is released on a hold above it', (id) => {
     const r = rig(id);
     hold(r, r.map.idleRpm + 1500);
-    cmd(r, { action: 'pedal', value: 0.6 });
+    r.sim.pedal = 0.6;
     run(r.sim, 4);
-    cmd(r, { action: 'pedal', value: 0 });
+    r.sim.pedal = 0;
     // A heavy flywheel on a small engine (the CG125 has 0.12 kg·m² against 1.6 N·m of friction) coasts down for a while.
     run(r.sim, 12);
     const reading = r.crank.readings();
@@ -384,7 +384,7 @@ describe('the rev limiter and fuel under load', () => {
   it('a hold above the limit is brought under it, and full load never touches the limiter', () => {
     const r = rig('v8-cross');
     hold(r, r.map.limitRpm + 500);
-    cmd(r, { action: 'pedal', value: 1 });
+    r.sim.pedal = 1;
     run(r.sim, 6);
     let top = 0;
     let cut = false;
@@ -479,8 +479,7 @@ describe('the controller', () => {
     run(r.sim, 6);
     const start = r.sim.rpm;
     expect(start).toBeGreaterThan(2000);
-    cmd(r, { action: 'pedal', value: 0.35 });
-    hold(r, start);
+        hold(r, start);
     let worst = 0;
     run(r.sim, 2, () => {
       worst = Math.max(worst, Math.abs(r.sim.rpm - start));
@@ -491,7 +490,7 @@ describe('the controller', () => {
   it('lets go for "listen without load" and the free engine keeps the same revs', () => {
     const r = rig('v8-cross');
     hold(r, 3000);
-    cmd(r, { action: 'pedal', value: 1 });
+    r.sim.pedal = 1;
     run(r.sim, 6);
     cmd(r, { action: 'free', pedal: freePedalFor(3000, r.params.idleRpm, r.params.redlineRpm, PEDAL_TOP_SPEED) });
     run(r.sim, 3);
