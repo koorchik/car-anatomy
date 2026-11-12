@@ -26,6 +26,7 @@ const LAYERS: Array<{ id: LayerId; label: string; title: string }> = [
   { id: 'oil', label: t('Олива'), title: t('Шлях оливи: насос, фільтр, магістраль, підшипники, головка') },
   { id: 'coolant', label: t('Охолодження'), title: t('Охолодження: насос, сорочка, термостат, патрубки радіатора') },
   { id: 'fuel', label: t('Паливо'), title: t('Паливо і запалювання: форсунки, свічки, котушки') },
+  { id: 'air', label: t('Повітря'), title: t('Повітря: фільтр, дросель, ресивер, патрубки, наддув') },
 ];
 
 const STORAGE_KEY = 'systems-layers';
@@ -287,6 +288,23 @@ export class SystemsView {
       coolant.flags.hidden = !liquid;
       coolant.warning.textContent = liquid && th.engineC > 112 ? t('Перегрів') : '';
       coolant.warning.hidden = !(liquid && th.engineC > 112);
+    }
+    const airSection = this.sections.get('air');
+    if (airSection && this.on.has('air')) {
+      const a = s.air;
+      const boosted = a.pressureRatio > 1.005 || (this.sim.systems?.boostBar ?? 0) > 0;
+      airSection.lines[0]!.textContent = s.running ? t('Повітря {g} г/с', { g: fmt(a.airGs, a.airGs < 10 ? 1 : 0) }) : t('Двигун стоїть: повітря не йде');
+      airSection.flags.textContent = !s.running
+        ? ''
+        : boosted && (this.sim.systems?.intercooler ?? 0) > 0
+          ? t('Наддув {b} бар · після компресора {t2} °C · після інтеркулера {t3} °C', { b: fmt((a.pressureRatio - 1) * 1.013, 2), t2: Math.round(a.compressorC), t3: Math.round(a.chargeC) })
+          : boosted
+            ? t('Наддув {b} бар · після компресора {t2} °C', { b: fmt((a.pressureRatio - 1) * 1.013, 2), t2: Math.round(a.compressorC) })
+          : this.sim.engine?.spec.fuel === 'diesel'
+            ? t('Дроселя немає: дизелем керує кількість палива')
+            : t('Тиск у ресивері {p} бар', { p: fmt(a.manifoldBar, 2) });
+      airSection.flags.hidden = !airSection.flags.textContent;
+      airSection.warning.hidden = true;
     }
     const fuel = this.sections.get('fuel');
     if (fuel && this.on.has('fuel')) this.renderFuel(s, fuel);

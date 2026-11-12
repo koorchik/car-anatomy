@@ -14,6 +14,8 @@ import { mainBearingZ, oilPlan } from './routes-oil.ts';
 import { rotaryOilPlan } from './routes-rotary.ts';
 import { coolantPlan, rotaryCoolantPlan } from './routes-coolant.ts';
 import { fuelPlan, fuelSlots, rotaryFuelPlan } from './routes-fuel.ts';
+import { airPlan, rotaryAirPlan, runnerChannel } from './routes-air.ts';
+import { intakeLift, mod } from '../../engine/kinematics.ts';
 import type { LayerPlan } from './route.ts';
 
 export type LayerId = 'oil' | 'coolant' | 'fuel' | 'air';
@@ -46,6 +48,8 @@ export function layerPlan(id: LayerId, engine: Engine, anchors: EngineAnchors): 
       return anchors.kind === 'piston' ? coolantPlan(engine, systems, anchors, sump) : rotaryCoolantPlan(engine, systems, anchors);
     case 'fuel':
       return anchors.kind === 'piston' ? fuelPlan(engine, systems, anchors) : rotaryFuelPlan(engine, systems, anchors);
+    case 'air':
+      return anchors.kind === 'piston' ? airPlan(engine, systems, anchors) : rotaryAirPlan(engine, systems, anchors);
     default:
       return null;
   }
@@ -116,7 +120,7 @@ export class SystemsLayers {
     if (!plan) return;
     const layer = new SystemLayer(this.engine, this.anchors, plan, LAYER_STYLES[id]);
     layer.addTo(this.model.mounted);
-    const feed = id === 'oil' ? oilFeed(this.engine, this.anchors, layer) : id === 'coolant' ? coolantFeed(this.engine, this.anchors, layer) : id === 'fuel' ? fuelFeed(this.engine, layer) : (): void => {};
+    const feed = id === 'oil' ? oilFeed(this.engine, this.anchors, layer) : id === 'coolant' ? coolantFeed(this.engine, this.anchors, layer) : id === 'fuel' ? fuelFeed(this.engine, layer) : airFeed(this.engine, this.anchors, layer);
     this.built.set(id, { layer, feed });
     this.builtList.push({ id, layer, feed });
   }
@@ -168,6 +172,68 @@ function fuelFeed(engine: Engine, layer: SystemLayer): (state: SystemsState) => 
       v.level[i] = state.running && litresPerMin > 0 ? 0.35 + 0.65 * Math.min(1, u / 0.5) : 0.12;
     }
     if (hp >= 0) v.spray[hp] = f.plunger;
+  };
+}
+
+/**
+ * Air: steady through the airbox, duct and plenum, and in each runner only while its valve is open, so the runners
+ * pulse in firing order. Compressed air runs hot until the intercooler.
+ */
+function airFeed(engine: Engine, anchors: EngineAnchors, layer: SystemLayer): (state: SystemsState) => void {
+  const ch = (id: string): number => layer.channel(id);
+  const steady = [ch('snorkel'), ch('duct'), ch('plenum')];
+  const hot = ch('charge-hot');
+  const cool = ch('charge-cool');
+  const throttle = ch('throttle');
+  const runners = anchors.kind === 'piston' ? anchors.runners.map((r) => ({ n: r.n, channel: ch(runnerChannel(r.n)), r: r.r })) : anchors.runners.map((r) => ({ n: r.rotor + 1, channel: ch(runnerChannel(r.rotor + 1)), r: r.r }));
+  const byNumber = new Map(engine.cylinders.map((c) => [c.n, c]));
+  const faces = engine.isRotary ? runners.map((r) => engine.cylinders.filter((c) => c.bank === r.n - 1)) : [];
+  const v = layer.values;
+  const heatOf = (c: number): number => Math.min(1, Math.max(0, (c - 25) / 120));
+  return (state) => {
+    const air = state.air;
+    // Volume flow at the manifold's density, m3/s; the ducts are about 70 mm across.
+    const density = Math.max(0.2, (air.manifoldBar * 1e5) / (287 * (air.chargeC + 273)));
+    const q = air.airGs / 1000 / 1.18;
+    const flowing = state.running && air.airGs > 0;
+    for (const i of steady) {
+      if (i < 0) continue;
+      v.speed[i] = q / ((Math.PI / 4) * 0.07 * 0.07);
+      v.level[i] = flowing ? 0.4 + 0.6 * Math.min(1, air.airGs / 60) : 0.12;
+      v.heat[i] = i === steady[2] ? heatOf(air.chargeC) : 0;
+    }
+    if (hot >= 0) {
+      v.speed[hot] = air.airGs / 1000 / density / ((Math.PI / 4) * 0.06 * 0.06);
+      v.level[hot] = flowing ? 0.4 + 0.6 * Math.min(1, air.airGs / 60) : 0.12;
+      v.heat[hot] = heatOf(air.compressorC);
+    }
+    if (cool >= 0) {
+      v.speed[cool] = air.airGs / 1000 / density / ((Math.PI / 4) * 0.06 * 0.06);
+      v.level[cool] = flowing ? 0.4 + 0.6 * Math.min(1, air.airGs / 60) : 0.12;
+      v.heat[cool] = heatOf(air.chargeC);
+    }
+    if (throttle >= 0) v.spray[throttle] = state.running ? state.throttle : 0;
+    const timing = state.timing ?? engine.timing;
+    for (let k = 0; k < runners.length; k++) {
+      const r = runners[k]!;
+      if (r.channel < 0) continue;
+      let lift = 0;
+      if (engine.isRotary) {
+        // A rotor's runner feeds whichever of its faces is on the intake phase.
+        for (const c of faces[k]!) {
+          const x = (mod(state.theta - c.fire, engine.cycle) / engine.cycle - 0.5) / 0.25;
+          if (x > 0 && x < 1) lift = Math.max(lift, Math.sin(Math.PI * x) ** 2);
+        }
+      } else {
+        const c = byNumber.get(r.n)!;
+        lift = intakeLift(mod(state.theta - c.fire, 720), timing);
+      }
+      const pulse = flowing ? lift * (0.3 + 0.7 * air.fill) : 0;
+      const area = Math.PI * (r.r * 0.1) ** 2;
+      v.speed[r.channel] = pulse > 0.02 ? (q / Math.max(1, runners.length)) * 3 / area * pulse : 0;
+      v.level[r.channel] = 0.12 + 0.88 * pulse;
+      v.heat[r.channel] = heatOf(air.chargeC);
+    }
   };
 }
 

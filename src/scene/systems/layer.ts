@@ -128,7 +128,7 @@ export class SystemLayer {
   private readonly fixedSprays: Array<{ mesh: THREE.InstancedMesh; channels: Int32Array; slots: Int32Array }> = [];
   private level: THREE.Mesh | null = null;
   private movers: THREE.InstancedMesh | null = null;
-  private readonly moverData: Array<{ position: THREE.Vector3; axis: THREE.Vector3; travel: number; channel: number }> = [];
+  private readonly moverData: Array<{ position: THREE.Vector3; axis: THREE.Vector3; travel: number; channel: number; turn: boolean; radius: number }> = [];
   private levelCentre = new THREE.Vector3();
   private readonly engine: Engine;
   private readonly frames: THREE.Object3D[];
@@ -351,7 +351,7 @@ export class SystemLayer {
       const mesh = new THREE.InstancedMesh(disc, material, plan.movers.length);
       mesh.frustumCulled = false;
       mesh.userData.instanceParts = plan.movers.map((m) => m.part);
-      for (const m of plan.movers) this.moverData.push({ position: m.position.clone(), axis: m.axis.clone().normalize(), travel: m.travel, channel: this.channels.indexOf(m.channel) });
+      for (const m of plan.movers) this.moverData.push({ position: m.position.clone(), axis: m.axis.clone().normalize(), travel: m.travel, channel: this.channels.indexOf(m.channel), turn: !!m.turn, radius: m.radius });
       plan.movers.forEach((m, i) => {
         this.scratchQuat.setFromUnitVectors(UP, this.moverData[i]!.axis);
         this.scratchMatrix.compose(m.position, this.scratchQuat, this.scratchScale.set(m.radius, m.radius, m.radius));
@@ -464,10 +464,16 @@ export class SystemLayer {
       for (let i = 0; i < this.moverData.length; i++) {
         const m = this.moverData[i]!;
         const value = m.channel >= 0 ? v.spray[m.channel]! : 0;
-        this.movers.getMatrixAt(i, this.scratchMatrix);
-        this.scratchMatrix.decompose(this.scratchB, this.scratchQuat, this.scratchScale);
+        this.baseQuat.setFromUnitVectors(UP, m.axis);
+        if (m.turn) {
+          // A plate about a diameter: its face across the bore when shut, nearly edge-on when open.
+          this.spinQuat.setFromAxisAngle(this.scratchB.set(1, 0, 0), (8 + 80 * Math.min(1, Math.max(0, value))) * DEG);
+          this.scratchQuat.multiplyQuaternions(this.baseQuat, this.spinQuat);
+        } else {
+          this.scratchQuat.copy(this.baseQuat);
+        }
         this.scratchA.copy(m.position).addScaledVector(m.axis, m.travel * value);
-        this.scratchMatrix.compose(this.scratchA, this.scratchQuat, this.scratchScale);
+        this.scratchMatrix.compose(this.scratchA, this.scratchQuat, this.scratchScale.set(m.radius, m.radius, m.radius));
         this.movers.setMatrixAt(i, this.scratchMatrix);
       }
       this.movers.instanceMatrix.needsUpdate = true;

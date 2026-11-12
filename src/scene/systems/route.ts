@@ -98,6 +98,8 @@ export interface Mover {
   /** Travel at full value, scene units. */
   travel: number;
   channel: string;
+  /** Turns across its axis instead of sliding along it: a throttle plate, shut at 8 degrees, open at 88. */
+  turn?: boolean;
 }
 
 export interface LayerPlan {

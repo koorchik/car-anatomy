@@ -255,4 +255,31 @@ export const SYSTEMS_EN: Record<string, string> = {
   'Свічки розжарювання ввімкнено': 'Glow plugs on',
   'Провідна свічка {a}, відстаюча {b}': 'Leading plug {a}, trailing {b}',
   'Іскра {a}': 'Spark {a}',
+  // Air layer
+  'Повітря': 'Air',
+  'Повітряний фільтр': 'Air filter',
+  'Коробка з паперовим фільтром, крізь яку двигун вдихає повітря. Забірний патрубок зазвичай бере холодне повітря подалі від гарячого двигуна.':
+    'A box with a paper filter that the engine breathes through. Its snorkel usually draws cool air from away from the hot engine.',
+  'Датчик витрати повітря': 'Mass airflow sensor',
+  'Нагріта плівка в потоці охолоджується тим сильніше, чим більше повітря проходить. За цим блок керування знає, скільки грамів повітря на секунду вдихає двигун, і дозує паливо.':
+    'A heated film in the airflow cools the more air passes it. From that the control unit knows how many grams of air per second the engine takes in, and meters the fuel.',
+  'Дросельна заслінка': 'Throttle plate',
+  'Поворотна заслінка, яку відкриває педаль газу. Вона не дає двигуну більше палива, а пропускає більше повітря; паливо додає блок керування слідом. У дизеля заслінки немає: він регулюється кількістю палива.':
+    'A turning plate that the gas pedal opens. It does not give the engine fuel; it lets in more air, and the control unit adds fuel to match. A diesel has none: it is controlled by the amount of fuel.',
+  'Виходи до інтеркулера': 'To and from the intercooler',
+  'Стиснене повітря виходить із компресора гарячим і йде до інтеркулера перед радіатором, а повертається охолодженим і щільнішим. Сам інтеркулер тут не намальовано.':
+    'Compressed air leaves the compressor hot and goes out to the intercooler ahead of the radiator, coming back cooler and denser. The intercooler itself is not drawn.',
+  'Повітропровід': 'Air intake duct',
+  'Труба від повітряного фільтра до дросельної заслінки або до компресора турбіни.':
+    'The pipe from the air filter to the throttle body or to the turbo compressor.',
+  'Механічний нагнітач': 'Supercharger',
+  'Насос, який крутить ремінь від колінвала, нагнітає повітря у впуск. Тиск є вже з низів, але нагнітач забирає частину потужності і гріє повітря.':
+    'A pump turned by a belt from the crank forces air into the intake. It gives boost from low rpm, but takes some power and heats the air.',
+  'Повітря: фільтр, дросель, ресивер, патрубки, наддув': 'Air: filter, throttle, plenum, runners, boost',
+  'Повітря {g} г/с': 'Air {g} g/s',
+  'Двигун стоїть: повітря не йде': 'Engine stopped: no air flows',
+  'Наддув {b} бар · після компресора {t2} °C · після інтеркулера {t3} °C': 'Boost {b} bar · after the compressor {t2} °C · after the intercooler {t3} °C',
+  'Дроселя немає: дизелем керує кількість палива': 'No throttle: a diesel is run by the amount of fuel',
+  'Тиск у ресивері {p} бар': 'Plenum pressure {p} bar',
+  'Наддув {b} бар · після компресора {t2} °C': 'Boost {b} bar · after the compressor {t2} °C',
 };

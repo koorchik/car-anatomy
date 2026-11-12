@@ -43,6 +43,10 @@ export interface SystemsState {
   fuel: FuelState;
   /** The frame this state was worked out for. */
   rpm: number;
+  throttle: number;
+  theta: number;
+  /** Valve events now: feature/vvt's when it moves them, else null for the engine's own. */
+  timing: ValveTiming | null;
   live: boolean;
   running: boolean;
   timeScale: number;
@@ -53,7 +57,7 @@ export class SystemsSim {
   systems: SystemsSpec | null = null;
   /** Share of oil in what the pump draws. feature/oil-sump sets it from the slosh in the pan. */
   oilSupply = 1;
-  readonly state: SystemsState = { oil: newOilState(), thermal: null as unknown as ThermalState, air: newAirState(), fuel: null as unknown as FuelState, rpm: 0, live: false, running: false, timeScale: 1 };
+  readonly state: SystemsState = { oil: newOilState(), thermal: null as unknown as ThermalState, air: newAirState(), fuel: null as unknown as FuelState, rpm: 0, throttle: 0, theta: 0, timing: null, live: false, running: false, timeScale: 1 };
   private fuel: FuelModel | null = null;
   // Inputs reused every frame, so stepping allocates nothing.
   private readonly airIn: AirInput = { rpm: 0, load: 0, boost: 0, fuelCut: true };
@@ -96,6 +100,9 @@ export class SystemsSim {
     if (!this.engine || !this.oilParams || !this.airParams || !this.thermal || !this.fuel) return st;
     const rpm = Math.max(0, frame.rpm);
     st.rpm = rpm;
+    st.throttle = frame.throttle;
+    st.theta = frame.theta;
+    st.timing = frame.timing ?? null;
     st.live = frame.live;
     st.running = frame.running;
     st.timeScale = frame.timeScale;
