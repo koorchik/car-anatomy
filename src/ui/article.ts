@@ -110,7 +110,7 @@ const list = (items: string[]): string => items.map((t) => `<li>${escapeHtml(t)}
 
 export const siblingsOf = (spec: EngineSpec): EngineSpec[] => ENGINES.filter((e) => e.cylinders === spec.cylinders && e.id !== spec.id.split('/')[0]);
 
-const FIELD_NAMES: Record<string, string> = {
+export const FIELD_NAMES: Record<string, string> = {
   bore: t('діаметр'), stroke: t('хід'), compression: t('ступінь стиснення'), rodLength: t('довжину шатуна'), valvesPerCyl: t('кількість клапанів'),
   valvetrain: t('привод клапанів'), charger: t('тип наддуву'), boostBar: t('тиск наддуву'), directInjection: t('тип упорскування'), blockMaterial: t('матеріал блока'),
   fuel: t('паливо'), years: t('роки випуску'), redline: t('межу обертів'), idle: t('холостий хід'), powerHp: t('потужність'), powerRpm: t('оберти потужності'), torqueNm: t('момент'), torqueRpm: t('оберти моменту'),

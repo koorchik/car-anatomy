@@ -146,6 +146,48 @@ describe('catalogue systems', () => {
     }
   });
 
+  it('carries each engine’s own hardware, and no variant inherits its page’s', () => {
+    const expected: Record<string, Partial<Record<'cooling' | 'fuelSystem' | 'ignition' | 'sparkPlugs' | 'glowPlugs' | 'oilFilter', unknown>>> = {
+      i1: { cooling: 'ram', fuelSystem: 'port' },
+      'i1/ktm-690-duke': { cooling: 'liquid', sparkPlugs: 2 },
+      'i1/vespa-gts-300-hpe': { cooling: 'liquid', sparkPlugs: 1 },
+      'i1/honda-cg125': { cooling: 'ram', fuelSystem: 'carburettor', ignition: 'distributor' },
+      b2: { cooling: 'fan', fuelSystem: 'carburettor', ignition: 'wasted-spark' },
+      'b2/bmw-r1250': { cooling: 'liquid', fuelSystem: 'port', ignition: 'coil-on-plug' },
+      'b4/beetle-1600': { cooling: 'fan', fuelSystem: 'carburettor', oilFilter: false },
+      'b6/porsche-993-carrera': { cooling: 'fan', sparkPlugs: 2, ignition: 'distributor' },
+      v2: { cooling: 'ram', sparkPlugs: 2 },
+      'v2/ducati-1299-panigale': { cooling: 'liquid', sparkPlugs: 1 },
+      'v2/hd-pan-america-revolution-max': { cooling: 'liquid' },
+      f12: { fuelSystem: 'mechanical', ignition: 'distributor' },
+      'f12/ferrari-f512m': { fuelSystem: 'port', ignition: 'coil-on-plug' },
+      'f12/ferrari-512bb': { fuelSystem: 'carburettor' },
+      i6d: { fuelSystem: 'diesel-pump', glowPlugs: false, sparkPlugs: 0, ignition: null },
+      'i6d/bmw-530d-b57': { fuelSystem: 'common-rail', glowPlugs: true },
+      'i6d/toyota-1hd-fte': { fuelSystem: 'diesel-pump' },
+      i4d: { fuelSystem: 'unit-injector' },
+      'i4d/mercedes-240d-om616': { fuelSystem: 'diesel-idi' },
+      r2: { ignition: 'wasted-spark', sparkPlugs: 2 },
+      'r2/rx8-renesis': { ignition: 'coil-on-plug' },
+      'r2/cosmo-l10a': { fuelSystem: 'carburettor', ignition: 'distributor' },
+      v8: { fuelSystem: 'port' },
+    };
+    for (const [id, facts] of Object.entries(expected)) {
+      const spec = engineById(id === 'v8' ? 'v8-cross' : id)!;
+      expect(spec, id).toBeDefined();
+      for (const [key, value] of Object.entries(facts)) expect(spec.systems![key as keyof typeof facts], `${id} ${key}`).toEqual(value);
+    }
+  });
+
+  it('names every systems field it could not check, in words the article knows', async () => {
+    const { FIELD_NAMES } = await import('../src/ui/article.ts');
+    for (const [page, { base, variants }] of Object.entries(ENGINE_VARIANTS)) {
+      for (const facts of [base, ...variants]) {
+        for (const name of facts.unverified.filter((n) => (SYSTEM_KEYS as readonly string[]).includes(n))) expect(FIELD_NAMES[name], `${page} ${name}`).toBeDefined();
+      }
+    }
+  });
+
   it('a variant without facts of its own gets what its own design implies, not its page', () => {
     for (const entry of CATALOGUE) {
       for (const variant of ENGINE_VARIANTS[entry.id]?.variants ?? []) {

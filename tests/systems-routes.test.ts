@@ -186,10 +186,10 @@ describe.each(pistonIds)('fuel and ignition in %s', (id) => {
       const along = rel.dot(axis);
       return { off: rel.clone().addScaledVector(axis, -along).length(), along };
     };
-    const nearest = (p: THREE.Vector3) => a.cylinders.reduce((best, c) => (Math.abs(c.z - p.z) < Math.abs(best.z - p.z) ? c : best), a.cylinders[0]!);
     for (const f of plan.flashes ?? []) {
       if (f.part !== 'spark-plug') continue;
-      const { off, along } = offAxis(f.position, nearest(f.position));
+      // A plug's spark slot is its cylinder's index.
+      const { off, along } = offAxis(f.position, a.cylinders[f.slot]!);
       expect(off, `${id} plug tip in the bore`).toBeLessThan(a.bore / 2);
       expect(Math.abs(along - a.deck), `${id} plug tip at the deck`).toBeLessThan(0.05 * a.bore);
     }
