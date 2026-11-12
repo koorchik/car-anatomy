@@ -9,6 +9,15 @@ export interface ChartSeries {
   y: number[];
 }
 
+/** Extras for the dyno: a thin reference curve, points held one by one, and points to compare with. */
+export interface ChartOverlay {
+  reference?: ChartSeries;
+  /** Held points. A hollow one did not settle in time. */
+  dots?: Array<{ x: number; y: number; hollow?: boolean }>;
+  /** Published figures, drawn as open rings. */
+  markers?: Array<{ x: number; y: number }>;
+}
+
 const INK = '#ece6d6';
 const DIM = '#a9b7b3';
 const GHOST = '#5fb6dc';
@@ -43,6 +52,8 @@ export class RpmChart {
   private showPeak = true;
   private safe = 0;
   private failure = 0;
+  private frame: { xMax: number; yMax: number } | null = null;
+  private overlay: ChartOverlay | null = null;
 
   constructor(label: string) {
     this.element = document.createElement('div');
@@ -97,7 +108,22 @@ export class RpmChart {
     this.yMin = bottom < -top * 0.03 ? bottom : 0;
     this.yMax = top * 1.1;
     this.xMax = Math.max(...series.x, ...(baseline?.x ?? [1]));
-    this.peakIndex = series.y.reduce((best, v, i, arr) => (v > (arr[best] ?? -Infinity) ? i : best), 0);
+    if (this.frame) {
+      this.xMax = this.frame.xMax;
+      this.yMax = Math.max(this.frame.yMax, this.yMax);
+    }
+    this.peakIndex = series.y.length ? series.y.reduce((best, v, i, arr) => (v > (arr[best] ?? -Infinity) ? i : best), 0) : -1;
+    this.draw();
+  }
+
+  /** Fixes the axes, so a curve that grows point by point does not keep rescaling them. Null lets the data decide. */
+  setFrame(frame: { xMax: number; yMax: number } | null): void {
+    this.frame = frame;
+    this.setData(this.series, this.baseline, this.unit, this.digits, this.showPeak);
+  }
+
+  setOverlay(overlay: ChartOverlay | null): void {
+    this.overlay = overlay;
     this.draw();
   }
 
@@ -149,7 +175,7 @@ export class RpmChart {
 
   draw(): void {
     const { width, height, pad } = this;
-    if (width <= 0 || height <= 0 || !this.series.x.length) return;
+    if (width <= 0 || height <= 0 || (!this.series.x.length && !this.frame)) return;
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
@@ -201,9 +227,35 @@ export class RpmChart {
       this.line(ctx, this.baseline, plotW, plotH);
       ctx.setLineDash([]);
     }
+    if (this.overlay?.reference) {
+      ctx.strokeStyle = DIM;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      this.line(ctx, this.overlay.reference, plotW, plotH);
+      ctx.setLineDash([]);
+    }
     ctx.strokeStyle = INK;
     ctx.lineWidth = 2;
     this.line(ctx, this.series, plotW, plotH);
+    for (const m of this.overlay?.markers ?? []) {
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(pad.l + (m.x / this.xMax) * plotW, this.yAt(m.y, plotH), 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    for (const d of this.overlay?.dots ?? []) {
+      ctx.beginPath();
+      ctx.arc(pad.l + (d.x / this.xMax) * plotW, this.yAt(d.y, plotH), 3.5, 0, Math.PI * 2);
+      if (d.hollow) {
+        ctx.strokeStyle = '#ea6a15';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#ea6a15';
+        ctx.fill();
+      }
+    }
 
     // The engine's speed right now, the same as the needle on the tachometer.
     if (this.marker > 1 && this.marker <= this.xMax) {
@@ -216,7 +268,7 @@ export class RpmChart {
       ctx.stroke();
     }
 
-    if (this.showPeak && this.peakIndex >= 0) {
+    if (this.showPeak && this.peakIndex >= 0 && this.series.y.length) {
       const v = this.series.y[this.peakIndex]!;
       const px = pad.l + (this.series.x[this.peakIndex]! / this.xMax) * plotW;
       const py = this.yAt(v, plotH);
@@ -226,7 +278,7 @@ export class RpmChart {
       ctx.fill();
     }
 
-    if (this.hoverRpm !== null) {
+    if (this.hoverRpm !== null && this.series.x.length) {
       const rpm = this.hoverRpm;
       const x = pad.l + (rpm / this.xMax) * plotW;
       ctx.strokeStyle = 'rgba(236,230,214,0.5)';

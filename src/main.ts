@@ -16,6 +16,7 @@ import { RotaryEngineModel } from './scene/rotary-engine.ts';
 import { Stage } from './scene/stage.ts';
 import { articleHtml } from './ui/article.ts';
 import { DesignerPage } from './ui/designer/designer-page.ts';
+import { DynoPanel } from './ui/dyno/dyno-panel.ts';
 import { FiringDiagram, legendHtml } from './ui/firing-diagram.ts';
 import { Spectrum } from './ui/spectrum.ts';
 import { tableHtml } from './ui/table.ts';
@@ -213,6 +214,21 @@ const firing = new FiringDiagram($('tooltip'));
 $('firing-body').append(firing.element);
 const spectrum = new Spectrum();
 $('spectrum-body').append(spectrum.element);
+const dyno = new DynoPanel({
+  drive,
+  layout() {
+    layoutPanels();
+    stage.fit(false, true);
+  },
+  leaveSlowMotion() {
+    if (speed === 'slow') setSpeed('readable');
+  },
+  changed(on) {
+    $<HTMLButtonElement>('speed').querySelector<HTMLButtonElement>('[data-v="slow"]')!.disabled = on;
+  },
+});
+app.querySelector('.dash')!.append(dyno.element);
+$('to-designer').before(dyno.toggleButton);
 
 let model: EngineModel | null = null;
 let view: ViewMode = 'xray';
@@ -298,6 +314,7 @@ function renderVariants(id: string): void {
 function loadEngine(next: Engine, keepRunning: boolean, keepCamera = false): void {
   drive.setEngine(next);
   showEngine(next, keepCamera);
+  dyno.setEngine(next, { kind: 'catalogue' });
   const spec = engine.spec;
   renderVariants(spec.id);
   $('engine-title').textContent = spec.title;
@@ -339,12 +356,14 @@ const designer = new DesignerPage({
   soundEngine(next, perf) {
     const running = drive.snapshot().state === 'running';
     drive.setEngine(next);
+    dyno.setEngine(next, { kind: 'designer', design: designer.current, perf });
     if (running && !perf.catches) drive.stop();
   },
   setTrim(trim) {
     drive.setTrim(trim);
   },
   wreck() {
+    dyno.abort('broken');
     drive.bang();
     drive.setDistress(0);
     drive.stop();
@@ -478,6 +497,8 @@ function setView(next: ViewMode): void {
 }
 
 function setSpeed(next: SpeedMode): void {
+  // Slow motion locks the crank at walking pace, where no absorber can work.
+  if (next === 'slow' && dyno.isActive) return;
   speed = next;
   setSegment('speed', next);
   $('slow-tool').hidden = next !== 'slow';
@@ -488,6 +509,7 @@ async function toggleIgnition(): Promise<void> {
   const button = $('ignition');
   const state = drive.snapshot().state;
   if (state === 'running' || state === 'cranking') {
+    dyno.abort('stopped');
     drive.stop();
     button.textContent = t('Запустити двигун');
     button.classList.remove('on');
@@ -880,6 +902,7 @@ function frame(now: number): void {
   }
 
   const snap = drive.tick(dt);
+  dyno.frame(snap, dt);
   const spec = engine.spec;
   const running = snap.state === 'running';
 
@@ -954,7 +977,7 @@ requestAnimationFrame(frame);
 // Handy for manual checks in the browser console.
 declare global {
   interface Window {
-    __engine: { drive: Drive; stage: Stage; designer: DesignerPage };
+    __engine: { drive: Drive; stage: Stage; designer: DesignerPage; dyno: DynoPanel };
   }
 }
-window.__engine = { drive, stage, designer };
+window.__engine = { drive, stage, designer, dyno };
