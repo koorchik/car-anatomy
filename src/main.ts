@@ -216,6 +216,10 @@ const spectrum = new Spectrum();
 $('spectrum-body').append(spectrum.element);
 const dyno = new DynoPanel({
   drive,
+  extras: stage.extras,
+  setFloor(y) {
+    stage.setFloor(y);
+  },
   layout() {
     layoutPanels();
     stage.fit(false, true);
@@ -281,6 +285,7 @@ function showEngine(next: Engine, keepCamera: boolean): void {
   model = newModel;
   model.setView(view);
   model.setExplode(explode);
+  dyno.attachModel(newModel);
   tacho.configure(spec.redlineRpm);
   tachoScale = spec.redlineRpm;
   applyZones();
@@ -494,6 +499,7 @@ function setView(next: ViewMode): void {
   view = next;
   setSegment('view', next);
   model?.setView(next);
+  dyno.setView(next);
 }
 
 function setSpeed(next: SpeedMode): void {
@@ -623,6 +629,7 @@ $<HTMLInputElement>('slow-rpm').addEventListener('input', (event) => {
 $<HTMLInputElement>('explode').addEventListener('input', (event) => {
   explode = Number((event.target as HTMLInputElement).value);
   model?.setExplode(explode);
+  dyno.setExplode(explode);
 });
 
 $<HTMLInputElement>('shake').addEventListener('change', (event) => {
@@ -902,7 +909,6 @@ function frame(now: number): void {
   }
 
   const snap = drive.tick(dt);
-  dyno.frame(snap, dt);
   const spec = engine.spec;
   const running = snap.state === 'running';
 
@@ -939,6 +945,7 @@ function frame(now: number): void {
     dt,
     shake: demoMode ? 0 : shake,
   });
+  dyno.frame(snap, theta, dt);
   stage.render(dt);
   updateScaleBar();
 

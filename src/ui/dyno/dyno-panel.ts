@@ -9,6 +9,9 @@ import { absorberMax, freePedalFor, holdRange, sizeAbsorber, sweepEndRpm, sweepS
 import type { Engine } from '../../engine/kinematics.ts';
 import type { CrankReadings } from '../../engine/loaded-crank.ts';
 import { PEDAL_TOP_SPEED } from '../../engine/sim.ts';
+import { DynoRig } from '../../scene/dyno-rig.ts';
+import type { EngineModel, ViewMode } from '../../scene/model-types.ts';
+import type * as THREE from 'three';
 import { HP_PER_KW, powerKw, type EngineTorqueMap } from '../../engine/torque-map.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
@@ -22,6 +25,10 @@ export type EngineSource = { kind: 'catalogue' } | { kind: 'designer'; design: D
 
 export interface DynoHost {
   drive: Drive;
+  /** Where the rig goes in the scene: beside the engine, not shaking with it. */
+  extras: THREE.Group;
+  /** Lowers the shadow floor when the rig stands below the engine's base. */
+  setFloor(y: number): void;
   /** Relayout the page after the dash changed height. */
   layout(): void;
   /** Slow motion cannot run on the dyno. */
@@ -68,6 +75,8 @@ export class DynoPanel {
   private readonly torqueChart = new RpmChart(t('Момент на стенді за обертами'));
   private readonly powerChart = new RpmChart(t('Потужність на стенді за обертами'));
   private readonly host: DynoHost;
+  private readonly rig = new DynoRig();
+  private model: EngineModel | null = null;
   private active = false;
   private engine: Engine | null = null;
   private source: EngineSource = { kind: 'catalogue' };
@@ -100,6 +109,7 @@ export class DynoPanel {
 
   constructor(host: DynoHost) {
     this.host = host;
+    host.extras.add(this.rig.group);
     this.toggleButton.type = 'button';
     this.toggleButton.className = 'btn';
     this.toggleButton.id = 'dyno-toggle';
@@ -292,6 +302,8 @@ export class DynoPanel {
       drive.setTorqueMap(null);
       this.map = null;
       this.spec = null;
+      this.rig.detach();
+      this.host.setFloor(0);
     }
     this.refreshControls();
     this.host.changed(on);
@@ -323,9 +335,30 @@ export class DynoPanel {
     slider.value = String(this.holdRpm);
     this.host.drive.setTorqueMap(this.map);
     this.host.drive.setLoad(this.spec);
+    this.placeRig();
     this.sendMode();
     this.setFrames();
     this.refreshControls();
+  }
+
+  /** The 3D model was rebuilt: the rig goes behind its flywheel. */
+  attachModel(model: EngineModel): void {
+    this.model = model;
+    if (this.active) this.placeRig();
+  }
+
+  private placeRig(): void {
+    if (!this.model || !this.spec) return;
+    this.rig.attach(this.model, this.spec);
+    this.host.setFloor(this.rig.floorY);
+  }
+
+  setView(view: ViewMode): void {
+    this.rig.setView(view);
+  }
+
+  setExplode(amount: number): void {
+    this.rig.setExplode(amount);
   }
 
   private command(cmd: DynoCommand): void {
@@ -490,8 +523,9 @@ export class DynoPanel {
   }
 
   /** Called every frame. */
-  frame(snap: DriveSnapshot, dt: number): void {
+  frame(snap: DriveSnapshot, theta: number, dt: number): void {
     if (!this.active) return;
+    this.rig.update(theta, this.last?.coupled ? this.last.load.absorberShare : 0);
     const drive = this.host.drive;
     const wasRunning = this.running;
     this.running = snap.state === 'running';
