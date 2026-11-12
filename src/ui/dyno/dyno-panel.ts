@@ -85,6 +85,8 @@ export class DynoPanel {
   private absorber: AbsorberKind = 'eddy';
   private mode: DynoMode = 'off';
   private holdRpm = 3000;
+  /** The visitor has set the held speed: keep it across engines. */
+  private holdChosen = false;
   private listening = false;
   private rate = 300;
   private stepThrottle = 1;
@@ -328,7 +330,9 @@ export class DynoPanel {
     this.map = this.source.kind === 'designer' ? designTorqueMap(this.source.design, this.source.perf) : catalogueTorqueMap(this.engine.spec);
     this.spec = sizeAbsorber(this.map, this.absorber);
     const range = holdRange(this.spec);
-    this.holdRpm = Math.min(range.max, Math.max(range.min, Math.round((0.45 * this.map.limitRpm) / 50) * 50));
+    // A held speed survives a change of engine or design, brought inside the new range.
+    const wanted = this.holdChosen ? this.holdRpm : 0.45 * this.map.limitRpm;
+    this.holdRpm = Math.min(range.max, Math.max(range.min, Math.round(wanted / 50) * 50));
     const slider = this.$('hold-rpm') as HTMLInputElement;
     slider.min = String(Math.ceil(range.min / 50) * 50);
     slider.max = String(Math.floor(range.max / 50) * 50);
@@ -401,6 +405,7 @@ export class DynoPanel {
 
   private setHold(rpm: number): void {
     if (!this.spec) return;
+    this.holdChosen = true;
     const range = holdRange(this.spec);
     this.holdRpm = Math.min(range.max, Math.max(range.min, Math.round(rpm / 50) * 50));
     (this.$('hold-rpm') as HTMLInputElement).value = String(this.holdRpm);
