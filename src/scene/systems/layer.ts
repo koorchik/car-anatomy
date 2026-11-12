@@ -112,6 +112,8 @@ export class SystemLayer {
   private readonly sprayTo: Float32Array;
   private readonly fixedSprays: Array<{ mesh: THREE.InstancedMesh; channels: Int32Array }> = [];
   private level: THREE.Mesh | null = null;
+  private movers: THREE.InstancedMesh | null = null;
+  private readonly moverData: Array<{ position: THREE.Vector3; axis: THREE.Vector3; travel: number; channel: number }> = [];
   private levelCentre = new THREE.Vector3();
   private readonly engine: Engine;
   private readonly frames: THREE.Object3D[];
@@ -270,6 +272,23 @@ export class SystemLayer {
       this.attach(mesh, list[0]!.space ?? 'mounted', shaft);
     }
 
+    if (plan.movers?.length) {
+      const disc = new THREE.CylinderGeometry(1, 1, 0.12, 18);
+      const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(style.color).multiplyScalar(0.8), roughness: 0.4, metalness: 0.6 });
+      this.materials.push(material);
+      const mesh = new THREE.InstancedMesh(disc, material, plan.movers.length);
+      mesh.frustumCulled = false;
+      mesh.userData.instanceParts = plan.movers.map((m) => m.part);
+      for (const m of plan.movers) this.moverData.push({ position: m.position.clone(), axis: m.axis.clone().normalize(), travel: m.travel, channel: this.channels.indexOf(m.channel) });
+      plan.movers.forEach((m, i) => {
+        this.scratchQuat.setFromUnitVectors(UP, this.moverData[i]!.axis);
+        this.scratchMatrix.compose(m.position, this.scratchQuat, this.scratchScale.set(m.radius, m.radius, m.radius));
+        mesh.setMatrixAt(i, this.scratchMatrix);
+      });
+      this.movers = mesh;
+      this.root.add(mesh);
+    }
+
     if (plan.level) {
       const l = plan.level;
       const geo = new THREE.PlaneGeometry(l.halfW * 2, l.zMax - l.zMin);
@@ -306,6 +325,11 @@ export class SystemLayer {
     for (const o of this.onShaft) o.visible = on;
   }
 
+  /** The layer's root and what it hangs on the shafts: everything it draws. */
+  get roots(): THREE.Object3D[] {
+    return [this.root, ...this.onShaft];
+  }
+
   get isVisible(): boolean {
     return this.visible;
   }
@@ -338,6 +362,18 @@ export class SystemLayer {
       this.overlayFlow.channels[i * 4 + 1] = v.level[i]!;
       this.overlayFlow.channels[i * 4 + 2] = v.heat[i]!;
     }
+    if (this.movers) {
+      for (let i = 0; i < this.moverData.length; i++) {
+        const m = this.moverData[i]!;
+        const value = m.channel >= 0 ? v.spray[m.channel]! : 0;
+        this.movers.getMatrixAt(i, this.scratchMatrix);
+        this.scratchMatrix.decompose(this.scratchB, this.scratchQuat, this.scratchScale);
+        this.scratchA.copy(m.position).addScaledVector(m.axis, m.travel * value);
+        this.scratchMatrix.compose(this.scratchA, this.scratchQuat, this.scratchScale);
+        this.movers.setMatrixAt(i, this.scratchMatrix);
+      }
+      this.movers.instanceMatrix.needsUpdate = true;
+    }
     for (const { mesh, channels } of this.fixedSprays) {
       for (let i = 0; i < channels.length; i++) {
         const spray = channels[i]! >= 0 ? v.spray[channels[i]!]! : 0;
@@ -369,6 +405,14 @@ export class SystemLayer {
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }
+
+  /** Colours the whole layer's flow, as the coolant warms from blue to green to red. */
+  setFlowColor(color: THREE.Color): void {
+    this.baseColor.copy(color);
+    this.flow.color.copy(color);
+    this.overlayFlow.color.copy(color);
+    this.flow.material.color.copy(color).multiplyScalar(0.3);
   }
 
   /** Index of a channel by id, or -1. */

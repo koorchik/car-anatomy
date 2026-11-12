@@ -20,6 +20,7 @@ export interface SystemsHost {
 /** Layers in the order of their keys, 4 to 7. */
 const LAYERS: Array<{ id: LayerId; label: string; title: string }> = [
   { id: 'oil', label: t('Олива'), title: t('Шлях оливи: насос, фільтр, магістраль, підшипники, головка') },
+  { id: 'coolant', label: t('Охолодження'), title: t('Охолодження: насос, сорочка, термостат, патрубки радіатора') },
 ];
 
 const STORAGE_KEY = 'systems-layers';
@@ -222,6 +223,24 @@ export class SystemsView {
       oil.flags.hidden = !flags.length;
       oil.warning.textContent = o.warning ? t('Тиск оливи майже нуль') : '';
       oil.warning.hidden = !o.warning;
+    }
+    const coolant = this.sections.get('coolant');
+    if (coolant && this.on.has('coolant')) {
+      const th = s.thermal;
+      const liquid = this.sim.systems?.cooling === 'liquid' || this.sim.engine?.isRotary;
+      coolant.lines[0]!.textContent = liquid
+        ? `${t('Рідина {t} °C', { t: Math.round(th.engineC) })} · ${t('термостат {s} %', { s: Math.round(th.thermostat * 100) })}`
+        : t('Повітряне охолодження · олива {t} °C', { t: Math.round(th.oilC) });
+      coolant.flags.textContent = !liquid
+        ? ''
+        : th.thermostat < 0.02
+          ? t('мале коло: радіатор закритий')
+          : th.thermostat < 0.9
+            ? t('термостат відкривається: частина йде в радіатор')
+            : t('велике коло: через радіатор');
+      coolant.flags.hidden = !liquid;
+      coolant.warning.textContent = liquid && th.engineC > 112 ? t('Перегрів') : '';
+      coolant.warning.hidden = !(liquid && th.engineC > 112);
     }
     const announce = s.oil.warning ? t('Тиск оливи майже нуль') : s.oil.reliefOpen && this.on.has('oil') ? t('Редукційний клапан відкрився') : '';
     if (announce !== this.lastAnnounce) {

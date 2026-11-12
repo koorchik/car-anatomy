@@ -139,10 +139,11 @@ export class ThermalModel {
       s.engineC = AMBIENT_C;
       s.oilC = AMBIENT_C;
     } else {
-      s.engineC = liquid ? 90 : 75;
-      s.oilC = liquid ? 92 : 88;
+      s.engineC = liquid ? 89 : 75;
+      s.oilC = liquid ? 90 : 88;
     }
-    s.thermostat = liquid ? thermostatTarget(s.engineC) : 0;
+    // Idling warm, the thermostat stands barely open.
+    s.thermostat = liquid ? Math.min(0.04, thermostatTarget(s.engineC)) : 0;
     s.sinceStart = kind === 'cold' ? 0 : 1e6;
   }
 

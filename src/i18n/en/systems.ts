@@ -142,4 +142,43 @@ export const SYSTEMS_EN: Record<string, string> = {
   'Форсунки поршнів працюють': 'Piston jets spraying',
   'Тиск оливи майже нуль': 'Oil pressure almost zero',
   'Редукційний клапан відкрився': 'Relief valve opened',
+  // Coolant layer
+  'Насос охолоджувальної рідини': 'Water pump',
+  'Відцентровий насос: крильчатка відкидає рідину до стінок і жене її в сорочку блока. Подача росте разом з обертами. Приводить його ремінь від колінвала або ремінь чи ланцюг ГРМ.':
+    'A centrifugal pump: its impeller flings the coolant outward and drives it into the water jacket. Its flow rises with rpm. A belt from the crank, or the timing belt or chain, drives it.',
+  'Сорочка охолодження': 'Water jacket',
+  'Порожнини в литві блока й головки навколо циліндрів і камер згоряння. Рідина йде вздовж циліндрів, піднімається крізь отвори прокладки в головку і найбільше тепла забирає біля випускних клапанів.':
+    'Passages cast into the block and head around the cylinders and combustion chambers. Coolant runs along the cylinders, rises through holes in the head gasket and picks up most heat around the exhaust valves.',
+  'Термостат': 'Thermostat',
+  'Восковий клапан між двигуном і радіатором. Поки рідина холодна, він закритий, і вона ходить малим колом через обвідний шланг, тож двигун прогрівається швидше. Близько 88 °C віск плавиться, тарілка піднімається і відкриває шлях у радіатор.':
+    'A wax valve between the engine and the radiator. While the coolant is cold it stays shut and the coolant goes round the bypass circuit, so the engine warms up sooner. At about 88 °C the wax melts, the valve lifts and opens the way to the radiator.',
+  'Обвідний шланг': 'Bypass hose',
+  'Мале коло: поки термостат закритий, рідина з головки одразу повертається в насос, минаючи радіатор. Тепло лишається в двигуні, і він швидше доходить до робочої температури.':
+    'The bypass circuit: while the thermostat is shut, coolant from the head goes straight back to the pump, past the radiator. The heat stays in the engine and it reaches its working temperature sooner.',
+  'Патрубок радіатора': 'Radiator hose',
+  'Товстий шланг до радіатора: верхній несе гарячу рідину від термостата, нижній повертає охолоджену до насоса. Сам радіатор стоїть перед двигуном і тут не намальований.':
+    'A fat hose to the radiator: the upper one carries hot coolant from the thermostat, the lower one brings it back cooled to the pump. The radiator itself sits ahead of the engine and is not drawn here.',
+  'Патрубок пічки': 'Heater hose',
+  'Частина гарячої рідини йде в маленький радіатор пічки в салоні й повертається до насоса. Кран пічки зазвичай прикритий, тому потік тут слабкий. Самої пічки тут не намальовано.':
+    'Some hot coolant goes to the small heater core in the cabin and returns to the pump. The heater valve is usually half shut, so the flow here is weak. The heater itself is not drawn.',
+  'Охолодження турбіни рідиною': 'Turbo water cooling',
+  'Корпус підшипників бензинової турбіни обмиває охолоджувальна рідина. Після вимкнення гарячого двигуна вона ще кипить у корпусі й сама циркулює, не даючи оливі в підшипниках закоксуватися.':
+    'Coolant washes round the bearing housing of a gasoline turbo. After a hot engine is switched off it keeps boiling in the housing and circulates by itself, so the oil in the bearings does not coke.',
+  'Ребра охолодження': 'Cooling fins',
+  'Двигун повітряного охолодження не має сорочки з рідиною: тепло з циліндрів і головок забирають тонкі ребра, які обдуває повітря. Що більше ребер і швидший потік, то менше гріється метал.':
+    'An air-cooled engine has no water jacket: thin fins blown by air carry the heat away from the cylinders and heads. The more fins and the faster the air, the cooler the metal.',
+  'Вентилятор охолодження': 'Cooling fan',
+  'Гонить повітря крізь ребра циліндрів і головок, навіть коли авто стоїть. Тут він на носку колінвала, як у Citroën 2CV, а в Beetle і Porsche 911 він сидить окремо і приводиться ременем.':
+    'Blows air through the fins of the cylinders and heads, even when the car is standing still. Here it sits on the crank nose, as on the Citroën 2CV; on the Beetle and the Porsche 911 it sits apart and is belt-driven.',
+  'Рідина в корпусі ротора': 'Coolant in the rotor housing',
+  'У роторного двигуна рідина йде каналами в стінках корпусів роторів і бічних корпусів уздовж усього двигуна. Найгарячіше місце біля свічок, де відбуваються спалахи.':
+    'In a rotary engine the coolant runs through passages in the walls of the rotor housings and side housings along the whole engine. The hottest spot is by the plugs, where combustion happens.',
+  'Охолодження: насос, сорочка, термостат, патрубки радіатора': 'Cooling: pump, water jacket, thermostat, radiator hoses',
+  'Рідина {t} °C': 'Coolant {t} °C',
+  'термостат {s} %': 'thermostat {s} %',
+  'Повітряне охолодження · олива {t} °C': 'Air cooling · oil {t} °C',
+  'велике коло: через радіатор': 'radiator circuit: through the radiator',
+  'мале коло: радіатор закритий': 'bypass circuit: radiator shut',
+  'термостат відкривається: частина йде в радіатор': 'thermostat opening: some goes to the radiator',
+  'Перегрів': 'Overheating',
 };

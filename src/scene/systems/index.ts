@@ -1,6 +1,7 @@
 // The systems layers of one model: built lazily, the first time each is switched on in the X-ray, and fed every frame
 // from SystemsSim. They live inside the model's groups, so they shake with it and go when it is disposed.
 
+import * as THREE from 'three';
 import type { Engine } from '../../engine/kinematics.ts';
 import { systemsOf } from '../../engine/systems-spec.ts';
 import type { SystemsState } from '../../systems/sim.ts';
@@ -11,6 +12,7 @@ import type { EngineAnchors, SystemsLook } from './anchors.ts';
 import { SystemLayer, type LayerStyle } from './layer.ts';
 import { mainBearingZ, oilPlan } from './routes-oil.ts';
 import { rotaryOilPlan } from './routes-rotary.ts';
+import { coolantPlan, rotaryCoolantPlan } from './routes-coolant.ts';
 import type { LayerPlan } from './route.ts';
 
 export type LayerId = 'oil' | 'coolant' | 'fuel' | 'air';
@@ -39,6 +41,8 @@ export function layerPlan(id: LayerId, engine: Engine, anchors: EngineAnchors): 
   switch (id) {
     case 'oil':
       return anchors.kind === 'piston' ? oilPlan(engine, systems, anchors, sump) : rotaryOilPlan(engine, systems, anchors, sump);
+    case 'coolant':
+      return anchors.kind === 'piston' ? coolantPlan(engine, systems, anchors, sump) : rotaryCoolantPlan(engine, systems, anchors);
     default:
       return null;
   }
@@ -107,7 +111,7 @@ export class SystemsLayers {
     if (!plan) return;
     const layer = new SystemLayer(this.engine, this.anchors, plan, LAYER_STYLES[id]);
     layer.addTo(this.model.mounted);
-    const feed = id === 'oil' ? oilFeed(this.engine, this.anchors, layer) : (): void => {};
+    const feed = id === 'oil' ? oilFeed(this.engine, this.anchors, layer) : id === 'coolant' ? coolantFeed(this.engine, this.anchors, layer) : (): void => {};
     this.built.set(id, { layer, feed });
   }
 
@@ -127,6 +131,71 @@ export class SystemsLayers {
     this.built.clear();
     this.model.setSystemsLook?.({ intakeGlass: false, ownSparks: true });
   }
+}
+
+const COOL = new THREE.Color('#3fa9f5');
+const NORMAL = new THREE.Color('#2fd3a0');
+const HOT = new THREE.Color('#ff5a3c');
+const AIR = new THREE.Color('#bfe6ff');
+
+/** Coolant channels from the pump's flow and the thermostat; the colour follows the coolant's temperature. */
+function coolantFeed(engine: Engine, anchors: EngineAnchors, layer: SystemLayer): (state: SystemsState) => void {
+  const banks = anchors.kind === 'piston' ? anchors.banks.length : 1;
+  const ch = (id: string): number => layer.channel(id);
+  const idx = {
+    pump: ch('pump'),
+    jacket: ch('jacket'),
+    transfer: ch('transfer'),
+    head: ch('head'),
+    outlet: ch('outlet'),
+    radiator: ch('radiator'),
+    bypass: ch('bypass'),
+    heater: ch('heater'),
+    turbo: ch('turbo-coolant'),
+    oilCooler: ch('oil-cooler'),
+    air: ch('cooling-air'),
+  };
+  const v = layer.values;
+  const colour = new THREE.Color();
+  const air = systemsOf(engine.spec).cooling !== 'liquid' && !engine.isRotary;
+  const set = (i: number, litresPerMin: number, bore: number): void => {
+    if (i < 0) return;
+    const u = speedOf(Math.max(0, litresPerMin), bore);
+    v.speed[i] = u;
+    v.level[i] = litresPerMin > 1e-4 ? 0.35 + 0.65 * Math.min(1, u / 2) : 0.1;
+  };
+  return (state) => {
+    const t = state.thermal;
+    const q = t.coolantFlow;
+    set(idx.pump, q / (2 * banks), 0.02);
+    set(idx.jacket, q / (2 * banks), 0.015);
+    set(idx.transfer, q / (8 * banks), 0.008);
+    set(idx.head, q / (2 * banks), 0.015);
+    set(idx.outlet, q / (2 * banks), 0.025);
+    set(idx.radiator, t.radiatorFlow, 0.032);
+    set(idx.bypass, t.bypassFlow, 0.018);
+    set(idx.heater, t.heaterFlow, 0.016);
+    set(idx.turbo, t.turboFlow, 0.008);
+    set(idx.oilCooler, 0.03 * q, 0.01);
+    if (idx.radiator >= 0) v.spray[idx.radiator] = t.thermostat;
+    if (idx.air >= 0) {
+      // Air through the fins: a fan's flow follows the crank, ram air stands for riding along.
+      const n = state.rpm / engine.spec.redlineRpm;
+      const kind = systemsOf(engine.spec).cooling;
+      const speed = !state.running ? 0 : kind === 'fan' ? 2 + 18 * n : 8;
+      v.speed[idx.air] = speed;
+      v.level[idx.air] = speed > 0 ? 0.55 : 0.1;
+    }
+    if (air) {
+      layer.setFlowColor(AIR);
+      return;
+    }
+    // Blue when cold, green at the working temperature, red as it boils over.
+    const c = t.engineC;
+    if (c <= 90) colour.copy(COOL).lerp(NORMAL, Math.max(0, (c - 25) / 65));
+    else colour.copy(NORMAL).lerp(HOT, Math.min(1, (c - 90) / 18));
+    layer.setFlowColor(colour);
+  };
 }
 
 /** Oil channels: velocity in each passage from the branch flows, at nominal passage sizes. */

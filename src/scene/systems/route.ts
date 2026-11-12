@@ -64,6 +64,17 @@ export interface FixedSpray {
   overlay?: boolean;
 }
 
+/** A disc that slides along an axis by its channel's spray value: the thermostat's valve, a pump plunger. */
+export interface Mover {
+  part: string;
+  position: THREE.Vector3;
+  axis: THREE.Vector3;
+  radius: number;
+  /** Travel at full value, scene units. */
+  travel: number;
+  channel: string;
+}
+
 export interface LayerPlan {
   /** Channel ids in shader order. */
   channels: string[];
@@ -73,6 +84,7 @@ export interface LayerPlan {
   fixedSprays: FixedSpray[];
   /** Oil surface: a level plane in the pan's rectangle. */
   level?: { y: number; halfW: number; zMin: number; zMax: number };
+  movers?: Mover[];
 }
 
 export const emptyPlan = (): LayerPlan => ({ channels: [], routes: [], parts: [], pistonSprays: [], fixedSprays: [] });

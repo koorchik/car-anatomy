@@ -10,6 +10,8 @@ export interface FlowMaterial {
   material: THREE.MeshStandardMaterial;
   /** phase, level 0..1, heat 0..1, spare: four floats per channel, written in place every frame. */
   channels: Float32Array;
+  /** The flow's colour, a live uniform: changing it recolours the dashes. */
+  color: THREE.Color;
 }
 
 /**
@@ -77,5 +79,5 @@ export function flowMaterial(color: THREE.ColorRepresentation, hotColor: THREE.C
       );
   };
   material.customProgramCacheKey = () => `systems-flow-${overlay ? 'over' : 'in'}`;
-  return { material, channels };
+  return { material, channels, color: uniforms.uFlowColor.value };
 }

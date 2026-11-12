@@ -29,15 +29,7 @@ const drawn = (roots: THREE.Object3D[]): THREE.Object3D[] => {
   return out;
 };
 
-const layerObjects = (model: EngineModel, layers: SystemsLayers, id: LayerId): THREE.Object3D[] => {
-  const layer = layers.layer(id);
-  if (!layer) return [];
-  const roots: THREE.Object3D[] = [layer.root];
-  model.group.traverse((o) => {
-    if (o.userData.noFit && o !== layer.root && !layer.root.getObjectById(o.id) && o.parent && o.parent.userData.noFit !== true) roots.push(o);
-  });
-  return roots;
-};
+const layerObjects = (_model: EngineModel, layers: SystemsLayers, id: LayerId): THREE.Object3D[] => layers.layer(id)?.roots ?? [];
 
 describe.each(ENGINES.map((e) => e.id))('layers of %s', (id) => {
   it('cost at most 8 draw calls each, and every part has its card', () => {

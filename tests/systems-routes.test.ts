@@ -14,6 +14,7 @@ import { layerPlan, LAYER_IDS } from '../src/scene/systems/index.ts';
 import { addScavenge, mainBearingZ, OIL_SIZES, oilPlan } from '../src/scene/systems/routes-oil.ts';
 import { distanceToOutline, insidePolygon, segmentDistance, toBank, type LayerPlan } from '../src/scene/systems/route.ts';
 import { sumpLayout } from '../src/systems/sump.ts';
+import { JACKET, jacketY } from '../src/scene/systems/routes-coolant.ts';
 
 // The models draw a few canvas textures, which nothing here looks at.
 const context = new Proxy({}, { get: () => () => ({ addColorStop: () => {} }), set: () => true });
@@ -138,6 +139,39 @@ describe.each(pistonIds)('oil in %s', (id) => {
       const plan = layerPlan(layer, engine, anchors);
       if (plan) expect(plan.channels.length, `${id} ${layer}`).toBeLessThanOrEqual(MAX_CHANNELS);
     }
+  });
+});
+
+describe.each(pistonIds)('coolant in %s', (id) => {
+  it('keeps the jacket between the liners and the block wall, and the hoses short', () => {
+    const { engine, anchors } = get(id);
+    const a = anchors as PistonAnchors;
+    const plan = layerPlan('coolant', engine, a)!;
+    if (systemsOf(engine.spec).cooling !== 'liquid') {
+      expect(plan.parts.some((p) => p.part === 'cooling-fins')).toBe(true);
+      return;
+    }
+    const jacket = plan.routes.filter((r) => r.channel === 'jacket');
+    expect(jacket.length).toBe(2 * a.banks.length);
+    for (const route of jacket) {
+      const [p, q] = route.points;
+      expect(route.radius).toBeCloseTo(JACKET.radius * a.bore, 9);
+      expect(p!.distanceTo(q!)).toBeGreaterThan(0);
+      for (const c of a.cylinders) {
+        if (c.z > Math.max(p!.z, q!.z) || c.z < Math.min(p!.z, q!.z)) continue;
+        const at = p!.clone().lerp(q!, (c.z - p!.z) / (q!.z - p!.z));
+        const axis = new THREE.Vector2(Math.sin((c.alpha * Math.PI) / 180), Math.cos((c.alpha * Math.PI) / 180));
+        const along = at.x * axis.x + at.y * axis.y;
+        const off = Math.hypot(at.x - axis.x * along, at.y - axis.y * along);
+        expect(off, `${id} jacket vs liner of ${c.n}`).toBeGreaterThanOrEqual(a.linerR + route.radius);
+        expect(insidePolygon(at.x, at.y, a.section), `${id} jacket inside`).toBe(true);
+        expect(distanceToOutline(at.x, at.y, a.section), `${id} jacket vs wall`).toBeGreaterThanOrEqual(route.radius);
+      }
+      expect(jacketY(a)).toBeLessThan(a.deck);
+    }
+    const front = Math.max(a.front, a.pulley.z);
+    for (const r of plan.routes.filter((x) => x.part === 'radiator-hose')) for (const p of r.points) expect(p.z, `${id} radiator stub`).toBeLessThanOrEqual(front + 1.55 * a.bore);
+    for (const r of plan.routes.filter((x) => x.part === 'heater-hose')) for (const p of r.points) expect(p.z, `${id} heater stub`).toBeGreaterThanOrEqual(a.rear - 1.55 * a.bore);
   });
 });
 
