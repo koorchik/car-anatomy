@@ -99,6 +99,13 @@ interface Complex {
 
 const STEPS = 360;
 
+/**
+ * How far past the outer rotor faces RotaryEngineModel.buildShaftAndEnds puts the pulley and the flywheel, mm:
+ * 30 mm to the end of the housing, then 10 and 15 mm more.
+ */
+const ROTARY_PULLEY_MM = 40;
+const ROTARY_FLYWHEEL_MM = 45;
+
 /** A force as a complex number w = Fy + i Fx, which turns as e^(i theta) when it turns with the crank. */
 const harmonic = (samples: Complex[], order: number): Complex => {
   let re = 0;
@@ -131,9 +138,17 @@ export class BalanceForces {
   readonly primary: number;
   /** Peak second-order force of one piston per unit omega^2. Zero on a rotary. */
   readonly secondary: number;
+  /**
+   * Largest inertia force of one piston over a turn, per unit omega^2: m r (1 + lambda) at top dead centre. Not
+   * primary + secondary, since the second order peaks near 90 degrees. On a rotary, the force of one rotor.
+   */
+  readonly pistonPeak: number;
   /** Lever couples are measured on, as kinematics.balance() does: one cylinder spacing, m. */
   readonly lever: number;
   private readonly weights: ShaftWeights[] = [];
+  /** Arrows of a rotary, split once so that placing them every frame does not search. */
+  private readonly rotors: ForceArrow[] = [];
+  private readonly rotaryWeights: ForceArrow[] = [];
   private readonly peakCache = new Map<string, { force: number; couple: number }>();
   private residualCache: OrderResidual | null = null;
   private theta = Number.NaN;
@@ -146,14 +161,20 @@ export class BalanceForces {
     if (engine.isRotary) {
       this.primary = masses.rotorKg * r;
       this.secondary = 0;
+      this.pistonPeak = this.primary;
       this.buildRotary();
     } else {
       this.primary = masses.reciprocatingKg * r;
       this.buildPiston();
-      let peak = 0;
+      let second = 0;
+      let whole = 0;
       const one = this.engine.cylinders[0]!;
-      for (let i = 0; i < STEPS; i++) peak = Math.max(peak, Math.abs(this.secondAccel(one, i)));
-      this.secondary = masses.reciprocatingKg * (peak / 1000);
+      for (let i = 0; i < STEPS; i++) {
+        second = Math.max(second, Math.abs(this.secondAccel(one, i)));
+        whole = Math.max(whole, Math.abs(pistonAcceleration(engine, one, i)));
+      }
+      this.secondary = masses.reciprocatingKg * (second / 1000);
+      this.pistonPeak = masses.reciprocatingKg * (whole / 1000);
       this.buildShafts();
     }
     this.at(0);
@@ -184,11 +205,11 @@ export class BalanceForces {
     const e = this.engine;
     for (const bank of e.banks) {
       const c = e.cylinders.find((x) => x.n === bank.cylinders[0])!;
-      this.arrow('rotor', 1, c.z);
+      this.rotors.push(this.arrow('rotor', 1, c.z));
     }
-    // Counterweights sit at both ends of the eccentric shaft: on the front pulley and in the flywheel.
-    this.arrow('counterweight', 1, e.zMax);
-    this.arrow('counterweight', 1, e.zMin);
+    // Counterweights sit at both ends of the eccentric shaft: on the front pulley and in the flywheel, where
+    // RotaryEngineModel draws them. Their span sets how large each must be to cancel the rotors' couple.
+    this.rotaryWeights.push(this.arrow('counterweight', 1, e.zMax + ROTARY_PULLEY_MM), this.arrow('counterweight', 1, e.zMin - ROTARY_FLYWHEEL_MM));
   }
 
   /** Piston acceleration minus its first order, mm per unit omega^2. */
@@ -227,16 +248,21 @@ export class BalanceForces {
     const e = this.engine;
     const b = e.spec.bore;
     const cw = e.spec.tuning?.counterweightMm ?? e.r + b * 0.3;
+    const span = Math.max(e.zMax - e.zMin, 1);
+    const left = (...parts: Array<{ force: Complex; couple: Complex }>): boolean =>
+      parts.reduce((sum, p) => sum + size(p.force) + size(p.couple) / span, 0) > this.primary * 1e-3;
+    // The designer's "one shaft" takes out the first order, "two shafts" both orders, which may take three shafts.
+    // A shaft is drawn only where its order is left: one resting with nothing to cancel would explain nothing.
     const reverse1 = this.pistonHarmonic(1, -1);
-    // The designer's "two shafts" is the full set. A shaft at crank speed is only needed where the first order is left.
-    const firstLeft = size(reverse1.force) + size(reverse1.couple) / Math.max(e.zMax - e.zMin, 1) > this.primary * 1e-3;
-    const wantFirst = shafts === 1 || firstLeft;
+    const forward2 = this.pistonHarmonic(2, 2);
+    const reverse2 = this.pistonHarmonic(2, -2);
+    const wantFirst = left(reverse1);
     const below = cw + b * 0.32;
     if (wantFirst) this.addShaft(1, -1, 0, -below, reverse1);
-    if (shafts === 2) {
+    if (shafts === 2 && left(forward2, reverse2)) {
       const y = wantFirst ? -(below + b * 0.42) : -below;
-      this.addShaft(2, 1, -b * 0.42, y, this.pistonHarmonic(2, 2));
-      this.addShaft(2, -1, b * 0.42, y, this.pistonHarmonic(2, -2));
+      this.addShaft(2, 1, -b * 0.42, y, forward2);
+      this.addShaft(2, -1, b * 0.42, y, reverse2);
     }
   }
 
@@ -322,23 +348,23 @@ export class BalanceForces {
       const a = shaft.sense * shaft.order * theta * DEG;
       const c = Math.cos(a);
       const s = Math.sin(a);
-      [front, rear].forEach((amp, i) => {
-        const w = shaft.weights[i];
-        if (!w) return;
+      for (let i = 0; i < shaft.weights.length; i++) {
+        const amp = i === 0 ? front : rear;
+        const w = shaft.weights[i]!;
         w.fy = amp.re * c - amp.im * s;
         w.fx = amp.re * s + amp.im * c;
         const len = Math.hypot(w.fx, w.fy);
-        // The weight sits on the side it pulls towards. With nothing to cancel it rests at the bottom.
+        // The weight sits on the side it pulls towards. A weight with nothing to do rests at the bottom.
         w.x = shaft.x + (len > 0 ? (w.fx / len) * ecc : 0);
         w.y = shaft.y + (len > 0 ? (w.fy / len) * ecc : -ecc);
-      });
+      }
     }
   }
 
   private placeRotary(theta: number): void {
     const e = this.engine;
     const m = this.masses;
-    const rotors = this.arrows.filter((a) => a.kind === 'rotor');
+    const rotors = this.rotors;
     let fx = 0;
     let fy = 0;
     let zx = 0;
@@ -360,23 +386,26 @@ export class BalanceForces {
       zx += arrow.z * arrow.fx;
       zy += arrow.z * arrow.fy;
     });
-    const [front, rear] = this.arrows.filter((a) => a.kind === 'counterweight') as [ForceArrow, ForceArrow];
+    const [front, rear] = this.rotaryWeights as [ForceArrow, ForceArrow];
     const span = front.z - rear.z;
     front.fx = (rear.z * fx - zx) / span;
     front.fy = (rear.z * fy - zy) / span;
     rear.fx = -fx - front.fx;
     rear.fy = -fy - front.fy;
     const radius = e.spec.bore * 0.45;
-    for (const w of [front, rear]) {
+    for (const w of this.rotaryWeights) {
       const len = Math.hypot(w.fx, w.fy);
       w.x = len > 0 ? (w.fx / len) * radius : 0;
       w.y = len > 0 ? (w.fy / len) * radius : 0;
     }
   }
 
-  /** Sum of the shown arrows at the current angle. */
-  sum(layers: ForceLayers): ForceSum {
-    const out = { fx: 0, fy: 0, mx: 0, my: 0 };
+  /** Sum of the shown arrows at the current angle, written into out when given. */
+  sum(layers: ForceLayers, out: ForceSum = { fx: 0, fy: 0, mx: 0, my: 0 }): ForceSum {
+    out.fx = 0;
+    out.fy = 0;
+    out.mx = 0;
+    out.my = 0;
     for (const a of this.arrows) {
       if (!isShown(a, layers)) continue;
       out.fx += a.fx;
@@ -423,6 +452,15 @@ export class BalanceForces {
     const amp = (samples: Complex[], order: number): number => size(harmonic(samples, order)) + size(harmonic(samples, -order));
     this.residualCache = { force1: amp(force, 1), force2: amp(force, 2), couple1: amp(couple, 1), couple2: amp(couple, 2) };
     return this.residualCache;
+  }
+
+  /**
+   * With the first and second orders cancelled, whether the 4th and higher orders of the pistons still show. They are
+   * never cancelled and are small, but the net force arrow and the figures show them.
+   */
+  higherLeft(): boolean {
+    const all = this.peaks(ALL_LAYERS);
+    return all.force > this.primary * 0.005 || all.couple > this.primary * this.lever * 0.005;
   }
 
   /**

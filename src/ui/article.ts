@@ -62,16 +62,20 @@ const forcesAtRedline = (engine: Engine): string => {
   const peak = bf.peaks(ALL_LAYERS);
   const force = left.includes('force1') || left.includes('force2');
   const couple = left.includes('couple1') || left.includes('couple2');
-  const values = { rpm: num(rpm), piston: n(bf.primary + bf.secondary), force: n(peak.force), couple: n(peak.couple) };
+  // What the model leaves, not what reaches the mounts: a real engine may have a balance shaft that the spec does not carry.
+  const after = bf.shafts.length ? t('після противаг колінвала й балансирних валів') : t('після противаг колінвала');
+  const values = { rpm: num(rpm), piston: n(bf.pistonPeak), force: n(peak.force), couple: n(peak.couple), after };
   const text = engine.isRotary
     ? t('На межі обертів ({rpm} об/хв) кожен ротор тягне вал убік із силою {force} Н.', { rpm: num(rpm), force: n(bf.primary) })
     : force && couple
-      ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а на опори двигуна лишається до {force} Н сили й {couple} Н·м моменту.', values)
+      ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а {after} лишається до {force} Н сили й {couple} Н·м моменту.', values)
       : force
-        ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а на опори двигуна лишається до {force} Н сили.', values)
+        ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а {after} лишається до {force} Н сили.', values)
         : couple
-          ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а на опори двигуна лишається до {couple} Н·м моменту.', values)
-          : t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, але всі вони гасять одна одну.', values);
+          ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а {after} лишається до {couple} Н·м моменту.', values)
+          : bf.higherLeft()
+            ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а {after} 1-й і 2-й порядки гасять одне одного. Лишаються лише слабкі вищі порядки, до {force} Н.', values)
+            : t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, але {after} всі вони гасять одна одну.', values);
   return `<p>${text} <button type="button" class="btn forces-show" data-show-forces>${t('Показати стрілки сил на моделі')}</button></p>`;
 };
 

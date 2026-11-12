@@ -1,9 +1,20 @@
 /* Inertia force arrows: the switch under the stage and the card with the legend and the figures. */
 
-.forces-card {
+/* The stage between the side panels. Only the card in it takes the pointer. */
+.forces-stage {
   position: absolute;
   z-index: 5;
-  right: calc(var(--panel-w) + 18px);
+  top: 0;
+  bottom: 0;
+  left: var(--stage-left, 0px);
+  right: var(--stage-right, 0px);
+  pointer-events: none;
+}
+
+/* Width and gap are CARD_W and CARD_GAP in balance-panel.ts, which decides when the card is too wide to fit. */
+.forces-card {
+  position: absolute;
+  right: 18px;
   top: calc(var(--top-h) + 8px);
   width: 340px;
   padding: 9px 12px 10px;
@@ -12,10 +23,7 @@
   background: rgba(14, 42, 51, 0.9);
   font-size: 13px;
   line-height: 1.35;
-}
-
-.panel-closed .forces-card {
-  right: 18px;
+  pointer-events: auto;
 }
 
 /* The switch shares a column with "exaggerate vibration". */
@@ -24,8 +32,11 @@
   flex-direction: column;
 }
 
-.tool-checks .check {
-  height: 26px;
+/* Two switches stacked fit the height of the other tools. On a phone the switch is alone and keeps its full height. */
+@media (min-width: 861px) {
+  .tool-checks .check {
+    height: 26px;
+  }
 }
 
 /* The card takes the place of the hint while it is open. */
@@ -165,38 +176,46 @@
   display: none;
 }
 
+/*
+ * Where the full card would cover the engine's name (narrow screens, the designer with both panels open), it shrinks
+ * to the buttons and one line, just above the view options and clear of the scale bar.
+ */
+.forces-card.compact {
+  left: 18px;
+  right: auto;
+  top: auto;
+  bottom: calc(var(--dash-h) + max(var(--tools-h, 66px) + 20px, 112px));
+  width: auto;
+  max-width: min(460px, calc(100% - 36px));
+  padding: 6px 9px 7px;
+}
+
+.compact .forces-title,
+.compact .forces-table,
+.compact .forces-legend,
+.compact .forces-note {
+  display: none;
+}
+
+.compact .forces-brief {
+  display: block;
+  font-size: 12.5px;
+}
+
+.compact .forces-layers {
+  margin-bottom: 4px;
+}
+
+.compact .forces-verdict {
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+
 @media (max-width: 860px) {
-  .forces-card {
+  .forces-card.compact {
     left: 10px;
     right: 10px;
-    top: auto;
     bottom: calc(var(--dash-h) + var(--tools-h, 66px) + 14px);
-    width: auto;
-    padding: 6px 9px 7px;
-  }
-
-  .panel-closed .forces-card {
-    right: 10px;
-  }
-
-  .forces-title,
-  .forces-table,
-  .forces-legend,
-  .forces-note {
-    display: none;
-  }
-
-  .forces-brief {
-    display: block;
-    font-size: 12.5px;
-  }
-
-  .forces-layers {
-    margin-bottom: 4px;
-  }
-
-  .forces-verdict {
-    margin-top: 4px;
-    font-size: 12.5px;
+    max-width: none;
   }
 }

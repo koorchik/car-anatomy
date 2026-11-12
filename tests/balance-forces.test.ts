@@ -198,6 +198,30 @@ describe('known results, derived from the physics', () => {
     expect(peak.force / bf.primary).toBeLessThan(1e-9);
     expect(peak.couple / (bf.primary * Math.abs(front! - rear!) / 1000)).toBeCloseTo(1, 6);
   });
+
+  it('rotary: the counterweights sit on the pulley and in the flywheel, where the model draws them', () => {
+    const bf = forces('r2');
+    const weights = bf.arrows.filter((a) => a.kind === 'counterweight').map((a) => a.z);
+    // 13B: outer rotor faces at ±91 mm, pulley about 131 mm in front, flywheel about 136 mm behind.
+    expect(weights).toEqual([bf.engine.zMax + 40, bf.engine.zMin - 45]);
+  });
+});
+
+describe('figures for the text', () => {
+  it('the largest force of one piston is m r (1 + lambda), at top dead centre', () => {
+    for (const id of ['i4', 'v8-cross', 'i1']) {
+      const bf = forces(id);
+      const e = bf.engine;
+      expect(bf.pistonPeak / ((bf.masses.reciprocatingKg * e.r * (1 + e.r / e.l)) / 1000)).toBeCloseTo(1, 4);
+      // The second order peaks away from TDC, so the two peaks together overstate it.
+      expect(bf.pistonPeak).toBeLessThan(bf.primary + bf.secondary);
+    }
+  });
+
+  it('higher orders show only where the first two cancel and something is still left', () => {
+    expect(forces('v8-cross').higherLeft()).toBe(true);
+    expect(forces('i6').higherLeft()).toBe(false);
+  });
 });
 
 describe('what is left', () => {
@@ -266,6 +290,13 @@ describe('balance shafts take out their own order and nothing else', () => {
       [2, -1],
     ]);
     for (const v of Object.values(bf.residual())) expect(v / bf.primary).toBeLessThan(1e-6);
+  });
+
+  it('a shaft with nothing to cancel is not drawn', () => {
+    // An inline four has no first order left for one shaft; an inline six has nothing left for either order.
+    expect(forces('i4', 1).shafts).toEqual([]);
+    expect(forces('i6', 2).shafts).toEqual([]);
+    expect(forces('i3', 1).shafts).toHaveLength(1);
   });
 
   it('even-firing 90° V6 with split pins keeps a first-order couple, the reason for a single balance shaft', () => {

@@ -336,6 +336,9 @@ const designer = new DesignerPage({
   showEngine(next) {
     showEngine(next, true);
   },
+  sameShape(next) {
+    balancePanel.updateEngine(next);
+  },
   heading() {
     syncDesignerHeading();
   },

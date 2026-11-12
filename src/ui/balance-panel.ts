@@ -4,7 +4,7 @@
 import { engineById, pageChoices } from '../data/engines.ts';
 import { DEFAULT_DESIGN } from '../designer/design.ts';
 import { reciprocatingMass } from '../designer/physics.ts';
-import { ALL_LAYERS, BalanceForces, arrowScale, atRpm, massesOf, roughly, type ForceLayers, type OrderResidual } from '../engine/balance-forces.ts';
+import { ALL_LAYERS, BalanceForces, arrowScale, atRpm, massesOf, roughly, type BalanceMasses, type ForceLayers, type OrderResidual } from '../engine/balance-forces.ts';
 import { buildEngine, type Engine } from '../engine/kinematics.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
@@ -39,8 +39,28 @@ const designerArrowScale = (): number => DEFAULT_DESIGN.bore / ((reciprocatingMa
 
 const swatch = (color: string, shape = ''): string => `<i class="forces-swatch${shape}" style="--swatch:${color}"></i>`;
 
+/** The designer's choice counts the orders the shafts take out, the picture counts shafts. Says why they differ. */
+function shaftNote(bf: BalanceForces): string {
+  const chosen = bf.masses.shafts;
+  const drawn = bf.shafts;
+  if (chosen === 0) return '';
+  if (drawn.length === 0) return chosen === 1 ? t('Валу 1-го порядку тут нічого гасити, тому його не намальовано.') : t('Балансирним валам тут нічого гасити, тому їх не намальовано.');
+  if (chosen === 2 && drawn.length === 1) return t('Валам 2-го порядку тут нічого гасити, тому вал лише один.');
+  if (drawn.length > chosen) return t('«Два» в конструкторі означає, що вали гасять обидва порядки. Тут на це потрібні три вали: один проти 1-го порядку й пара проти 2-го.');
+  return '';
+}
+
+const sameMasses = (a: BalanceMasses, b: BalanceMasses): boolean =>
+  a.reciprocatingKg === b.reciprocatingKg && a.rotatingKg === b.rotatingKg && a.rotorKg === b.rotorKg && a.shafts === b.shafts;
+
+/** Width of the full card and its gap from the edge of the stage, as in balance-panel.css. */
+const CARD_W = 340;
+const CARD_GAP = 18;
+
 export class BalancePanel {
   private readonly checkbox: HTMLInputElement;
+  /** Spans the part of the stage between the side panels, so the card never slides under them. */
+  private readonly stageBox = document.createElement('div');
   private readonly card = document.createElement('section');
   private layers: ForceLayers = { ...ALL_LAYERS };
   private engine: Engine | null = null;
@@ -84,9 +104,41 @@ export class BalancePanel {
       this.render();
       this.card.querySelector<HTMLButtonElement>(`button[data-layer="${key}"]`)?.focus();
     });
-    host.append(this.card);
-    // On a phone the card sits just above the view options, whose height changes with the speed mode.
-    new ResizeObserver(() => this.card.style.setProperty('--tools-h', `${tools.offsetHeight}px`)).observe(tools);
+    this.stageBox.className = 'forces-stage';
+    this.stageBox.append(this.card);
+    host.append(this.stageBox);
+    // Shrunk, the card sits just above the view options, whose height changes with the speed mode.
+    new ResizeObserver(() => this.stageBox.style.setProperty('--tools-h', `${tools.offsetHeight}px`)).observe(tools);
+    // The full card goes to the top right of the stage, unless it would cover the engine's name and the buttons
+    // under it. Then it shrinks to the buttons and one line. The stage box resizes with the window and the side panels,
+    // the name with each engine.
+    const name = host.querySelector<HTMLElement>('.engine-name');
+    const fit = (): void => {
+      const stage = this.stageBox.getBoundingClientRect();
+      const nameRight = name?.getBoundingClientRect().right ?? stage.left;
+      this.card.classList.toggle('compact', window.innerWidth <= 860 || stage.right - CARD_GAP - CARD_W < nameRight + 12);
+    };
+    const fitter = new ResizeObserver(fit);
+    fitter.observe(this.stageBox);
+    if (name) fitter.observe(name);
+  }
+
+  /**
+   * The designer changed something the 3D model does not show, so the model stays. New masses rebuild the arrows,
+   * a new rev limit only the figures.
+   */
+  updateEngine(engine: Engine): void {
+    const before = this.engine;
+    if (!before || engine === before) return;
+    this.engine = engine;
+    if (!sameMasses(massesOf(engine.spec), massesOf(before.spec))) {
+      this.overlay?.dispose();
+      this.overlay = null;
+      this.forces = null;
+      if (this.on) this.build();
+    } else if (engine.spec.redlineRpm !== before.spec.redlineRpm) {
+      this.render();
+    }
   }
 
   /** A new model on the stage. Arrows are built only while they are shown. */
@@ -148,11 +200,11 @@ export class BalancePanel {
 
   private render(): void {
     const bf = this.forces;
-    if (!bf) return;
-    const spec = bf.engine.spec;
+    if (!bf || !this.engine) return;
     const rotary = bf.engine.isRotary;
     const shafts = bf.shafts.length > 0;
-    const redline = spec.redlineRpm;
+    // The designer may hand over a new rev limit without new forces.
+    const redline = this.engine.spec.redlineRpm;
     const peak = bf.peaks(this.layers);
     const chip = (key: keyof ForceLayers, color: string, label: string): string =>
       `<button type="button" data-layer="${key}" aria-pressed="${this.layers[key]}">${swatch(color)}${label}</button>`;
@@ -175,16 +227,14 @@ export class BalancePanel {
     ].join('');
     const left = bf.left();
     const after = shafts ? t('Після противаг і балансирних валів') : t('Після противаг');
-    // The 4th and higher orders of the pistons are never cancelled. They are small, but the net force shows them.
-    const all = bf.peaks(ALL_LAYERS);
-    const higher = all.force > bf.primary * 0.005 || all.couple > bf.primary * bf.lever * 0.005;
     const verdict = rotary
       ? t('Ротори крутяться разом із валом, тому противаги на кінцях вала гасять і їхні сили, і момент.')
       : left.length
         ? t('{after} лишається: {list}.', { after, list: left.map((k) => LEFT_WORDS[k]).join(', ') })
-        : higher
+        : bf.higherLeft()
           ? t('{after} сили й моменти 1-го і 2-го порядків гасять одне одного. Лишаються лише слабкі вищі порядки.', { after })
           : t('{after} сили й моменти гасять одне одного: двигун урівноважений.', { after });
+    const note = shaftNote(bf);
     this.card.innerHTML = `
       <h2 class="forces-title">${t('Сили інерції')}</h2>
       <div class="forces-layers" role="group" aria-label="${t('Які сили показати')}">${chips.join('')}</div>
@@ -194,7 +244,7 @@ export class BalancePanel {
       </table>
       <p class="forces-brief"></p>
       ${legend ? `<p class="forces-legend">${legend}</p>` : ''}
-      <p class="forces-verdict">${verdict}</p>
+      <p class="forces-verdict">${verdict}${note ? ` ${note}` : ''}</p>
       <details class="forces-note"${this.noteOpen ? ' open' : ''}><summary>${t('Як читати стрілки')}</summary>${t('Довжина стрілок від обертів не залежить: усі сили ростуть із квадратом обертів однаково. Фіолетові стрілки показують 2-й порядок разом із дрібними вищими. Сума сил і момент рахуються лише з показаних стрілок. Дуга моменту така, як сила, що дала б цей момент на плечі між сусідніми циліндрами. Маси деталей оцінено за їхніми розмірами.')}</details>`;
     this.card.querySelector('details')!.addEventListener('toggle', (event) => (this.noteOpen = (event.target as HTMLDetailsElement).open));
     this.updateNow();
