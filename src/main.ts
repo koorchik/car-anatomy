@@ -15,6 +15,7 @@ import { PistonEngineModel } from './scene/piston-engine.ts';
 import { RotaryEngineModel } from './scene/rotary-engine.ts';
 import { Stage } from './scene/stage.ts';
 import { articleHtml } from './ui/article.ts';
+import { ValveReadout } from './ui/valve-readout.ts';
 import { DesignerPage } from './ui/designer/designer-page.ts';
 import { FiringDiagram, legendHtml } from './ui/firing-diagram.ts';
 import { Spectrum } from './ui/spectrum.ts';
@@ -213,6 +214,8 @@ const firing = new FiringDiagram($('tooltip'));
 $('firing-body').append(firing.element);
 const spectrum = new Spectrum();
 $('spectrum-body').append(spectrum.element);
+const valveReadout = new ValveReadout();
+app.append(valveReadout.element);
 
 let model: EngineModel | null = null;
 let view: ViewMode = 'xray';
@@ -269,6 +272,8 @@ function showEngine(next: Engine, keepCamera: boolean): void {
   tachoScale = spec.redlineRpm;
   applyZones();
   firing.setEngine(engine);
+  firing.setInactive([]);
+  valveReadout.setEngine(spec);
   $('badge').textContent = spec.badge;
   $('badge').style.setProperty('--badge-fit', String(spec.badge.length > 2 ? 0.46 : 0.62));
   $('part-card').hidden = true;
@@ -915,15 +920,19 @@ function frame(now: number): void {
     boost: snap.boost,
     dt,
     shake: demoMode ? 0 : shake,
+    valves: demoMode ? undefined : snap.valves,
   });
   stage.render(dt);
   updateScaleBar();
 
   tacho.update(snap.rpm, running && snap.fuelCut && snap.rpm > spec.redlineRpm - 200);
-  if (onDesigner) designer.frame(snap.rpm, running, snap.load, dt);
+  if (onDesigner) designer.frame(snap.rpm, running, snap.load, dt, snap.valves);
+  valveReadout.update(snap.valves, running && !demoMode);
+  firing.setInactive(running ? (snap.valves?.off ?? []) : []);
   firing.draw(theta);
 
-  const firesPerSecond = ((snap.rpm / 60) * 720 * spec.cylinders) / 720 / 2;
+  // Resting cylinders don't fire: the firing tone drops with them.
+  const firesPerSecond = (((snap.rpm / 60) * 720 * spec.cylinders) / 720 / 2) * (running ? (snap.valves?.active ?? 1) : 1);
   const rotaryFires = (snap.rpm / 60) * spec.cylinders;
   const firingHz = engine.isRotary ? rotaryFires : firesPerSecond;
   spectrum.draw(drive.audioReady ? drive.analyser : null, drive.sampleRate, snap.state === 'off' ? 0 : firingHz);

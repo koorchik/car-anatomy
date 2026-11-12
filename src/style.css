@@ -2341,3 +2341,125 @@ input[type='range']::-moz-range-thumb {
   }
 }
 
+
+/* Variable valve gear: live labels over the dashboard and the cam diagram in the designer */
+.valve-state {
+  position: absolute;
+  z-index: 4;
+  right: calc(var(--panel-w) + 18px);
+  bottom: calc(var(--dash-h) + 12px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 6px;
+  max-width: 420px;
+  pointer-events: none;
+}
+
+.panel-closed .valve-state {
+  right: 18px;
+}
+
+.valve-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: rgba(14, 42, 51, 0.82);
+  color: var(--bone);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cams-widget {
+  margin: 4px 0 2px;
+}
+
+.cam-diagram {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.cam-grid {
+  stroke: rgba(236, 230, 214, 0.12);
+}
+
+.cam-line,
+.cam-low,
+.cam-live {
+  fill: none;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+.cam-in {
+  stroke: var(--intake);
+}
+
+.cam-ex {
+  stroke: var(--ignition);
+}
+
+.cam-low {
+  stroke-dasharray: 4 3;
+  opacity: 0.85;
+}
+
+.cam-reach {
+  stroke: none;
+}
+
+.cam-reach-in {
+  fill: rgba(98, 198, 236, 0.18);
+}
+
+.cam-reach-ex {
+  fill: rgba(255, 122, 26, 0.16);
+}
+
+.cam-live {
+  stroke: var(--bone);
+  stroke-width: 1.2;
+}
+
+.cam-legend {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.cam-key {
+  display: inline-block;
+  width: 12px;
+  height: 3px;
+  margin: 0 3px 2px 0;
+  vertical-align: middle;
+}
+
+.cam-key-in {
+  background: var(--intake);
+}
+
+.cam-key-ex {
+  background: var(--ignition);
+  margin-left: 6px;
+}
+
+@media (max-width: 860px) {
+  .valve-state {
+    right: 10px;
+    bottom: calc(var(--dash-h) + 44px);
+    max-width: 52vw;
+  }
+
+  .valve-chip {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 430px) {
+  .valve-phase {
+    display: none;
+  }
+}

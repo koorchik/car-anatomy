@@ -13,7 +13,7 @@ import { RpmChart, type ChartSeries } from './chart.ts';
 const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { maximumFractionDigits: digits, minimumFractionDigits: digits });
 const rpmText = (v: number): string => (Math.round(v / 50) * 50).toLocaleString(numberLocale);
 
-type MetricId = 'boost' | 'fill' | 'bsfc' | 'fuel' | 'egt' | 'backpressure';
+type MetricId = 'boost' | 'fill' | 'bsfc' | 'fuel' | 'egt' | 'backpressure' | 'intakePhase' | 'exhaustPhase';
 
 const METRICS: Record<MetricId, { name: string; unit: string; digits: number; of: (p: RpmPoint) => number }> = {
   fill: { name: t('Наповнення'), unit: '%', digits: 0, of: (p) => p.fillRatio * 100 },
@@ -22,6 +22,9 @@ const METRICS: Record<MetricId, { name: string; unit: string; digits: number; of
   boost: { name: t('Наддув'), unit: t('бар'), digits: 2, of: (p) => p.boostBar },
   backpressure: { name: t('Протитиск'), unit: t('бар'), digits: 2, of: (p) => p.backpressureBar },
   egt: { name: t('Температура газів'), unit: '°C', digits: 0, of: (p) => p.egtC },
+  // Later than park is positive, so an intake that opens earlier reads below zero.
+  intakePhase: { name: t('Фаза впуску від вихідної'), unit: '°', digits: 0, of: (p) => p.intakeShift },
+  exhaustPhase: { name: t('Фаза випуску від вихідної'), unit: '°', digits: 0, of: (p) => p.exhaustShift },
 };
 
 const ENERGY: Array<{ key: keyof RpmPoint['energy']; name: string; color: string }> = [

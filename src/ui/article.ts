@@ -6,6 +6,7 @@ import { balance, groupIntervals, torqueCurve, type Engine } from '../engine/kin
 import { ASPIRATION_NAMES, VALVETRAIN_NAMES, type EngineSpec } from '../engine/spec.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
+import { VALVETRAIN_FIELD_NAMES, valvetrainArticleHtml, valvetrainFigures } from './valvetrain-article.ts';
 
 const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { maximumFractionDigits: digits, minimumFractionDigits: digits });
 
@@ -42,6 +43,7 @@ const figures = (engine: Engine): Array<[string, string]> => {
   rows.push([t('Ступінь стиснення'), `${num(s.compression, s.compression % 1 ? 1 : 0)} : 1`]);
   rows.push([t('Живлення'), s.fuel === 'diesel' ? t('дизель, {aspiration}', { aspiration: ASPIRATION_NAMES[s.aspiration] }) : t('бензин, {aspiration}', { aspiration: ASPIRATION_NAMES[s.aspiration] })]);
   rows.push([t('Межа обертів'), t('{rpm} об/хв', { rpm: num(s.redlineRpm) })]);
+  rows.push(...valvetrainFigures(engine));
   return rows;
 };
 
@@ -114,6 +116,7 @@ const FIELD_NAMES: Record<string, string> = {
   fuel: t('паливо'), years: t('роки випуску'), redline: t('межу обертів'), idle: t('холостий хід'), powerHp: t('потужність'), powerRpm: t('оберти потужності'), torqueNm: t('момент'), torqueRpm: t('оберти моменту'),
   firingOrder: t('порядок запалювання'), numbering: t('нумерацію циліндрів'), veeAngle: t('кут розвалу'), firingIntervals: t('інтервали спалахів'), exhaust: t('характер вихлопу'),
   rotorR: t('радіус ротора'), rotorE: t('ексцентриситет'), rotorWidth: t('ширину ротора'),
+  ...VALVETRAIN_FIELD_NAMES,
 };
 
 /** What this engine's exhaust is set to, in words, so the difference between engines of a page can be read as well as heard. */
@@ -174,6 +177,7 @@ export function articleHtml(engine: Engine): string {
     ${verify}
     ${facts ? factsHtml(facts, voiceText(s)) : ''}
     <p>${t('{link} і подивитись, що зміниться.', { link: `<a class="sibling" href="#/designer/from/${s.id}">${t('Відкрити цей двигун у конструкторі')}</a>` })}</p>
+    ${valvetrainArticleHtml(engine)}
     ${isVariant ? `<h2 class="layout-general">${t('Про цю компоновку загалом')}</h2><p class="lead">${escapeHtml(a.lead)}</p>` : ''}
     <h3>${t('Як це влаштовано')}</h3>
     <p>${escapeHtml(a.how)}</p>

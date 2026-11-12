@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { ValveState } from '../engine/valve-control.ts';
 
 export type ViewMode = 'solid' | 'xray' | 'mechanism';
 
@@ -15,6 +16,8 @@ export interface FrameState {
   dt: number;
   /** Multiplier for visible shaking; 0 turns it off. */
   shake: number;
+  /** Variable valve gear as the engine computer has it now. */
+  valves?: ValveState;
 }
 
 export interface EngineModel {

@@ -160,11 +160,15 @@ describe('no control is dead', () => {
     ['diesel', base({ fuel: 'diesel', lambda: 1.5, compression: 18, charger: 'turbo', boostBar: 1, turboSizeHp: 200 })],
     ['rotary', base({ layout: 'rotary', cylinders: 2 })],
     ['W', base({ layout: 'w', cylinders: 12, collector: 'bybank' })],
+    ['variable valves', base({ layout: 'vee', cylinders: 8, veeAngle: 90, collector: 'bybank', camPhaser: 'dual', camSwitch: 'both', switchRpm: 5000, deactivation: 'valves' })],
+    ['lift control', base({ camPhaser: 'dual', liftControl: 'continuous' })],
+    ['multiair', base({ valvetrain: 'sohc', liftControl: 'multiair' })],
+    ['pushrod VVT', base({ layout: 'vee', cylinders: 8, veeAngle: 90, valvetrain: 'ohv', valvesPerCyl: 2, camPhaser: 'coupled', deactivation: 'valves' })],
   ];
   const soundOf = (d: Design): string => JSON.stringify(synthConfig(buildEngine(designToSpec(d, evaluate(d))), 1));
   const lookOf = (d: Design): string => {
     const s = designToSpec(d, evaluate(d));
-    return JSON.stringify([s.coverColor, s.layout, buildEngine(s).cylinders]);
+    return JSON.stringify([s.coverColor, s.layout, buildEngine(s).cylinders, s.vvt]);
   };
   const figures = (d: Design): string => JSON.stringify(snapshot(d).map((m) => [m.id, Math.round(m.value * 1e4)]));
 
