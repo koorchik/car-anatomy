@@ -3,6 +3,7 @@
 
 import type { Engine } from '../engine/kinematics.ts';
 import { EngineSim, type EngineState } from '../engine/sim.ts';
+import type { ValveState } from '../engine/valve-control.ts';
 import { synthConfig, type ListenPosition, type SynthConfig } from './synth.ts';
 import type { WorkletCommand, WorkletReport } from './worklet.ts';
 import workletUrl from './worklet.ts?worker&url';
@@ -15,6 +16,8 @@ export interface DriveSnapshot {
   throttle: number;
   fuelCut: boolean;
   boost: number;
+  /** Phasers, cam profile, lift and resting cylinders, for engines with variable valve gear. */
+  valves?: ValveState;
 }
 
 /** Short synthetic room so the engine isn't heard in a vacuum. */
@@ -241,9 +244,10 @@ export class Drive {
         throttle: r.throttle,
         fuelCut: r.fuelCut,
         boost: r.boost,
+        valves: r.valves,
       };
     }
     const s = this.local;
-    return { angle: s.angle, rpm: s.rpm, state: s.state, load: s.load, throttle: s.throttle, fuelCut: s.fuelCut, boost: s.boost };
+    return { angle: s.angle, rpm: s.rpm, state: s.state, load: s.load, throttle: s.throttle, fuelCut: s.fuelCut, boost: s.boost, valves: s.valves.vvt ? s.valves.state : undefined };
   }
 }

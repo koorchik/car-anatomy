@@ -1,6 +1,7 @@
 // Runs on the audio thread. The crank angle lives here while sound is on, so firing and
 // the picture cannot drift apart.
 
+import type { ValveState } from '../engine/valve-control.ts';
 import { EngineSynth, type ListenPosition, type SynthConfig } from './synth.ts';
 
 declare const sampleRate: number;
@@ -28,6 +29,8 @@ export interface WorkletReport {
   throttle: number;
   fuelCut: boolean;
   boost: number;
+  /** Variable valve gear, only for engines that have it. */
+  valves?: ValveState;
 }
 
 const REPORT_EVERY = 512;
@@ -95,6 +98,7 @@ class EngineProcessor extends AudioWorkletProcessor {
         throttle: sim.throttle,
         fuelCut: sim.fuelCut,
         boost: sim.boost,
+        valves: sim.valves.vvt ? { ...sim.valves.state } : undefined,
       };
       this.port.postMessage(report);
     }

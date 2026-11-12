@@ -26,6 +26,7 @@ const fingerprint = (text: string): string => {
 
 const describeEngine = (spec: EngineSpec): unknown => {
   const e = buildEngine(spec);
+  const sound = synthConfig(e);
   return round({
     id: spec.id,
     family: spec.family,
@@ -61,7 +62,8 @@ const describeEngine = (spec: EngineSpec): unknown => {
     counterweight: spec.tuning?.counterweightMm,
     article: fingerprint(JSON.stringify(spec.article)),
     engine: { r: e.r, l: e.l, deck: e.deck, cycle: e.cycle, zMin: e.zMin, zMax: e.zMax, cc: e.displacementCc, intervals: e.intervals, cylinders: e.cylinders, banks: e.banks, throws: e.throws, rotary: e.isRotary },
-    sound: synthConfig(e),
+    // The valve gear is spec.vvt itself: stored once, above.
+    sound: { ...sound, sim: { ...sound.sim, valves: sound.sim.valves ? 'spec.vvt' : undefined } },
   });
 };
 
