@@ -198,3 +198,28 @@ describe('events between frames', () => {
     expect(width).toBeGreaterThan(10);
   });
 });
+
+describe('the rotary’s plugs', () => {
+  it('lead from below the short axis, where the rotor face sweeps down past them', async () => {
+    const { vi } = await import('vitest');
+    const context = new Proxy({}, { get: () => () => ({ addColorStop: () => {} }), set: () => true });
+    vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => context }) });
+    const { RotaryEngineModel } = await import('../src/scene/rotary-engine.ts');
+    const r2 = buildEngine(engineById('r2')!);
+    const model = new RotaryEngineModel(r2);
+    const a = model.systemsAnchors();
+    for (const p of a.plugs) {
+      expect(p.leading.y).toBeLessThan(0);
+      expect(p.trailing.y).toBeGreaterThan(0);
+      expect(p.leading.x).toBeGreaterThan(0);
+    }
+    // The rotor turns clockwise seen from the front, so on the plug side (+x) its face moves downwards.
+    const frame = { theta: 0, rpm: 800, load: 0.2, fuelCut: false, running: true, boost: 0, dt: 0.016, shake: 0 };
+    const rotor = (model as unknown as { rotors: Array<{ group: { rotation: { z: number } } }> }).rotors[0]!.group;
+    model.update(frame);
+    const before = rotor.rotation.z;
+    model.update({ ...frame, theta: 10 });
+    expect(rotor.rotation.z).toBeLessThan(before);
+    vi.unstubAllGlobals();
+  });
+});
