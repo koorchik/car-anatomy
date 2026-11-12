@@ -44,6 +44,13 @@ export interface ValveEvents {
   overlap: number;
 }
 
+/** What the cams do at one moment: events in crank degrees after firing TDC, and lifts in mm. */
+export interface CamState {
+  events: ValveEvents;
+  intakeLift: number;
+  exhaustLift: number;
+}
+
 /** Share of fuel energy that reaches the shaft. BSFC in g/kWh, heating value in MJ/kg; 1 kWh is 3.6 MJ. */
 export const brakeEfficiency = (bsfc: number, lhv: number): number => 3600 / (bsfc * lhv);
 
@@ -223,12 +230,14 @@ const mufflerLoss = (open: number): number => {
   return 0.2;
 };
 
-interface OperatingPoint {
+export interface OperatingPoint {
   /** Fraction of atmospheric pressure the throttle lets through. 1 is wide open. */
   throttle: number;
   lambda: number;
   /** Compressor bypassed: a cruise condition. */
   noBoost: boolean;
+  /** Cam position and profile. The design's own cam when left out. */
+  cam?: CamState;
 }
 
 /** Turbine inlet pressure from Stodola's ellipse law: p3^2 - p4^2 grows with flow^2 and with T3. */
@@ -237,7 +246,7 @@ export const turbineInletPressure = (p4: number, flow: number, t3: number): numb
 /** Below this end-of-compression temperature on a cold start, diesel fuel won't light by itself, glow plugs or not. */
 export const COLD_IGNITION_K = 600;
 
-class Model {
+export class Model {
   readonly d: Design;
   readonly fuel: (typeof FUELS)[keyof typeof FUELS];
   readonly vdM3: number;
@@ -245,6 +254,7 @@ class Model {
   readonly floatAt: number;
   readonly intakeTune: number;
   readonly exhaustTune: number;
+  readonly baseCam: CamState;
 
   constructor(d: Design) {
     this.d = d;
@@ -255,6 +265,7 @@ class Model {
     this.floatAt = floatRpm(d);
     this.intakeTune = intakeTuneRpm(d);
     this.exhaustTune = exhaustTuneRpm(d, this.events);
+    this.baseCam = { events: this.events, intakeLift: d.lift, exhaustLift: d.lift };
   }
 
   private strokeM(): number {
@@ -262,7 +273,7 @@ class Model {
   }
 
   /** Breathing of the valves: Taylor's inlet Mach index. */
-  private machIndex(rpm: number, sound: number): number {
+  private machIndex(rpm: number, sound: number, cam: CamState): number {
     const d = this.d;
     const sp = (2 * this.strokeM() * rpm) / 60;
     if (isRotary(d)) {
@@ -271,20 +282,21 @@ class Model {
     }
     const { intake } = valveSplit(d);
     const ratio = (d.bore / d.intakeValve) ** 2 / intake;
-    const liftShape = (1 - Math.exp((-d.lift / d.intakeValve) / 0.13)) / 0.865;
-    const flow = 0.4 * liftShape * (d.intakeDuration / 245) ** 0.8;
+    const liftShape = (1 - Math.exp((-cam.intakeLift / d.intakeValve) / 0.13)) / 0.865;
+    const duration = cam.events.intakeClose - cam.events.intakeOpen;
+    const flow = 0.4 * liftShape * (duration / 245) ** 0.8;
     return (ratio * sp) / (sound * flow);
   }
 
-  private breathing(rpm: number, z: number, sound: number): number {
+  private breathing(rpm: number, z: number, sound: number, valves: CamState): number {
     const d = this.d;
-    const { ivcAbdc, overlap } = this.events;
+    const { ivcAbdc, overlap } = valves.events;
     const choked = Math.min(1 / (1 + (z / 0.9) ** 3.5), 0.78 / Math.max(z, 0.01));
 
     let cam = 1;
     if (!isRotary(d)) {
       // Speed index without the cam's own help, because the cam timing decides which speed it suits.
-      const speed = z * (d.intakeDuration / 245) ** 0.8;
+      const speed = z * ((valves.events.intakeClose - valves.events.intakeOpen) / 245) ** 0.8;
       const late = Math.max(ivcAbdc, 5);
       const zCam = 0.42 * (late / 50) ** 0.75;
       if (speed < zCam) cam -= 0.22 * (late / 60) ** 1.6 * (1 - speed / zCam) ** 2;
@@ -323,26 +335,26 @@ class Model {
   }
 
   /** Pressure lost pushing gas past the exhaust valves, Pa. Not capped at sonic: a tiny valve really does choke. */
-  private exhaustValveDrop(sp: number, rhoExh: number): number {
+  private exhaustValveDrop(sp: number, rhoExh: number, cam: CamState): number {
     const d = this.d;
     if (isRotary(d)) return 0;
     const { exhaust } = valveSplit(d);
     const ratio = (d.bore / d.exhaustValve) ** 2 / exhaust;
-    const liftShape = (1 - Math.exp((-d.lift / d.exhaustValve) / 0.13)) / 0.865;
-    const flow = 0.4 * liftShape * (d.exhaustDuration / 245) ** 0.8;
+    const liftShape = (1 - Math.exp((-cam.exhaustLift / d.exhaustValve) / 0.13)) / 0.865;
+    const flow = 0.4 * liftShape * ((cam.events.exhaustClose - cam.events.exhaustOpen) / 245) ** 0.8;
     const speed = (sp * ratio) / flow;
     return Math.min(0.35 * 0.5 * rhoExh * speed * speed, 4e5);
   }
 
   /** Heywood's ideal-cycle volumetric efficiency: back pressure leaves more residual gas behind. */
-  private residualEffect(pe: number, pi: number): number {
+  private residualEffect(pe: number, pi: number, cam: CamState): number {
     const d = this.d;
     const g = 1.35;
     const r = d.compression;
     const ratio = clamp(pe / pi, 0.3, 4);
     const ideal = (g - 1) / g + (r - ratio) / (g * (r - 1));
     const baseline = (g - 1) / g + (r - 1) / (g * (r - 1));
-    const scavenge = !isRotary(d) ? 0.0012 * clamp(this.events.overlap, 0, 90) * clamp(1 - ratio, -0.6, 0.4) : 0;
+    const scavenge = !isRotary(d) ? 0.0012 * clamp(cam.events.overlap, 0, 90) * clamp(1 - ratio, -0.6, 0.4) : 0;
     return (ideal / baseline) * (1 + scavenge);
   }
 
@@ -380,10 +392,10 @@ class Model {
   }
 
   /** Spark-ignition knock: Douaud-Eyzat ignition delay against the time the end gas spends compressed. */
-  private knock(pIm: number, tIm: number, peakRatio: number, sp: number, offset: number): { retard: number; severity: number } {
+  private knock(pIm: number, tIm: number, peakRatio: number, sp: number, offset: number, cam: CamState): { retard: number; severity: number } {
     const d = this.d;
     if (this.fuel.diesel) return { retard: 0, severity: 0 };
-    const late = Math.max(0, this.events.ivcAbdc - 30);
+    const late = Math.max(0, cam.events.ivcAbdc - 30);
     const rEff = 1 + (d.compression - 1) * (1 - 0.0018 * late);
     const pIvc = pIm / 101325;
     const tIvc = tIm + 45;
@@ -418,6 +430,7 @@ class Model {
     const cycles = rpm / 120;
     const stoich = fuel.afr;
     const lambda = op.lambda;
+    const cam = op.cam ?? this.baseCam;
 
     let pressureRatio = 1;
     let pExhaust = P_ATM * 1.03;
@@ -445,13 +458,13 @@ class Model {
       const tIm = Math.max(240, cooled - fuel.chargeCooling - (d.directInjection && !fuel.diesel ? 8 : 0));
       const sound = Math.sqrt(1.4 * R_AIR * tIm);
       const rho = pIm / (R_AIR * tIm);
-      const z = this.machIndex(rpm, sound);
-      const ve = Math.max(0.02, this.breathing(rpm, z, sound) * this.residualEffect(pExhaust, Math.max(pIm, 1e3)));
+      const z = this.machIndex(rpm, sound, cam);
+      const ve = Math.max(0.02, this.breathing(rpm, z, sound, cam) * this.residualEffect(pExhaust, Math.max(pIm, 1e3), cam));
       const airKgs = rho * ve * this.vdM3 * cycles;
       const fuelKgs = airKgs / (stoich * lambda);
 
       const peakRatio = fuel.diesel ? 1.5 : 2.9 * clamp(heatReleaseFactor(lambda, false), 0.55, 1.05);
-      const { retard, severity } = this.knock(pIm, tIm, peakRatio, sp, d.ignitionOffset);
+      const { retard, severity } = this.knock(pIm, tIm, peakRatio, sp, d.ignitionOffset, cam);
       const ignitionError = d.ignitionOffset - retard;
       const peakBar = ((pIm * d.compression ** 1.32) / 1e5) * peakRatio * (1 + 0.012 * ignitionError);
 
@@ -477,7 +490,7 @@ class Model {
       const pipeDrop = k * 0.5 * rhoExh * gasSpeed * gasSpeed;
       const primaryArea = (Math.PI / 4) * d.headerDia ** 2;
       const primarySpeed = Math.min(1.3 * sp * (this.pistonAreaMm2() / primaryArea), 480);
-      const primaryDrop = 0.6 * 0.5 * rhoExh * primarySpeed * primarySpeed + this.exhaustValveDrop(sp, rhoExh);
+      const primaryDrop = 0.6 * 0.5 * rhoExh * primarySpeed * primarySpeed + this.exhaustValveDrop(sp, rhoExh, cam);
       const p4 = P_ATM + pipeDrop;
 
       let turbineDriven = pExhaust;
