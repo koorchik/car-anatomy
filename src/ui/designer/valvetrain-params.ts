@@ -29,7 +29,9 @@ function readouts(d: Design, perf: Performance): Array<[string, string]> {
   const c = perf.cruise;
   if (c.reachable) {
     if (phased(d)) {
-      const phases = d.camPhaser === 'coupled' ? [phaseText(c.intakeShift, false)] : [phaseText(c.intakeShift, false), ...(d.camPhaser === 'dual' ? [phaseText(c.exhaustShift, true)] : [])];
+      const shaft = Math.round(Math.abs(c.intakeShift));
+      const coupled = shaft === 0 ? t('вал як у спокої') : t('вал пізніше на {deg}°', { deg: shaft });
+      const phases = d.camPhaser === 'coupled' ? [coupled] : [phaseText(c.intakeShift, false), ...(d.camPhaser === 'dual' ? [phaseText(c.exhaustShift, true)] : [])];
       rows.push([t('Фази на круїзі'), phases.join(', ')]);
     }
     if (d.deactivation !== 'none') rows.push([t('Циліндри на круїзі'), t('{active} з {all}', { active: c.activeCylinders, all: d.cylinders })]);

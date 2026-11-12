@@ -2347,7 +2347,8 @@ input[type='range']::-moz-range-thumb {
   position: absolute;
   z-index: 4;
   right: calc(var(--panel-w) + 18px);
-  bottom: calc(var(--dash-h) + 12px);
+  /* Above the scale bar, clear of the view tools along the bottom. */
+  bottom: calc(var(--dash-h) + 116px);
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;

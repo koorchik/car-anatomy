@@ -36,6 +36,8 @@ import {
 } from './geometry.ts';
 import { createMaterials, glowTexture, hotPipeMaterial, type EngineMaterials, type HotPipeUniforms } from './materials.ts';
 import { GAS, disposeTree, markDamaged, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
+import { liveTiming, type ValveState } from '../engine/valve-control.ts';
+import { VariableValveGear } from './variable-valves.ts';
 
 interface CylinderParts {
   def: Cylinder;
@@ -124,6 +126,8 @@ export class PistonEngineModel implements EngineModel {
   private rollVel = 0;
   private readonly valveLift: number;
   private readonly shakeGain: number;
+  /** Phasers, switching cams, lift control and resting cylinders. Inert on engines without them. */
+  private gear!: VariableValveGear;
 
   private readonly deck: number;
   private readonly bore: number;
@@ -145,6 +149,7 @@ export class PistonEngineModel implements EngineModel {
     this.buildBlock();
     this.buildValvetrain(heads);
     this.buildEnds();
+    this.gear.build(engine.zMax * MM + this.bore * 0.2);
     this.buildManifolds(heads);
     this.buildTurbos();
     this.buildSolidDetails(heads);
@@ -400,6 +405,7 @@ export class PistonEngineModel implements EngineModel {
     const camBase = b * 0.115;
     const halfSpanFor = (exhaust: boolean): number => (exhaust ? timing.exhaustClose - timing.exhaustOpen : timing.intakeClose - timing.intakeOpen) / 4;
     const lobeWidth = b * 0.11;
+    this.gear = new VariableValveGear({ engine: e, materials: m, bore: b, heads, mounted: this.mounted, valveLift: this.valveLift, camBase, lobeWidth, spinners: this.spinners });
     const camsByKey = new Map<string, { group: THREE.Group; lobes: LobeDef[]; zs: number[]; x: number; y: number }>();
 
     const camFor = (bankIndex: number, side: number): { lobes: LobeDef[]; zs: number[]; x: number; y: number } => {
@@ -472,7 +478,7 @@ export class PistonEngineModel implements EngineModel {
             cam.y = camPos.y;
             cam.zs.push(tipBank.z);
             const aim = -Math.atan2(dirBank.x, dirBank.y);
-            cam.lobes.push({ z: tipBank.z, rotation: (thetaPeak / 2) * DEG + aim, halfSpan: halfSpanFor(exhaust) });
+            cam.lobes.push(...this.gear.lobesFor(`${cyl.bank}/${key}`, cyl.bank, cyl, exhaust, { z: tipBank.z, rotation: (thetaPeak / 2) * DEG + aim, halfSpan: halfSpanFor(exhaust) }, tipBank, dirBank));
           }
         }
       }
@@ -497,12 +503,14 @@ export class PistonEngineModel implements EngineModel {
         const [bankIndex] = key.split('/');
         const zMin = Math.min(...cam.zs) - b * 0.5;
         const zMax = Math.max(...cam.zs) + b * 0.5;
-        const geo = camshaftGeometry(cam.lobes, camBase, this.valveLift, lobeWidth, b * 0.078, zMin, zMax);
+        const geo = camshaftGeometry(this.gear.finishLobes(key, cam.lobes), camBase, this.valveLift, lobeWidth, b * 0.078, zMin, zMax);
         const mesh = tag(new THREE.Mesh(geo, m.cam), 'cam');
         mesh.position.set(cam.x, cam.y, 0);
         mesh.castShadow = true;
         heads[Number(bankIndex)]!.add(mesh);
         this.cams.push(mesh);
+        const side = Number(key.split('/')[1]);
+        this.gear.attachCam(mesh, key, !dohc ? 'both' : side === this.exhaustSide(Number(bankIndex)) ? 'exhaust' : 'intake');
       }
     } else if (blockCam) {
       const zs = blockLobes.map((l) => l.z);
@@ -511,6 +519,7 @@ export class PistonEngineModel implements EngineModel {
       mesh.position.set(blockCam.x, blockCam.y, 0);
       this.mounted.add(mesh);
       this.cams.push(mesh);
+      this.gear.attachCam(mesh, 'block', 'both');
 
       const rockerGeo = new THREE.BoxGeometry(1, b * 0.05, b * 0.07);
       this.rockerMesh = tag(new THREE.InstancedMesh(rockerGeo, m.rod, pushrodValves.length), 'pushrod');
@@ -938,6 +947,8 @@ export class PistonEngineModel implements EngineModel {
 
     this.crank.rotation.z = -theta * DEG;
 
+    const resting = new Set(state.valves?.off ?? []);
+    const fuelOnly = e.spec.vvt?.deactivation?.kind === 'fuel';
     for (const c of this.cylinders) {
       const def = c.def;
       const d = pistonPin(e, def, theta) * MM;
@@ -955,33 +966,44 @@ export class PistonEngineModel implements EngineModel {
 
       if (this.viewMode !== 'solid') {
         const phase = cyclePhase(e, def, theta);
-        const firing = running && !fuelCut;
+        const rests = resting.has(def.n);
+        const firing = running && !fuelCut && !rests;
         const look = gasAppearance(phase, firing);
         c.gasMaterial.color.copy(look.color);
         c.gasMaterial.opacity = look.opacity;
+        // A resting cylinder squeezes trapped exhaust with its valves shut, or pumps fresh air with only its fuel cut.
+        if (rests) {
+          c.gasMaterial.color.copy(fuelOnly ? GAS.intake : GAS.exhaust);
+          c.gasMaterial.opacity = fuelOnly ? 0.18 : 0.25 + 0.2 * Math.cos(phase * 4 * Math.PI) ** 2;
+        }
+        c.gas.userData.part = rests ? (fuelOnly ? 'deactivated-fuel' : 'deactivated') : 'gas';
         const sparkOn = firing && phase < 0.035;
         const sparkMat = c.spark.material as THREE.SpriteMaterial;
         sparkMat.opacity = sparkOn ? 1 - phase / 0.035 : 0;
       }
     }
 
-    // Cams turn at half crank speed in the same direction.
-    for (const cam of this.cams) cam.rotation.z = -theta * 0.5 * DEG;
+    // Cams turn at half crank speed in the same direction, each turned further by its phaser.
+    for (const cam of this.cams) cam.rotation.z = -(theta - this.gear.shiftOf(cam, state.valves)) * 0.5 * DEG;
     for (const s of this.spinners) {
       s.object.rotation.z = -theta * s.ratio * DEG;
     }
     const chainShift = (theta / 360) * 1.2;
     for (const tex of this.chainMaterials) tex.offset.x = -chainShift % 1;
 
-    this.updateValves(theta);
+    this.gear.update(theta, state);
+    this.updateValves(theta, state.valves);
 
     this.updateHeaders(state);
     this.updateFlash(state);
     this.updateMounts(state);
   }
 
-  private updateValves(theta: number): void {
+  private updateValves(theta: number, valves?: ValveState): void {
     const e = this.engine;
+    // Phasers move the events, a low cam or a lever shrinks them, and a resting cylinder's valves stay shut.
+    const live = liveTiming(e.timing, e.spec.vvt, valves);
+    const shut = new Set(valves && e.spec.vvt?.deactivation?.kind === 'valves' ? valves.off : []);
     const b = this.bore;
     const stemLen = b * (e.spec.valvetrain === 'dohc' ? 0.72 : 0.62);
     const m = new THREE.Matrix4();
@@ -1002,7 +1024,8 @@ export class PistonEngineModel implements EngineModel {
 
     for (const v of this.valves) {
       const phi = mod(theta - v.cyl.fire, 720);
-      const l = (v.exhaust ? exhaustLift(phi, e.timing) : intakeLift(phi, e.timing)) * this.valveLift;
+      const camLift = (v.exhaust ? exhaustLift(phi, live.timing) * live.exhaustLift : intakeLift(phi, live.timing) * live.intakeLift) * this.valveLift;
+      const l = shut.has(v.cyl.n) ? 0 : camLift;
       lift.makeTranslation(0, -l, 0);
       const bankAlpha = e.banks[v.cyl.bank]!.alpha * DEG;
       offset.makeTranslation(Math.sin(bankAlpha) * exploded * 2.6 * b, Math.cos(bankAlpha) * exploded * 2.6 * b, 0);
@@ -1018,13 +1041,14 @@ export class PistonEngineModel implements EngineModel {
 
       if (v.ohv && this.rockerMesh && this.pushrodMesh && this.lifterMesh) {
         const o = v.ohv;
-        const lifterBase = o.camCenter.clone().addScaledVector(o.camDir, o.camBase + l);
+        // The lifter body always rides the lobe. A deactivating lifter collapses, so the pushrod stays put.
+        const lifterBase = o.camCenter.clone().addScaledVector(o.camDir, o.camBase + camLift);
         // Lifter
         quat.setFromUnitVectors(up, o.camDir);
         m.compose(lifterBase, quat, pos.set(1, 1, 1));
         this.lifterMesh.setMatrixAt(rockerIndex, m);
         // Pushrod runs from the lifter to the rocker's near end, which rises with lift.
-        const lifterTop = lifterBase.clone().addScaledVector(o.camDir, b * 0.16);
+        const lifterTop = o.camCenter.clone().addScaledVector(o.camDir, o.camBase + l + b * 0.16);
         const rodEnd = o.rodEnd.clone().addScaledVector(o.camDir, l);
         rodEnd.x += Math.sin(bankAlpha) * exploded * 2.6 * b;
         rodEnd.y += Math.cos(bankAlpha) * exploded * 2.6 * b;
@@ -1065,11 +1089,12 @@ export class PistonEngineModel implements EngineModel {
     const targetHeat = state.running ? Math.pow(state.load * 0.6 + nRpm * 0.5, 1.4) : 0;
     this.heat += (targetHeat - this.heat) * Math.min(1, state.dt * (targetHeat > this.heat ? 0.35 : 0.14));
     const firing = state.running && !state.fuelCut;
+    const resting = new Set(state.valves?.off ?? []);
     for (const h of this.headers) {
       h.uniforms.uHeat.value = this.heat;
       const phi = mod(state.theta - h.cyl.fire, 720);
       const x = (phi - e.timing.exhaustOpen) / 150;
-      if (firing && x >= 0 && x <= 1.2) {
+      if (firing && !resting.has(h.cyl.n) && x >= 0 && x <= 1.2) {
         h.uniforms.uPulsePos.value = x;
         h.uniforms.uPulseAmp.value = (1 - x * 0.7) * (0.25 + state.load * 0.75);
       } else {
@@ -1084,8 +1109,10 @@ export class PistonEngineModel implements EngineModel {
       for (const l of this.flash) l.intensity = 0;
       return;
     }
-    // Two most recent fires light up the inside of the engine.
+    // Two most recent fires light up the inside of the engine. Resting cylinders don't fire.
+    const resting = new Set(state.valves?.off ?? []);
     const ranked = this.cylinders
+      .filter((c) => !resting.has(c.def.n))
       .map((c) => ({ c, phase: cyclePhase(e, c.def, state.theta) }))
       .sort((a, b) => a.phase - b.phase);
     this.flash.forEach((light, i) => {
