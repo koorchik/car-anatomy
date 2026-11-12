@@ -56,8 +56,10 @@ const throwSpacing = (e: Engine): number => {
   return (zs[0]! - zs[1]!) / 1000;
 };
 
+const EVERY_ENGINE = ENGINES.flatMap((page) => pageChoices(page.id).map((c) => [c.id] as const));
+
 describe('the arrows add up to what the kinematics leave', () => {
-  it.each(ENGINES.map((s) => [s.id] as const))('%s', (id) => {
+  it.each(EVERY_ENGINE)('%s', (id) => {
     const bf = forces(id);
     const e = bf.engine;
     const table = vibrationTable(e);
@@ -138,12 +140,14 @@ describe('known results, derived from the physics', () => {
     const r = bf.residual();
     for (const v of Object.values(r)) expect(v / bf.primary).toBeLessThan(tiny);
     const a = throwSpacing(bf.engine);
+    // A 90° pair on one pin: their first orders add up to one piston's force turning with the crank, plus two rods turning.
+    const perThrow = bf.primary + (2 * bf.masses.rotatingKg * bf.engine.r) / 1000;
     const peak = bf.peaks(FIRST_ONLY);
-    expect(peak.couple / (bf.primary * a)).toBeCloseTo(Math.sqrt(10), 3);
+    expect(peak.couple / (perThrow * a)).toBeCloseTo(Math.sqrt(10), 3);
     // Constant size: a couple that turns, which is exactly what counterweights can cancel.
     for (let i = 0; i < 360; i += 15) {
       const s = bf.at(i).sum(FIRST_ONLY);
-      expect(Math.hypot(s.mx, s.my) / (bf.primary * a)).toBeCloseTo(Math.sqrt(10), 3);
+      expect(Math.hypot(s.mx, s.my) / (perThrow * a)).toBeCloseTo(Math.sqrt(10), 3);
     }
   });
 
@@ -193,6 +197,34 @@ describe('known results, derived from the physics', () => {
     // Rotors half a turn apart: their forces cancel and leave a couple of one rotor times the distance.
     expect(peak.force / bf.primary).toBeLessThan(1e-9);
     expect(peak.couple / (bf.primary * Math.abs(front! - rear!) / 1000)).toBeCloseTo(1, 6);
+  });
+});
+
+describe('what is left', () => {
+  it.each([
+    ['i1', ['force1', 'force2']],
+    ['i3', ['couple1', 'couple2']],
+    ['i4', ['force2']],
+    ['i5', ['couple1', 'couple2']],
+    ['i6', []],
+    ['v6-90', ['couple2']],
+    ['v8-cross', []],
+    ['v8-flat', ['force2', 'couple2']],
+    ['b4', ['couple2']],
+    ['b6', []],
+    ['r2', []],
+  ] as const)('%s', (id, left) => {
+    expect(forces(id).left()).toEqual(left);
+  });
+
+  it('turning masses shake the engine when the counterweights are hidden', () => {
+    // An inline four's pins pair off, so its turning masses cancel; a single's do not.
+    const noWeights = { order1: true, order2: false, balancing: false };
+    expect(forces('i4').peaks(noWeights).force / forces('i4').primary).toBeLessThan(1e-3);
+    const single = forces('i1');
+    const turning = (single.masses.rotatingKg * single.engine.r) / 1000;
+    // At TDC the piston and the crankpin pull the same way.
+    expect(single.at(0).sum(noWeights).fy).toBeCloseTo(single.primary + turning, 9);
   });
 });
 

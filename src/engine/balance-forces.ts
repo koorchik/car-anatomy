@@ -5,9 +5,10 @@
 // (newtons per (rad/s)^2). Multiplying by omega^2 gives newtons. Coordinates and angles follow kinematics.ts:
 // X right, Y up, Z to the front, angles clockwise from +Y seen from the front, lengths in mm.
 //
-// The arrows add up to exactly what vibrationTable() leaves: the pistons' own forces, the masses turning on the
-// crankpins, and per-throw counterweights that cancel those masses and the half of each piston's first order that
-// turns with the crank (the classic 50% balance factor). Balance shafts then take out what is left of their order.
+// The arrows add up to exactly what vibrationTable() leaves, with the sign of a force rather than of an
+// acceleration: the pistons' own forces, the masses turning on each crankpin, and a counterweight on both webs of
+// every throw that together cancel those masses and the half of each piston's first order that turns with the crank
+// (the classic 50% balance factor). Balance shafts then take out what is left of their order.
 
 import type { EngineSpec } from './spec.ts';
 import { pistonAcceleration, pistonPin, type Engine } from './kinematics.ts';
@@ -53,9 +54,10 @@ export interface BalanceMasses {
 
 /** Which groups of arrows are shown. Each shown arrow counts in the sum. */
 export interface ForceLayers {
+  /** Pistons' first order, the masses turning on the crankpins and the rotors: everything at crank frequency. */
   order1: boolean;
   order2: boolean;
-  /** Turning masses, counterweights and balance shafts. */
+  /** Counterweights and balance shafts, of the orders shown. */
   balancing: boolean;
 }
 
@@ -69,8 +71,9 @@ export const massesOf = (spec: EngineSpec): BalanceMasses => ({
   shafts: spec.tuning?.balanceShafts ?? 0,
 });
 
+/** Turning masses stay with the first order: they shake the engine whether or not anything fights them. */
 export const isShown = (arrow: ForceArrow, layers: ForceLayers): boolean =>
-  (arrow.order === 1 ? layers.order1 : layers.order2) && (arrow.kind === 'piston' || arrow.kind === 'rotor' || layers.balancing);
+  (arrow.order === 1 ? layers.order1 : layers.order2) && (layers.balancing || (arrow.kind !== 'counterweight' && arrow.kind !== 'shaft'));
 
 export interface ForceSum {
   /** Net force per unit omega^2, kg m. */
@@ -128,6 +131,8 @@ export class BalanceForces {
   readonly primary: number;
   /** Peak second-order force of one piston per unit omega^2. Zero on a rotary. */
   readonly secondary: number;
+  /** Lever couples are measured on, as kinematics.balance() does: one cylinder spacing, m. */
+  readonly lever: number;
   private readonly weights: ShaftWeights[] = [];
   private readonly peakCache = new Map<string, { force: number; couple: number }>();
   private residualCache: OrderResidual | null = null;
@@ -136,6 +141,7 @@ export class BalanceForces {
   constructor(engine: Engine, masses: BalanceMasses) {
     this.engine = engine;
     this.masses = masses;
+    this.lever = (engine.spec.bore * 1.18) / 1000;
     const r = engine.r / 1000;
     if (engine.isRotary) {
       this.primary = masses.rotorKg * r;
@@ -164,10 +170,13 @@ export class BalanceForces {
     for (const c of e.cylinders) {
       this.arrow('piston', 1, c.z);
       this.arrow('piston', 2, c.z);
+      // The big end of this cylinder's rod and its share of the pin.
+      this.arrow('rotating', 1, c.z);
     }
+    // A counterweight on the web either side of each pin, where the 3D crank has them.
+    const web = e.rodWidth * 0.29;
     for (const t of e.throws) {
-      this.arrow('rotating', 1, t.z);
-      this.arrow('counterweight', 1, t.z);
+      for (const side of [1, -1]) this.arrow('counterweight', 1, t.z + side * (t.length / 2 + web));
     }
   }
 
@@ -271,6 +280,7 @@ export class BalanceForces {
     const m = this.masses;
     const r = e.r;
     const cw = (e.spec.tuning?.counterweightMm ?? r + e.spec.bore * 0.3) * 0.62;
+    const turning = (m.rotatingKg * r) / 1000;
     let k = 0;
     for (const c of e.cylinders) {
       const gamma = (theta + c.pin - c.alpha) * DEG;
@@ -286,23 +296,26 @@ export class BalanceForces {
         a.fx = along * ux;
         a.fy = along * uy;
       }
-    }
-    for (const t of e.throws) {
-      const n = t.cylinders.length;
-      const px = Math.sin((theta + t.angle) * DEG);
-      const py = Math.cos((theta + t.angle) * DEG);
-      const turning = (n * m.rotatingKg * r) / 1000;
-      const counter = (n * (m.rotatingKg + m.reciprocatingKg / 2) * r) / 1000;
+      const px = Math.sin((theta + c.pin) * DEG);
+      const py = Math.cos((theta + c.pin) * DEG);
       const pin = this.arrows[k++]!;
       pin.x = r * px;
       pin.y = r * py;
       pin.fx = turning * px;
       pin.fy = turning * py;
-      const weight = this.arrows[k++]!;
-      weight.x = -cw * px;
-      weight.y = -cw * py;
-      weight.fx = -counter * px;
-      weight.fy = -counter * py;
+    }
+    for (const t of e.throws) {
+      const px = Math.sin((theta + t.angle) * DEG);
+      const py = Math.cos((theta + t.angle) * DEG);
+      // Each of the two webs takes half of what turns on its pin.
+      const counter = (t.cylinders.length * (m.rotatingKg + m.reciprocatingKg / 2) * r) / 2000;
+      for (let side = 0; side < 2; side++) {
+        const weight = this.arrows[k++]!;
+        weight.x = -cw * px;
+        weight.y = -cw * py;
+        weight.fx = -counter * px;
+        weight.fy = -counter * py;
+      }
     }
     const ecc = e.spec.bore * 0.1;
     for (const { shaft, front, rear } of this.weights) {
@@ -411,7 +424,27 @@ export class BalanceForces {
     this.residualCache = { force1: amp(force, 1), force2: amp(force, 2), couple1: amp(couple, 1), couple2: amp(couple, 2) };
     return this.residualCache;
   }
+
+  /**
+   * Orders that are still there with everything in place. Measured as kinematics.balance() does: against one piston's
+   * first order, couples over the bore pitch too, and anything under 1% of that counts as cancelled.
+   */
+  left(): Array<keyof OrderResidual> {
+    const r = this.residual();
+    const share = { force1: r.force1, force2: r.force2, couple1: r.couple1 / this.lever, couple2: r.couple2 / this.lever };
+    return (Object.keys(share) as Array<keyof OrderResidual>).filter((k) => share[k] > this.primary * 0.01);
+  }
 }
+
+/** Newtons at a crank speed for a figure kept per unit omega^2. */
+export const atRpm = (perOmega2: number, rpm: number): number => perOmega2 * ((rpm * Math.PI) / 30) ** 2;
+
+/** Three significant figures: the masses behind every force are estimates. */
+export const roughly = (v: number): number => {
+  if (v === 0 || !Number.isFinite(v)) return 0;
+  const step = 10 ** (Math.floor(Math.log10(Math.abs(v))) - 2);
+  return Math.round(v / step) * step;
+};
 
 /**
  * Arrow length per unit of force, mm per kg m, shared by a set of engines shown together: the largest
