@@ -715,7 +715,8 @@ export class DynoPanel {
     const a = map.anchor;
     if (a.published) {
       const model = t('Модель без цього дає {hp} к.с. і {nm} Н·м.', { hp: num(a.modelHp), nm: num(a.modelNm) });
-      if (Math.abs(a.scale - 1) < 0.005 && Math.abs(a.modelHp / a.published.powerHp - 1) < 0.005) return t('Збігається з заводськими {figures}.', { figures: publishedText(a.published) });
+      const torqueMatches = a.published.torqueNm === null || Math.abs(a.modelNm / a.published.torqueNm - 1) < 0.005;
+      if (Math.abs(a.modelHp / a.published.powerHp - 1) < 0.005 && torqueMatches) return t('Збігається з заводськими {figures}.', { figures: publishedText(a.published) });
       if (a.clamped) return `${t('Модель надто далека від заводських цифр ({figures}), тому їх досягнуто лише частково.', { figures: publishedText(a.published) })} ${model}`;
       return `${t('Приведено до заводських {figures}.', { figures: publishedText(a.published) })} ${model}`;
     }
