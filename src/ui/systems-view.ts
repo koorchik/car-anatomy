@@ -157,6 +157,11 @@ export class SystemsView {
     this.lastText = 0;
   }
 
+  /** Same model on stage, new figures: the designer's mixture, ignition or boost moved. */
+  retune(engine: Engine): void {
+    this.sim.configure(engine);
+  }
+
   reset(kind: 'warm' | 'cold'): void {
     this.sim.reset(kind);
     this.lastText = 0;

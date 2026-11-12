@@ -356,6 +356,8 @@ const designer = new DesignerPage({
   soundEngine(next, perf) {
     const running = drive.snapshot().state === 'running';
     drive.setEngine(next);
+    // Mixture, ignition and boost change the systems' numbers without changing the model.
+    systems.retune(next);
     if (running && !perf.catches) drive.stop();
   },
   setTrim(trim) {
