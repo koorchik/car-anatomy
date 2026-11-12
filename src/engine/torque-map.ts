@@ -59,6 +59,8 @@ export const HP_PER_KW = 1.35962;
 const SPOOL_DOWN_S = 0.3;
 /** Compressor exponent (gamma - 1) / gamma for air. */
 const COMPRESSOR_EXP = 0.286;
+/** Share of the idle air that passes a shut throttle plate; the idle governor's own air path gives the rest. */
+const LEAK_SHARE = 0.6;
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
@@ -115,25 +117,28 @@ export function holdCharge(map: EngineTorqueMap, rpm: number): number {
 
 /**
  * Charge that leaks past a shut throttle. The gap is small enough for the air to pass at the speed of sound, so the
- * mass flow is fixed and the charge per cycle falls as 1/rpm. Set equal to the idle charge at idle. Zero for a diesel,
- * which has no throttle and cuts its fuel instead.
+ * mass flow is fixed and the charge per cycle falls as 1/rpm. Taken as 60 % of the idle charge at idle (estimate):
+ * the idle governor's own air path makes up the rest. Zero for a diesel, which has no throttle and cuts its fuel.
  */
 export function leakCharge(map: EngineTorqueMap, rpm: number): number {
   if (map.diesel) return 0;
-  return (holdCharge(map, map.idleRpm) * map.idleRpm) / Math.max(rpm, map.idleRpm * 0.25);
-}
-
-/** Highest charge the boost allows right now. `spool` is the share of its steady boost the turbo already gives. */
-export function chargeLimit(map: EngineTorqueMap, rpm: number, spool: number): number {
-  const ratio = mapValue(map, map.pressureRatio, rpm);
-  if (map.boostKind === 'none') return 1;
-  if (map.boostKind === 'mechanical') return ratio;
-  return 1 + (ratio - 1) * clamp(spool, 0, 1);
+  return (LEAK_SHARE * holdCharge(map, map.idleRpm) * map.idleRpm) / Math.max(rpm, map.idleRpm * 0.25);
 }
 
 /**
- * Time constant of the turbo at this speed, s. The exhaust drives the wheel up to speed, and at the start of a
- * spool-up the exhaust flows as much as the engine breathes unboosted, so the time goes as one over that flow.
+ * Highest charge the boost allows right now. `pressure` is the manifold pressure ratio the turbo gives at this moment;
+ * a belt-driven compressor always gives what the speed allows.
+ */
+export function chargeLimit(map: EngineTorqueMap, rpm: number, pressure: number): number {
+  if (map.boostKind === 'none') return 1;
+  if (map.boostKind === 'mechanical') return mapValue(map, map.pressureRatio, rpm);
+  return Math.max(1, pressure);
+}
+
+/**
+ * Time constant of the turbo at this speed, s, for the manifold pressure it gives to follow its steady value. The
+ * exhaust drives the wheel up to speed, and at the start of a spool-up the exhaust flows as much as the engine
+ * breathes unboosted, so the time goes as one over that flow.
  */
 export function spoolTime(map: EngineTorqueMap, rpm: number, rising: boolean): number {
   if (!rising) return SPOOL_DOWN_S;
@@ -142,20 +147,26 @@ export function spoolTime(map: EngineTorqueMap, rpm: number, rising: boolean): n
 }
 
 /**
- * Turbo shaft speed 0..1, as the sound expects it. The compressor's enthalpy rise goes with the square of its tip
- * speed, and the enthalpy rise with the pressure ratio to the power (gamma - 1) / gamma.
+ * Turbo shaft speed 0..1 at a pressure ratio, as the sound expects it. The compressor's enthalpy rise goes with the
+ * square of its tip speed, and the enthalpy rise with the pressure ratio to the power (gamma - 1) / gamma.
  */
-export function turboShaft(map: EngineTorqueMap, rpm: number, spool: number): number {
+export function turboShaft(map: EngineTorqueMap, pressure: number): number {
   if (map.boostKind !== 'turbo') return 0;
   const top = Math.max(...map.pressureRatio);
   if (top <= 1.001) return 0;
-  const now = 1 + (mapValue(map, map.pressureRatio, rpm) - 1) * clamp(spool, 0, 1);
-  return Math.sqrt(clamp((now ** COMPRESSOR_EXP - 1) / (top ** COMPRESSOR_EXP - 1), 0, 1));
+  return Math.sqrt(clamp((Math.max(1, pressure) ** COMPRESSOR_EXP - 1) / (top ** COMPRESSOR_EXP - 1), 0, 1));
+}
+
+/** The pressure ratio a turbo shaft speed gives: the inverse of turboShaft. */
+export function pressureForShaft(map: EngineTorqueMap, shaft: number): number {
+  if (map.boostKind !== 'turbo') return 1;
+  const top = Math.max(...map.pressureRatio);
+  return (1 + clamp(shaft, 0, 1) ** 2 * (top ** COMPRESSOR_EXP - 1)) ** (1 / COMPRESSOR_EXP);
 }
 
 /** Manifold pressure over atmospheric, bar. A diesel's manifold sits at whatever the compressor gives. */
-export function manifoldBar(map: EngineTorqueMap, rpm: number, charge: number, spool: number): number {
-  if (map.diesel) return map.boostKind === 'none' ? 0 : (chargeLimit(map, rpm, spool) - 1) * ATM_BAR;
+export function manifoldBar(map: EngineTorqueMap, rpm: number, charge: number, pressure: number): number {
+  if (map.diesel) return (chargeLimit(map, rpm, pressure) - 1) * ATM_BAR;
   return (Math.max(0, charge) - 1) * ATM_BAR;
 }
 

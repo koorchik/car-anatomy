@@ -127,14 +127,15 @@ describe('part load follows the Willans line', () => {
     expect(map.spoolRpm).toBeLessThan(map.limitRpm);
   });
 
-  it('a shut throttle leaves a petrol engine a small manifold pressure at idle', () => {
+  it('idles a petrol engine at a small manifold pressure, part of it leaking past the shut throttle', () => {
     // The Willans line with pumping linear in the charge gives 0.12-0.2 bar absolute. Real engines idle at 0.3-0.4:
     // spark retarded for a torque reserve and residual gas take efficiency the line does not know about.
     for (const [id, map] of maps) {
       if (map.diesel) continue;
-      const absolute = manifoldBar(map, map.idleRpm, leakCharge(map, map.idleRpm), 0) + ATM_BAR;
+      const absolute = manifoldBar(map, map.idleRpm, holdCharge(map, map.idleRpm), 1) + ATM_BAR;
       expect(absolute, id).toBeGreaterThan(0.1);
       expect(absolute, id).toBeLessThan(0.45);
+      expect(leakCharge(map, map.idleRpm)).toBeLessThan(holdCharge(map, map.idleRpm));
       // The leak is choked: charge per cycle halves when the speed doubles.
       expect(leakCharge(map, map.idleRpm * 2)).toBeCloseTo(leakCharge(map, map.idleRpm) / 2, 9);
     }
