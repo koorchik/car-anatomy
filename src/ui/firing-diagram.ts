@@ -166,33 +166,42 @@ export class FiringDiagram {
     this.markers = markers;
   }
 
+  /** Plot x of a crank angle. */
+  private xAt(engine: Engine, deg: number): number {
+    const { l, r } = this.pad;
+    return l + ((((deg % engine.cycle) + engine.cycle) % engine.cycle) / engine.cycle) * (this.width - l - r);
+  }
+
+  /** A bar from one angle to another, split where it runs past the end of the cycle. */
+  private bar(engine: Engine, y: number, h: number, from: number, to: number): void {
+    const span = (((to - from) % engine.cycle) + engine.cycle) % engine.cycle;
+    if (span <= 0) return;
+    const { l, r } = this.pad;
+    const plotW = this.width - l - r;
+    const x0 = this.xAt(engine, from);
+    const x1 = x0 + (span / engine.cycle) * plotW;
+    const end = l + plotW;
+    this.ctx.fillRect(x0, y, Math.max(1.5, Math.min(x1, end) - x0), h);
+    if (x1 > end) this.ctx.fillRect(l, y, x1 - end, h);
+  }
+
   private drawMarkers(engine: Engine): void {
     const m = this.markers;
     if (!m) return;
     const ctx = this.ctx;
-    const { l, r, t, b } = this.pad;
-    const plotW = this.width - l - r;
+    const { t, b } = this.pad;
     const rowH = (this.height - t - b) / this.rows.length;
-    const x = (deg: number): number => l + ((((deg % engine.cycle) + engine.cycle) % engine.cycle) / engine.cycle) * plotW;
-    const bar = (y: number, h: number, from: number, to: number): void => {
-      const span = (((to - from) % engine.cycle) + engine.cycle) % engine.cycle;
-      if (span <= 0) return;
-      const x0 = x(from);
-      const x1 = x0 + (span / engine.cycle) * plotW;
-      const end = l + plotW;
-      ctx.fillRect(x0, y, Math.max(1.5, Math.min(x1, end) - x0), h);
-      if (x1 > end) ctx.fillRect(l, y, x1 - end, h);
-    };
-    this.rows.forEach((c, i) => {
+    const h = Math.max(2, rowH * 0.34);
+    for (let i = 0; i < this.rows.length; i++) {
+      const c = this.rows[i]!;
       const y = t + i * rowH;
-      const h = Math.max(2, rowH * 0.34);
       ctx.fillStyle = '#ff5fae';
-      if (m.inject) bar(y + rowH * 0.62 - h / 2, h, c.fire + m.inject[0], c.fire + m.inject[1]);
+      if (m.inject) this.bar(engine, y + rowH * 0.62 - h / 2, h, c.fire + m.inject[0], c.fire + m.inject[1]);
       ctx.fillStyle = '#ffb3d6';
-      if (m.pilot) bar(y + rowH * 0.62 - h / 2, h, c.fire + m.pilot[0], c.fire + m.pilot[1]);
+      if (m.pilot) this.bar(engine, y + rowH * 0.62 - h / 2, h, c.fire + m.pilot[0], c.fire + m.pilot[1]);
       ctx.fillStyle = '#ffffff';
-      for (const s of m.sparks) ctx.fillRect(x(c.fire + s) - 1, y, 2, rowH - 2);
-    });
+      for (let k = 0; k < m.sparks.length; k++) ctx.fillRect(this.xAt(engine, c.fire + m.sparks[k]!) - 1, y, 2, rowH - 2);
+    }
   }
 
   draw(theta: number): void {

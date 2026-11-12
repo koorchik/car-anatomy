@@ -105,9 +105,9 @@ export class SystemsView {
     this.live = el('div', 'visually-hidden');
     this.live.setAttribute('aria-live', 'polite');
     readout.after(this.live);
-    // The card sits above the row of view options, whose height changes as it wraps.
+    // On a narrow stage the row of view options wraps upwards; the card stays above it.
     const row = tool.parentElement;
-    if (row) new ResizeObserver(() => readout.style.setProperty('--tools-h', `${row.offsetHeight}px`)).observe(row);
+    if (row && typeof ResizeObserver !== 'undefined') new ResizeObserver(() => readout.style.setProperty('--tools-h', `${row.offsetHeight}px`)).observe(row);
 
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as unknown;
@@ -208,6 +208,8 @@ export class SystemsView {
     this.tool.title = showing ? '' : t('Шари систем видно в рентгені');
     this.tool.querySelectorAll<HTMLButtonElement>('button[data-layer]').forEach((b) => b.setAttribute('aria-pressed', String(this.on.has(b.dataset.layer as LayerId))));
     this.readout.hidden = !showing || this.on.size === 0;
+    // With three or four layers the card keeps to one line each, so it doesn't cover the engine.
+    this.readout.classList.toggle('compact', this.on.size > 2);
     for (const [id, section] of this.sections) section.root.hidden = !this.on.has(id);
   }
 
