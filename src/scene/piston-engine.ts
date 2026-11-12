@@ -95,7 +95,7 @@ function gasAppearance(phase: number, firing: boolean): { color: THREE.Color; op
 
 export class PistonEngineModel implements EngineModel {
   readonly group = new THREE.Group();
-  private readonly mounted = new THREE.Group();
+  readonly mounted = new THREE.Group();
   private readonly engine: Engine;
   private readonly materials: EngineMaterials;
   private readonly crank: THREE.Mesh;

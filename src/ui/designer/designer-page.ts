@@ -69,10 +69,10 @@ const summaryOf = (d: Design): string => {
   return parts.join(', ');
 };
 
-/** Everything about the spec that changes what the 3D model looks like. */
+/** Everything about the spec that changes what the 3D model looks like, the balance arrows included. */
 const geometryKey = (engine: Engine): string => {
   const s = engine.spec;
-  return JSON.stringify([s.layout, s.bore, s.stroke, s.rodRatio, s.compression, s.firingOrder, s.firingIntervals, s.valvetrain, s.valvesPerCyl, s.aspiration, s.valves, s.timing, s.blockMaterial, s.exhaust.groups, s.coverColor, s.tuning?.flywheelKg, s.tuning?.vibrationGain, s.tuning?.counterweightMm]);
+  return JSON.stringify([s.layout, s.bore, s.stroke, s.rodRatio, s.compression, s.firingOrder, s.firingIntervals, s.valvetrain, s.valvesPerCyl, s.aspiration, s.valves, s.timing, s.blockMaterial, s.exhaust.groups, s.coverColor, s.tuning?.flywheelKg, s.tuning?.vibrationGain, s.tuning?.counterweightMm, s.tuning?.reciprocatingKg, s.tuning?.rotatingKg, s.tuning?.balanceShafts]);
 };
 
 export class DesignerPage {

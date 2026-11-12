@@ -1,0 +1,202 @@
+/* Inertia force arrows: the switch under the stage and the card with the legend and the figures. */
+
+.forces-card {
+  position: absolute;
+  z-index: 5;
+  right: calc(var(--panel-w) + 18px);
+  top: calc(var(--top-h) + 8px);
+  width: 340px;
+  padding: 9px 12px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: rgba(14, 42, 51, 0.9);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.panel-closed .forces-card {
+  right: 18px;
+}
+
+/* The switch shares a column with "exaggerate vibration". */
+.tool-checks {
+  display: flex;
+  flex-direction: column;
+}
+
+.tool-checks .check {
+  height: 26px;
+}
+
+/* The card takes the place of the hint while it is open. */
+.forces-on .hint {
+  display: none;
+}
+
+.forces-title {
+  margin: 0 0 6px;
+  font-family: var(--display);
+  font-size: 19px;
+  line-height: 1.1;
+}
+
+.forces-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 7px;
+}
+
+.forces-layers button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: none;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.forces-layers button:hover {
+  background: rgba(236, 230, 214, 0.08);
+}
+
+.forces-layers button[aria-pressed='false'] {
+  color: var(--bone-dim);
+  text-decoration: line-through;
+}
+
+.forces-layers button[aria-pressed='false'] .forces-swatch {
+  opacity: 0.3;
+}
+
+.forces-swatch {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border-radius: 2px;
+  background: var(--swatch);
+  vertical-align: -1px;
+}
+
+.forces-layers .forces-swatch {
+  margin-right: 0;
+}
+
+.forces-swatch.arc {
+  background: none;
+  border: 2px solid var(--swatch);
+  border-bottom-color: transparent;
+  border-radius: 50%;
+}
+
+.forces-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.forces-table th,
+.forces-table td {
+  padding: 2px 0;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.forces-table thead th {
+  color: var(--bone-dim);
+  font-size: 11.5px;
+  text-align: right;
+}
+
+.forces-table th[scope='row'] {
+  text-align: left;
+}
+
+.forces-table td {
+  padding-left: 8px;
+  text-align: right;
+}
+
+.forces-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 6px 0 0;
+  color: var(--bone-dim);
+  font-size: 12px;
+}
+
+.forces-verdict {
+  margin: 7px 0 0;
+}
+
+.forces-note {
+  margin: 5px 0 0;
+  color: var(--bone-dim);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.forces-note summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.forces-note[open] summary {
+  margin-bottom: 3px;
+}
+
+.forces-show {
+  margin-top: 8px;
+}
+
+.forces-brief {
+  display: none;
+  margin: 0;
+}
+
+/* The one-time hint about parts would sit under the card. */
+.forces-on .parts-callout {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .forces-card {
+    left: 10px;
+    right: 10px;
+    top: auto;
+    bottom: calc(var(--dash-h) + var(--tools-h, 66px) + 14px);
+    width: auto;
+    padding: 6px 9px 7px;
+  }
+
+  .panel-closed .forces-card {
+    right: 10px;
+  }
+
+  .forces-title,
+  .forces-table,
+  .forces-legend,
+  .forces-note {
+    display: none;
+  }
+
+  .forces-brief {
+    display: block;
+    font-size: 12.5px;
+  }
+
+  .forces-layers {
+    margin-bottom: 4px;
+  }
+
+  .forces-verdict {
+    margin-top: 4px;
+    font-size: 12.5px;
+  }
+}

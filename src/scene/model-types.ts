@@ -19,6 +19,8 @@ export interface FrameState {
 
 export interface EngineModel {
   group: THREE.Group;
+  /** Engine frame of kinematics.ts: crank axis on Z, scene units. Shakes with the engine; overlays go here. */
+  readonly mounted: THREE.Group;
   update(state: FrameState): void;
   setView(view: ViewMode): void;
   /** 0 = assembled, 1 = fully pulled apart. */

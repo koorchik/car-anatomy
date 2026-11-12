@@ -47,7 +47,7 @@ interface RotorParts {
 
 export class RotaryEngineModel implements EngineModel {
   readonly group = new THREE.Group();
-  private readonly mounted = new THREE.Group();
+  readonly mounted = new THREE.Group();
   private readonly engine: Engine;
   private readonly materials: EngineMaterials;
   private readonly R: number;
