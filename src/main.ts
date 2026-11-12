@@ -23,6 +23,7 @@ import { LANGUAGE_GROUP_LABEL, LANGUAGE_LABELS, locale, switchLocale, type Local
 import { t } from './i18n/t.ts';
 import { Tacho } from './ui/tacho.ts';
 import { SystemsView } from './ui/systems-view.ts';
+import type { SystemsFrame } from './systems/sim.ts';
 
 type SpeedMode = 'slow' | 'readable' | 'real';
 
@@ -224,6 +225,7 @@ const systems = new SystemsView($('systems-tool'), $('systems-readout'), {
     model?.setExplode(0);
     systems.setExplode(0);
   },
+  markers: (markers) => firing.setMarkers(markers),
 });
 
 let model: EngineModel | null = null;
@@ -891,6 +893,8 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 if (reducedMotion) stage.setOrbit(false);
 
 let lastFrame = performance.now();
+/** Reused every frame: the systems step allocates nothing. */
+const systemsFrame: SystemsFrame = { theta: 0, advance: 0, rpm: 0, load: 0, throttle: 0, boost: 0, running: false, cranking: false, fuelCut: true, live: false, dt: 0, timeScale: 1 };
 let firingTextShown = '';
 let spectrumTextShown = '';
 
@@ -948,21 +952,21 @@ function frame(now: number): void {
   // The systems are worked out at idle in the demo and in slow motion: at 40 rpm oil would barely flow at all.
   const slowed = demoMode || speed === 'slow';
   const systemsRpm = slowed && shownRunning ? spec.idleRpm : snap.rpm;
-  systems.frame({
-    theta,
-    advance: Math.max(0, shownSpeed * dt),
-    rpm: systemsRpm,
-    load: shownLoad,
-    throttle: snap.throttle,
-    boost: snap.boost,
-    running: shownRunning,
-    cranking: snap.state === 'cranking',
-    fuelCut: shownCut,
-    live: !slowed,
-    demo: demoMode,
-    dt,
-    timeScale: Math.min(1, shownSpeed / Math.max(systemsRpm * 6, 1)),
-  });
+  const sf = systemsFrame;
+  sf.theta = theta;
+  sf.advance = Math.max(0, shownSpeed * dt);
+  sf.rpm = systemsRpm;
+  sf.load = shownLoad;
+  sf.throttle = snap.throttle;
+  sf.boost = snap.boost;
+  sf.running = shownRunning;
+  sf.cranking = snap.state === 'cranking';
+  sf.fuelCut = shownCut;
+  sf.live = !slowed;
+  sf.demo = demoMode;
+  sf.dt = dt;
+  sf.timeScale = Math.min(1, shownSpeed / Math.max(systemsRpm * 6, 1));
+  systems.frame(sf);
   stage.render(dt);
   updateScaleBar();
 

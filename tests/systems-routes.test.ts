@@ -175,6 +175,40 @@ describe.each(pistonIds)('coolant in %s', (id) => {
   });
 });
 
+describe.each(pistonIds)('fuel and ignition in %s', (id) => {
+  it('puts plug tips and direct injectors in the chamber and port injectors in their runners', () => {
+    const { engine, anchors } = get(id);
+    const a = anchors as PistonAnchors;
+    const plan = layerPlan('fuel', engine, a)!;
+    const offAxis = (p: THREE.Vector3, c: { alpha: number; z: number }): { off: number; along: number } => {
+      const axis = new THREE.Vector3(Math.sin((c.alpha * Math.PI) / 180), Math.cos((c.alpha * Math.PI) / 180), 0);
+      const rel = p.clone().setZ(p.z - c.z);
+      const along = rel.dot(axis);
+      return { off: rel.clone().addScaledVector(axis, -along).length(), along };
+    };
+    const nearest = (p: THREE.Vector3) => a.cylinders.reduce((best, c) => (Math.abs(c.z - p.z) < Math.abs(best.z - p.z) ? c : best), a.cylinders[0]!);
+    for (const f of plan.flashes ?? []) {
+      if (f.part !== 'spark-plug') continue;
+      const { off, along } = offAxis(f.position, nearest(f.position));
+      expect(off, `${id} plug tip in the bore`).toBeLessThan(a.bore / 2);
+      expect(Math.abs(along - a.deck), `${id} plug tip at the deck`).toBeLessThan(0.05 * a.bore);
+    }
+    for (const s of plan.pistonSprays.filter((x) => x.part === 'injector-direct')) {
+      expect(Math.abs(s.from.x), `${id} direct injector in the bore`).toBeLessThan(a.bore / 2);
+    }
+    for (const s of plan.fixedSprays.filter((x) => x.part === 'injector-port')) {
+      const runner = a.runners.reduce((best, r) => {
+        const d = Math.min(...r.points.map((p) => p.distanceTo(s.from)));
+        return d < best.d ? { r, d } : best;
+      }, { r: a.runners[0]!, d: Infinity }).r;
+      const pts = runner.points;
+      let best = Infinity;
+      for (let i = 1; i < pts.length; i++) best = Math.min(best, segmentDistance(pts[i - 1]!, pts[i]!, s.from, s.from));
+      expect(best, `${id} port injector inside its runner`).toBeLessThan(runner.r * 1.2);
+    }
+  });
+});
+
 describe.each(rotaryIds)('oil in rotary %s', (id) => {
   it('feeds the eccentric shaft, cools the rotors and meters oil into every rotor', () => {
     const { anchors } = get(id);

@@ -51,6 +51,8 @@ export interface PistonSpray {
   toX: number;
   aboveWrist: number;
   radius: number;
+  /** Event slot that drives it, instead of the channel's spray value: an injection. */
+  slot?: number;
 }
 
 /** A cone fixed to a shaft: oil flung into a rotor, fuel into a port. */
@@ -62,6 +64,29 @@ export interface FixedSpray {
   radius: number;
   space?: Space;
   overlay?: boolean;
+  /** Event slot that drives it, instead of the channel's spray value. */
+  slot?: number;
+}
+
+/** A glowing point that lights on an event: a spark at a plug tip, a glow plug, a coil firing. */
+export interface Flash {
+  part: string;
+  position: THREE.Vector3;
+  slot: number;
+  /** Size relative to the bore-sized default. */
+  size?: number;
+  color?: string;
+}
+
+/** A part turning about its own axis at a ratio of crank speed: a distributor's rotor arm turns at half. */
+export interface Spinner {
+  part: string;
+  position: THREE.Vector3;
+  axis: THREE.Vector3;
+  /** Arm length and thickness. */
+  length: number;
+  radius: number;
+  ratio: number;
 }
 
 /** A disc that slides along an axis by its channel's spray value: the thermostat's valve, a pump plunger. */
@@ -85,6 +110,12 @@ export interface LayerPlan {
   /** Oil surface: a level plane in the pan's rectangle. */
   level?: { y: number; halfW: number; zMin: number; zMax: number };
   movers?: Mover[];
+  flashes?: Flash[];
+  spinners?: Spinner[];
+  /** Number of event slots the flashes and sprays read. */
+  slots?: number;
+  /** Channels whose brightness follows an event slot: a high-pressure line lit by its injection, a lead by its spark. */
+  channelSlots?: Record<string, number>;
 }
 
 export const emptyPlan = (): LayerPlan => ({ channels: [], routes: [], parts: [], pistonSprays: [], fixedSprays: [] });

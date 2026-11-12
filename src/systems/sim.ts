@@ -4,9 +4,10 @@
 import type { Engine } from '../engine/kinematics.ts';
 import type { ValveTiming } from '../engine/spec.ts';
 import { systemsOf, type SystemsSpec } from '../engine/systems-spec.ts';
-import { airParams, airStep, newAirState, type AirParams, type AirState } from './air.ts';
-import { newOilState, oilParams, oilStep, type OilParams, type OilState } from './oil.ts';
-import { ThermalModel, thermalParams, type ThermalState } from './thermal.ts';
+import { airParams, airStep, newAirState, type AirInput, type AirParams, type AirState } from './air.ts';
+import { FuelModel, type FuelInput, type FuelState } from './fuel.ts';
+import { newOilState, oilParams, oilStep, type OilInput, type OilParams, type OilState } from './oil.ts';
+import { ThermalModel, thermalParams, type ThermalInput, type ThermalState } from './thermal.ts';
 
 export interface SystemsFrame {
   /** Shown crank angle, the one the pistons are drawn at. */
@@ -39,6 +40,7 @@ export interface SystemsState {
   oil: OilState;
   thermal: ThermalState;
   air: AirState;
+  fuel: FuelState;
   /** The frame this state was worked out for. */
   rpm: number;
   live: boolean;
@@ -51,7 +53,13 @@ export class SystemsSim {
   systems: SystemsSpec | null = null;
   /** Share of oil in what the pump draws. feature/oil-sump sets it from the slosh in the pan. */
   oilSupply = 1;
-  readonly state: SystemsState = { oil: newOilState(), thermal: null as unknown as ThermalState, air: newAirState(), rpm: 0, live: false, running: false, timeScale: 1 };
+  readonly state: SystemsState = { oil: newOilState(), thermal: null as unknown as ThermalState, air: newAirState(), fuel: null as unknown as FuelState, rpm: 0, live: false, running: false, timeScale: 1 };
+  private fuel: FuelModel | null = null;
+  // Inputs reused every frame, so stepping allocates nothing.
+  private readonly airIn: AirInput = { rpm: 0, load: 0, boost: 0, fuelCut: true };
+  private readonly thermalIn: ThermalInput = { dt: 0, rpm: 0, load: 0, running: false, fuelKw: 0 };
+  private readonly oilIn: OilInput = { rpm: 0, tempC: 90, supply: 1, running: false, live: false };
+  private readonly fuelIn: FuelInput = { theta: 0, advance: 0, rpm: 0, load: 0, pressureRatio: 1, fuelGs: 0, fuelCut: true, running: false, cranking: false, engineC: 90, sinceStart: 0 };
   private oilParams: OilParams | null = null;
   private airParams: AirParams | null = null;
   private thermal: ThermalModel | null = null;
@@ -75,6 +83,8 @@ export class SystemsSim {
       this.thermal.reset('warm');
     }
     this.state.thermal = this.thermal.state;
+    this.fuel = new FuelModel(engine, s);
+    this.state.fuel = this.fuel.state;
   }
 
   reset(kind: 'warm' | 'cold'): void {
@@ -83,15 +93,47 @@ export class SystemsSim {
 
   step(frame: SystemsFrame): SystemsState {
     const st = this.state;
-    if (!this.engine || !this.oilParams || !this.airParams || !this.thermal) return st;
+    if (!this.engine || !this.oilParams || !this.airParams || !this.thermal || !this.fuel) return st;
     const rpm = Math.max(0, frame.rpm);
     st.rpm = rpm;
     st.live = frame.live;
     st.running = frame.running;
     st.timeScale = frame.timeScale;
-    airStep(this.airParams, { rpm, load: frame.running ? frame.load : 0, boost: frame.boost, fuelCut: frame.fuelCut || !frame.running }, st.air);
-    this.thermal.step({ dt: frame.dt, rpm, load: frame.load, running: frame.running, fuelKw: st.air.fuelKw }, frame.live);
-    oilStep(this.oilParams, { rpm, tempC: st.thermal.oilC, supply: this.oilSupply, running: frame.running, live: frame.live }, st.oil);
+    const air = this.airIn;
+    air.rpm = rpm;
+    air.load = frame.running ? frame.load : 0;
+    air.boost = frame.boost;
+    air.fuelCut = frame.fuelCut || !frame.running;
+    airStep(this.airParams, air, st.air);
+    const heat = this.thermalIn;
+    heat.dt = frame.dt;
+    heat.rpm = rpm;
+    heat.load = frame.load;
+    heat.running = frame.running;
+    heat.fuelKw = st.air.fuelKw;
+    this.thermal.step(heat, frame.live);
+    const oil = this.oilIn;
+    oil.rpm = rpm;
+    oil.tempC = st.thermal.oilC;
+    oil.supply = this.oilSupply;
+    oil.running = frame.running;
+    oil.live = frame.live;
+    oilStep(this.oilParams, oil, st.oil);
+    const fuel = this.fuelIn;
+    fuel.theta = frame.theta;
+    fuel.advance = frame.advance;
+    fuel.rpm = rpm;
+    fuel.load = frame.load;
+    fuel.pressureRatio = st.air.pressureRatio;
+    fuel.fuelGs = st.air.fuelGs;
+    fuel.fuelCut = frame.fuelCut;
+    fuel.running = frame.running;
+    fuel.cranking = frame.cranking;
+    fuel.engineC = st.thermal.engineC;
+    fuel.sinceStart = st.thermal.sinceStart;
+    fuel.timing = frame.timing;
+    fuel.active = frame.active;
+    this.fuel.step(fuel);
     return st;
   }
 }

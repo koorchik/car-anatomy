@@ -41,6 +41,8 @@ describe.each(ENGINES.map((e) => e.id))('layers of %s', (id) => {
       const objects = drawn(layerObjects(model, layers, layer));
       expect(objects.length, `${id} ${layer}`).toBeLessThanOrEqual(8);
       for (const o of objects) {
+        // Spark and glow points are light, not parts: clicks pass through them.
+        if ((o as THREE.Points).isPoints) continue;
         const keys = [o.userData.part, ...((o.userData.partOf as string[] | undefined) ?? []), ...((o.userData.instanceParts as string[] | undefined) ?? [])].filter(Boolean) as string[];
         expect(keys.length, `${id} ${layer} unnamed mesh`).toBeGreaterThan(0);
         for (const key of keys) expect(PARTS[key], key).toBeDefined();

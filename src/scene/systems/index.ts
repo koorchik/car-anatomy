@@ -13,6 +13,7 @@ import { SystemLayer, type LayerStyle } from './layer.ts';
 import { mainBearingZ, oilPlan } from './routes-oil.ts';
 import { rotaryOilPlan } from './routes-rotary.ts';
 import { coolantPlan, rotaryCoolantPlan } from './routes-coolant.ts';
+import { fuelPlan, fuelSlots, rotaryFuelPlan } from './routes-fuel.ts';
 import type { LayerPlan } from './route.ts';
 
 export type LayerId = 'oil' | 'coolant' | 'fuel' | 'air';
@@ -43,6 +44,8 @@ export function layerPlan(id: LayerId, engine: Engine, anchors: EngineAnchors): 
       return anchors.kind === 'piston' ? oilPlan(engine, systems, anchors, sump) : rotaryOilPlan(engine, systems, anchors, sump);
     case 'coolant':
       return anchors.kind === 'piston' ? coolantPlan(engine, systems, anchors, sump) : rotaryCoolantPlan(engine, systems, anchors);
+    case 'fuel':
+      return anchors.kind === 'piston' ? fuelPlan(engine, systems, anchors) : rotaryFuelPlan(engine, systems, anchors);
     default:
       return null;
   }
@@ -53,6 +56,8 @@ export class SystemsLayers {
   private readonly model: EngineModel;
   private readonly anchors: EngineAnchors | null;
   private readonly built = new Map<LayerId, Built>();
+  /** The same entries as a plain array, walked every frame without an iterator. */
+  private readonly builtList: Array<Built & { id: LayerId }> = [];
   private readonly wanted = new Set<LayerId>();
   private view: ViewMode = 'xray';
   private exploded = false;
@@ -111,17 +116,19 @@ export class SystemsLayers {
     if (!plan) return;
     const layer = new SystemLayer(this.engine, this.anchors, plan, LAYER_STYLES[id]);
     layer.addTo(this.model.mounted);
-    const feed = id === 'oil' ? oilFeed(this.engine, this.anchors, layer) : id === 'coolant' ? coolantFeed(this.engine, this.anchors, layer) : (): void => {};
+    const feed = id === 'oil' ? oilFeed(this.engine, this.anchors, layer) : id === 'coolant' ? coolantFeed(this.engine, this.anchors, layer) : id === 'fuel' ? fuelFeed(this.engine, layer) : (): void => {};
     this.built.set(id, { layer, feed });
+    this.builtList.push({ id, layer, feed });
   }
 
   /** Every frame, after the model has moved. */
   update(state: SystemsState, theta: number, dt: number): void {
     if (!this.showing) return;
-    for (const [id, { layer, feed }] of this.built) {
+    for (let i = 0; i < this.builtList.length; i++) {
+      const { id, layer, feed } = this.builtList[i]!;
       if (!this.wanted.has(id)) continue;
       feed(state);
-      layer.update(dt, state.timeScale, this.reducedMotion);
+      layer.update(dt, state.timeScale, this.reducedMotion, theta);
       layer.updatePistonSprays(theta);
     }
   }
@@ -129,8 +136,39 @@ export class SystemsLayers {
   dispose(): void {
     for (const { layer } of this.built.values()) layer.dispose();
     this.built.clear();
+    this.builtList.length = 0;
     this.model.setSystemsLook?.({ intakeGlass: false, ownSparks: true });
   }
+}
+
+/** Fuel: injections, pilots, sparks and glow into the event slots; the lines run with the fuel flow. */
+function fuelFeed(engine: Engine, layer: SystemLayer): (state: SystemsState) => void {
+  const slots = fuelSlots(engine);
+  const sparks = engine.isRotary ? engine.banks.length * 2 : engine.cylinders.length;
+  const ch = (id: string): number => layer.channel(id);
+  const flowing = [ch('feed'), ch('rail'), ch('hp-rail'), ch('spray')];
+  const hp = ch('hp-rail');
+  const v = layer.values;
+  const ev = layer.events;
+  return (state) => {
+    const f = state.fuel;
+    for (let i = 0; i < sparks; i++) ev[slots.spark(i)] = f.sparks[i]!;
+    for (let i = 0; i < engine.cylinders.length; i++) {
+      ev[slots.inject(i)] = f.injecting[i]! || f.continuous;
+      ev[slots.pilot(i)] = f.piloting[i]!;
+    }
+    ev[slots.glow] = f.glow ? 1 : 0;
+    ev[slots.continuous] = f.continuous;
+    // Petrol is 0.74 g per millilitre; the lines are about 8 mm across.
+    const litresPerMin = (state.air.fuelGs / 0.74) * 0.06;
+    for (const i of flowing) {
+      if (i < 0) continue;
+      const u = speedOf(litresPerMin, 0.008);
+      v.speed[i] = u;
+      v.level[i] = state.running && litresPerMin > 0 ? 0.35 + 0.65 * Math.min(1, u / 0.5) : 0.12;
+    }
+    if (hp >= 0) v.spray[hp] = f.plunger;
+  };
 }
 
 const COOL = new THREE.Color('#3fa9f5');

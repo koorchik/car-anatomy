@@ -359,8 +359,8 @@ export class PistonEngineModel implements EngineModel {
       frame.add(cover);
       this.shellMeshes.push({ mesh: cover, solid: m.cover, glass: m.coverGlass });
 
-      // Coil packs, only on the assembled look.
-      if (e.spec.fuel !== 'diesel') {
+      // Coil packs, only on the assembled look, and only where each plug has its own coil.
+      if (e.spec.fuel !== 'diesel' && (e.spec.systems?.ignition ?? 'coil-on-plug') === 'coil-on-plug') {
         const coilGeo = merge(
           zs.map((z) => {
             const c = extrude(roundedRect(-b * 0.2, 0, b * 0.2, b * 0.07, b * 0.03), b * 0.18, { thickness: 0.008, segments: 1 });

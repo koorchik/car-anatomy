@@ -27,6 +27,14 @@ const label = (engine: Engine, c: Cylinder): string => {
   return `${c.bank + 1}${'abc'[face]}`;
 };
 
+/** Fuel and spark events of each chamber, in degrees of its own cycle from firing TDC, drawn over its row. */
+export interface CycleMarkers {
+  inject: [number, number] | null;
+  /** A diesel's pilot, or a second direct-injection shot. */
+  pilot: [number, number] | null;
+  sparks: number[];
+}
+
 export class FiringDiagram {
   readonly element: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -38,6 +46,7 @@ export class FiringDiagram {
   private dpr = 1;
   private hover: { x: number; y: number } | null = null;
   private readonly tooltip: HTMLElement;
+  private markers: CycleMarkers | null = null;
 
   constructor(tooltip: HTMLElement) {
     this.tooltip = tooltip;
@@ -152,6 +161,40 @@ export class FiringDiagram {
     this.tooltip.style.top = `${clientY - 12}px`;
   }
 
+  /** Shows the fuel layer's injection windows and sparks on every row; null takes them off. */
+  setMarkers(markers: CycleMarkers | null): void {
+    this.markers = markers;
+  }
+
+  private drawMarkers(engine: Engine): void {
+    const m = this.markers;
+    if (!m) return;
+    const ctx = this.ctx;
+    const { l, r, t, b } = this.pad;
+    const plotW = this.width - l - r;
+    const rowH = (this.height - t - b) / this.rows.length;
+    const x = (deg: number): number => l + ((((deg % engine.cycle) + engine.cycle) % engine.cycle) / engine.cycle) * plotW;
+    const bar = (y: number, h: number, from: number, to: number): void => {
+      const span = (((to - from) % engine.cycle) + engine.cycle) % engine.cycle;
+      if (span <= 0) return;
+      const x0 = x(from);
+      const x1 = x0 + (span / engine.cycle) * plotW;
+      const end = l + plotW;
+      ctx.fillRect(x0, y, Math.max(1.5, Math.min(x1, end) - x0), h);
+      if (x1 > end) ctx.fillRect(l, y, x1 - end, h);
+    };
+    this.rows.forEach((c, i) => {
+      const y = t + i * rowH;
+      const h = Math.max(2, rowH * 0.34);
+      ctx.fillStyle = '#ff5fae';
+      if (m.inject) bar(y + rowH * 0.62 - h / 2, h, c.fire + m.inject[0], c.fire + m.inject[1]);
+      ctx.fillStyle = '#ffb3d6';
+      if (m.pilot) bar(y + rowH * 0.62 - h / 2, h, c.fire + m.pilot[0], c.fire + m.pilot[1]);
+      ctx.fillStyle = '#ffffff';
+      for (const s of m.sparks) ctx.fillRect(x(c.fire + s) - 1, y, 2, rowH - 2);
+    });
+  }
+
   draw(theta: number): void {
     const engine = this.engine;
     if (!engine || this.width <= 0) return;
@@ -161,6 +204,7 @@ export class FiringDiagram {
     ctx.clearRect(0, 0, this.element.width, this.element.height);
     if (this.background) ctx.drawImage(this.background, 0, 0);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.drawMarkers(engine);
     const { l, r, t, b } = this.pad;
     const plotW = this.width - l - r;
     const x = l + ((((theta % engine.cycle) + engine.cycle) % engine.cycle) / engine.cycle) * plotW;

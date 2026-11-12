@@ -5,7 +5,8 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { pistonPin, type Engine } from '../../engine/kinematics.ts';
+import { DEG, pistonPin, type Engine } from '../../engine/kinematics.ts';
+import { glowTexture } from '../materials.ts';
 import type { EngineAnchors } from './anchors.ts';
 import { flowMaterial, MAX_CHANNELS, type FlowMaterial } from './flow-material.ts';
 import { pathLength, tightPath, type LayerPlan, type PartMaterial, type PartPlacement, type Space } from './route.ts';
@@ -107,10 +108,24 @@ export class SystemLayer {
   private readonly phase: Float32Array;
   private sprays: THREE.InstancedMesh | null = null;
   private readonly sprayChannel: Int32Array;
+  private readonly spraySlot: Int32Array;
+  /** Event inputs, set by the layer's feed each frame (1 = happened this frame), and their fading display. */
+  readonly events: Float32Array;
+  private readonly shown: Float32Array;
+  private flashPoints: THREE.Points | null = null;
+  private flashColors: THREE.BufferAttribute | null = null;
+  private readonly flashSlots: Int32Array;
+  private readonly flashBase: Float32Array;
+  private spinners: THREE.InstancedMesh | null = null;
+  private readonly spinnerData: Array<{ position: THREE.Vector3; axis: THREE.Vector3; ratio: number; length: number; radius: number }> = [];
+  private readonly spinQuat = new THREE.Quaternion();
+  /** Pairs of channel index and event slot. */
+  private readonly slotChannels: Int32Array;
+  private readonly baseQuat = new THREE.Quaternion();
   private readonly sprayCylinder: Int32Array;
   private readonly sprayFrom: Float32Array;
   private readonly sprayTo: Float32Array;
-  private readonly fixedSprays: Array<{ mesh: THREE.InstancedMesh; channels: Int32Array }> = [];
+  private readonly fixedSprays: Array<{ mesh: THREE.InstancedMesh; channels: Int32Array; slots: Int32Array }> = [];
   private level: THREE.Mesh | null = null;
   private movers: THREE.InstancedMesh | null = null;
   private readonly moverData: Array<{ position: THREE.Vector3; axis: THREE.Vector3; travel: number; channel: number }> = [];
@@ -131,6 +146,14 @@ export class SystemLayer {
     this.channels = plan.channels.slice(0, MAX_CHANNELS);
     const n = this.channels.length;
     this.values = { speed: new Float32Array(n), level: new Float32Array(n), heat: new Float32Array(n), spray: new Float32Array(n) };
+    this.events = new Float32Array(plan.slots ?? 0);
+    this.shown = new Float32Array(plan.slots ?? 0);
+    const linked = Object.entries(plan.channelSlots ?? {}).filter(([id]) => this.channels.includes(id));
+    this.slotChannels = new Int32Array(linked.length * 2);
+    linked.forEach(([id, slot], i) => {
+      this.slotChannels[i * 2] = this.channels.indexOf(id);
+      this.slotChannels[i * 2 + 1] = slot;
+    });
     this.baseColor = new THREE.Color(style.color);
     this.phase = new Float32Array(n);
     this.root.userData.noFit = true;
@@ -214,6 +237,7 @@ export class SystemLayer {
     // Sprays that follow a piston, and sprays fixed to the engine or a shaft.
     const count = plan.pistonSprays.length;
     this.sprayChannel = new Int32Array(count);
+    this.spraySlot = new Int32Array(count).fill(-1);
     this.sprayCylinder = new Int32Array(count);
     this.sprayFrom = new Float32Array(count * 2);
     this.sprayTo = new Float32Array(count * 2);
@@ -227,6 +251,7 @@ export class SystemLayer {
       mesh.userData.instanceParts = plan.pistonSprays.map((s) => s.part);
       plan.pistonSprays.forEach((s, i) => {
         this.sprayChannel[i] = this.channels.indexOf(s.channel);
+        this.spraySlot[i] = s.slot ?? -1;
         this.sprayCylinder[i] = s.cylinder;
         this.sprayFrom[i * 2] = s.from.x;
         this.sprayFrom[i * 2 + 1] = s.from.y;
@@ -259,8 +284,10 @@ export class SystemLayer {
         mesh.userData.overlay = true;
       }
       const channels = new Int32Array(list.length);
+      const slots = new Int32Array(list.length).fill(-1);
       list.forEach((s, i) => {
         channels[i] = this.channels.indexOf(s.channel);
+        slots[i] = s.slot ?? -1;
         const dir = this.scratchA.subVectors(s.to, s.from);
         const len = dir.length();
         this.scratchQuat.setFromUnitVectors(UP, dir.normalize());
@@ -268,8 +295,53 @@ export class SystemLayer {
         mesh.setMatrixAt(i, this.scratchMatrix);
         mesh.setColorAt(i, this.scratchColor.setRGB(0, 0, 0));
       });
-      this.fixedSprays.push({ mesh, channels });
+      this.fixedSprays.push({ mesh, channels, slots });
       this.attach(mesh, list[0]!.space ?? 'mounted', shaft);
+    }
+
+    // Flashes: one Points object; each point's colour is its brightness, added over the scene.
+    const flashes = plan.flashes ?? [];
+    this.flashSlots = new Int32Array(flashes.length);
+    this.flashBase = new Float32Array(flashes.length * 3);
+    if (flashes.length) {
+      const positions = new Float32Array(flashes.length * 3);
+      flashes.forEach((f, i) => {
+        positions[i * 3] = f.position.x;
+        positions[i * 3 + 1] = f.position.y;
+        positions[i * 3 + 2] = f.position.z;
+        this.flashSlots[i] = f.slot;
+        const c = new THREE.Color(f.color ?? '#cfe6ff');
+        this.flashBase[i * 3] = c.r;
+        this.flashBase[i * 3 + 1] = c.g;
+        this.flashBase[i * 3 + 2] = c.b;
+      });
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      this.flashColors = new THREE.BufferAttribute(new Float32Array(flashes.length * 3), 3);
+      this.flashColors.setUsage(THREE.DynamicDrawUsage);
+      geo.setAttribute('color', this.flashColors);
+      const size = (anchors.kind === 'piston' ? anchors.bore : anchors.R) * 0.55 * (flashes[0]!.size ?? 1);
+      const material = new THREE.PointsMaterial({ size, map: glowTexture(), vertexColors: true, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
+      this.materials.push(material);
+      this.flashPoints = new THREE.Points(geo, material);
+      this.flashPoints.frustumCulled = false;
+      this.flashPoints.renderOrder = 22;
+      // Light, not a part: clicks pass through it.
+      this.flashPoints.raycast = () => {};
+      this.root.add(this.flashPoints);
+    }
+
+    if (plan.spinners?.length) {
+      const arm = new THREE.BoxGeometry(1, 1, 1);
+      arm.translate(0.5, 0, 0);
+      const material = new THREE.MeshStandardMaterial({ color: '#d9d2c4', roughness: 0.5, metalness: 0.3 });
+      this.materials.push(material);
+      const mesh = new THREE.InstancedMesh(arm, material, plan.spinners.length);
+      mesh.frustumCulled = false;
+      mesh.userData.instanceParts = plan.spinners.map((sp) => sp.part);
+      for (const sp of plan.spinners) this.spinnerData.push({ position: sp.position.clone(), axis: sp.axis.clone().normalize(), ratio: sp.ratio, length: sp.length, radius: sp.radius });
+      this.spinners = mesh;
+      this.root.add(mesh);
     }
 
     if (plan.movers?.length) {
@@ -348,8 +420,34 @@ export class SystemLayer {
    * Moves the dashes. Speeds are physical (m/s); on screen they slow with the square root of the slow motion,
    * so flows stay readable while the crank crawls, and level off at the top so fast flows don't flicker.
    */
-  update(dt: number, timeScale: number, reducedMotion: boolean): void {
+  update(dt: number, timeScale: number, reducedMotion: boolean, theta = 0): void {
     const v = this.values;
+    // Events light at once and fade over about 40 ms of real time, so a spark is seen even at full speed.
+    const fade = Math.exp(-dt / 0.04);
+    for (let i = 0; i < this.events.length; i++) this.shown[i] = Math.max(this.events[i]!, this.shown[i]! * fade);
+    for (let i = 0; i < this.slotChannels.length; i += 2) v.level[this.slotChannels[i]!] = 0.15 + 0.85 * this.shown[this.slotChannels[i + 1]!]!;
+    if (this.flashPoints && this.flashColors) {
+      const colors = this.flashColors.array as Float32Array;
+      for (let i = 0; i < this.flashSlots.length; i++) {
+        const level = this.shown[this.flashSlots[i]!] ?? 0;
+        colors[i * 3] = this.flashBase[i * 3]! * level;
+        colors[i * 3 + 1] = this.flashBase[i * 3 + 1]! * level;
+        colors[i * 3 + 2] = this.flashBase[i * 3 + 2]! * level;
+      }
+      this.flashColors.needsUpdate = true;
+    }
+    if (this.spinners) {
+      for (let i = 0; i < this.spinnerData.length; i++) {
+        const sp = this.spinnerData[i]!;
+        this.baseQuat.setFromUnitVectors(UP, sp.axis);
+        // The arm is built along X and turns about Y, which the base turn points along the part's axis.
+        this.spinQuat.setFromAxisAngle(UP, -theta * sp.ratio * DEG);
+        this.scratchQuat.multiplyQuaternions(this.baseQuat, this.spinQuat);
+        this.scratchMatrix.compose(sp.position, this.scratchQuat, this.scratchScale.set(sp.length, sp.radius, sp.radius));
+        this.spinners.setMatrixAt(i, this.scratchMatrix);
+      }
+      this.spinners.instanceMatrix.needsUpdate = true;
+    }
     const scale = Math.sqrt(Math.max(0, Math.min(1, timeScale)));
     for (let i = 0; i < this.channels.length; i++) {
       const u = v.speed[i]! * scale;
@@ -374,9 +472,9 @@ export class SystemLayer {
       }
       this.movers.instanceMatrix.needsUpdate = true;
     }
-    for (const { mesh, channels } of this.fixedSprays) {
+    for (const { mesh, channels, slots } of this.fixedSprays) {
       for (let i = 0; i < channels.length; i++) {
-        const spray = channels[i]! >= 0 ? v.spray[channels[i]!]! : 0;
+        const spray = slots[i]! >= 0 ? this.shown[slots[i]!]! : channels[i]! >= 0 ? v.spray[channels[i]!]! : 0;
         mesh.setColorAt(i, this.scratchColor.copy(this.baseColor).multiplyScalar(0.8 * spray));
       }
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -400,7 +498,7 @@ export class SystemLayer {
       this.scratchQuat.setFromUnitVectors(UP, dir.multiplyScalar(1 / Math.max(len, 1e-6)));
       this.scratchMatrix.compose(from, this.scratchQuat, this.scratchScale.set(1, len, 1));
       mesh.setMatrixAt(i, this.scratchMatrix);
-      const open = this.sprayChannel[i]! >= 0 ? this.values.spray[this.sprayChannel[i]!]! : 0;
+      const open = this.spraySlot[i]! >= 0 ? this.shown[this.spraySlot[i]!]! : this.sprayChannel[i]! >= 0 ? this.values.spray[this.sprayChannel[i]!]! : 0;
       mesh.setColorAt(i, this.scratchColor.copy(color).multiplyScalar(0.9 * open));
     }
     mesh.instanceMatrix.needsUpdate = true;

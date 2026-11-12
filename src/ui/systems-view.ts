@@ -2,6 +2,7 @@
 // It owns the systems model and the layers of the model on stage. Layers show only in the X-ray of an assembled engine.
 
 import type { Engine } from '../engine/kinematics.ts';
+import { isDieselSystem } from '../engine/systems-spec.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import type { EngineModel, ViewMode } from '../scene/model-types.ts';
@@ -9,23 +10,30 @@ import { LAYER_STYLES, SystemsLayers, type LayerId } from '../scene/systems/inde
 import { RELIEF_BAR, RELIEF_BAR_HEAVY } from '../systems/oil.ts';
 import { SystemsSim, type SystemsFrame, type SystemsState } from '../systems/sim.ts';
 import { WARMUP_SPEED } from '../systems/thermal.ts';
+import type { CycleMarkers } from './firing-diagram.ts';
 
 export interface SystemsHost {
   /** Asked when a layer is switched on outside the X-ray. */
   wantXray(): void;
   /** Asked when a layer is switched on while the engine is pulled apart. */
   wantAssembled(): void;
+  /** Injection and spark marks for the cycle diagram while the fuel layer shows; null clears them. */
+  markers?(markers: CycleMarkers | null): void;
 }
 
 /** Layers in the order of their keys, 4 to 7. */
 const LAYERS: Array<{ id: LayerId; label: string; title: string }> = [
   { id: 'oil', label: t('Олива'), title: t('Шлях оливи: насос, фільтр, магістраль, підшипники, головка') },
   { id: 'coolant', label: t('Охолодження'), title: t('Охолодження: насос, сорочка, термостат, патрубки радіатора') },
+  { id: 'fuel', label: t('Паливо'), title: t('Паливо і запалювання: форсунки, свічки, котушки') },
 ];
 
 const STORAGE_KEY = 'systems-layers';
 /** Top of the oil gauge, bar. */
 const GAUGE_BAR = 7;
+
+/** Degrees before top dead centre, or after it when negative. */
+const beforeTdc = (deg: number): string => (deg >= 0 ? t('{deg}° до ВМТ', { deg: Math.round(deg) }) : t('{deg}° після ВМТ', { deg: Math.round(-deg) }));
 
 const fmt = (value: number, digits = 1): string => value.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
@@ -177,6 +185,7 @@ export class SystemsView {
       this.on.delete(id);
     }
     this.layers?.set(id, next);
+    if (id === 'fuel' && !next) this.host.markers?.(null);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([...this.on]));
     } catch {
@@ -188,11 +197,48 @@ export class SystemsView {
 
   private syncButtons(): void {
     const showing = this.view === 'xray' && this.explode <= 0.01;
+    if (!showing || !this.on.has('fuel')) this.host.markers?.(null);
     this.tool.classList.toggle('dimmed', !showing);
     this.tool.title = showing ? '' : t('Шари систем видно в рентгені');
     this.tool.querySelectorAll<HTMLButtonElement>('button[data-layer]').forEach((b) => b.setAttribute('aria-pressed', String(this.on.has(b.dataset.layer as LayerId))));
     this.readout.hidden = !showing || this.on.size === 0;
     for (const [id, section] of this.sections) section.root.hidden = !this.on.has(id);
+  }
+
+  private renderFuel(s: SystemsState, section: Section): void {
+    const f = s.fuel;
+    const engine = this.sim.engine;
+    const systems = this.sim.systems;
+    if (!engine || !systems) return;
+    const system = systems.fuelSystem;
+    const diesel = isDieselSystem(system);
+    const ms = fmt(f.pulseMs, 1);
+    let first: string;
+    if (system === 'carburettor') first = t('Карбюратор: потік повітря підхоплює паливо в дифузорі');
+    else if (system === 'mechanical') first = t('Безперервне упорскування: форсунки бризкають весь час');
+    else if (diesel) {
+      const btdc = (((engine.cycle - f.injectStart) % engine.cycle) + engine.cycle) % engine.cycle;
+      const main = t('основне упорскування {a}', { a: beforeTdc(btdc > engine.cycle / 2 ? btdc - engine.cycle : btdc) });
+      first = f.railBar !== null ? `${t('Тиск у рампі {p} бар', { p: Math.round(f.railBar) })} · ${main}` : main.charAt(0).toLocaleUpperCase() + main.slice(1);
+      if (f.pilotEnd > f.pilotStart) first += ` · ${t('пілотне перед ним')}`;
+    } else if (system === 'port') first = t('Упорскування {ms} мс, закінчується за {deg}° до відкриття впускного клапана', { ms, deg: 20 });
+    else if (system === 'direct') first = `${t('Тиск {p} бар', { p: Math.round(f.railBar ?? 0) })} · ${t('упорскування на такті впуску, {ms} мс', { ms })}`;
+    else first = `${t('У канали {share} %, решта в циліндри', { share: Math.round(f.portShare * 100) })} · ${t('Тиск {p} бар', { p: Math.round(f.railBar ?? 0) })}`;
+    section.lines[0]!.textContent = s.running ? first : t('Двигун стоїть: палива немає');
+    const second = diesel
+      ? f.glow
+        ? t('Свічки розжарювання ввімкнено')
+        : ''
+      : engine.isRotary
+        ? t('Провідна свічка {a}, відстаюча {b}', { a: beforeTdc(f.advance), b: beforeTdc(f.trailingAdvance) })
+        : t('Іскра {a}', { a: beforeTdc(f.advance) });
+    section.flags.textContent = second;
+    section.flags.hidden = !second;
+    section.warning.hidden = true;
+    const cycle = engine.cycle;
+    const window = (a: number, b: number): [number, number] | null => (((b - a) % cycle) + cycle) % cycle > 0 ? [a, b] : null;
+    const sparks = diesel ? [] : engine.isRotary ? [cycle - f.advance, cycle - f.trailingAdvance] : systems.ignition === 'wasted-spark' ? [cycle - f.advance, 360 - f.advance] : [cycle - f.advance];
+    this.host.markers?.(s.running ? { inject: window(f.injectStart, f.injectEnd), pilot: window(f.pilotStart, f.pilotEnd), sparks } : { inject: null, pilot: null, sparks: [] });
   }
 
   frame(frame: SystemsFrame): void {
@@ -242,6 +288,8 @@ export class SystemsView {
       coolant.warning.textContent = liquid && th.engineC > 112 ? t('Перегрів') : '';
       coolant.warning.hidden = !(liquid && th.engineC > 112);
     }
+    const fuel = this.sections.get('fuel');
+    if (fuel && this.on.has('fuel')) this.renderFuel(s, fuel);
     const announce = s.oil.warning ? t('Тиск оливи майже нуль') : s.oil.reliefOpen && this.on.has('oil') ? t('Редукційний клапан відкрився') : '';
     if (announce !== this.lastAnnounce) {
       this.lastAnnounce = announce;

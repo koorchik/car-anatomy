@@ -181,4 +181,78 @@ export const SYSTEMS_EN: Record<string, string> = {
   'мале коло: радіатор закритий': 'bypass circuit: radiator shut',
   'термостат відкривається: частина йде в радіатор': 'thermostat opening: some goes to the radiator',
   'Перегрів': 'Overheating',
+  // Fuel and ignition layer
+  'Паливна магістраль': 'Fuel line',
+  'Трубка від бака. Електричний насос у баку гонить паливо до двигуна, а надлишок повертається назад. Бака тут не намальовано.':
+    'The line from the tank. An electric pump in the tank sends fuel to the engine, and what is not used goes back. The tank is not drawn.',
+  'Паливна рампа': 'Fuel rail',
+  'Труба, з якої паливо під тиском розходиться по форсунках. Для впускних каналів тиск 3–4 бар, для безпосереднього упорскування до 200 бар, у дизельному Common Rail до 1600–2000 бар.':
+    'A pipe that holds fuel under pressure and feeds every injector. About 3-4 bar for port injection, up to 200 bar for direct injection, 1,600-2,000 bar in a diesel common rail.',
+  'Форсунка у впускному каналі': 'Port injector',
+  'Електромагнітний клапан, що бризкає паливо в канал на закритий впускний клапан. Суміш встигає випаруватись, поки клапан відкриється. Блок керування рахує, скільки мілісекунд тримати форсунку відкритою.':
+    'A solenoid valve that sprays fuel into the port onto the closed intake valve. The mixture has time to evaporate before the valve opens. The control unit works out how many milliseconds to hold it open.',
+  'Форсунка безпосереднього упорскування': 'Direct injector',
+  'Бризкає паливо прямо в циліндр під тиском до 200 бар, найчастіше на такті впуску. Випаровуючись у циліндрі, паливо охолоджує заряд, тож можна більше стиснення без детонації.':
+    'Sprays fuel straight into the cylinder at up to 200 bar, mostly during the intake stroke. Evaporating in the cylinder, the fuel cools the charge, which allows more compression without knock.',
+  'Паливний насос високого тиску': 'High-pressure fuel pump',
+  'Плунжерний насос на кінці розподільчого вала. Кулачок штовхає плунжер, і кожен його хід дотискає паливо в рампу безпосереднього упорскування.':
+    'A plunger pump on the end of a camshaft. A cam lobe pushes the plunger, and each stroke tops up the pressure in the direct-injection rail.',
+  'Карбюратор': 'Carburetor',
+  'Повітря прискорюється у звуженні, дифузорі, і розрідження там висмоктує паливо з поплавкової камери. Що більше повітря, то більше палива: суміш складається сама, без електроніки.':
+    'Air speeds up in a narrowing, the venturi, and the low pressure there draws fuel from the float bowl. More air brings more fuel: the mixture makes itself, without electronics.',
+  'Механічний паливний насос': 'Mechanical fuel pump',
+  'Діафрагмовий насос на блоці, який приводить ексцентрик розподільчого вала. Він подає паливо в поплавкову камеру карбюратора під невеликим тиском.':
+    'A diaphragm pump on the block, worked by an eccentric on the camshaft. It feeds fuel to the carburetor float bowl at low pressure.',
+  'Дозатор механічного упорскування': 'Mechanical fuel distributor',
+  'У системах на зразок Bosch K-Jetronic заслінка в потоці повітря рухає плунжер дозатора, і він ділить паливо між форсунками. Форсунки бризкають безперервно, а не імпульсами.':
+    'In systems like the Bosch K-Jetronic, a plate in the airflow moves the distributor plunger, which shares the fuel among the injectors. The injectors spray all the time, not in pulses.',
+  'Дизельна форсунка': 'Diesel injector',
+  'Впорскує паливо в гаряче стиснене повітря біля верхньої мертвої точки, і воно спалахує саме. Сучасна форсунка робить кілька коротких упорскувань за цикл: пілотне згладжує стукіт, основне дає роботу.':
+    'Injects fuel into the hot compressed air near top dead centre, where it lights by itself. A modern injector makes several short shots per cycle: the pilot softens the knock, the main one does the work.',
+  'Насос-форсунка': 'Unit injector',
+  'Насос і форсунка в одному корпусі, по одній на циліндр. Окремий кулачок розподільчого вала через коромисло тисне на плунжер і створює тиск понад 2000 бар просто над камерою.':
+    'Pump and injector in one body, one per cylinder. Its own cam lobe presses the plunger through a rocker and makes over 2,000 bar right above the chamber.',
+  'Насос високого тиску дизеля': 'Diesel injection pump',
+  'Рядний насос має по плунжеру на циліндр і окрему трубку до кожної форсунки; насос Common Rail тримає тиск у спільній рампі. Приводить його шестерня або ремінь ГРМ.':
+    'An inline pump has a plunger per cylinder and its own line to each injector; a common-rail pump keeps the pressure in a shared rail. A gear or the timing belt drives it.',
+  'Трубка високого тиску': 'High-pressure line',
+  'Товстостінна сталева трубка від насоса до форсунки. На рядному насосі вони однакової довжини, щоб імпульс тиску приходив до кожної форсунки за той самий час.':
+    'A thick-walled steel line from the pump to an injector. On an inline pump they are of equal length so the pressure pulse reaches every injector in the same time.',
+  'Форкамера': 'Prechamber',
+  'Маленька камера в головці над циліндром. Паливо впорскується в неї, займається там і гарячим струменем вилітає в циліндр. Такий дизель м’якший, але гірше заводиться на холодну і витрачає більше.':
+    'A small chamber in the head above the cylinder. Fuel is injected into it, lights there and bursts into the cylinder as a hot jet. Such a diesel is smoother, but starts worse when cold and uses more fuel.',
+  'Свічка розжарювання': 'Glow plug',
+  'Тонкий стрижень, що розжарюється в камері на холодному пуску дизеля. Поки стиснення ще не гріє повітря досить, він допомагає паливу спалахнути.':
+    'A thin rod that glows hot in the chamber when a diesel starts from cold. Until compression heats the air enough, it helps the fuel light.',
+  'Свічка запалювання': 'Spark plug',
+  'Іскра між її електродами підпалює суміш трохи раніше за верхню мертву точку: полум’ю потрібен час, щоб тиск піднявся саме тоді, коли поршень почне йти вниз.':
+    'A spark between its electrodes lights the mixture a little before top dead centre: the flame needs time, so the pressure rises just as the piston starts down.',
+  'Розподільник запалювання': 'Distributor',
+  'Обертається вдвічі повільніше за колінвал і по черзі з’єднує одну котушку з дротом кожної свічки. Бігунок під кришкою вказує на того, хто зараз отримає іскру.':
+    'Turns at half crank speed and connects one coil in turn to each plug lead. The rotor arm under the cap points at the plug that gets the spark next.',
+  'Високовольтний дріт': 'Ignition lead',
+  'Несе десятки тисяч вольт від котушки чи розподільника до свічки.':
+    'Carries tens of thousands of volts from the coil or distributor to the plug.',
+  'Провідна свічка': 'Leading plug',
+  'Нижня свічка роторного двигуна. Вона спалахує першою і запалює суміш у передній за ходом ротора частині камери.':
+    'The lower plug of a rotary engine. It fires first and lights the mixture in the part of the chamber ahead in the rotor’s travel.',
+  'Відстаюча свічка': 'Trailing plug',
+  'Верхня свічка роторного двигуна. Вона іскрить на 10–15° пізніше за провідну і допалює суміш у задній частині довгої камери.':
+    'The upper plug of a rotary engine. It fires 10-15° after the leading one and burns the mixture at the rear of the long chamber.',
+  'Паливо і запалювання: форсунки, свічки, котушки': 'Fuel and ignition: injectors, plugs, coils',
+  '{deg}° до ВМТ': '{deg}° before TDC',
+  '{deg}° після ВМТ': '{deg}° after TDC',
+  'Карбюратор: потік повітря підхоплює паливо в дифузорі': 'Carburetor: the airflow draws fuel in the venturi',
+  'Безперервне упорскування: форсунки бризкають весь час': 'Continuous injection: the injectors spray all the time',
+  'основне упорскування {a}': 'main injection {a}',
+  'Тиск у рампі {p} бар': 'Rail pressure {p} bar',
+  'пілотне перед ним': 'a pilot before it',
+  'Упорскування {ms} мс, закінчується за {deg}° до відкриття впускного клапана': 'Injection {ms} ms, ending {deg}° before the intake valve opens',
+  'Тиск {p} бар': 'Pressure {p} bar',
+  'упорскування на такті впуску, {ms} мс': 'injection on the intake stroke, {ms} ms',
+  'У канали {share} %, решта в циліндри': 'Ports {share} %, the rest into the cylinders',
+  'Двигун стоїть: палива немає': 'Engine stopped: no fuel',
+  'Свічки розжарювання ввімкнено': 'Glow plugs on',
+  'Провідна свічка {a}, відстаюча {b}': 'Leading plug {a}, trailing {b}',
+  'Іскра {a}': 'Spark {a}',
 };
