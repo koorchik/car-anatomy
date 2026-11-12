@@ -7,6 +7,7 @@ import type { Article, EngineSpec } from '../engine/spec.ts';
 import { resolveDesign } from './constraints.ts';
 import { axisAngle } from './crank.ts';
 import { DEFAULT_DESIGN, type CrankThrow, type Design } from './design.ts';
+import type { SYSTEM_KEYS } from './systems.ts';
 import { factoryInputs, designToSpec } from './to-spec.ts';
 
 export interface CatalogueEntry {
@@ -24,6 +25,8 @@ export interface CatalogueEntry {
   factory: { idleRpm: number; revTimeS: number; rough: number };
   /** Everything that differs from the designer's defaults. */
   design: Partial<Design>;
+  /** Hardware of this engine alone for the systems layers. Variants don't inherit it: each has its own or the derived one. */
+  systems?: SystemFacts;
   article: Article;
   /** Short note when a figure could not be confirmed against a primary source. */
   verifyNote?: string;
@@ -55,7 +58,10 @@ export interface EngineVariant extends EngineFacts {
   factory: CatalogueEntry['factory'];
   firing?: CatalogueEntry['firing'];
   design: Partial<Design>;
+  systems?: SystemFacts;
 }
+
+export type SystemFacts = Partial<Pick<Design, (typeof SYSTEM_KEYS)[number]>>;
 
 export interface PageVariants {
   base: EngineFacts;
@@ -76,7 +82,7 @@ function throwsForFiring(d: Design, order: number[], intervals: number[]): Crank
 export function catalogueDesign(entry: CatalogueEntry, variant?: EngineVariant): Design {
   const name = variant?.name ?? entry.example;
   const trimKey = variant ? `${entry.id}/${variant.id}` : entry.id;
-  const base: Design = { ...DEFAULT_DESIGN, ...entry.design, ...variant?.design, name };
+  const base: Design = { ...DEFAULT_DESIGN, ...entry.design, ...variant?.design, ...(variant ? variant.systems : entry.systems), name };
   const rotary = base.layout === 'rotary';
   const firing = variant?.firing ?? entry.firing;
   const { order } = firing;

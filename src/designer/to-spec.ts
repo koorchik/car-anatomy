@@ -6,6 +6,7 @@ import { safeCounterweight } from './constraints.ts';
 import { effectiveOpen, effectivePops, effectiveRasp, exhaustGroups, isRotary, isTurbo, type Design } from './design.ts';
 import { FUELS } from './fuels.ts';
 import { valveEvents, type Performance } from './physics.ts';
+import { systemsOfDesign } from './systems.ts';
 
 const FAMILY: Record<Design['layout'], Family> = {
   inline: 'inline',
@@ -119,6 +120,7 @@ export function designToSpec(d: Design, perf: SpecInputs): EngineSpec {
     },
     coverColor: d.coverColor ?? COVER_COLORS[d.layout],
     blockMaterial: d.blockMaterial,
+    systems: systemsOfDesign(d),
     article: { lead: '', how: '', sound: '', pros: [], cons: [], cars: [] },
     timing: rotary
       ? undefined

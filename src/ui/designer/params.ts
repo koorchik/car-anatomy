@@ -4,6 +4,7 @@ import { cylinderChoices, type NumericKey } from '../../designer/constraints.ts'
 import { effectiveOpen, effectivePops, effectiveRasp, isBoosted, isRotary, isTurbo, type Design } from '../../designer/design.ts';
 import { FUELS, type FuelId } from '../../designer/fuels.ts';
 import type { Performance } from '../../designer/physics.ts';
+import { FUEL_SYSTEM_NAMES, fuelSystemsFor, shownSystems } from '../../designer/systems.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
 
@@ -29,13 +30,16 @@ export interface NumberParam {
 
 export interface ChoiceParam {
   kind: 'choice';
-  key: 'layout' | 'cylinders' | 'pistonMaterial' | 'rodMaterial' | 'blockMaterial' | 'crankPreset' | 'balanceShafts' | 'valvetrain' | 'valvesPerCyl' | 'charger' | 'fuel' | 'collector' | 'muffler' | 'blowoff';
+  key: 'layout' | 'cylinders' | 'pistonMaterial' | 'rodMaterial' | 'blockMaterial' | 'crankPreset' | 'balanceShafts' | 'valvetrain' | 'valvesPerCyl' | 'charger' | 'fuel' | 'collector' | 'muffler' | 'blowoff'
+    | 'fuelSystem' | 'cooling' | 'oilCooler' | 'ignition' | 'oilPump' | 'sparkPlugs';
   label: string;
   /** Options, or a function when they depend on the rest of the design. */
   options: Array<[string | number, string]> | ((d: Design) => Array<[string | number, string]>);
   help: string;
-  /** Set when the choice changes nothing but the sound. */
-  only?: 'sound';
+  /** Set when the choice changes nothing but the sound, or nothing but the systems layers. */
+  only?: 'sound' | 'looks';
+  /** For optional fields: what to show while the field itself is null. */
+  shown?: (d: Design) => string | number;
   applies?: (d: Design) => boolean;
   /** Dropdown instead of buttons, when options won't fit in a row. */
   select?: boolean;
@@ -43,9 +47,12 @@ export interface ChoiceParam {
 
 export interface ToggleParam {
   kind: 'toggle';
-  key: 'catalyst' | 'directInjection';
+  key: 'catalyst' | 'directInjection' | 'pistonJets' | 'glowPlugs' | 'oilFilter';
   label: string;
   help: string;
+  only?: 'looks';
+  /** For optional fields: what to show while the field itself is null. */
+  shown?: (d: Design) => boolean;
   applies?: (d: Design) => boolean;
 }
 
@@ -75,6 +82,8 @@ export interface ParamGroup {
 }
 
 const notRotary = (d: Design): boolean => !isRotary(d);
+const notDiesel = (d: Design): boolean => !FUELS[d.fuel].diesel;
+const capital = (text: string): string => text.charAt(0).toLocaleUpperCase() + text.slice(1);
 const rpm = (v: number): string => t('{rpm} об/хв', { rpm: (Math.round(v / 50) * 50).toLocaleString(numberLocale) });
 
 export const PARAM_GROUPS: ParamGroup[] = [
@@ -281,6 +290,29 @@ export const PARAM_GROUPS: ParamGroup[] = [
       { kind: 'number', key: 'lambda', label: t('Склад суміші λ'), unit: '', step: 0.01, digits: 2, help: t('Менше 1 означає багату суміш, більше 1 бідну. Найбільша потужність близько 0,88, найкраща економія близько 1,05. Дизель працює бідно завжди.') },
       { kind: 'number', key: 'ignitionOffset', label: t('Запалювання від оптимуму'), unit: '°', step: 1, help: t('Плюс означає раніше, мінус пізніше. Далі від оптимуму момент падає. Раннє запалювання підвищує тиск і детонацію.') },
       { kind: 'toggle', key: 'directInjection', label: t('Безпосереднє упорскування'), help: t('Паливо подається прямо в циліндр. Заряд холодніший, суміш менше часу проводить під тиском, тому можна більше стиснення. Насос забирає трохи потужності.') },
+      {
+        kind: 'choice',
+        key: 'fuelSystem',
+        label: t('Подача палива'),
+        select: true,
+        only: 'looks',
+        applies: (d) => fuelSystemsFor(d).length > 1,
+        options: (d) => fuelSystemsFor(d).map((f) => [f, capital(FUEL_SYSTEM_NAMES[f])]),
+        shown: (d) => shownSystems(d).fuelSystem,
+        help: t('Яке саме обладнання подає паливо: карбюратор, форсунки в каналах чи в циліндрах, насос-форсунки дизеля. Видно в шарі палива в рентгені. Модель потужності знає лише, чи упорскування безпосереднє.'),
+      },
+      {
+        kind: 'choice',
+        key: 'ignition',
+        label: t('Запалювання'),
+        only: 'looks',
+        applies: notDiesel,
+        options: [['coil-on-plug', t('Котушка на свічці')], ['wasted-spark', t('Холоста іскра')], ['distributor', t('Розподільник')]],
+        shown: (d) => shownSystems(d).ignition,
+        help: t('Окрема котушка над кожною свічкою, одна котушка на пару циліндрів, яка іскрить в обох щоразу, або одна котушка з розподільником, що роздає іскру дротами. Видно в шарі палива. У моделі потужності не враховано.'),
+      },
+      { kind: 'choice', key: 'sparkPlugs', label: t('Свічок на циліндр'), only: 'looks', applies: (d) => notDiesel(d) && notRotary(d), options: [[1, '1'], [2, '2']], shown: (d) => shownSystems(d).sparkPlugs, help: t('Дві свічки підпалюють суміш з двох боків, і полум\'я швидше проходить велику камеру. Так роблять у великих циліндрах і на старих авіаційних та гоночних двигунах. Видно в шарі палива. У моделі потужності не враховано.') },
+      { kind: 'toggle', key: 'glowPlugs', label: t('Свічки розжарювання'), only: 'looks', applies: (d) => !notDiesel(d), shown: (d) => shownSystems(d).glowPlugs, help: t('Розжарені стрижні в камерах допомагають холодному дизелю запуститися, поки стиснення ще не гріє повітря досить. Видно в шарі палива. У моделі потужності не враховано.') },
     ],
     readouts: (d, perf) => {
       const worst = perf.points.reduce((a, b) => (b.knockRetard > a.knockRetard ? b : a), perf.points[0]!);
@@ -291,6 +323,18 @@ export const PARAM_GROUPS: ParamGroup[] = [
             [t('Найвищий тиск у циліндрі'), t('{value} бар', { value: Math.round(perf.points.reduce((a, b) => Math.max(a, b.peakPressureBar), 0)) })],
           ];
     },
+  },
+  {
+    id: 'cooling',
+    title: t('Охолодження і мащення'),
+    intro: t('Як двигун позбувається тепла і як олива доходить до підшипників. Усе це видно в шарах оливи й охолодження в рентгені, а на потужність у моделі не впливає.'),
+    params: [
+      { kind: 'choice', key: 'cooling', label: t('Охолодження'), only: 'looks', applies: notRotary, options: [['liquid', t('Рідина')], ['fan', t('Вентилятор')], ['ram', t('Набігаючий потік')]], shown: (d) => shownSystems(d).cooling, help: t('Рідина відводить тепло від сорочки в радіатор. Повітряний двигун має ребра на циліндрах і головках, і їх обдуває вентилятор або, як на мотоциклі, зустрічний потік. Видно в шарі охолодження.') },
+      { kind: 'choice', key: 'oilCooler', label: t('Оливний радіатор'), only: 'looks', options: [['none', t('Немає')], ['coolant', t('У рідину')], ['air', t('У повітря')]], shown: (d) => shownSystems(d).oilCooler, help: t('Теплообмінник віддає тепло оливи охолоджувальній рідині, а радіатор у потоці повітря віддає його прямо повітрю. Двигунам з турбіною, дизелям і повітряним він потрібен найбільше. Видно в шарі оливи.') },
+      { kind: 'toggle', key: 'pistonJets', label: t('Охолодження поршнів оливою'), only: 'looks', applies: notRotary, shown: (d) => shownSystems(d).pistonJets, help: t('Форсунки знизу циліндрів бризкають оливою на днище поршня і забирають тепло. Потрібні двигунам з наддувом і дизелям. Видно в шарі оливи: тиск після їх відкриття росте повільніше. У моделі потужності не враховано.') },
+      { kind: 'choice', key: 'oilPump', label: t('Привід оливного насоса'), only: 'looks', applies: notRotary, options: [['crank', t('Від колінвала')], ['chain', t('Ланцюгом')], ['shaft', t('Валиком')]], shown: (d) => shownSystems(d).oilPump, help: t('Насос на носку колінвала крутиться з ним разом. Насос у піддоні приводить окремий ланцюг або валик від розподільчого чи допоміжного вала. Видно в шарі оливи.') },
+      { kind: 'toggle', key: 'oilFilter', label: t('Повнопотоковий оливний фільтр'), only: 'looks', shown: (d) => shownSystems(d).oilFilter, help: t('Уся олива від насоса проходить крізь паперовий фільтр. Старі двигуни, як Beetle, мали лише сітку на забірнику. Видно в шарі оливи.') },
+    ],
   },
   {
     id: 'exhaust',

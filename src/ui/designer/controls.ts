@@ -180,7 +180,7 @@ function choiceControl(param: ChoiceParam, onChange: (patch: DesignPatch) => voi
           );
           signature = next;
         }
-        select.value = String(d[param.key]);
+        select.value = String(d[param.key] ?? param.shown?.(d));
       },
     };
   }
@@ -213,7 +213,7 @@ function choiceControl(param: ChoiceParam, onChange: (patch: DesignPatch) => voi
         );
         signature = next;
       }
-      group.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === String(d[param.key]))));
+      group.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === String(d[param.key] ?? param.shown?.(d)))));
     },
   };
 }
@@ -236,7 +236,7 @@ function toggleControl(param: ToggleParam, onChange: (patch: DesignPatch) => voi
     param,
     root,
     sync(d) {
-      input.checked = d[param.key];
+      input.checked = d[param.key] ?? param.shown?.(d) ?? false;
     },
   };
 }
