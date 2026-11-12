@@ -108,8 +108,19 @@ export interface EnergyBalance {
   unburned: number;
 }
 
+/** What turns an engine with no fuel, as the Willans line for part load needs it. */
+export interface Motoring {
+  /** Friction with no load, accessories, and pumping out of an empty manifold, N·m, on the points' speeds. */
+  interceptNm: number[];
+  /** Pumping torque that one atmosphere in the manifold gives back, N·m. */
+  atmosphereNm: number;
+}
+
 export interface Performance {
   points: RpmPoint[];
+  /** Full load with the compressor bypassed, on every fourth of the points' speeds. Empty without a turbo. */
+  offBoost: RpmPoint[];
+  motoring: Motoring;
   peakPower: RpmPoint;
   peakTorque: RpmPoint;
   bestBsfc: RpmPoint;
@@ -368,6 +379,21 @@ class Model {
     return ideal * CYCLE_REALISM * heat * Math.max(spark, 0.3) * rotaryShape;
   }
 
+  /**
+   * Willans intercept as a mean effective pressure, bar. Pumping is counted out of an empty manifold, since it
+   * falls linearly as the charge fills it; friction at the peak pressure of a throttled, or unthrottled diesel, stroke.
+   */
+  motoringBar(rpm: number): number {
+    const sp = (2 * this.strokeM() * rpm) / 60;
+    const manifold = this.fuel.diesel ? 1 : 0.3;
+    return this.frictionBar(sp, manifold * this.d.compression ** 1.32) + 0.08 + (P_ATM * 1.03) / 1e5;
+  }
+
+  /** Torque of one bar of mean effective pressure, N·m. */
+  get nmPerBar(): number {
+    return (1e5 * this.vdM3) / (4 * Math.PI);
+  }
+
   private frictionBar(sp: number, peakBar: number): number {
     const d = this.d;
     if (isRotary(d)) return 0.35 + 0.004 * peakBar + 0.0016 * sp * sp + 0.012 * sp;
@@ -624,8 +650,15 @@ export function evaluate(d: Design): Performance {
   const low = Math.max(500, Math.min(800, limit * 0.15));
   const points: RpmPoint[] = [];
   const op: OperatingPoint = { throttle: 1, lambda: d.lambda, noBoost: false };
+  // The dyno's part-load map needs these on the same speeds, worked out with the same operating point.
+  const offBoost: RpmPoint[] = [];
+  const interceptNm: number[] = [];
   for (let i = 0; i <= steps; i++) {
-    points.push(model.at(low + ((limit - low) * i) / steps, op));
+    const rpm = low + ((limit - low) * i) / steps;
+    points.push(model.at(rpm, op));
+    // Every fourth speed is enough for a curve this smooth, and keeps the model quick under a slider.
+    if (isTurbo(d) && i % 4 === 0) offBoost.push(model.at(rpm, { ...op, noBoost: true }));
+    interceptNm.push(model.motoringBar(rpm) * model.nmPerBar);
   }
   const peakPower = points.reduce((a, b) => (b.powerKw > a.powerKw ? b : a), points[0]!);
   const peakTorque = points.reduce((a, b) => (b.torqueNm > a.torqueNm ? b : a), points[0]!);
@@ -705,6 +738,8 @@ export function evaluate(d: Design): Performance {
   const count = turboCount(d) || 1;
   return {
     points,
+    offBoost,
+    motoring: { interceptNm, atmosphereNm: (P_ATM / 1e5) * model.nmPerBar },
     peakPower,
     peakTorque,
     bestBsfc,

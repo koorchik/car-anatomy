@@ -4,7 +4,7 @@
 import { DEG } from '../engine/kinematics.ts';
 import { t } from '../i18n/t.ts';
 import { crankForPreset } from './crank.ts';
-import { DEFAULT_DESIGN, valveSplit, type Design, type DesignLayout } from './design.ts';
+import { DEFAULT_DESIGN, valveSplit, type Design, type DesignLayout, type PublishedFigures } from './design.ts';
 
 export interface Range {
   min: number;
@@ -272,10 +272,26 @@ function resolveIdentity(d: Design): void {
       revTimeS: clamp(f.revTimeS, 0.2, 10),
       rough: clamp(f.rough, 0, 1),
       trim: clamp(f.trim, 0.02, 3),
+      published: resolvePublished(f.published),
     };
   } else {
     d.factory = null;
   }
+}
+
+/** Figures from a link: power must be a number, the rest may be missing. */
+function resolvePublished(p: unknown): PublishedFigures | null {
+  if (!p || typeof p !== 'object') return null;
+  const raw = p as Record<string, unknown>;
+  const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  if (!finite(raw.powerHp) || raw.powerHp <= 0) return null;
+  const optional = (v: unknown, lo: number, hi: number): number | null => (finite(v) && v > 0 ? clamp(v, lo, hi) : null);
+  return {
+    powerHp: clamp(raw.powerHp, 1, 3000),
+    powerRpm: optional(raw.powerRpm, 300, 25000),
+    torqueNm: optional(raw.torqueNm, 1, 6000),
+    torqueRpm: optional(raw.torqueRpm, 300, 25000),
+  };
 }
 
 /** Names of the parameters whose value changed in resolving, so the interface can say so. */

@@ -1,10 +1,11 @@
 // Ukrainian text is the source and its own key: t('Запустити двигун'). English lives in src/i18n/en/.
 
 import { DESIGNER_EN } from './en/designer.ts';
+import { DYNO_EN } from './en/dyno.ts';
 import { UI_EN } from './en/ui.ts';
 import { locale } from './locale.ts';
 
-const ENGLISH: Record<string, string> = { ...UI_EN, ...DESIGNER_EN };
+const ENGLISH: Record<string, string> = { ...UI_EN, ...DESIGNER_EN, ...DYNO_EN };
 
 /** Translates a source string. `{name}` in the text is filled from `values`. */
 export function t(source: string, values?: Record<string, string | number>): string {

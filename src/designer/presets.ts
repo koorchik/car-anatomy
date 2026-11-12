@@ -14,7 +14,9 @@ export function designFromSpec(spec: EngineSpec): Design {
   const [page, variantId] = spec.id.split('/');
   const entry = CATALOGUE.find((e) => e.id === page);
   if (!entry) throw new Error(`No catalogue entry for ${spec.id}`);
-  return catalogueDesign(entry, variantId ? ENGINE_VARIANTS[page!]?.variants.find((v) => v.id === variantId) : undefined);
+  const known = ENGINE_VARIANTS[page!];
+  const variant = variantId ? known?.variants.find((v) => v.id === variantId) : undefined;
+  return catalogueDesign(entry, variant, variantId ? variant : known?.base);
 }
 
 /**
