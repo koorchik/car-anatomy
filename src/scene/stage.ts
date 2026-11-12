@@ -26,6 +26,29 @@ function buildStudioEnv(renderer: THREE.WebGLRenderer): THREE.Texture {
   return env;
 }
 
+/** The part under a ray hit: a merged mesh of the systems layers keeps one key per vertex, an instanced one per instance. */
+export function partKeyOf(hit: THREE.Intersection): string | undefined {
+  const o = hit.object;
+  const table = o.userData.partOf as string[] | undefined;
+  const index = (o as THREE.Mesh).geometry?.getAttribute('aPart');
+  if (table && index && hit.face) return table[index.getX(hit.face.a)];
+  const instances = o.userData.instanceParts as string[] | undefined;
+  if (instances && hit.instanceId !== undefined) return instances[hit.instanceId];
+  return o.userData.part as string | undefined;
+}
+
+/** Bounds of a model without what sits outside it on purpose (userData.noFit), such as the systems layers' hose stubs. */
+export function fitBox(root: THREE.Object3D): THREE.Box3 {
+  const skipped: Array<[THREE.Object3D, THREE.Object3D]> = [];
+  root.traverse((o) => {
+    if (o !== root && o.userData.noFit && o.parent) skipped.push([o, o.parent]);
+  });
+  for (const [o, parent] of skipped) parent.remove(o);
+  const box = new THREE.Box3().setFromObject(root);
+  for (const [o, parent] of skipped) parent.add(o);
+  return box;
+}
+
 export interface Insets {
   left: number;
   right: number;
@@ -153,7 +176,7 @@ export class Stage {
   fit(resetAngle: boolean, keepScale = false): void {
     if (!this.model) return;
     this.model.group.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(this.model.group);
+    const box = fitBox(this.model.group);
     const sphere = box.getBoundingSphere(new THREE.Sphere());
     const freeW = Math.max(120, this.width - this.insets.left - this.insets.right);
     const freeH = Math.max(120, this.height - this.insets.top - this.insets.bottom);
@@ -202,17 +225,19 @@ export class Stage {
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
     const hits = this.raycaster.intersectObject(this.model.group, true);
+    const shown = (hit: THREE.Intersection): boolean => {
+      for (let obj: THREE.Object3D | null = hit.object; obj; obj = obj.parent) if (!obj.visible) return false;
+      return true;
+    };
+    // Drillings inside a solid shaft are drawn over everything, so they are picked as they are seen.
+    for (const hit of hits) {
+      const key = hit.object.userData.overlay && shown(hit) ? partKeyOf(hit) : undefined;
+      if (key && PARTS[key]) return PARTS[key];
+    }
     let fallback: PartInfo | null = null;
     for (const hit of hits) {
-      if (!hit.object.visible) continue;
-      let obj: THREE.Object3D | null = hit.object;
-      let visible = true;
-      while (obj) {
-        if (!obj.visible) visible = false;
-        obj = obj.parent;
-      }
-      if (!visible) continue;
-      const key = hit.object.userData.part as string | undefined;
+      if (!shown(hit)) continue;
+      const key = partKeyOf(hit);
       if (!key) continue;
       const info = PARTS[key];
       if (!info) continue;

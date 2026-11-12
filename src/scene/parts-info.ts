@@ -1,4 +1,5 @@
 import { t } from '../i18n/t.ts';
+import { SYSTEM_PARTS } from './systems/parts.ts';
 
 export interface PartInfo {
   name: string;
@@ -34,4 +35,5 @@ export const PARTS: Record<string, PartInfo> = {
   eccentric: { name: t('Ексцентриковий вал'), text: t('Заміна колінвалу. Обертається втричі швидше за ротор і отримує зусилля через ексцентрик.') },
   housing: { name: t('Корпус ротора'), text: t('Внутрішня поверхня має форму епітрохоїди. Вершини ротора ковзають нею через апексні ущільнення.') },
   chamber: { name: t('Камера ротора'), text: t('Простір між гранню ротора і корпусом. Під час обертання вона збільшується і зменшується, замінюючи такти поршневого двигуна.') },
+  ...SYSTEM_PARTS,
 };

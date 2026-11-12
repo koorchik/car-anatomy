@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { DEG, cyclePhase, mod, strokeAt, type Cylinder, type Engine } from '../engine/kinematics.ts';
-import { MM, extrude, flywheelGeometry, gearShape, merge, pulleyGeometry, tubeAlong, zCylinder } from './geometry.ts';
+import { MM, extrude, flywheelGeometry, gearShape, merge, pulleyGeometry, roundedRect, tubeAlong, zCylinder } from './geometry.ts';
 import { createMaterials, glowTexture, hotPipeMaterial, type EngineMaterials, type HotPipeUniforms } from './materials.ts';
 import { GAS, disposeTree, markDamaged, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
+import type { RotaryAnchors, SystemsLook } from './systems/anchors.ts';
+import { panDims } from '../systems/sump.ts';
 
 /** Point on the housing's inner surface, parameter in degrees. Matches the apex path. */
 export function housingPoint(psiDeg: number, R: number, e: number): [number, number] {
@@ -47,7 +49,7 @@ interface RotorParts {
 
 export class RotaryEngineModel implements EngineModel {
   readonly group = new THREE.Group();
-  private readonly mounted = new THREE.Group();
+  readonly mounted = new THREE.Group();
   private readonly engine: Engine;
   private readonly materials: EngineMaterials;
   private readonly R: number;
@@ -66,6 +68,18 @@ export class RotaryEngineModel implements EngineModel {
   private readonly flash: THREE.PointLight;
   private readonly explodables: Array<{ object: THREE.Object3D; direction: THREE.Vector3 }> = [];
   private viewMode: ViewMode = 'xray';
+  /** Recorded while building, for the systems layers (systemsAnchors). */
+  private readonly record = {
+    front: 0,
+    rear: 0,
+    pulley: { z: 0, r: 0 },
+    plugs: [] as RotaryAnchors['plugs'],
+    runners: [] as RotaryAnchors['runners'],
+    exhausts: [] as RotaryAnchors['exhausts'],
+    plenum: { x: 0, y: 0, r: 0, zMin: 0, zMax: 0 },
+    intake: [] as THREE.Mesh[],
+  };
+  private systemsLook: SystemsLook = { intakeGlass: false, ownSparks: true };
   private heat = 0;
   private roll = 0;
   private rollVel = 0;
@@ -84,6 +98,7 @@ export class RotaryEngineModel implements EngineModel {
     this.buildShaftAndEnds(layout.rotors);
     for (let i = 0; i < layout.rotors; i++) this.buildRotorSection(i, layout.rotors);
     this.buildPlumbing(layout.rotors);
+    this.buildPan();
 
     this.flash = new THREE.PointLight('#ff8a3a', 0, this.R * 6, 2);
     this.mounted.add(this.flash);
@@ -129,6 +144,23 @@ export class RotaryEngineModel implements EngineModel {
     this.mounted.add(pulley);
     this.spinners.push({ object: pulley, ratio: 1 });
     this.peripheral.push(pulley);
+    this.record.front = front;
+    this.record.rear = rear;
+    this.record.pulley = { z: front + 0.1, r: this.R * 0.5 };
+  }
+
+  /** The oil pan under the housings, sized by panDims, which the oil layer and feature/oil-sump read too. */
+  private buildPan(): void {
+    const m = this.materials;
+    const pan = panDims(this.engine);
+    const geo = extrude(roundedRect(-pan.halfW, pan.bottom, pan.halfW, pan.top + pan.lip, pan.round), pan.zMax - pan.zMin, { thickness: 0.015, segments: 2 });
+    geo.translate(0, 0, (pan.zMax + pan.zMin) / 2);
+    const sump = tag(new THREE.Mesh(geo, m.sump), 'sump');
+    sump.castShadow = true;
+    sump.renderOrder = 5;
+    this.mounted.add(sump);
+    this.shellMeshes.push({ mesh: sump, solid: m.sump, glass: m.sumpGlass });
+    this.explodables.push({ object: sump, direction: new THREE.Vector3(0, -1, 0) });
   }
 
   private rotorPhase(rotor: number): number {
@@ -298,6 +330,8 @@ export class RotaryEngineModel implements EngineModel {
       plugs.push(spark);
     }
     this.sparks.push(plugs);
+    // The face sweeps down past the plugs, so the lower one meets each charge first: it leads.
+    this.record.plugs.push({ leading: new THREE.Vector3(R - e + 0.01, -R * 0.16, z), trailing: new THREE.Vector3(R - e + 0.01, R * 0.16, z) });
   }
 
   private buildPlumbing(rotors: number): void {
@@ -316,6 +350,7 @@ export class RotaryEngineModel implements EngineModel {
         new THREE.Vector3(-half - R * 0.92, -R * 0.95, zRear),
       ];
       const { material, uniforms } = hotPipeMaterial();
+      this.record.exhausts.push({ rotor: i, points: pts });
       const pipe = tag(new THREE.Mesh(tubeAlong(pts, pipeR, 32, 10), material), 'header');
       pipe.castShadow = true;
       this.mounted.add(pipe);
@@ -332,12 +367,16 @@ export class RotaryEngineModel implements EngineModel {
       intake.castShadow = true;
       this.mounted.add(intake);
       this.peripheral.push(intake);
+      this.record.runners.push({ rotor: i, points: runner, r: pipeR * 0.86 });
+      this.record.intake.push(intake);
     }
     const zs = [this.zOf(0, rotors), this.zOf(rotors - 1, rotors)];
     const plenum = tag(new THREE.Mesh(zCylinder(pipeR * 1.5, zs[0]! - zs[1]! + 0.5, 20, -half - R * 0.62, R * 1.14, (zs[0]! + zs[1]!) / 2), m.intake), 'intake');
     plenum.castShadow = true;
     this.mounted.add(plenum);
     this.peripheral.push(plenum);
+    this.record.plenum = { x: -half - R * 0.62, y: R * 1.14, r: pipeR * 1.5, zMin: zs[1]! - 0.25, zMax: zs[0]! + 0.25 };
+    this.record.intake.push(plenum);
   }
 
   setView(view: ViewMode): void {
@@ -355,6 +394,42 @@ export class RotaryEngineModel implements EngineModel {
     }
     for (const list of this.sparks) for (const s of list) s.visible = view !== 'solid';
     this.flash.intensity = 0;
+    this.setSystemsLook(this.systemsLook);
+  }
+
+  setSystemsLook(look: SystemsLook): void {
+    this.systemsLook = look;
+    const glass = look.intakeGlass && this.viewMode === 'xray';
+    for (const mesh of this.record.intake) {
+      mesh.material = glass ? this.materials.intakeGlass : this.materials.intake;
+      mesh.castShadow = !glass;
+    }
+    const sparks = this.viewMode !== 'solid' && look.ownSparks;
+    for (const list of this.sparks) for (const s of list) s.visible = sparks;
+  }
+
+  systemsAnchors(): RotaryAnchors {
+    const layout = this.engine.spec.layout as Extract<Engine['spec']['layout'], { kind: 'wankel' }>;
+    const r = this.record;
+    return {
+      kind: 'rotary',
+      shaft: this.shaft,
+      R: this.R,
+      e: this.e,
+      width: this.width,
+      half: this.R * 1.32,
+      tall: (this.R + this.e) * 1.28,
+      rotorZ: Array.from({ length: layout.rotors }, (_, i) => this.zOf(i, layout.rotors)),
+      rotorPhase: this.rotors.map((p) => p.phase),
+      plugs: r.plugs,
+      runners: r.runners,
+      exhausts: r.exhausts,
+      plenum: r.plenum,
+      front: r.front,
+      rear: r.rear,
+      pulley: r.pulley,
+      pan: panDims(this.engine),
+    };
   }
 
   private chamberMesh(c: Chamber): THREE.Object3D | null {

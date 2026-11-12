@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { EngineAnchors, SystemsLook } from './systems/anchors.ts';
 
 export type ViewMode = 'solid' | 'xray' | 'mechanism';
 
@@ -19,6 +20,12 @@ export interface FrameState {
 
 export interface EngineModel {
   group: THREE.Group;
+  /** Engine frame of kinematics.ts: crank axis on Z, scene units. Shakes with the engine; overlays go here. */
+  readonly mounted: THREE.Group;
+  /** Where the parts the systems layers follow were built (src/scene/systems/anchors.ts). */
+  systemsAnchors?(): EngineAnchors;
+  /** Glass intake while the air or fuel layer shows; the model's own sparks off while the fuel layer draws real ones. */
+  setSystemsLook?(look: SystemsLook): void;
   update(state: FrameState): void;
   setView(view: ViewMode): void;
   /** 0 = assembled, 1 = fully pulled apart. */
