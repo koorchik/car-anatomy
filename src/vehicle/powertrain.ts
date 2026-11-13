@@ -76,7 +76,7 @@ export function idealGearbox(o: IdealGearboxOptions): Powertrain {
 }
 
 /** Speed where full power just matches drag, m/s: what top gear is geared for. */
-export function topSpeed(car: VehicleSpec, peakPowerW: number, efficiency: number): number {
+export function topSpeed(car: Pick<VehicleSpec, 'roadLoad'>, peakPowerW: number, efficiency: number): number {
   let lo = 1;
   let hi = 200;
   for (let i = 0; i < 80; i++) {

@@ -66,4 +66,4 @@ export interface VehicleSpec {
 }
 
 /** Rolling and aerodynamic drag at a speed on the level, newtons: roadLoadN with the car's coefficients. */
-export const dragForce = (car: VehicleSpec, v: number): number => roadLoadN(car.roadLoad, v, 0);
+export const dragForce = (car: Pick<VehicleSpec, 'roadLoad'>, v: number): number => roadLoadN(car.roadLoad, v, 0);
