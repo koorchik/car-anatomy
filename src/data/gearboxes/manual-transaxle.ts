@@ -10,11 +10,12 @@
 //
 // Reconstructed (ours): every tooth count, module, helix and centre distance. We read Honda's figures as tooth ratios
 // cut after three places rather than rounded, since Honda gives sixth as 0.734 and DSPORT as 0.735; the Civic's teeth
-// reproduce them that way (sixth 36/49 = 0.73469 gives both). The final drive 18/74 shares its tooth sum 92 with the FL5's 19/73 = 3.842, so both
-// run on one centre distance in one case. No single reverse idler between shafts 80 mm apart gives 3.757, so the
-// Civic's reverse runs through a compound idler. The 911's pairs reproduce Porsche's two places; its 9/32 crown wheel
-// and pinion matches the 991 manual's 3.44 = 31/9. Shaft positions, face widths, hands, the sleeves' order and the
-// differential's place are layout estimates.
+// reproduce them that way (sixth 36/49 = 0.73469 gives both). The final drive 18/74 shares its tooth sum 92 with the
+// FL5's 19/73 = 3.842, so both run on one centre distance in one case. No single reverse idler between shafts 80 mm
+// apart gives 3.757, so the Civic's reverse runs through a compound idler; so does the 911's, since a single idler
+// reaches 3.55 at 85 mm only with a 1.5 mm module, too fine for 450 N·m (docs/gearbox-model.md). The 911's pairs
+// reproduce Porsche's two places; its 9/32 crown wheel and pinion matches the 991 manual's 3.44 = 31/9. Shaft
+// positions, face widths, hands, the sleeves' order and the differential's place are layout estimates.
 
 import { applyGearboxEnglish } from '../../i18n/en/apply-gearbox.ts';
 import { GEARBOX_MANUAL_TRANSAXLE_EN } from '../../i18n/en/gearbox-manual-transaxle.ts';
@@ -42,7 +43,7 @@ const CIVIC_FK8: GearboxRecord = {
         { teeth: [45, 41], module: 1.75, faceWidth: 16 },
         { teeth: [49, 36], module: 1.75, faceWidth: 15 },
       ],
-      reverse: { teeth: [19, 34, 20, 42], module: 2, helix: 0, faceWidth: 14, side: 1, engage: 'synchro' },
+      reverse: { teeth: [19, 34, 20, 42], module: 2.75, helix: 0, faceWidth: 18, side: 1, engage: 'synchro' },
       sleeves: [
         { id: '1-2', shaft: 'output', front: 1, back: 2 },
         { id: '3-4', shaft: 'input', front: 3, back: 4 },
@@ -91,7 +92,7 @@ const PORSCHE_992_CARRERA_T: GearboxRecord = {
         { teeth: [43, 34], module: 2, faceWidth: 17 },
         { teeth: [50, 31], module: 2, faceWidth: 16 },
       ],
-      reverse: { teeth: [20, 30, 71], module: 1.5, helix: 0, faceWidth: 16, side: 1, engage: 'synchro' },
+      reverse: { teeth: [18, 25, 18, 46], module: 2.75, helix: 0, faceWidth: 18, side: 1, engage: 'synchro' },
       sleeves: [
         { id: '1-2', shaft: 'output', front: 1, back: 2 },
         { id: '3-4', shaft: 'input', front: 3, back: 4 },
@@ -110,7 +111,8 @@ const PORSCHE_992_CARRERA_T: GearboxRecord = {
     'Зубці, модулі, кути нахилу й міжосьова відстань — наша реконструкція, що відтворює кожне число до опублікованого знака. ' +
     'Головна пара 9/32 дає 3,556; механічна 911 покоління 991 мала головну передачу 3,44 = 31/9, тож ведуча шестерня на 9 зубців правдоподібна. ' +
     'Головна пара конічна, бо піввісі йдуть поперек валів коробки, але чи вона гіпоїдна, Porsche не пише; ми намалювали її прямозубою. ' +
-    'Міжосьова 85 мм, порядок муфт, задній хід через одну проміжну шестерню, ширини вінців і місце диференціала — оцінка.',
+    'Задній хід 3,55 через одну проміжну шестерню між валами за 85 мм дає лише дуже дрібний модуль, тож ми взяли подвійну проміжну шестерню (18 → 25 і 18 → 46). ' +
+    'Міжосьова 85 мм, порядок муфт, ширини вінців і місце диференціала — оцінка.',
   sources: [
     'https://newsroom.porsche.com/dam/jcr:f50e6bb0-6e82-4062-b167-532afdf23ac9/992%20911%20Carrera%20T%20Technical%20Specifications.pdf',
     'https://newsroom.porsche.com/dam/jcr:e1638451-d7dc-4f0e-a00d-b169cf342b86/2013_911_Technical_Specifications.pdf.PDF',

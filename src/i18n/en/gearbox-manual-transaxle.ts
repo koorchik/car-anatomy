@@ -16,6 +16,7 @@ export const GEARBOX_MANUAL_TRANSAXLE_EN: Record<string, GearboxTextEn> = {
       'The tooth counts, modules, helix angles and center distance are our reconstruction, which reproduces every ratio to the published place. ' +
       'The 9/32 final drive gives 3.556; the 991-generation 911 manual had a 3.44 = 31/9 final drive, so a 9-tooth pinion is plausible. ' +
       'The final drive is a bevel pair because the halfshafts run across the transmission’s shafts, but Porsche does not say whether it is a hypoid; we drew it as a straight bevel pair. ' +
-      'The 85 mm center distance, the order of the sleeves, the reverse through a single idler, the face widths and the place of the differential are estimates.',
+      'A single reverse idler between shafts 85 mm apart gives 3.55 only with a very fine module, so we took a compound idler (18 → 25 and 18 → 46). ' +
+      'The 85 mm center distance, the order of the sleeves, the face widths and the place of the differential are estimates.',
   },
 };

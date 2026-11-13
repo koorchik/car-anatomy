@@ -220,7 +220,7 @@ describe('power path', () => {
       }
     }
     expect(stateByName(civic, 'R').loaded.map((j) => meshName(civic, j))).toEqual(['final-pinion/final-ring', 'in-R/idler-R', 'idler-R2/out-R']);
-    expect(stateByName(p992, 'R').loaded.map((j) => meshName(p992, j))).toEqual(['final-pinion/final-ring', 'in-R/idler-R', 'idler-R/out-R']);
+    expect(stateByName(p992, 'R').loaded.map((j) => meshName(p992, j))).toEqual(['final-pinion/final-ring', 'in-R/idler-R', 'idler-R2/out-R']);
     // The final drive carries the output shaft's torque: the speed's ratio times the input torque.
     for (const box of [civic, p992]) {
       const s = stateByName(box, '1');
@@ -241,7 +241,8 @@ describe('power path', () => {
 describe('transaxle descriptions that cannot be built are refused', () => {
   const desc = civicRecord.layout.desc as TransaxleDesc;
   it('a reverse idler too short to reach both gears', () => {
-    expect(() => transaxleSpec({ ...desc, reverse: { ...desc.reverse, teeth: [17, 17, 17] } })).toThrow(/idler/);
+    // 17 teeth at 2 mm: 34 mm to the idler from either shaft, 68 mm in all for shafts 80 mm apart.
+    expect(() => transaxleSpec({ ...desc, reverse: { ...desc.reverse, teeth: [17, 17, 17], module: 2 } })).toThrow(/idler/);
   });
 
   it('a crown wheel and pinion with a face wider than a third of their cone distance', () => {
