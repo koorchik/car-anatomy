@@ -8,8 +8,14 @@ import { isBoosted, isRotary, isTurbo, type Design } from './design.ts';
 import { FUELS } from './fuels.ts';
 import { COLD_IGNITION_K, type Performance } from './physics.ts';
 import { designToSpec } from './to-spec.ts';
+import { lubricationFigures } from './lubrication-figures.ts';
 
 export type Severity = 'fatal' | 'warning' | 'note';
+
+/** Crank axis over the pan's floor beyond which the engine can't sit low in a car (estimate: the deepest catalogue pan, the V2's, has 241 mm). */
+export const DEEP_PAN_MM = 250;
+/** Oil over the pickup's bell at the limiter on a level road below which a pan is short of oil (estimate). */
+export const LOW_OIL_MM = 20;
 
 export interface Diagnostic {
   id: string;
@@ -151,6 +157,15 @@ export function diagnose(d: Design, perf: Performance): Diagnostic[] {
     }
     if (perf.events.overlap > 70) {
       add('overlap', 'note', t('Велике перекриття фаз'), t('Двигун дихає на високих обертах, а на низьких частина суміші йде прямо у випуск. Холостий хід нерівний і витрата більша.'));
+    }
+  }
+  if (!rotary) {
+    const lube = lubricationFigures(d);
+    if (lube.crankHeightMm > DEEP_PAN_MM) {
+      add('deep-pan', 'warning', t('Глибокий піддон'), t('Вісь колінвала стоїть на {mm} мм над дном піддона: двигун доведеться посадити вище, або піддон зачепить дорогу.', { mm: Math.round(lube.crankHeightMm) }), t('Менше оливи або сухий картер з окремим баком.'));
+    }
+    if (lube.immersionMm < LOW_OIL_MM) {
+      add('low-oil', 'warning', t('Замало оливи'), t('Навіть на прямій на межі обертів забірник лише на {mm} мм під оливою: решта в головках і на стінках.', { mm: Math.max(0, Math.round(lube.immersionMm)) }), t('Більше оливи, глибший піддон або сухий картер.'));
     }
   }
   if (!perf.cruise.reachable) {

@@ -111,10 +111,14 @@ describe.each(pistonIds)('oil in %s', (id) => {
     const pan = sump.pan;
     expect(sump.levelY).toBeGreaterThan(pan.bottom);
     expect(sump.levelY).toBeLessThan(pan.top);
-    const suction = plan.routes.find((r) => r.channel === 'suction')!;
-    const pick = suction.points[0]!;
-    expect(pick.y).toBeLessThan(sump.levelY);
-    expect(pick.y).toBeGreaterThan(pan.bottom);
+    // A dry sump's pressure stage draws from the tank; its pan has only the scavenge screens, on the floor.
+    const suction = plan.routes.find((r) => r.channel === 'suction');
+    const picks = sump.tank ? plan.routes.filter((r) => r.channel === 'scavenge' && r.part === 'oil-pump').map((r) => r.points[0]!) : [suction!.points[0]!];
+    expect(picks.length).toBeGreaterThan(0);
+    for (const pick of picks) {
+      expect(pick.y).toBeLessThan(sump.levelY);
+      expect(pick.y).toBeGreaterThan(pan.bottom);
+    }
     for (const drain of plan.routes.filter((r) => r.channel === 'drain' || (r.channel === 'turbo-drain' && r.part === 'turbo-oil' && r.points.length > 2))) {
       const end = drain.points[drain.points.length - 1]!;
       expect(end.y, `${id} drain above the oil`).toBeGreaterThan(sump.levelY);
@@ -227,7 +231,8 @@ describe.each(rotaryIds)('oil in rotary %s', (id) => {
 
 it('a dry sump layout draws its scavenge stages and tank, and the pressure stage draws from the tank alone', () => {
   const { engine, anchors } = get('b6');
-  const s = systemsOf(engine.spec);
+  // The GT3 is a dry sump in the catalogue; the layout here is built by hand from its wet twin.
+  const s = { ...systemsOf(engine.spec), sump: 'wet' as const };
   const sump = sumpLayout(engine, s);
   const tank = { position: new THREE.Vector3(1.2, 0, sump.pan.zMax), radius: 0.15, height: 0.6 };
   const outlet = tank.position.clone().add(new THREE.Vector3(0, -tank.height / 2, 0));

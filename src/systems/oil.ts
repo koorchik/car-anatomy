@@ -74,6 +74,8 @@ export interface OilInput {
   /** Share of oil in what the scavenge stages draw, 0..1; the rest is air. Feature/oil-sump drives it. */
   scavengeSupply?: number;
   running: boolean;
+  /** Flow added to the pump's, L/min: an oil accumulator giving oil (positive) or refilling (negative). */
+  extraFlow?: number;
   /** The visitor's engine at its true speed. The warning only shows then. */
   live: boolean;
 }
@@ -122,7 +124,7 @@ export function oilStep(p: OilParams, input: OilInput, out: OilState): void {
   const g = p.g100 / ratio;
   const gt = p.turboShare * g;
   const gj = p.jets ? JET_SHARE * g : 0;
-  const q = Math.max(0, p.pumpLitresPerRev * input.rpm * Math.min(1, Math.max(0, input.supply)));
+  const q = Math.max(0, p.pumpLitresPerRev * input.rpm * Math.min(1, Math.max(0, input.supply)) + (input.extraFlow ?? 0));
   // The flow the circuit takes rises monotonically with pressure, so bisection finds the one balance with the pump.
   let lo = 0;
   let hi = q / g;

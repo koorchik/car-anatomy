@@ -16,7 +16,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 41,
       torqueRpm: 4000,
       voiceEvidence: 'estimate',
-      unverified: ['cooling', 'oilCooler'],
+      unverified: ['cooling', 'oilCooler', 'sump'],
       sources: ['https://1000ps.com/en-gb/model/5851/royal-enfield-bullet-500-efi', 'https://www.cyclechaos.com/wiki/Royal_Enfield_BULLET_500_EFI'],
     },
     variants: [{
@@ -78,7 +78,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 74,
       torqueRpm: 6500,
       voiceEvidence: 'default',
-      unverified: ['compression', 'torqueNm', 'redline', 'blockMaterial', 'fuel', 'sparkPlugs'],
+      unverified: ['compression', 'torqueNm', 'redline', 'blockMaterial', 'fuel', 'sparkPlugs', 'sump'],
       sources: ['https://www.totalmotorcycle.com/motorcycles/2016/2016-KTM-690-Duke', 'https://www.motorcycle.com/specs/ktm/sport/2018/duke/690/detail.html', 'https://en.wikipedia.org/wiki/KTM_690_Duke'],
       factory: {
         idleRpm: 1740,
@@ -379,7 +379,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 30,
       torqueRpm: 5500,
       voiceEvidence: 'estimate',
-      unverified: ['compression', 'redline', 'blockMaterial', 'fuel', 'fuelSystem', 'cooling'],
+      unverified: ['compression', 'redline', 'blockMaterial', 'fuel', 'fuelSystem', 'cooling', 'sump'],
       sources: ['https://en.wikipedia.org/wiki/Honda_N360', 'https://fastcarcheck.uk/specs/make/honda/n360/258580', 'https://www.kucarfa.nl/Honda/N360GB.html'],
       factory: {
         idleRpm: 1100,
@@ -663,7 +663,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 150,
       torqueRpm: 3250,
       voiceEvidence: 'estimate',
-      unverified: ['oilCooler'],
+      unverified: ['oilCooler', 'sump'],
       sources: ['https://h-dmediakit.com/assets/documents/news/eu/2016-08/Milwaukee-Eight_FINAL.pdf', 'https://en.wikipedia.org/wiki/Harley-Davidson_Milwaukee-Eight_engine', 'https://powersportsguide.com/harley-davidson-hp-chart', 'https://bikeindia.in/milwaukee-eight-harley-davidson-reveal-new-107-and-114-engines/', 'https://ultimatemotorcycling.com/2020/05/15/2020-harley-davidson-road-glide-buyers-guide-specs-prices/'],
     },
     variants: [{
@@ -731,7 +731,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 140,
       torqueRpm: 8000,
       voiceEvidence: 'default',
-      unverified: ['redline', 'fuel', 'blockMaterial', 'firingIntervals', 'years', 'sparkPlugs'],
+      unverified: ['redline', 'fuel', 'blockMaterial', 'firingIntervals', 'years', 'sparkPlugs', 'sump'],
       sources: ['https://moto-data.net/ktm/1290-super-duke-r-2020', 'https://www.visordown.com/news/new-bikes/2020-ktm-1290-super-duke-r-revealed-–-overview-full-specs'],
       factory: {
         idleRpm: 1280,
@@ -784,7 +784,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 128,
       torqueRpm: 6750,
       voiceEvidence: 'default',
-      unverified: ['powerRpm', 'fuel', 'directInjection', 'firingIntervals'],
+      unverified: ['powerRpm', 'fuel', 'directInjection', 'firingIntervals', 'sump'],
       sources: ['https://ultimatemotorcycling.com/?p=229359', 'https://www.enginebuildermag.com/?p=51398', 'https://ironcitymotorcycles.co.uk/harley-davidson/new-bikes/adventure-touring/pan-america-1250/2023', 'https://canadamotoguide.com/2021/02/26/harley-davidson-revolution-max-1250-engine-a-closer-look/'],
       factory: {
         idleRpm: 1280,
@@ -1244,6 +1244,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'civic-type-r-k20c1',
+      systems: { oilL: 5.4 },
       name: 'Honda Civic Type R FK8',
       cars: ['Honda Civic Type R FK8'],
       years: '2017-2021',
@@ -1254,7 +1255,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 400,
       torqueRpm: 2500,
       voiceEvidence: 'default',
-      unverified: ['firingOrder', 'fuel'],
+      unverified: ['firingOrder', 'fuel', 'oilL'],
       sources: ['https://en.wikipedia.org/wiki/Honda_K_engine'],
       factory: {
         idleRpm: 880,
@@ -1500,7 +1501,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 407,
       torqueRpm: 4000,
       voiceEvidence: 'default',
-      unverified: [],
+      unverified: ['oilL'],
       sources: ['https://en.wikipedia.org/wiki/Subaru_EJ_engine'],
     },
     variants: [{
@@ -1749,7 +1750,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 380,
       torqueRpm: 1950,
       voiceEvidence: 'default',
-      unverified: ['firingOrder', 'numbering', 'fuel', 'blockMaterial', 'years', 'note'],
+      unverified: ['firingOrder', 'numbering', 'fuel', 'blockMaterial', 'years', 'note', 'sump'],
       sources: ['https://newsroom.porsche.com/dam/jcr:86a2a46d-fa29-42ef-8480-5d50a8d9974d/PCNA18_0111_us.pdf', 'https://www.auto-data.net/en/porsche-718-cayman-982-2.0-300hp-37364', 'https://porsche.com/uk/aboutporsche/christophorusmagazine/archive/376/articleoverview/article02', 'https://flatsixes.com/?p=43382', 'https://en.wikipedia.org/wiki/Porsche_718_Boxster_and_Cayman_(982)', 'https://foreverpontiac.com/forums/topic/7704-car-and-driver-porsche%E2%80%99s-newly-four-cylinder-718-boxster-sounds-better-than-you-think/'],
       factory: {
         idleRpm: 880,
@@ -1797,7 +1798,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 420,
       torqueRpm: 1900,
       voiceEvidence: 'default',
-      unverified: ['firingOrder', 'numbering', 'fuel', 'blockMaterial', 'years'],
+      unverified: ['firingOrder', 'numbering', 'fuel', 'blockMaterial', 'years', 'sump'],
       sources: ['https://newsroom.porsche.com/dam/jcr:86a2a46d-fa29-42ef-8480-5d50a8d9974d/PCNA18_0111_us.pdf', 'https://en.wikipedia.org/wiki/Porsche_718_Boxster_and_Cayman_(982)', 'https://porsche.com/uk/aboutporsche/christophorusmagazine/archive/376/articleoverview/article02'],
       factory: {
         idleRpm: 880,
@@ -2062,6 +2063,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
     },
     variants: [{
       id: 'bmw-m3-e46-s54',
+      systems: { sump: 'baffled' },
       name: 'BMW M3 E46 (S54)',
       cars: ['BMW M3 E46', 'BMW Z4 M', 'BMW M Coupe/Roadster'],
       years: '2000-2006',
@@ -2073,6 +2075,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueRpm: 4900,
       voiceEvidence: 'default',
       unverified: ['firingOrder', 'fuel'],
+      sumpNote: 'Мокрий піддон із кількома відсіками: окремий насос переганяє оливу з переднього відсіку назад, коли автомобіль гальмує. Головки не відкачуються, тому це не сухий картер.',
       sources: ['https://en.wikipedia.org/wiki/BMW_S54'],
       factory: {
         idleRpm: 940,
@@ -2624,6 +2627,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'nissan-gtr-vr38dett',
+      systems: { sump: 'baffled' },
       name: 'Nissan GT-R VR38DETT',
       cars: ['Nissan GT-R R35'],
       years: '2017-2025',
@@ -2635,6 +2639,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueRpm: 3300,
       voiceEvidence: 'estimate',
       unverified: ['redline', 'fuel', 'numbering', 'boostBar'],
+      sumpNote: 'Nissan називає систему гібридною мокрою і сухою: насос відкачування повертає оливу в піддон, але окремого бака немає.',
       sources: ['https://en.wikipedia.org/wiki/Nissan_VR_engine', 'https://www.rerev.com/firing-orders/nissan/3-8l/', 'https://motoiq.com/the-2017-nissan-gt-r-is-faster-and-stronger-than-ever', 'https://www.kbb.com/nissan/gt-r/2017/specs/'],
       factory: {
         idleRpm: 940,
@@ -3143,11 +3148,12 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 460,
       torqueRpm: 6000,
       voiceEvidence: 'default',
-      unverified: ['pistonJets', 'oilCooler'],
+      unverified: ['pistonJets', 'oilCooler', 'oilL'],
       sources: ['https://www.carfolio.com/porsche-911-gt3-512270', 'https://www.auto-data.net/en/porsche-911-991-ii-gt3-4.0-500hp-29495', 'https://newsroom.porsche.com/christophorus/en/2017/381/technique-porsche-gt3-991-motor.html'],
     },
     variants: [{
       id: 'porsche-992-carrera-3-0',
+      systems: { sump: 'integrated-dry' },
       name: 'Porsche 911 Carrera (992) 3.0 твін-турбо',
       cars: ['Porsche 911 Carrera (992)', 'Porsche 911 Carrera 4 (992)', 'Porsche 911 Carrera T (992)'],
       years: '2019-2024',
@@ -3158,7 +3164,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 450,
       torqueRpm: 1950,
       voiceEvidence: 'default',
-      unverified: ['fuel', 'blockMaterial', 'exhaust'],
+      unverified: ['fuel', 'blockMaterial', 'exhaust', 'sump'],
       sources: ['https://www.auto-data.net/en/porsche-911-992-carrera-t-3.0-385hp-pdk-46703', 'https://www.thecarspec.net/car-detail/porsche-911-992-carrera-30-385-hp-pdk-2019', 'https://download.newsroom.porsche.com/dam/jcr:683ce58d-5a57-4bd0-bf5f-b1bf5fe1931d/2020_911_Carrera_and_911_Carrera_Cabriolet_US_specifications.pdf'],
       factory: {
         idleRpm: 800,
@@ -3197,6 +3203,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'porsche-718-gt4-4-0',
+      systems: { sump: 'integrated-dry' },
       name: 'Porsche 718 Cayman GT4 4.0',
       cars: ['Porsche 718 Cayman GT4', 'Porsche 718 Spyder'],
       years: '2019-2023',
@@ -3207,7 +3214,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 420,
       torqueRpm: 5000,
       voiceEvidence: 'default',
-      unverified: ['fuel', 'blockMaterial', 'exhaust', 'valvesPerCyl'],
+      unverified: ['fuel', 'blockMaterial', 'exhaust', 'valvesPerCyl', 'sump'],
       sources: ['https://www.auto-data.net/en/porsche-718-cayman-982-gt4-4.0-420hp-41345', 'https://www.carexpert.co.nz/porsche/718/2020/cayman-gt4/powertrain-and-performance', 'https://www.autocosmos.com.ar/catalogo/2021/porsche/718-cayman-gt4/40l/165434'],
       factory: {
         idleRpm: 830,
@@ -3240,6 +3247,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'porsche-cayman-981-3-4',
+      systems: { sump: 'integrated-dry', oilL: 7.5 },
       name: 'Porsche Cayman S (981) 3.4',
       cars: ['Porsche Cayman S (981)', 'Porsche Cayman GTS (981, 340 к.с.)', 'Porsche Boxster S (981, 315 к.с.)'],
       years: '2013-2016',
@@ -3250,7 +3258,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 370,
       torqueRpm: 4500,
       voiceEvidence: 'default',
-      unverified: ['rodLength', 'idle', 'exhaust', 'firingOrder'],
+      unverified: ['rodLength', 'idle', 'exhaust', 'firingOrder', 'oilL'],
       sources: ['https://newsroom.porsche.com/dam/jcr:0036dadf-873b-46b8-86b2-841009f188af/2014_Cayman_Technical_Specifications.pdf', 'https://www.auto-data.net/en/porsche-cayman-981c-s-3.4-325hp-21384', 'https://en.wikipedia.org/wiki/Porsche_Boxster_and_Cayman_(981)'],
       factory: {
         idleRpm: 770,
@@ -3342,7 +3350,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'porsche-993-carrera',
-      systems: { cooling: 'fan', sparkPlugs: 2, ignition: 'distributor' },
+      systems: { cooling: 'fan', sparkPlugs: 2, ignition: 'distributor', sump: 'dry' },
       name: 'Porsche 911 Carrera (993) 3.6 повітряного охолодження',
       cars: ['Porsche 911 Carrera (993, 1994-1995)'],
       years: '1993-1995',
@@ -3404,7 +3412,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: null,
       torqueRpm: null,
       voiceEvidence: 'estimate',
-      unverified: ['fuelSystem'],
+      unverified: ['fuelSystem', 'sump'],
       sources: ['https://www.conceptcarz.com/w13531/duesenberg-model-j.aspx', 'https://carbaze.com/car-15498/duesenberg-j', 'https://ww.autozine.org/Archive/Duesenberg/classic/SJ.html'],
     },
     variants: [{
@@ -3497,7 +3505,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'mercedes-w196',
-      systems: { sparkPlugs: 2 },
+      systems: { sparkPlugs: 2, sump: 'dry' },
       name: 'Mercedes-Benz W196 R (M196)',
       cars: ['Mercedes-Benz W196 R'],
       years: '1954-1955',
@@ -3508,7 +3516,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 253,
       torqueRpm: 6450,
       voiceEvidence: 'estimate',
-      unverified: ['blockMaterial', 'redline', 'firingOrder', 'powerHp', 'torqueNm', 'sparkPlugs'],
+      unverified: ['blockMaterial', 'redline', 'firingOrder', 'powerHp', 'torqueNm', 'sparkPlugs', 'sump'],
       sources: ['https://en.wikipedia.org/wiki/Mercedes-Benz_M196_engine', 'https://en.wikipedia.org/wiki/Mercedes-Benz_W196', 'https://www.ultimatecarpage.com/spec/362/Mercedes-Benz-W196.html'],
       factory: {
         idleRpm: 770,
@@ -3546,7 +3554,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'alfa-romeo-8c-2300',
-      systems: { fuelSystem: 'carburettor' },
+      systems: { fuelSystem: 'carburettor', sump: 'dry' },
       name: 'Alfa Romeo 8C 2300',
       cars: ['Alfa Romeo 8C 2300'],
       years: '1931-1935',
@@ -3557,7 +3565,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: null,
       torqueRpm: null,
       voiceEvidence: 'estimate',
-      unverified: ['compression', 'firingOrder', 'fuel', 'redline', 'blockMaterial', 'powerHp', 'torqueNm', 'torqueRpm', 'fuelSystem'],
+      unverified: ['compression', 'firingOrder', 'fuel', 'redline', 'blockMaterial', 'powerHp', 'torqueNm', 'torqueRpm', 'fuelSystem', 'sump'],
       sources: ['https://en.wikipedia.org/wiki/Alfa_Romeo_8C', 'https://www.conceptcarz.com/w10253/alfa-romeo-8c-2300.aspx', 'https://www.ultimatecarpage.com/spec/3/Alfa-Romeo-8C-2300-Touring-Spider.html'],
       factory: {
         idleRpm: 710,
@@ -3610,6 +3618,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
     },
     variants: [{
       id: 'camaro-ss-lt1',
+      systems: { oilL: 9.5 },
       name: 'Chevrolet Camaro SS 6.2 LT1',
       cars: ['Chevrolet Camaro SS'],
       years: '2016-2024',
@@ -3882,6 +3891,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
     },
     variants: [{
       id: 'ferrari-488-gtb-f154',
+      systems: { sump: 'dry' },
       name: 'Ferrari 488 GTB F154',
       cars: ['Ferrari 488 GTB', 'Ferrari 488 Spider'],
       years: '2015-2019',
@@ -3929,6 +3939,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'mclaren-720s-m840t',
+      systems: { sump: 'dry' },
       name: 'McLaren 720S M840T',
       cars: ['McLaren 720S'],
       years: '2017-2023',
@@ -3990,7 +4001,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 582,
       torqueRpm: 4750,
       voiceEvidence: 'default',
-      unverified: ['fuel', 'directInjection'],
+      unverified: ['fuel', 'directInjection', 'sump'],
       sources: ['https://en.wikipedia.org/wiki/Ford_Modular_engine', 'https://8020automotive.com/ultimate-ford-5-2-voodoo-engine-guide/', 'https://paultan.org/2015/06/04/ford-mustang-shelby-gt350-gt350r-526-hp-582-nm', 'https://www.thechicagogarage.com/goto/post?id=3110294', 'https://rerev.com/firing-orders/ford/5-2l/'],
       factory: {
         idleRpm: 910,
@@ -4028,6 +4039,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'corvette-z06-c8-lt6',
+      systems: { sump: 'dry', oilL: 7.6 },
       name: 'Chevrolet Corvette Z06 C8 LT6',
       cars: ['Chevrolet Corvette Z06 C8'],
       years: '2023-',
@@ -4091,6 +4103,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
     },
     variants: [{
       id: 'audi-r8-52-fsi',
+      systems: { sump: 'dry' },
       name: 'Audi R8 5.2 FSI V10',
       cars: ['Audi R8 Type 42'],
       years: '2009-2015',
@@ -4140,7 +4153,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'huracan-lp610-4',
-      systems: { fuelSystem: 'dual' },
+      systems: { fuelSystem: 'dual', sump: 'dry' },
       name: 'Lamborghini Huracan LP 610-4',
       cars: ['Lamborghini Huracan LP 610-4'],
       years: '2014-2019',
@@ -4189,6 +4202,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'bmw-m5-e60-s85',
+      systems: { sump: 'baffled' },
       name: 'BMW M5 E60 S85',
       cars: ['BMW M5 E60', 'BMW M5 E61', 'BMW M6 E63'],
       years: '2005-2010',
@@ -4200,6 +4214,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueRpm: 6100,
       voiceEvidence: 'default',
       unverified: ['numbering', 'fuel'],
+      sumpNote: 'Два піддони: електричні насоси переганяють оливу з меншого в більший на поворотах. Головки не відкачуються, тому це не сухий картер.',
       sources: ['https://en.wikipedia.org/wiki/BMW_S85', 'https://www.bmwblog.com/2020/08/23/bmw-s85-v10-engine', 'https://australiancar.reviews/bmw-s85-engine-2005-10/'],
       factory: {
         idleRpm: 740,
@@ -4294,6 +4309,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'gallardo-50-even-fire',
+      systems: { sump: 'dry' },
       name: 'Lamborghini Gallardo 5.0',
       cars: ['Lamborghini Gallardo'],
       years: '2003-2005',
@@ -4356,6 +4372,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
     },
     variants: [{
       id: 'ferrari-812-superfast-f140',
+      systems: { sump: 'dry' },
       name: 'Ferrari 812 Superfast F140 GA',
       cars: ['Ferrari 812 Superfast', 'Ferrari 812 GTS'],
       years: '2017-2024',
@@ -4366,7 +4383,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 718,
       torqueRpm: 7000,
       voiceEvidence: 'default',
-      unverified: ['compression', 'redline', 'firingOrder', 'numbering', 'firingIntervals', 'fuel'],
+      unverified: ['compression', 'redline', 'firingOrder', 'numbering', 'firingIntervals', 'fuel', 'sump'],
       sources: ['https://en.wikipedia.org/wiki/Ferrari_F140_engine', 'https://www.enginelabs.com/news/12-pack-o-pistons-inside-ferrari-new-6-5-liter-v12-engine/', 'https://www.hagerty.com/media/automotive-history/epic-engines-v-12-ferrari-heart-soul/', 'https://cararac.com/spec/ferrari/812-superfast/'],
       factory: {
         idleRpm: 850,
@@ -4406,6 +4423,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'aventador-lp700-4-l539',
+      systems: { sump: 'dry' },
       name: 'Lamborghini Aventador LP 700-4 L539',
       cars: ['Lamborghini Aventador LP 700-4'],
       years: '2011-2016',
@@ -4569,7 +4587,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
     },
     variants: [{
       id: 'ferrari-512bb',
-      systems: { fuelSystem: 'carburettor' },
+      systems: { fuelSystem: 'carburettor', sump: 'dry' },
       name: 'Ferrari BB 512 4.9 F102B',
       cars: ['Ferrari 512 BB'],
       years: '1976-1981',
@@ -4612,6 +4630,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'ferrari-f512m',
+      systems: { sump: 'dry' },
       name: 'Ferrari F512 M 4.9 F113G',
       cars: ['Ferrari F512 M'],
       years: '1994-1996',
@@ -4654,7 +4673,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'ferrari-312t',
-      systems: { fuelSystem: 'mechanical' },
+      systems: { fuelSystem: 'mechanical', sump: 'dry' },
       name: 'Ferrari 312T 3.0 Tipo 015',
       cars: ['Ferrari 312T', 'Ferrari 312T2', 'Ferrari 312T3', 'Ferrari 312T4', 'Ferrari 312T5'],
       years: '1975-1980',
@@ -4665,7 +4684,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 320,
       torqueRpm: null,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'numbering', 'blockMaterial', 'powerHp', 'torqueNm', 'redline', 'exhaust', 'fuelSystem'],
+      unverified: ['firingOrder', 'numbering', 'blockMaterial', 'powerHp', 'torqueNm', 'redline', 'exhaust', 'fuelSystem', 'sump'],
       sources: ['https://en.wikipedia.org/wiki/Ferrari_312T', 'https://www.f1technical.net/f1db/cars/335/ferrari-312t', 'https://en.wikipedia.org/wiki/Ferrari_flat-12_engine'],
       factory: {
         idleRpm: 850,
@@ -4704,7 +4723,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'porsche-917-912',
-      systems: { fuelSystem: 'mechanical', cooling: 'fan', sparkPlugs: 2 },
+      systems: { fuelSystem: 'mechanical', cooling: 'fan', sparkPlugs: 2, sump: 'dry' },
       name: 'Porsche 917 4.5 Type 912',
       cars: ['Porsche 917 (1969)'],
       years: '1969-1971',
@@ -4715,7 +4734,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 475,
       torqueRpm: null,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'numbering', 'compression', 'powerHp', 'torqueNm', 'blockMaterial', 'redline', 'exhaust', 'fuelSystem', 'cooling', 'sparkPlugs'],
+      unverified: ['firingOrder', 'numbering', 'compression', 'powerHp', 'torqueNm', 'blockMaterial', 'redline', 'exhaust', 'fuelSystem', 'cooling', 'sparkPlugs', 'sump'],
       sources: ['https://en.wikipedia.org/wiki/Porsche_917', 'https://en.wikipedia.org/wiki/Porsche_flat-twelve_engine', 'https://auto-data.net/en/porsche-917-4.5-v12-520hp-43512', 'https://www.autosport.com/wec/feature/9421/is-this-the-greatest-racing-car-of-all-time'],
       factory: {
         idleRpm: 690,
@@ -4754,7 +4773,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'alfa-115-12',
-      systems: { fuelSystem: 'mechanical' },
+      systems: { fuelSystem: 'mechanical', sump: 'dry' },
       name: 'Alfa Romeo 3.0 Tipo 115-12',
       cars: ['Brabham BT45', 'Brabham BT46', 'Alfa Romeo 33TT12'],
       years: '1973-1979',
@@ -4765,7 +4784,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 325,
       torqueRpm: 9000,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'numbering', 'powerHp', 'powerRpm', 'torqueNm', 'torqueRpm', 'blockMaterial', 'redline', 'exhaust', 'fuelSystem'],
+      unverified: ['firingOrder', 'numbering', 'powerHp', 'powerRpm', 'torqueNm', 'torqueRpm', 'blockMaterial', 'redline', 'exhaust', 'fuelSystem', 'sump'],
       sources: ['https://www.f1technical.net/forum/viewtopic.php?p=832384', 'https://en.wikipedia.org/wiki/Alfa_Romeo_12-cylinder_engine', 'https://en.wikipedia.org/wiki/Brabham_BT45'],
       factory: {
         idleRpm: 850,
@@ -4820,6 +4839,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
     },
     variants: [{
       id: 'a8-phaeton-6-0-420',
+      systems: { sump: 'dry' },
       name: 'Audi A8 / VW Phaeton 6.0 W12 420 к.с.',
       cars: ['Audi A8 W12 (D2)', 'Volkswagen Phaeton W12'],
       years: '2001-2005',
@@ -4830,7 +4850,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 550,
       torqueRpm: 3500,
       voiceEvidence: 'default',
-      unverified: ['torqueRpm', 'exhaust'],
+      unverified: ['torqueRpm', 'exhaust', 'sump'],
       sources: ['https://www.thedrive.com/uploads/2023/08/02/SSP_248.pdf', 'https://en.wikipedia.org/wiki/Volkswagen_Group_W-12_engine', 'https://www.auto-data.net/en/volkswagen-phaeton-6.0-w12-48v-420hp-9156'],
       factory: {
         idleRpm: 690,
@@ -5000,11 +5020,12 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 1250,
       torqueRpm: 2200,
       voiceEvidence: 'estimate',
-      unverified: [],
+      unverified: ['oilL'],
       sources: ['https://en.wikipedia.org/wiki/Bugatti_Veyron', 'https://newsroom.bugatti.com/api/en/press-releases/pdf/bugatti-w16-engine-the-last-of-its-kind'],
     },
     variants: [{
       id: 'veyron-super-sport',
+      systems: { sump: 'dry', oilL: 16 },
       name: 'Bugatti Veyron 16.4 Super Sport',
       cars: ['Bugatti Veyron 16.4 Super Sport', 'Bugatti Veyron Grand Sport Vitesse'],
       years: '2010-2015',
@@ -5015,7 +5036,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 1500,
       torqueRpm: 3000,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'fuel', 'blockMaterial', 'directInjection', 'exhaust'],
+      unverified: ['oilL', 'firingOrder', 'fuel', 'blockMaterial', 'directInjection', 'exhaust'],
       sources: ['https://en.wikipedia.org/wiki/Bugatti_Veyron', 'https://en.wikipedia.org/wiki/Bugatti_W16_engine'],
       factory: {
         idleRpm: 670,
@@ -5049,6 +5070,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'chiron',
+      systems: { sump: 'dry', oilL: 16 },
       name: 'Bugatti Chiron / Divo 8.0 W16',
       cars: ['Bugatti Chiron', 'Bugatti Chiron Sport', 'Bugatti Chiron Pur Sport', 'Bugatti Divo'],
       years: '2016-2022',
@@ -5059,7 +5081,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 1600,
       torqueRpm: 2000,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'redline', 'fuel', 'blockMaterial', 'directInjection', 'exhaust'],
+      unverified: ['oilL', 'firingOrder', 'redline', 'fuel', 'blockMaterial', 'directInjection', 'exhaust'],
       sources: ['https://en.wikipedia.org/wiki/Bugatti_Chiron', 'https://newsroom.bugatti.com/api/en/press-releases/pdf/bugatti-w16-engine-the-last-of-its-kind', 'https://www.autocarindia.com/car-news/bugatti-divo-unveiled-409482'],
       factory: {
         idleRpm: 700,
@@ -5093,6 +5115,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'chiron-super-sport',
+      systems: { sump: 'dry', oilL: 16 },
       name: 'Bugatti Chiron Super Sport 8.0 W16 1600 к.с.',
       cars: ['Bugatti Chiron Super Sport', 'Bugatti Chiron Super Sport 300+', 'Bugatti Centodieci', 'Bugatti Mistral', 'Bugatti Bolide (серійний)'],
       years: '2019-2026',
@@ -5103,7 +5126,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 1600,
       torqueRpm: 2250,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'redline', 'torqueRpm', 'powerRpm', 'fuel', 'blockMaterial', 'directInjection', 'exhaust', 'years'],
+      unverified: ['oilL', 'firingOrder', 'redline', 'torqueRpm', 'powerRpm', 'fuel', 'blockMaterial', 'directInjection', 'exhaust', 'years'],
       sources: ['https://en.wikipedia.org/wiki/Bugatti_Chiron', 'https://en.wikipedia.org/wiki/Bugatti_Bolide', 'https://en.wikipedia.org/wiki/Bugatti_W16_engine'],
       factory: {
         idleRpm: 820,
@@ -5138,6 +5161,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'bolide-race',
+      systems: { sump: 'dry', oilL: 16 },
       name: 'Bugatti Bolide 8.0 W16 на гоночному пальному',
       cars: ['Bugatti Bolide (концепт)'],
       years: '2020',
@@ -5148,7 +5172,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 1850,
       torqueRpm: null,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'torqueNm', 'fuel', 'redline', 'blockMaterial', 'directInjection', 'exhaust'],
+      unverified: ['oilL', 'firingOrder', 'torqueNm', 'fuel', 'redline', 'blockMaterial', 'directInjection', 'exhaust'],
       sources: ['https://en.wikipedia.org/wiki/Bugatti_Bolide', 'https://en.wikipedia.org/wiki/Bugatti_W16_engine'],
       factory: {
         idleRpm: 820,
@@ -5281,7 +5305,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 130,
       torqueRpm: 3500,
       voiceEvidence: 'estimate',
-      unverified: ['compression', 'torqueNm', 'fuel', 'blockMaterial', 'exhaust'],
+      unverified: ['compression', 'torqueNm', 'fuel', 'blockMaterial', 'exhaust', 'sump'],
       sources: ['https://en.wikipedia.org/wiki/Mazda_Wankel_engine', 'https://www.auto-data.net/en/mazda-cosmo-l10a-1.0-wankel-110hp-43594', 'https://www.goodingco.com/lot/1967-mazda-cosmo-sport/'],
       factory: {
         idleRpm: 1100,
@@ -5323,6 +5347,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
     },
     variants: [{
       id: 'mazda-767-13j',
+      systems: { sump: 'dry' },
       name: 'Mazda 767 13J-M 4 ротори',
       cars: ['Mazda 767'],
       years: '1988',
@@ -5333,7 +5358,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 490,
       torqueRpm: 8000,
       voiceEvidence: 'estimate',
-      unverified: ['rotorR', 'rotorE', 'rotorWidth', 'fuel', 'blockMaterial', 'exhaust'],
+      unverified: ['rotorR', 'rotorE', 'rotorWidth', 'fuel', 'blockMaterial', 'exhaust', 'sump'],
       sources: ['https://www.asahi-net.or.jp/~IP3T-NKSN/Pages/B-grc/SPC-767.htm', 'https://en.wikipedia.org/wiki/Mazda_767', 'https://www.mazda.com/en/experience/mspr/motorsports/lemans/r26b/'],
       factory: {
         idleRpm: 850,
@@ -5352,6 +5377,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'mercedes-c111-ii',
+      systems: { sump: 'dry' },
       name: 'Mercedes-Benz C111-II M 950 4 ротори',
       cars: ['Mercedes-Benz C111-II'],
       years: '1970',
@@ -5362,7 +5388,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 433,
       torqueRpm: 5000,
       voiceEvidence: 'estimate',
-      unverified: ['powerRpm', 'torqueNm', 'torqueRpm', 'rotorR', 'fuel', 'blockMaterial', 'exhaust'],
+      unverified: ['powerRpm', 'torqueNm', 'torqueRpm', 'rotorR', 'fuel', 'blockMaterial', 'exhaust', 'sump'],
       sources: ['https://de.wikipedia.org/wiki/Mercedes-Benz_C_111', 'https://en.wikipedia.org/wiki/Mercedes-Benz_M950F', 'https://stern-freunde.de/article/16-mercedes-benz-c-111-ii-premiere-vor-50-jahren-auf-genfer-automobilsalon-1970', 'https://www.autoworld.be/en/detail-pages-of-expo-cars/mercedes-c-111-ii'],
       factory: {
         idleRpm: 850,

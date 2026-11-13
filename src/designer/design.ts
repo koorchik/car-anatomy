@@ -1,7 +1,7 @@
 // The engine a visitor builds. Everything here is a choice they can make. Anything derived lives elsewhere.
 
 import { t } from '../i18n/t.ts';
-import type { Cooling, FuelSystem, Ignition, OilCooler, OilPumpDrive } from '../engine/systems-spec.ts';
+import type { Cooling, FuelSystem, Ignition, OilCooler, OilPumpDrive, SumpKind } from '../engine/systems-spec.ts';
 import type { FuelId } from './fuels.ts';
 
 export type DesignLayout = 'inline' | 'vee' | 'boxer' | 'flatvee' | 'vr' | 'w' | 'rotary';
@@ -106,6 +106,10 @@ export interface Design {
   glowPlugs: boolean | null;
   oilPump: OilPumpDrive | null;
   oilFilter: boolean | null;
+  /** How the oil returns to the pump. Changes windage, mass and the pan's depth. Null: a wet sump. */
+  sump: SumpKind | null;
+  /** Oil capacity with the filter, litres. Null: what the size and the sump imply (src/designer/lubrication.ts). */
+  oilL: number | null;
 
   headerLength: number;
   headerDia: number;
@@ -194,6 +198,8 @@ export const DEFAULT_DESIGN: Design = {
   glowPlugs: null,
   oilPump: null,
   oilFilter: null,
+  sump: null,
+  oilL: null,
   headerLength: 650,
   headerDia: 40,
   headerSpread: 0,

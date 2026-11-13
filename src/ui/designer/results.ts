@@ -291,7 +291,7 @@ export class DesignerResults {
   private reliabilityHtml(): string {
     const rel = this.reliability;
     if (!rel) return '';
-    const sorted = [...rel.items].sort((a, b) => b.load - a.load);
+    const sorted = rel.items.filter((i) => !i.trackOnly).sort((a, b) => b.load - a.load);
     const rows = sorted
       .map((item) => {
         const open = this.openMetric === item.id;

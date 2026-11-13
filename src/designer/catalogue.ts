@@ -49,6 +49,8 @@ export interface EngineFacts {
   voiceEvidence: 'sourced' | 'owner' | 'estimate' | 'default';
   /** Field names that could not be confirmed against a source. */
   unverified: string[];
+  /** What the sump label leaves out, for the article's lubrication line. */
+  sumpNote?: string;
   sources: string[];
 }
 
@@ -61,7 +63,8 @@ export interface EngineVariant extends EngineFacts {
   systems?: SystemFacts;
 }
 
-export type SystemFacts = Partial<Pick<Design, (typeof SYSTEM_KEYS)[number]>>;
+/** The systems hardware, plus the sump and its oil, which do change the figures (src/designer/lubrication.ts). */
+export type SystemFacts = Partial<Pick<Design, (typeof SYSTEM_KEYS)[number] | 'sump' | 'oilL'>>;
 
 export interface PageVariants {
   base: EngineFacts;

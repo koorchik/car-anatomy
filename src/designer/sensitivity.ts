@@ -8,6 +8,7 @@ import type { Design } from './design.ts';
 import { evaluate, type Performance } from './physics.ts';
 import { editDesign } from './presets.ts';
 import { assessReliability, type Reliability } from './reliability.ts';
+import { lubricationFigures } from './lubrication-figures.ts';
 
 export interface Metric {
   id: string;
@@ -28,7 +29,7 @@ export function metricsOf(perf: Performance, rel: Reliability): Metric[] {
     { id: 'peakRpm', name: t('Оберти піку потужності'), value: perf.peakPower.rpm, format: 'rpm' },
     { id: 'safeRpm', name: t('Безпечні оберти'), value: rel.safeRpm, format: 'rpm' },
   ];
-  for (const item of rel.items) metrics.push({ id: item.id, name: item.name, value: item.load, format: 'load' });
+  for (const item of rel.items) if (!item.trackOnly) metrics.push({ id: item.id, name: item.name, value: item.load, format: 'load' });
   return metrics;
 }
 
@@ -73,7 +74,12 @@ export function compareMetrics(before: Metric[], after: Metric[]): Effect[] {
 export function snapshot(d: Design): Metric[] {
   const plain = d.factory ? { ...d, factory: null } : d;
   const perf = evaluate(plain);
-  return metricsOf(perf, assessReliability(plain, perf));
+  const lube = lubricationFigures(plain);
+  return [
+    ...metricsOf(perf, assessReliability(plain, perf)),
+    { id: 'crankHeight', name: t('Висота колінвала над дном піддона'), value: lube.crankHeightMm, format: 'percent' },
+    { id: 'oil', name: t('Об’єм оливи'), value: lube.oilL, format: 'percent' },
+  ];
 }
 
 export interface Probe {

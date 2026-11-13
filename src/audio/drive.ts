@@ -51,6 +51,8 @@ export class Drive {
   private listen: ListenPosition = 'exhaust';
   private lockedRpm: number | null = null;
   private pedal = 0;
+  /** Set by start, cleared by stop: the audio thread's last report can still say running just after a stop. */
+  private wanted = false;
   audioFailed = false;
 
   constructor(engine: Engine) {
@@ -143,8 +145,13 @@ export class Drive {
     this.node?.port.postMessage(cmd);
   }
 
+  /** Started and not stopped since. */
+  get wantsRunning(): boolean {
+    return this.wanted;
+  }
+
   setEngine(engine: Engine): void {
-    const running = this.snapshot().state === 'running';
+    const running = this.wanted && this.snapshot().state === 'running';
     this.config = synthConfig(engine);
     this.local.configure(this.config.sim);
     this.post({ type: 'config', config: this.config, running });
@@ -171,6 +178,7 @@ export class Drive {
   }
 
   start(): void {
+    this.wanted = true;
     this.local.start();
     if (this.lockedRpm !== null) this.local.startImmediately();
     this.post({ type: 'start' });
@@ -178,6 +186,7 @@ export class Drive {
   }
 
   stop(): void {
+    this.wanted = false;
     this.local.stop();
     this.post({ type: 'stop' });
   }
@@ -186,7 +195,7 @@ export class Drive {
   lock(rpm: number | null): void {
     this.lockedRpm = rpm;
     this.local.lockedRpm = rpm;
-    const running = this.snapshot().state === 'running';
+    const running = this.wanted && this.snapshot().state === 'running';
     this.post({ type: 'lock', rpm, running });
   }
 

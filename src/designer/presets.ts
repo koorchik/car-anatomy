@@ -58,14 +58,19 @@ export function withLayout(d: Design, layout: DesignLayout): Design {
     collectorOf: null,
     pans: null,
     coverColor: null,
+    // The oil a layout's pan holds follows its size.
+    oilL: null,
     factory: null,
   });
   return resolveDesign({ ...moved, ...layoutExhaust(layout, moved.cylinders) });
 }
 
 const COSMETIC = new Set<keyof Design>(['name', 'coverColor']);
-/** Hardware only the systems layers draw. The power model never reads it, so the factory figures stay. */
-const SYSTEM_FACTS = new Set<keyof Design>(SYSTEM_KEYS);
+/**
+ * Hardware only the systems layers draw, and the oil an engine holds, which only shapes its pan and the lap on track.
+ * The power model never reads them, so the factory figures stay.
+ */
+const SYSTEM_FACTS = new Set<keyof Design>([...SYSTEM_KEYS, 'oilL']);
 
 /** One edit from the panel, with what that edit implies for the fields that depended on the old value. */
 export function editDesign(d: Design, patch: Partial<Design>): Design {
@@ -97,6 +102,8 @@ export function editDesign(d: Design, patch: Partial<Design>): Design {
     next.glowPlugs = null;
   }
   if ('fuelSystem' in patch && !('ignition' in patch)) next.ignition = null;
+  // The derived capacity depends on the sump: a dry sump's tank holds more.
+  if ('sump' in patch && !('oilL' in patch)) next.oilL = null;
   if (('charger' in patch || 'cooling' in patch || FUELS[next.fuel]?.diesel !== dieselBefore) && !('pistonJets' in patch || 'oilCooler' in patch)) {
     next.pistonJets = null;
     next.oilCooler = null;

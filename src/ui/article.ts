@@ -4,6 +4,7 @@ import { ENGINES, engineFacts } from '../data/engines.ts';
 import type { EngineFacts } from '../designer/catalogue.ts';
 import { ALL_LAYERS, BalanceForces, atRpm, massesOf, roughly } from '../engine/balance-forces.ts';
 import { COOLING_NAMES, FUEL_SYSTEM_NAMES } from '../designer/systems.ts';
+import { SUMP_NAMES } from '../designer/lubrication.ts';
 import { balance, groupIntervals, torqueCurve, type Engine } from '../engine/kinematics.ts';
 import { ASPIRATION_NAMES, VALVETRAIN_NAMES, type EngineSpec } from '../engine/spec.ts';
 import { numberLocale } from '../i18n/locale.ts';
@@ -44,6 +45,7 @@ const figures = (engine: Engine): Array<[string, string]> => {
   rows.push([t('Ступінь стиснення'), `${num(s.compression, s.compression % 1 ? 1 : 0)} : 1`]);
   rows.push([t('Живлення'), s.fuel === 'diesel' ? t('дизель, {aspiration}', { aspiration: ASPIRATION_NAMES[s.aspiration] }) : t('бензин, {aspiration}', { aspiration: ASPIRATION_NAMES[s.aspiration] })]);
   if (s.systems) rows.push([t('Подача палива'), FUEL_SYSTEM_NAMES[s.systems.fuelSystem]], [t('Охолодження'), COOLING_NAMES[s.systems.cooling]]);
+  if (s.systems) rows.push([t('Мащення'), t('{kind}, {litres} л оливи', { kind: SUMP_NAMES[s.systems.sump], litres: num(s.systems.oilL, s.systems.oilL % 1 ? 1 : 0) })]);
   rows.push([t('Межа обертів'), t('{rpm} об/хв', { rpm: num(s.redlineRpm) })]);
   return rows;
 };
@@ -145,6 +147,7 @@ export const FIELD_NAMES: Record<string, string> = {
   firingOrder: t('порядок запалювання'), numbering: t('нумерацію циліндрів'), veeAngle: t('кут розвалу'), firingIntervals: t('інтервали спалахів'), exhaust: t('характер вихлопу'),
   rotorR: t('радіус ротора'), rotorE: t('ексцентриситет'), rotorWidth: t('ширину ротора'),
   fuelSystem: t('систему живлення'), cooling: t('тип охолодження'), oilCooler: t('оливний радіатор'), pistonJets: t('охолодження поршнів оливою'), sparkPlugs: t('кількість свічок'), ignition: t('систему запалювання'), glowPlugs: t('свічки розжарювання'), oilPump: t('привід оливного насоса'), oilFilter: t('оливний фільтр'),
+  sump: t('тип мащення'), oilL: t('об’єм оливи'),
 };
 
 /** What this engine's exhaust is set to, in words, so the difference between engines of a page can be read as well as heard. */
@@ -181,6 +184,7 @@ function factsHtml(facts: EngineFacts, voice: string): string {
     : '';
   return `<h3>${escapeHtml(facts.name)}</h3>
     ${facts.note ? `<p>${escapeHtml(facts.note)}</p>` : ''}
+    ${facts.sumpNote ? `<p class="note">${escapeHtml(facts.sumpNote)}</p>` : ''}
     <p>${escapeHtml(voice)} <span class="note small">${VOICE_EVIDENCE[facts.voiceEvidence]}</span></p>
     <p class="note">${escapeHtml(about)}.</p>${verify}${sources}`;
 }
@@ -203,6 +207,7 @@ export function articleHtml(engine: Engine): string {
       .map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`)
       .join('')}</dl>
     ${verify}
+    ${engine.isRotary ? '' : `<p class="note">${t('{link}: як олива в піддоні поводиться на треку і чи дістане її насос.', { link: `<a class="sibling" href="#/sump/${s.id}">${t('Мащення на треку')}</a>` })}</p>`}
     ${facts ? factsHtml(facts, voiceText(s)) : ''}
     <p>${t('{link} і подивитись, що зміниться.', { link: `<a class="sibling" href="#/designer/from/${s.id}">${t('Відкрити цей двигун у конструкторі')}</a>` })}</p>
     ${isVariant ? `<h2 class="layout-general">${t('Про цю компоновку загалом')}</h2><p class="lead">${escapeHtml(a.lead)}</p>` : ''}
