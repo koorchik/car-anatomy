@@ -6,8 +6,9 @@
 // acceleration–velocity transition (Wk: f3 = f4 = 12.5 Hz, Q4 0.63; Wd: f3 = f4 = 2 Hz, Q4 0.63) and, for Wk only, the
 // upward step (f5 2.37 Hz, Q5 0.91, f6 3.35 Hz, Q6 0.91, with its gain (f5/f6)² at low frequency). The article's table
 // prints f6 = 3.3 Hz; 3.35 Hz reproduces the standard's table of gains to the third digit and 3.3 Hz misses it by 3 % at
-// 1 Hz (docs/research/suspensions.md). The digital filter is a cascade of biquads from the bilinear transform,
-// prewarped at each section's own frequency; at 1 kHz it stays within 0.1 % of the analogue gain up to 20 Hz.
+// 1 Hz (docs/research/suspensions.md; that table is as the research remembers it, the standard itself was not read). The digital filter is a cascade of biquads from the bilinear transform,
+// prewarped at each section's own frequency; at 1 kHz it stays within 0.15 % of the analogue gain up to 20 Hz and
+// 0.3 % up to 31.5 Hz.
 //
 // Grip: the dynamic load coefficient DLC = σ(F_z)/F_z,static from the truck and pavement literature, the share of time
 // the wheel is off the road, the lowest load, and the available grip ⟨F_max(F_z(t))⟩ / F_max(F_z,static), with F_max
