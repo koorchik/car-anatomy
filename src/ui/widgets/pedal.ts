@@ -97,6 +97,16 @@ export class Pedal {
     this.apply();
   }
 
+  /**
+   * Lets go of everything, the gas key too: for a page the visitor leaves. Its key-up goes to the next page's keys,
+   * and a key still counted as held would open the throttle again on coming back.
+   */
+  reset(): void {
+    this.keyHeld = false;
+    this.keyValue = 0;
+    this.letGo();
+  }
+
   /** Eases the gas key toward pressed or released. */
   frame(dt: number): void {
     const target = this.keyHeld ? 1 : 0;

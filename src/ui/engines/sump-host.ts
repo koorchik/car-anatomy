@@ -80,7 +80,7 @@ export class SumpMode {
   /** In and out of the page. */
   set(on: boolean): void {
     const s = this.section;
-    const { stage, view, time, panels, keys } = s.ctx;
+    const { stage, view, time, panels } = s.ctx;
     const { balance, systems, dyno } = s.features;
     this.on = on;
     document.body.classList.toggle('sump-mode', on);
@@ -139,7 +139,7 @@ export class SumpMode {
       $('nav-engines').classList.add('current');
     }
     // Space plays the lap here and the arrows move through it; the layer keys and the ignition stay off.
-    keys.use(on ? ['engines/sump', 'engines'] : ['engines']);
+    s.useKeys();
     panels.relayout();
   }
 

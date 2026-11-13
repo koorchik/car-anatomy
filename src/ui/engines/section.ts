@@ -6,7 +6,7 @@ import type { Drive } from '../../audio/drive.ts';
 import type { Engine } from '../../engine/kinematics.ts';
 import { liveScratch, liveTiming, type ValveState } from '../../engine/valve-control.ts';
 import { plural, t } from '../../i18n/t.ts';
-import type { EngineModel } from '../../scene/model-types.ts';
+import type { EngineModel, ViewMode } from '../../scene/model-types.ts';
 import { PistonEngineModel } from '../../scene/piston-engine.ts';
 import { RotaryEngineModel } from '../../scene/rotary-engine.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
@@ -48,6 +48,8 @@ export class EnginesSection implements Section {
   private starting = false;
   /** The freeze the camera has gone home for (see TimeControl.frozen). */
   private homedFor: FreezeOptions | null = null;
+  /** Between leave() and the next enter(): another section is shown. */
+  private away = false;
   /** Reused every frame: the systems step allocates nothing. */
   private readonly systemsFrame: SystemsFrame = { theta: 0, advance: 0, rpm: 0, load: 0, throttle: 0, boost: 0, running: false, cranking: false, fuelCut: true, live: false, dt: 0, timeScale: 1 };
   /** Valve events and firing cylinders for the systems layers, written in place each frame. */
@@ -87,6 +89,7 @@ export class EnginesSection implements Section {
   }
 
   enter(_route: Route, from: Route | null): void {
+    if (this.away) this.resume();
     if (from === null || this.page() !== 'catalogue' || this.onDesigner || this.sump.on) {
       this.applyRoute();
       return;
@@ -100,12 +103,38 @@ export class EnginesSection implements Section {
   }
 
   leave(_to: Route): void {
-    // Nothing else to switch to yet: this keeps the sound and the pages' timers from running behind another section.
+    this.away = true;
+    // The pages' timers stop, and the next section gets the one Drive with the engine off, the throttle closed and the
+    // crank free: a latched pedal or slow motion left on it would rev or hold the engine there.
     this.features.dyno.setActive(false);
-    this.drive.stop();
     if (this.onDesigner) this.designer.page.leave();
     if (this.sump.on) this.sump.page?.leave();
+    this.dash.pedal.reset();
+    this.drive.lock(null);
+    this.drive.stop();
     this.ctx.keys.use([]);
+  }
+
+  /** Back from another section, which may have changed the shared view and time while this one was away. */
+  private resume(): void {
+    this.away = false;
+    const { view, time } = this.ctx;
+    this.useKeys();
+    this.applyView(view.mode);
+    $('slow-tool').hidden = time.mode !== 'slow';
+    // The oil page's lap holds the crank itself.
+    if (!this.sump.on) this.drive.lock(time.mode === 'slow' ? this.slowRpm : null);
+  }
+
+  /** The keys of the page shown: the oil page's own over the engines'. */
+  useKeys(): void {
+    this.ctx.keys.use(this.sump.on ? ['engines/sump', 'engines'] : ['engines']);
+  }
+
+  private applyView(mode: ViewMode): void {
+    this.model?.setView(mode);
+    this.features.systems.setView(mode);
+    this.features.dyno.setView(mode);
   }
 
   layout({ width }: Viewport): PanelSizes {
@@ -250,12 +279,12 @@ export class EnginesSection implements Section {
   /** The tools under the stage and the pages' own clicks. */
   private listen(): void {
     const { view, time, slots } = this.ctx;
+    // The view and the time are the shell's and outlive this section: another section's choices are not this one's.
     view.onChange((mode) => {
-      this.model?.setView(mode);
-      this.features.systems.setView(mode);
-      this.features.dyno.setView(mode);
+      if (!this.away) this.applyView(mode);
     });
     time.onChange((mode) => {
+      if (this.away) return;
       $('slow-tool').hidden = mode !== 'slow';
       this.drive.lock(mode === 'slow' ? this.slowRpm : null);
     });
@@ -345,7 +374,7 @@ export class EnginesSection implements Section {
       { codes: ['ArrowLeft', 'ArrowRight'], label: t('На 5 с назад або вперед'), down: lap },
       { codes: [...digits, 'KeyS'], label: null, down: lap },
     ]);
-    keys.use(['engines']);
+    this.useKeys();
   }
 
   frame(dt: number): void {
