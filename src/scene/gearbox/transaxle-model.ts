@@ -29,7 +29,7 @@ import { GearboxSceneBase, lathe, ring } from './scene-base.ts';
 export interface TransaxleModelOptions {
   /** Points per tooth and layers: 'low' for phones and slow machines. */
   quality?: MeshQuality;
-  /** The flywheel the bellhousing wraps, mm (layout estimate). */
+  /** The flywheel the bellhousing wraps, mm: in a car its engine's (packaging.ts, flywheelRadiusMm). Default TRANSAXLE_LAYOUT.flywheelMm. */
   flywheelRadiusMm?: number;
   /**
    * Inner joint centres the two stubs reach, gearbox frame (mm, z behind the front face), in the order of
@@ -54,7 +54,6 @@ const RAIL_CLEAR = 0.12;
 /** Halfshaft stub and inner joint housing, in differential case radii. */
 const STUB = 0.24;
 const JOINT = 0.62;
-const DEFAULT_FLYWHEEL = 150;
 
 const TAU = Math.PI * 2;
 const wrap = (angle: number): number => angle - Math.floor(angle / TAU) * TAU;
@@ -147,7 +146,7 @@ export class TransaxleModel extends GearboxSceneBase {
       this.buildShafts();
       this.buildSynchros();
       this.buildDifferential();
-      this.buildCase(options.flywheelRadiusMm ?? DEFAULT_FLYWHEEL);
+      this.buildCase(options.flywheelRadiusMm ?? TRANSAXLE_LAYOUT.flywheelMm);
     } catch (error) {
       this.dispose();
       throw error;
@@ -544,8 +543,9 @@ export class TransaxleModel extends GearboxSceneBase {
     let bell: THREE.BufferGeometry;
     if (d.axis === 'z') {
       // Beside a transverse engine the clutch housing also holds the differential's engine side, whose output leaves
-      // through its face next to the block: one casting round the flywheel and the ring gear, closed toward the case.
-      const y0 = L.wall;
+      // through its face next to the block: one casting round the flywheel and the ring gear, closed toward the case
+      // round the differential's housing, which may reach on into it beside the clutch (transaxleFrame).
+      const y0 = -frame.front;
       const around = (grow: number) =>
         hullShape([
           { x: 0, y: 0, r: (rFront + grow) * MM },
@@ -555,7 +555,11 @@ export class TransaxleModel extends GearboxSceneBase {
       wall.holes.push(new THREE.Path(around(-2).getPoints()));
       const tube = extrude(wall, (y1 - y0) * MM, undefined, 12);
       tube.translate(0, 0, ((y0 + y1) / 2) * MM);
-      const back = extrude(around(6), 8 * MM, undefined, 12);
+      const plate = around(6);
+      if (d.centre[2] - d.halfLength - L.margin < frame.front) {
+        plate.holes.push(new THREE.Path().absarc(d.centre[0] * MM, d.centre[1] * MM, housingR * MM, 0, Math.PI * 2, true));
+      }
+      const back = extrude(plate, 8 * MM, undefined, 12);
       back.translate(0, 0, (y0 + 4) * MM);
       bell = merge([tube, back]);
     } else {

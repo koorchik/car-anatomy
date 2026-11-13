@@ -334,7 +334,12 @@ export function speedRatio(box: Gearbox, state: StateInfo): number | null {
 /** Layout estimates, mm (not data): case walls, the bellhousing's depth, the differential case and the stubs. */
 export const TRANSAXLE_LAYOUT = {
   wall: 10,
+  /** The bellhousing's face to the case's front wall: the flywheel, the clutch and its release bearing. */
   bellhousingMm: 120,
+  /** The flywheel's radius and its depth behind the bellhousing's face; behind it the clutch cover's radius. */
+  flywheelMm: 150,
+  flywheelDepthMm: 40,
+  clutchMm: 135,
   /** Tip circles to the case. */
   margin: 6,
   /** Differential case radius and half length, in ring-gear pitch radii (helical) or crown pitch radii (bevel). */
@@ -362,7 +367,10 @@ export interface DiffPlace {
 
 export interface TransaxleFrame {
   diff: DiffPlace;
-  /** Inner joint centres of the default stubs, first on the axis's negative side (−Z or −X), then the positive one. */
+  /**
+   * Inner joint centres of the default stubs, first on the axis's negative side in the engine's frame (−Z, away from
+   * the engine, which is +z here; or −X), then the positive one.
+   */
   stubs: [GearboxPoint, GearboxPoint];
   /** The case's front and back faces, z (the front may lie ahead of 0 where the crown wheel reaches). */
   front: number;
@@ -414,8 +422,18 @@ export function transaxleFrame(spec: GearboxSpec): TransaxleFrame {
     diff.axis === 'z'
       ? [[c[0], c[1], c[2] + reach], [c[0], c[1], c[2] - reach]]
       : [[c[0] - reach, c[1], c[2]], [c[0] + reach, c[1], c[2]]];
-  // The case reaches ahead of z = 0 where the differential (or the crown wheel) does.
-  const diffFront = diff.axis === 'z' ? Math.min(c[2] - diff.halfLength, diff.ringAt[2] - ring.faceWidth / 2) : c[2] - diff.ringTip;
-  const front = Math.min(-L.wall, diffFront - L.margin);
+  // The case reaches ahead of z = 0 where the crown wheel or the ring gear does: both come in under the clutch. A
+  // parallel differential's case sits beside the clutch, as in a front-wheel-drive transaxle whose clutch housing holds
+  // the differential, so it may reach on into the bellhousing when it clears the clutch cover across and the flywheel
+  // along; otherwise the case starts ahead of it too.
+  let front: number;
+  if (diff.axis === 'z') {
+    front = Math.min(-L.wall, diff.ringAt[2] - ring.faceWidth / 2 - L.margin);
+    const nose = c[2] - diff.halfLength - L.margin;
+    const besideClutch = Math.hypot(c[0], c[1]) - diff.radius - L.margin >= L.clutchMm && nose >= front - L.bellhousingMm + L.flywheelDepthMm;
+    if (!besideClutch) front = Math.min(front, nose);
+  } else {
+    front = Math.min(-L.wall, c[2] - diff.ringTip - L.margin);
+  }
   return { diff, stubs, front, back: back + L.wall, bellhousing: front - L.bellhousingMm };
 }

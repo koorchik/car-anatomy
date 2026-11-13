@@ -14,6 +14,7 @@ import { buildEngine } from '../src/engine/kinematics.ts';
 import { GEARBOX_PARTS } from '../src/scene/gearbox/parts.ts';
 import { TransaxleModel } from '../src/scene/gearbox/transaxle-model.ts';
 import { transaxleStubs } from '../src/vehicle/gearbox-place.ts';
+import { flywheelRadiusMm } from '../src/vehicle/packaging.ts';
 import type { ModelDef } from './model-api.ts';
 
 export function transaxleViewer(recordId: string, title: string): ModelDef {
@@ -23,7 +24,10 @@ export function transaxleViewer(recordId: string, title: string): ModelDef {
   const car = record.car ? CARS[record.car] : undefined;
   const drive = car ? DRIVE_CARS[car.id] : undefined;
   const joint = drive ? (drive.driveline.diffOutputs.front ?? drive.driveline.diffOutputs.rear) : undefined;
-  const stubs = car && joint ? transaxleStubs(car, buildEngine(engineById(car.engine)!), spec, joint) : undefined;
+  const engine = car ? buildEngine(engineById(car.engine)!) : undefined;
+  const stubs = car && engine && joint ? transaxleStubs(car, engine, spec, joint) : undefined;
+  // The bellhousing wraps the flywheel the car's engine model draws.
+  const flywheel = engine ? flywheelRadiusMm(engine) : undefined;
   const gears = box.states.map((s) => s.name);
   return {
     title,
@@ -46,7 +50,11 @@ export function transaxleViewer(recordId: string, title: string): ModelDef {
       },
     ],
     create(values) {
-      const model = new TransaxleModel(box, { quality: values.quality === 'low' ? 'low' : 'high', ...(values.car && stubs ? { stubs } : {}) });
+      const model = new TransaxleModel(box, {
+        quality: values.quality === 'low' ? 'low' : 'high',
+        ...(flywheel ? { flywheelRadiusMm: flywheel } : {}),
+        ...(values.car && stubs ? { stubs } : {}),
+      });
       const table = new TableDrive(box, gears.includes(values.gear as string) ? (values.gear as string) : 'N');
       const pose = table.frame();
       const unlit = { angles: pose.angles, sleeves: pose.sleeves, meshPower: box.meshes.map(() => 0) };

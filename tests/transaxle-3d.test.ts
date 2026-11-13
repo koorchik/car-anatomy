@@ -354,6 +354,38 @@ describe('in the car', () => {
     }
   });
 
+  it.each(BOXES)('$id: stays in the engine bay (a rear engine\'s box only across the car and in height)', ({ id, car: carId }) => {
+    // A transverse box ends in the bay, short of the left wheel's inner side as it steers; the 911's reaches forward
+    // past its bay under the rear seats, so only its width and height are held.
+    const car = CARS[carId]!;
+    const engine = buildEngine(engineById(car.engine)!);
+    const box = boxOf(id);
+    const model = new TransaxleModel(box, { quality: 'low' });
+    model.setView('solid');
+    const toCar = gearboxToCar(car, engine, transaxleFrame(box.spec).bellhousing);
+    const bay = car.packaging!.bay;
+    const axes = car.mount.axis === 'transverse' ? [0, 1, 2] : [1, 2];
+    model.group.updateMatrixWorld(true);
+    const toMounted = model.mounted.matrixWorld.clone().invert();
+    const v = new THREE.Vector3();
+    const outside: string[] = [];
+    model.group.traverseVisible((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const m = toMounted.clone().multiply(mesh.matrixWorld);
+      const pos = mesh.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m);
+        const p = toCar([v.x / MM, v.y / MM, -v.z / MM]);
+        for (const k of axes) {
+          if (p[k]! < bay.min[k]! || p[k]! > bay.max[k]!) outside.push(`${o.userData.part as string} ${'xyz'[k]} ${p[k]!.toFixed(3)}`);
+        }
+      }
+    });
+    expect([...new Set(outside)].slice(0, 5)).toEqual([]);
+    model.dispose();
+  });
+
   it.each(BOXES)('$id: the bellhousing meets the back of the engine block on the crank axis', ({ id, car: carId }) => {
     const car = CARS[carId]!;
     const engine = buildEngine(engineById(car.engine)!);
