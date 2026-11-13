@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ALL_GEARBOXES, gearboxById } from '../src/data/gearboxes.ts';
 import { DRIVE_CARS } from '../src/data/drive-cars.ts';
@@ -203,5 +205,39 @@ describe('shared gear', () => {
     const base = gearboxSpec(e30Record);
     const spec: GearboxSpec = { ...base, axes: base.axes.map((a) => (a.id === 'idler' ? { ...a, x: a.x + 0.5 } : a)) };
     expect(() => buildGearbox(spec)).toThrow(/axes are/);
+  });
+});
+
+/** Files a module loads at run time, following value imports and re-exports; `import type` is erased and skipped. */
+function runtimeGraph(entry: string): Set<string> {
+  const seen = new Set<string>();
+  const visit = (file: string) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const source = readFileSync(file, 'utf8');
+    for (const m of source.matchAll(/^\s*(?:import|export)\s+(type\s+)?(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/gm)) {
+      if (m[1] || !m[2]!.startsWith('.')) continue;
+      visit(resolve(dirname(file), m[2]!));
+    }
+  };
+  visit(resolve(entry));
+  return seen;
+}
+
+describe('10. the audio thread never derives', () => {
+  // What the worklet runs: the solver and the core it steps, and the load that will drive them (stage K2c), once it
+  // exists. None of it may pull in the derivation or the gear geometry: a few milliseconds there is an audible gap.
+  const entries = ['src/drivetrain/solver.ts', 'src/drivetrain/core.ts', 'src/drivetrain/driveline-load.ts', 'src/vehicle/vehicle-load.ts'].filter((f) => existsSync(f));
+
+  it.each(entries)('%s does not load topology.ts or gear-geometry.ts', (entry) => {
+    const files = [...runtimeGraph(entry)].map((f) => f.replace(/\\/g, '/'));
+    expect(files.some((f) => f.endsWith('/drivetrain/topology.ts'))).toBe(false);
+    expect(files.some((f) => f.endsWith('/drivetrain/gear-geometry.ts'))).toBe(false);
+  });
+
+  it('the graph walker does see them where they are loaded', () => {
+    const files = [...runtimeGraph('src/drivetrain/catalogue.ts')];
+    expect(files.some((f) => f.endsWith('/drivetrain/gear-geometry.ts'))).toBe(true);
+    expect(files.some((f) => f.endsWith('/drivetrain/topology.ts'))).toBe(false);
   });
 });
