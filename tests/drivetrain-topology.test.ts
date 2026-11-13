@@ -243,9 +243,10 @@ describe('10. the audio thread never derives', () => {
     expect(files.some((f) => f.endsWith('/drivetrain/gear-geometry.ts'))).toBe(false);
   });
 
-  it('nothing the worklet loads carries text: no t() and no dictionary on the audio thread', () => {
+  it('nothing the worklet loads carries text: no t(), no dictionary and no data records on the audio thread', () => {
+    // The whole-car plan's rule: the load arrives as plain data, so the worklet never needs src/data (names, records).
     const files = [...runtimeGraph('src/audio/worklet.ts')].map((f) => f.replace(/\\/g, '/'));
-    expect(files.filter((f) => f.includes('/i18n/'))).toEqual([]);
+    expect(files.filter((f) => f.includes('/src/i18n/') || f.includes('/src/data/'))).toEqual([]);
   });
 
   it('the graph walker does see them where they are loaded', () => {
