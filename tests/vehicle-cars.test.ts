@@ -3,7 +3,9 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { calibrateRoadLoad, epaForceN, K_EPA_LIST, type EpaRow } from '../scripts/calibrate-road-load.ts';
 import { CAR_LIST, carById, CARS } from '../src/data/cars.ts';
+import { DRIVE_CARS } from '../src/data/drive-cars.ts';
 import { engineById, engineFacts } from '../src/data/engines.ts';
+import { gearboxById } from '../src/data/gearboxes.ts';
 import { genericCar, SUMP_CARS } from '../src/data/sump-cars.ts';
 import { SECTOR_NAMES, TYRE_NAMES } from '../src/data/vehicle-names.ts';
 import { evaluate } from '../src/designer/physics.ts';
@@ -47,6 +49,9 @@ import { buildTrack, TEST_CIRCUIT, TEST_SECTORS } from '../src/vehicle/track.ts'
 import { outerDiameterM, parseTyreSize, rollingRadiusM } from '../src/vehicle/tyre-size.ts';
 import { dragForce, G, TYRES, type EngineMount, type VehicleSpec } from '../src/vehicle/vehicle.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
+import { gearboxSpec } from '../src/drivetrain/catalogue.ts';
+import { finalRatio } from '../src/drivetrain/layouts/transaxle.ts';
+import { transaxleDiffOutput } from '../src/vehicle/gearbox-place.ts';
 
 /** Reads a dotted path like 'body.trackFrontM'; undefined when the record has no such field. */
 const at = (car: CarRecord, path: string): unknown =>
@@ -502,6 +507,56 @@ describe('links between sections', () => {
     for (const sump of SUMP_CARS) expect(carLinks(CARS[sump.car!]!, pages).map((l) => l.section)).toEqual(['engines', 'sump']);
   });
 });
+
+describe('gearbox links', () => {
+  it('the Civic and the 911 drive the two gearboxes of the manual-transaxle page', () => {
+    expect(CARS['civic-type-r-fk8']!.gearbox).toBe('manual-transaxle');
+    expect(CARS['porsche-911-carrera-t-992']!.gearbox).toBe('manual-transaxle/porsche-911-carrera-t-992');
+  });
+
+  it.each(CAR_LIST.filter((c) => c.gearbox !== null).map((c) => [c.id, c] as const))(
+    '%s names a gearbox of its own, and its drive car names the same one',
+    (_id, car) => {
+      expect(gearboxById(car.gearbox!)?.car).toBe(car.id);
+      expect(DRIVE_CARS[car.id]?.gearbox).toBe(car.gearbox);
+    },
+  );
+
+  it("the drive car of every linked car has its driven axle's inner joints, the gearbox its final drive", () => {
+    for (const car of CAR_LIST.filter((c) => c.gearbox !== null)) {
+      const drive = DRIVE_CARS[car.id]!;
+      const axle = car.drive === 'fwd' ? 'front' : 'rear';
+      expect(drive.driveline.diffOutputs[axle], car.id).toBeDefined();
+      // The left joint, inside the left wheel.
+      const joint = drive.driveline.diffOutputs[axle]!;
+      expect(joint[1], car.id).toBeGreaterThan(0);
+      expect(joint[1], car.id).toBeLessThan(wheelCentre(car, axle, 'left')[1] - 0.25);
+      expect(Math.abs(Math.abs(stateRatioFinal(car.gearbox!)) - drive.finalDrive.ratio), car.id).toBeLessThanOrEqual(0.005);
+    }
+  });
+
+  it('a transaxle car keeps the inner joint its gearbox gives, bolted to the engine at crankFront (to 1 mm)', () => {
+    for (const id of ['civic-type-r-fk8', 'porsche-911-carrera-t-992']) {
+      const car = CARS[id]!;
+      const axle = car.drive === 'fwd' ? 'front' : 'rear';
+      const joint = transaxleDiffOutput(car, buildEngine(engineById(car.engine)!), gearboxSpec(gearboxById(car.gearbox!)!));
+      const stored = DRIVE_CARS[id]!.driveline.diffOutputs[axle]!;
+      for (let k = 0; k < 3; k++) expect(Math.abs(stored[k]! - joint[k]!), `${id} ${k}`).toBeLessThanOrEqual(0.001);
+      // The differential sits on the driven axle's line, a little below the wheel centres, and the halfshaft reaches
+      // the wheel at less than 10° in plan and in elevation.
+      const wheel = wheelCentre(car, axle, 'left');
+      const span = wheel[1] - joint[1];
+      expect(Math.abs(Math.atan2(wheel[0] - joint[0], span)), id).toBeLessThan((10 * Math.PI) / 180);
+      expect(Math.abs(Math.atan2(wheel[2] - joint[2], span)), id).toBeLessThan((10 * Math.PI) / 180);
+    }
+  });
+});
+
+/** The final drive inside a transaxle's case, from its teeth. */
+function stateRatioFinal(gearbox: string): number {
+  const spec = gearboxSpec(gearboxById(gearbox)!);
+  return finalRatio(spec) ?? NaN;
+}
 
 describe('names of the vehicle core', () => {
   it('name every tyre and every sector of the test circuit', () => {
