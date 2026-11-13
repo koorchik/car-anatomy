@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { CAR_LIST } from '../src/data/cars.ts';
 import { CATALOGUE, engineById, pageChoices } from '../src/data/engines.ts';
+import { GEARBOX_PAGES } from '../src/data/gearboxes.ts';
 import { decodeDesign, encodeDesign } from '../src/designer/codec.ts';
 import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
 import { designFromSpec } from '../src/designer/presets.ts';
@@ -168,6 +170,25 @@ describe('routes', () => {
   it('keeps ids clear of the words the addresses use', () => {
     for (const id of ENGINE_IDS) {
       for (const word of id.split('/')) expect(RESERVED.engines, id).not.toContain(word);
+    }
+    // #/car/designer is the car designer and #/car/<id> a car, which ?car=<id> names as well.
+    for (const car of CAR_LIST) expect(RESERVED.car, car.id).not.toContain(car.id);
+    // #/gearboxes/designer is the gearbox designer and #/gearboxes/<page>[/<variant>] a page of the catalogue.
+    for (const page of GEARBOX_PAGES) {
+      for (const id of [page.id, ...page.variants.map((v) => v.id)]) {
+        for (const word of id.split('/')) expect(RESERVED.gearboxes, id).not.toContain(word);
+      }
+    }
+  });
+
+  it('opens a car, a gearbox page and its variants where the scheme puts them', () => {
+    for (const car of CAR_LIST) {
+      expect(parseRoute(`#/car/${car.id}`), car.id).toMatchObject({ section: 'car', page: 'overview', path: [car.id] });
+      expect(parseRoute(`#/engines/v8-cross?car=${car.id}`).query.car, car.id).toBe(car.id);
+    }
+    for (const page of GEARBOX_PAGES) {
+      expect(parseRoute(`#/gearboxes/${page.id}`), page.id).toMatchObject({ section: 'gearboxes', page: 'catalogue', path: [page.id] });
+      for (const v of page.variants) expect(parseRoute(`#/gearboxes/${page.id}/${v.id}`), v.id).toMatchObject({ section: 'gearboxes', page: 'catalogue' });
     }
   });
 
