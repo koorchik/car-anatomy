@@ -10,6 +10,7 @@ import { stackLength } from '../src/drivetrain/layouts/layshaft.ts';
 import { buildGearbox } from '../src/drivetrain/topology.ts';
 
 const DEG = 180 / Math.PI;
+const helix = (beta: number): string => (beta === 0 ? 'spur' : `${(Math.abs(beta) * DEG).toFixed(2)}° ${beta > 0 ? 'R' : 'L'}`);
 
 function print(record: GearboxRecord, car: DriveCar | null): void {
   const spec = gearboxSpec(record);
@@ -29,13 +30,14 @@ function print(record: GearboxRecord, car: DriveCar | null): void {
       overall.padStart(8), ' ', s.loaded.map(mesh).join(', ') || (s.kind === 'gear' ? 'none: direct' : ''),
     );
   }
-  console.log('mesh                      teeth   m_n    helix  shift        a mm   eps_a  eps_b  undercut');
+  // The helix as an angle and the hand of the first gear (its mate has the other hand).
+  console.log('mesh                      teeth   m_n      helix  shift        a mm   eps_a  eps_b  undercut');
   for (const m of box.meshes) {
     const a = spec.gears.find((g) => g.id === m.a)!;
     const b = spec.gears.find((g) => g.id === m.b)!;
     const cut = [a, b].filter((g) => undercut(g.teeth, g.shift, Math.abs(g.helix), g.pressureAngle).undercut).map((g) => g.id);
     console.log(
-      `${m.a}/${m.b}`.padEnd(24), `${a.teeth}/${b.teeth}`.padStart(7), a.module.toFixed(2).padStart(5), `${(m.geometry.a.beta * DEG).toFixed(2)}°`.padStart(8),
+      `${m.a}/${m.b}`.padEnd(24), `${a.teeth}/${b.teeth}`.padStart(7), a.module.toFixed(2).padStart(5), helix(m.geometry.a.beta).padStart(10),
       `${a.shift}/${b.shift}`.padStart(6), m.geometry.centre.toFixed(3).padStart(11), m.geometry.epsAlpha.toFixed(2).padStart(7), m.geometry.epsBeta.toFixed(2).padStart(6),
       ` ${cut.join(', ') || '—'}`,
     );
