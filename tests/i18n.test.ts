@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CATALOGUE } from '../src/data/engines.ts';
 import { ENGINE_VARIANTS } from '../src/data/engine-variants.ts';
 import { DESIGNER_EN } from '../src/i18n/en/designer.ts';
+import { LUBRICATION_EN } from '../src/i18n/en/lubrication.ts';
 import { SYSTEMS_EN } from '../src/i18n/en/systems.ts';
 import { ENGINE_TEXT_EN } from '../src/i18n/en/engines.ts';
 import { UI_EN } from '../src/i18n/en/ui.ts';
@@ -20,7 +21,7 @@ const SOURCE_DATA = ['src/data/engines.ts', 'src/data/engine-variants.ts'];
 const files = walk('src').filter((f) => !f.startsWith('src/i18n/') && !SOURCE_DATA.includes(f));
 const CALL = /\bt\(\s*(['"])((?:\\.|(?!\1).)*)\1/gs;
 const unescape = (text: string): string => text.replace(/\\(['"\\])/g, '$1').replace(/\\n/g, '\n');
-const ENGLISH = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN };
+const ENGLISH = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN };
 const placeholders = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).sort();
 
 describe.each(files)('%s', (file) => {
