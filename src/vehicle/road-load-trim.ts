@@ -8,7 +8,7 @@ export const ROAD_LOAD_TRIM: RoadLoadTrim = {
   rolling: { aPerKg: 0.08619, bPerKg: 0.0020682 },
   areaShare: 0.8585,
   cars: {
-    'bmw-m3-e30': { rule: 'brochure', cdA: 0.6804 },
+    'bmw-m3-e30': { rule: 'vmax', cdA: 0.7113 },
     'porsche-cayman-s-981': { rule: 'vmax', cdA: 0.6035 },
   },
 };

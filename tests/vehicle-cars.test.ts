@@ -1,8 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { calibrateRoadLoad, epaForceN, K_EPA_LIST, type EpaRow } from '../scripts/calibrate-road-load.ts';
+import { calibrateRoadLoad, drives, epaForceN, K_EPA_LIST, type EpaRow } from '../scripts/calibrate-road-load.ts';
 import { CAR_LIST, carById, CARS } from '../src/data/cars.ts';
+import { driveCarById } from '../src/data/drive-cars.ts';
+import { gearboxById } from '../src/data/gearboxes.ts';
+import { buildCarDrive } from '../src/drivetrain/car-model.ts';
+import { steadyTopSpeed } from '../src/drivetrain/runs.ts';
 import { engineById, engineFacts } from '../src/data/engines.ts';
 import { genericCar, SUMP_CARS } from '../src/data/sump-cars.ts';
 import { SECTOR_NAMES, TYRE_NAMES } from '../src/data/vehicle-names.ts';
@@ -66,6 +70,10 @@ describe('car records', () => {
 
     it('links to a gearbox and suspensions by name only once those sections have them', () => {
       if (car.gearbox !== null) expect(car.gearbox).toMatch(/^[a-z0-9-]+(\/[a-z0-9-]+)?$/);
+      // A gearbox link names a record of the catalogue, the same one the car's drivetrain uses.
+      if (car.gearbox !== null) expect(gearboxById(car.gearbox), car.gearbox).toBeDefined();
+      const drive = driveCarById(car.id);
+      if (drive) expect(car.gearbox).toBe(drive.gearbox);
       if (car.suspension !== null) for (const type of [car.suspension.front, car.suspension.rear]) expect(type).toMatch(/^[a-z0-9-]+$/);
     });
 
@@ -237,6 +245,10 @@ describe('road load', () => {
       // An unchecked or limited top speed says nothing about drag: the maker's Cd·A times k_EPA, marked unverified.
       expect(rl.c).toBeCloseTo(0.5 * AIR_DENSITY * car.aero!.cd * car.aero!.areaM2 * ROAD_LOAD_TRIM.kEpa, 3);
       expect(car.unverified.some((p) => p.startsWith('published.vmax')) || car.published.vmaxLimited).toBe(true);
+    } else if (drives(car)) {
+      // A car the gearbox model drives is calibrated on its force at the wheels: the model's steady top speed is the
+      // published one (the lap's ideal gearbox takes its real one at stage K7).
+      expect(steadyTopSpeed(buildCarDrive(car.id), rl).v * 3.6).toBeCloseTo(car.published.vmaxKmh, 0);
     } else {
       // The lap's own top speed with this road load is the published one.
       const design = designFromSpec(engineById(car.engine)!);
@@ -248,8 +260,8 @@ describe('road load', () => {
   it('refuses a car nobody calibrated instead of guessing its drag', () => {
     const e30 = CARS['bmw-m3-e30']!;
     expect(() => roadLoadCoeffs({ ...e30, id: 'uncalibrated' })).toThrow(/calibrate-road-load/);
-    // The record's rule changed (a checked top speed) but the trim was not rerun.
-    expect(() => roadLoadCoeffs({ ...e30, unverified: e30.unverified.filter((p) => !p.startsWith('published.vmax')) })).toThrow(/calibrate-road-load/);
+    // The record's rule changed (its top speed no longer checked) but the trim was not rerun.
+    expect(() => roadLoadCoeffs({ ...e30, unverified: [...e30.unverified, 'published.vmaxKmh'] })).toThrow(/calibrate-road-load/);
   });
 
   it.each(CAR_LIST.map((c) => [c.id, c] as const))('%s: rolls the lap on the driven tyres\' radius, from their size', (_id, car) => {
@@ -314,8 +326,9 @@ describe('links between sections', () => {
   it('links only to pages that exist', () => {
     const engines = pageIndex({ engines: (id) => !!engineById(id) });
     expect(carLinks(e30, engines)).toEqual([{ section: 'engines', target: 'i4/bmw-m3-e30-s14', href: '#/engines/i4/bmw-m3-e30-s14' }]);
-    // No gearbox link while the record has none, even if the page exists.
-    expect(carLinks(e30, pageIndex({ gearboxes: () => true }))).toEqual([]);
+    // No gearbox link while the record has none, even if the page exists; the E30 has one since stage K2b.
+    expect(carLinks({ ...e30, gearbox: null }, pageIndex({ gearboxes: () => true }))).toEqual([]);
+    expect(carLinks(e30, pageIndex({ gearboxes: () => true })).map((l) => l.href)).toEqual(['#/gearboxes/manual-rwd']);
     const linked: CarRecord = { ...e30, gearbox: 'manual-rwd', suspension: { front: 'macpherson', rear: 'semi-trailing' } };
     expect(carLinks(linked, pageIndex({ gearboxes: () => true, suspensions: (type) => type === 'semi-trailing' })).map((l) => l.href)).toEqual([
       '#/gearboxes/manual-rwd',
