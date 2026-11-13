@@ -6,6 +6,10 @@
 // For a gearbox in a car: the natural frequencies of the drivetrain with each damper, from the car's engine; for a car
 // that drives (its DriveCar has dynamics, stage K2b), its road load, top speed, 0–100 km/h and 0–400 m by the
 // quasi-static and the whole model, and the shunt in every gear.
+// `--designer` prints the gearbox designer's model instead (stage K9a): for each copy of a catalogue gearbox in its
+// car (and the odd presets with `--designer all`), the teeth it picks, the ratios against their targets and the
+// published ones, and the quasi-static figures: v_max, revs in top, the rev drops and synchronisers on the upshifts,
+// the start grade, 0–100 km/h and 0–400 m.
 import { carById } from '../src/data/cars.ts';
 import { DRIVE_CARS, driveCarById } from '../src/data/drive-cars.ts';
 import { engineById } from '../src/data/engines.ts';
@@ -27,6 +31,8 @@ import { vehicleModes } from '../src/drivetrain/vehicle-modes.ts';
 import { AIR_DENSITY } from '../src/vehicle/constants.ts';
 import { roadLoadCoeffs, roadLoadN, roadLoadRule } from '../src/vehicle/road-load.ts';
 import { staticWheelLoadN, tyreAt } from '../src/vehicle/tyre.ts';
+import { evaluateGearbox } from '../src/gearbox-designer/evaluate.ts';
+import { catalogueGearboxPresets, oddGearboxPresets, type GearboxPreset } from '../src/gearbox-designer/presets.ts';
 
 const DEG = 180 / Math.PI;
 const helix = (beta: number): string => (beta === 0 ? 'spur' : `${(Math.abs(beta) * DEG).toFixed(2)}° ${beta > 0 ? 'R' : 'L'}`);
@@ -148,7 +154,54 @@ function printModes(box: Gearbox, car: DriveCar): void {
   }
 }
 
+/** The gearbox designer's figures for one preset. */
+function printDesigner(preset: GearboxPreset): void {
+  const d = preset.design;
+  const e = evaluateGearbox(d);
+  const record = d.factory ? gearboxById(d.factory.gearbox) : undefined;
+  const car = carById(d.car)!;
+  const kmh = (v: number | null) => (v === null ? '—' : v.toFixed(0));
+  console.log(
+    `\n${preset.name} [${preset.id}]: ${d.type}, ${d.gears} speeds, centre ${d.centreMm} mm, helix ${d.helix}°, modules ${d.module}/${d.lowModule}/${d.mainModule} mm, ` +
+      `engine ${d.engine}, ${d.massKg.toFixed(0)} kg, ${d.tyreSize} ${d.tyre}, C_dA ${d.cdA.toFixed(3)} m², C_rr ${d.crr.toFixed(4)}`,
+  );
+  if (e.mainRatio !== null) console.log(`constant-mesh pair ${e.mainRatio.toFixed(4)}`);
+  console.log('gear   teeth    m_n  shift          ratio    target  published   step  overall    eff  km/h/1000  km/h@limit  grid step');
+  for (const g of e.gears) {
+    const p = g.pair;
+    const published = record?.published.ratios[g.gear - 1];
+    console.log(
+      String(g.gear).padEnd(5), (p ? `${p.teeth[0]}/${p.teeth[1]}` : 'direct').padStart(7), (p ? p.module.toFixed(2) : '').padStart(6),
+      (p ? `${p.shift[0].toFixed(2)}/${p.shift[1].toFixed(2)}` : '').padStart(12), g.ratio.toFixed(4).padStart(9), g.target.toFixed(4).padStart(9),
+      (published === undefined ? '' : published.toFixed(3)).padStart(10), (g.step === null ? '' : g.step.toFixed(3)).padStart(6), g.overall.toFixed(3).padStart(8),
+      g.efficiency.toFixed(3).padStart(6), g.kmhPer1000.toFixed(1).padStart(10), g.kmhAtLimit.toFixed(0).padStart(11),
+      (p && !p.hand ? p.step.toFixed(4) : p ? 'by hand' : '').padStart(10),
+    );
+  }
+  console.log(
+    `reverse ${e.reverse.teeth.join('/')} ${e.reverse.ratio.toFixed(3)} (published ${record?.published.reverse ?? '—'}), final drive ${e.finalDrive.toFixed(3)}, ` +
+      `range ${e.range.toFixed(2)}, input side ${e.inputInertia.toFixed(4)} kg·m²`,
+  );
+  console.log(
+    `v_max ${e.vmaxKmh.toFixed(1)} km/h in ${e.vmaxGear}${e.vmaxAtLimiter ? ' at the limiter' : ''} (published ${car.published.vmaxKmh}); top gear ${e.topRpmAt100.toFixed(0)} rpm at 100 km/h, ` +
+      `${e.topRpmAt120.toFixed(0)} at 120; starts on ${e.startGradePct.toFixed(0)} % at most`,
+  );
+  console.log(
+    `0–100 km/h ${e.zeroTo100S?.toFixed(2) ?? '—'} s (published ${car.published.zeroTo100S ?? '—'}), 0–400 m ${e.zeroTo400mS?.toFixed(2) ?? '—'} s at ${kmh(e.at400mKmh)} km/h; ` +
+      `power band ${e.powerBand[0].toFixed(0)}–${e.powerBand[1].toFixed(0)} rpm`,
+  );
+  console.log(
+    'upshifts at the limit: ' +
+      e.shifts.map((x) => `${x.from}→${x.to} to ${x.rpmAfter.toFixed(0)} rpm${x.inBand ? '' : ' (below the band)'}, sync ${(x.syncS * 1000).toFixed(0)} ms, break ${(x.pauseS * 1000).toFixed(0)} ms`).join('; '),
+  );
+}
+
 const ids = process.argv.slice(2);
+if (ids[0] === '--designer') {
+  const presets = [...catalogueGearboxPresets(), ...(ids[1] === 'all' ? oddGearboxPresets() : [])];
+  for (const p of presets) printDesigner(p);
+  process.exit(0);
+}
 const targets: Array<[GearboxRecord, DriveCar | null]> = ids.length
   ? ids.map((id) => {
       const car = driveCarById(id);
