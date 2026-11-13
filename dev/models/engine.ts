@@ -64,13 +64,16 @@ export default defineModel({
     const overlay = new BalanceOverlay(new BalanceForces(engine, masses), pageArrowScale(spec.id), layersOf(values));
     model.mounted.add(overlay.group);
     overlay.group.visible = values.forces as boolean;
+    /** Degrees turned since spinning started, so the crank starts from the slider's angle and not from the clock. */
+    let spun = 0;
     return {
       group: model.group,
       // A rotary explains itself from the front, as on its page. The site's floor is under y = 0.
       home: engine.isRotary ? [0.34, 0.22, 1] : undefined,
       groundY: 0,
-      frame(time, dt) {
-        const theta = values.spin ? ((values.theta as number) + time * SPIN) % engine.cycle : (values.theta as number);
+      frame(_time, dt) {
+        spun = values.spin ? (spun + dt * SPIN) % engine.cycle : 0;
+        const theta = values.spin ? ((values.theta as number) + spun) % engine.cycle : (values.theta as number);
         const running = values.running as boolean;
         model.update({ theta, rpm: running ? spec.idleRpm : 0, load: 0.35, fuelCut: false, running, boost: 0, dt, shake: 0 });
         if (overlay.group.visible) overlay.update(theta);
