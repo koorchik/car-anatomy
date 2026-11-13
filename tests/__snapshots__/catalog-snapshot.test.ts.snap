@@ -721,7 +721,7 @@ exports[`catalogue engine b6 has not changed 1`] = `
     "intercooler": 0,
     "lambda": 0.88,
     "lhvMJ": 43,
-    "oilCooler": "none",
+    "oilCooler": "coolant",
     "oilFilter": true,
     "oilPump": "crank",
     "pistonJets": true,

@@ -3143,7 +3143,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 460,
       torqueRpm: 6000,
       voiceEvidence: 'default',
-      unverified: ['pistonJets'],
+      unverified: ['pistonJets', 'oilCooler'],
       sources: ['https://www.carfolio.com/porsche-911-gt3-512270', 'https://www.auto-data.net/en/porsche-911-991-ii-gt3-4.0-500hp-29495', 'https://newsroom.porsche.com/christophorus/en/2017/381/technique-porsche-gt3-991-motor.html'],
     },
     variants: [{
@@ -3877,7 +3877,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 540,
       torqueRpm: 6000,
       voiceEvidence: 'default',
-      unverified: ['pistonJets'],
+      unverified: ['pistonJets', 'oilCooler'],
       sources: ['https://en.wikipedia.com/wiki/Ferrari_F136_engine', 'https://www.pistonheads.com/news/ph-eurocars/ferrari-458-italia-the-f430-replacement-revealed/20343', 'https://teamspeed.com/forums/458-430-360/26740-s-official-ferrari-press-release-458-italia.html?nojs=1'],
     },
     variants: [{
