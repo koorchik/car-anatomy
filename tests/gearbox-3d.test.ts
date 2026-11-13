@@ -10,13 +10,31 @@ import { withSpeedCount } from '../src/drivetrain/layouts/layshaft-speeds.ts';
 import { poseAt } from '../src/drivetrain/table-drive.ts';
 import { buildGearbox, type Gearbox } from '../src/drivetrain/topology.ts';
 import { buildGearGeometry, DETAIL, faceTwist, drawnGear, layerCount, type GearLayer } from '../src/scene/gearbox/gear-mesh.ts';
-import { GearboxModel } from '../src/scene/gearbox/gearbox-model.ts';
+import { GearboxModel, type GearboxFrame } from '../src/scene/gearbox/gearbox-model.ts';
 import { acquireGeometry, geometryCacheStats, releaseGeometry } from '../src/scene/gearbox/geometry-cache.ts';
 import { GEARBOX_PARTS } from '../src/scene/gearbox/parts.ts';
+import type { ViewMode } from '../src/scene/model-types.ts';
 
 // The cast aluminium's bump map is drawn on a canvas, which nothing here looks at.
 const context = new Proxy({}, { get: () => () => ({ addColorStop: () => {} }), set: () => true });
 vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => context }) });
+
+/**
+ * SceneModel<F> of the whole-car plan («Stage для всіх розділів»), verbatim, until O2b puts it in model-types.ts. The
+ * model implements it structurally, and tsc checks the assignment in the test below, so the two cannot drift apart.
+ */
+interface PlannedSceneModel<F> {
+  group: THREE.Group;
+  update(frame: F): void;
+  setView(view: ViewMode): void;
+  setExplode(amount: number): void;
+  setFailure(part: string | null): void;
+  dispose(): void;
+  anchors?(): Record<string, THREE.Vector3>;
+  setHighlight?(on: boolean): void;
+  setGhost?(alpha: number): void;
+  setRenderBand?(base: number): void;
+}
 
 const e30Record = gearboxById('manual-rwd')!;
 const e30Desc = e30Record.layout.desc as LayshaftDesc;
@@ -394,7 +412,9 @@ describe('the model', () => {
   });
 
   it('views, ghost, highlight, render bands and anchors work without a renderer', () => {
-    const model = new GearboxModel(e30);
+    const model: PlannedSceneModel<GearboxFrame> & GearboxModel = new GearboxModel(e30);
+    // The overview needs all three of the plan's optional methods from the gearbox (gearboxes plan, change 6).
+    expect([model.anchors, model.setHighlight, model.setGhost, model.setRenderBand].every((f) => typeof f === 'function')).toBe(true);
     model.setView('solid');
     model.setView('mechanism');
     model.setGhost(0.15);
