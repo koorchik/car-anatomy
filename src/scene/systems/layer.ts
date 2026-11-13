@@ -505,11 +505,13 @@ export class SystemLayer {
   /**
    * Moves the dashes. Speeds are physical (m/s); on screen they slow with the square root of the slow motion,
    * so flows stay readable while the crank crawls, and level off at the top so fast flows don't flicker.
+   * `hold` stills them for a snapshot: the dashes stand where that many seconds of the flow carry them.
    */
-  update(dt: number, timeScale: number, reducedMotion: boolean, theta = 0): void {
+  update(dt: number, timeScale: number, reducedMotion: boolean, theta = 0, hold?: number): void {
     const v = this.values;
     // Events light at once and fade over about 40 ms of real time, so a spark is seen even at full speed.
-    const fade = Math.exp(-dt / 0.04);
+    // A held picture shows only what happens at its angle, not the glow left from before it stopped.
+    const fade = hold === undefined ? Math.exp(-dt / 0.04) : 0;
     for (let i = 0; i < this.events.length; i++) this.shown[i] = Math.max(this.events[i]!, this.shown[i]! * fade);
     for (let i = 0; i < this.slotChannels.length; i += 2) v.level[this.slotChannels[i]!] = 0.15 + 0.85 * this.shown[this.slotChannels[i + 1]!]!;
     if (this.flashPoints && this.flashColors) {
@@ -538,7 +540,8 @@ export class SystemLayer {
     for (let i = 0; i < this.channels.length; i++) {
       const u = v.speed[i]! * scale;
       const shown = u > 1e-5 ? Math.max(0.12, 2.5 * (1 - Math.exp(-u / 1.5))) : 0;
-      if (!reducedMotion) this.phase[i] = (this.phase[i]! + shown * dt) % 1000;
+      if (hold !== undefined) this.phase[i] = (shown * hold) % 1000;
+      else if (!reducedMotion) this.phase[i] = (this.phase[i]! + shown * dt) % 1000;
       this.flow.channels[i * 4] = this.phase[i]!;
       this.flow.channels[i * 4 + 1] = v.level[i]!;
       this.flow.channels[i * 4 + 2] = v.heat[i]!;

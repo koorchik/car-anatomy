@@ -30,6 +30,7 @@ import { shownAdvance, type SystemsFrame } from './systems/sim.ts';
 import { liveScratch, liveTiming, type ValveState } from './engine/valve-control.ts';
 import type { SumpHost, SumpPage } from './ui/sump/sump-page.ts';
 import type { SystemLayer } from './scene/systems/layer.ts';
+import type { FreezeOptions } from './shell/freeze.ts';
 
 type SpeedMode = 'slow' | 'readable' | 'real';
 
@@ -315,6 +316,8 @@ let explodeBefore = 0;
 /** The page wants its engine heard: a start that lands after the page has gone or gone quiet is dropped. */
 let sumpSoundWanted = false;
 let flattenedLayer: SystemLayer | null = null;
+/** Held still for a snapshot (see freeze): no time passes and the crank stands at one angle. */
+let frozen: FreezeOptions | null = null;
 
 /** How much bigger the largest engine of this page is. Size goes as the cube root of displacement, near enough to frame by. */
 function pageFrameScale(next: Engine): number {
@@ -511,12 +514,7 @@ const sumpHost: SumpHost = {
   showEngine(next, keepCamera) {
     drive.setEngine(next);
     showEngine(next, keepCamera);
-    if (!keepCamera) {
-      // Look at the bottom half, where the oil is.
-      const drop = 0.15 * stage.camera.position.distanceTo(stage.controls.target) * Math.tan((stage.camera.fov * Math.PI) / 360);
-      stage.controls.target.y -= drop;
-      stage.camera.position.y -= drop;
-    }
+    if (!keepCamera) lookAtOil();
     return model!;
   },
   heading(title, sub) {
@@ -550,6 +548,13 @@ const sumpHost: SumpHost = {
     model?.setFailure(part);
   },
 };
+
+/** Looks at the bottom half of the engine, where the oil is: the oil page's home view. */
+function lookAtOil(): void {
+  const drop = 0.15 * stage.camera.position.distanceTo(stage.controls.target) * Math.tan((stage.camera.fov * Math.PI) / 360);
+  stage.controls.target.y -= drop;
+  stage.camera.position.y -= drop;
+}
 
 /** In and out of the oil-on-track page: its own panel, dash and summary, the X-ray with the oil layer on. */
 function setSumpMode(on: boolean): void {
@@ -1181,7 +1186,8 @@ let spectrumTextShown = '';
 
 function frame(now: number): void {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  // A frozen page stands still: nothing drawn gets any time to move.
+  const dt = frozen ? 0 : Math.min(0.1, (now - lastFrame) / 1000);
   lastFrame = now;
 
   // Throttle key eases in and out so the note doesn't step.
@@ -1193,7 +1199,7 @@ function frame(now: number): void {
     applyPedal();
   }
 
-  const snap = drive.tick(dt);
+  const snap = frozen ? drive.snapshot() : drive.tick(dt);
   const spec = engine.spec;
   const running = snap.state === 'running';
   const lap = onSump && sump?.isActive ? sump.frame(dt) : null;
@@ -1235,6 +1241,10 @@ function frame(now: number): void {
     theta = snap.angle;
     visualTheta = theta;
   }
+  if (frozen) {
+    theta = ((frozen.theta % engine.cycle) + engine.cycle) % engine.cycle;
+    visualTheta = theta;
+  }
 
   model?.update({
     theta,
@@ -1244,6 +1254,7 @@ function frame(now: number): void {
     running: shownRunning,
     boost: snap.boost,
     dt,
+    held: frozen !== null,
     shake: demoMode ? 0 : shake,
     valves: demoMode ? undefined : snap.valves,
   });
@@ -1253,7 +1264,7 @@ function frame(now: number): void {
   const systemsRpm = lap ? lap.rpm : slowed && shownRunning ? spec.idleRpm : snap.rpm;
   const sf = systemsFrame;
   // How far the shown angle really moved: in real mode Drive keeps nudging it toward the audio thread's angle.
-  sf.advance = shownAdvance(sf.theta, theta, shownSpeed * dt, engine.cycle);
+  sf.advance = frozen ? 0 : shownAdvance(sf.theta, theta, shownSpeed * dt, engine.cycle);
   sf.theta = theta;
   sf.rpm = systemsRpm;
   sf.load = shownLoad;
@@ -1265,6 +1276,7 @@ function frame(now: number): void {
   sf.live = !slowed && !lap;
   sf.demo = demoMode;
   sf.dt = dt;
+  sf.hold = frozen?.time;
   sf.timeScale = Math.min(1, shownSpeed / Math.max(systemsRpm * 6, 1));
   systemsValves(sf, demoMode ? undefined : snap.valves);
   systems.frame(sf);
@@ -1310,10 +1322,17 @@ layoutPanels();
 applyRoute();
 requestAnimationFrame(frame);
 
+/** Holds the page still for a snapshot, the same way before and after a change (src/shell/freeze.ts). Null lets go. */
+function freeze(options: FreezeOptions | null): void {
+  frozen = options && { ...options };
+  stage.freeze(options && { quality: options.quality, orbit: options.orbit });
+  if (options && onSump) lookAtOil();
+}
+
 // Handy for manual checks in the browser console.
 declare global {
   interface Window {
-    __engine: { drive: Drive; stage: Stage; designer: DesignerPage; systems: SystemsView; dyno: DynoPanel; readonly sump: SumpPage | null };
+    __engine: { drive: Drive; stage: Stage; designer: DesignerPage; systems: SystemsView; dyno: DynoPanel; readonly sump: SumpPage | null; freeze: (options: FreezeOptions | null) => void };
   }
 }
 window.__engine = {
@@ -1325,4 +1344,5 @@ window.__engine = {
   get sump() {
     return sump;
   },
+  freeze,
 };
