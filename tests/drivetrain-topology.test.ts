@@ -227,7 +227,9 @@ function runtimeGraph(entry: string): Set<string> {
 describe('10. the audio thread never derives', () => {
   // What the worklet runs: the solver and the core it steps, and the load that will drive them (stage K2c), once it
   // exists. None of it may pull in the derivation or the gear geometry: a few milliseconds there is an audible gap.
-  const entries = ['src/drivetrain/solver.ts', 'src/drivetrain/core.ts', 'src/drivetrain/driveline-load.ts', 'src/vehicle/vehicle-load.ts'].filter((f) => existsSync(f));
+  const entries = [
+    'src/drivetrain/solver.ts', 'src/drivetrain/core.ts', 'src/drivetrain/driveline-load.ts', 'src/vehicle/vehicle-load.ts', 'src/vehicle/vehicle-step.ts', 'src/vehicle/longitudinal.ts',
+  ].filter((f) => existsSync(f));
 
   it('checks at least the solver and the core it steps (paths from the repository root)', () => {
     expect(entries).toEqual(expect.arrayContaining(['src/drivetrain/solver.ts', 'src/drivetrain/core.ts']));

@@ -2,6 +2,7 @@
 // engine parts. The model hands this dictionary to whoever shows it (its `parts` field).
 
 import { t } from '../../i18n/t.ts';
+import type { AxleSpec, Vec3 } from '../../suspension/spec.ts';
 import type { PartInfo } from '../parts-info.ts';
 
 export const SUSPENSION_PARTS: Record<string, PartInfo> = {
@@ -105,4 +106,187 @@ export const SUSPENSION_PARTS: Record<string, PartInfo> = {
     name: t('Дорога'),
     text: t('Смуга дороги під колесом з нерівностями сцени.'),
   },
+  'susp.upper-arm': {
+    name: t('Верхній важіль'),
+    text: t('Тримає верх кулака. Він коротший за нижній, тож на стиску тягне верх колеса всередину, і в повороті зовнішнє колесо менше завалюється разом із кузовом. Хитається на двох сайлентблоках, а з кулаком з’єднаний кульовою опорою.'),
+  },
+  'susp.toe-link': {
+    name: t('Тяга сходження'),
+    text: t('Тримає задню частину кулака, щоб колесо не поверталося від бічних і гальмівних сил. Її довжиною виставляють сходження заднього колеса, а висотою внутрішнього шарніра задають, як воно змінюється на ходу.'),
+  },
+  'susp.lower-link': {
+    name: t('Нижня тяга'),
+    text: t('Одна з двох нижніх тяг. Кожна тримає кулак лише вздовж себе, а пара разом працює як нижній важіль з уявною кульовою опорою там, де сходяться їхні лінії. Тому й вісь повороту колеса тут уявна й рухається на ходу.'),
+  },
+  'susp.upper-link': {
+    name: t('Верхня тяга'),
+    text: t('Одна з двох верхніх тяг. Разом вони працюють як верхній важіль з уявною кульовою опорою за межами кулака. П’ять тяг лишають кулаку один рух, хід колеса, а їхні довжини й кути задають, як колесо змінює розвал і сходження на ходу.'),
+  },
+  'susp.strut-carrier': {
+    name: t('Носій стійки'),
+    text: t('Литий носій, жорстко з’єднаний зі стійкою, стоїть на нижньому важелі. Колісний кулак повертається в ньому навколо власної осі, ближчої до колеса, тож сама стійка з кермом не повертається. Вісь повороту підходить до середини колеса, і момент на ведених колесах менше смикає кермо.'),
+  },
+  'susp.steering-knuckle': {
+    name: t('Колісний кулак'),
+    text: t('Несе маточину й гальмо, а з кермом повертається в носії стійки на двох опорах, зверху й знизу. Лінія через них і є віссю повороту колеса. Рульова тяга тягне саме цей кулак.'),
+  },
+  'susp.damper': {
+    name: t('Амортизатор'),
+    text: t('Корпус з оливою й поршнем, на який навито пружину. Нижнім вушком стоїть на важелі чи тязі, верхнім кінцем кріпиться до кузова. Ланкою він не працює: кулак тримають важелі чи тяги, тож бічні сили шток не згинають.'),
+  },
 };
+
+/** Cards that read differently on a corner without a plain strut. */
+const ON_WISHBONES: Record<string, PartInfo> = {
+  'susp.knuckle': {
+    name: t('Поворотний кулак'),
+    text: t('Литий кулак з маточиною. Його тримають дві кульові опори, верхня й нижня, і рульова тяга. Лінія через дві кульові опори і є віссю повороту колеса.'),
+  },
+  'susp.ball-joint': {
+    name: t('Кульова опора'),
+    text: t('Шарнір між важелем і кулаком: кулька в обоймі дає кулаку і хитатися разом із важелем, і повертатися з кермом. Верхня й нижня кульові опори разом задають вісь повороту колеса.'),
+  },
+};
+
+const ON_LINKS: Record<string, PartInfo> = {
+  'susp.knuckle': {
+    name: t('Поворотний кулак'),
+    text: t('Литий кулак з маточиною. Його тримають п’ять тяг, кожна на своєму шарнірі. Кульових опор, через які йде вісь повороту, тут немає: вісь проходить через точки, де сходяться лінії пар тяг.'),
+  },
+};
+
+/** The same layouts on a wheel that does not steer: its knuckle is not a steering knuckle, and the toe link holds it. */
+const ON_WISHBONES_UNSTEERED: Record<string, PartInfo> = {
+  'susp.knuckle': {
+    name: t('Кулак'),
+    text: t('Литий кулак з маточиною. Його тримають дві кульові опори, верхня й нижня, і тяга сходження: без неї кулак повертався б навколо лінії через кульові опори, а так колесо лише ходить угору й униз.'),
+  },
+  'susp.ball-joint': {
+    name: t('Кульова опора'),
+    text: t('Шарнір між важелем і кулаком: кулька в обоймі дає кулаку хитатися разом із важелем. Повертатися навколо лінії через обидві кульові опори кулаку не дає тяга сходження.'),
+  },
+};
+
+const ON_LINKS_UNSTEERED: Record<string, PartInfo> = {
+  'susp.knuckle': {
+    name: t('Кулак'),
+    text: t('Литий кулак з маточиною. Його тримають п’ять тяг, кожна на своєму шарнірі, і кожна забирає в нього одну можливість рухатися. Лишається одна, хід колеса, тож колесо ходить угору й униз і не повертається.'),
+  },
+  'susp.lower-link': {
+    name: t('Нижня тяга'),
+    text: t('Одна з двох нижніх тяг. Кожна тримає кулак лише вздовж себе, а пара разом працює як нижній важіль з уявною кульовою опорою там, де сходяться їхні лінії. Ця уявна опора рухається на ходу, тож довжини й кути тяг задають, як колесо змінює розвал і сходження.'),
+  },
+};
+
+/** A coilover (or a lone coil) on an arm, on a link or on the knuckle. */
+const SPRING_ON_ARM: PartInfo = {
+  name: t('Пружина'),
+  text: t('Тримає вагу авто й приймає удари від дороги. Від її жорсткості залежать висота кузова й частота його коливань. Тут вона стоїть на важелі ближче до кузова, ніж колесо, тож стискається менше, ніж піднімається колесо, і мусить бути жорсткішою.'),
+};
+
+const SPRING_ON_LINK: PartInfo = {
+  name: t('Пружина'),
+  text: t('Тримає вагу авто й приймає удари від дороги. Від її жорсткості залежать висота кузова й частота його коливань. Тут вона стоїть на тязі ближче до кузова, ніж колесо, тож стискається менше, ніж піднімається колесо, і мусить бути жорсткішою.'),
+};
+
+const SPRING_ON_KNUCKLE: PartInfo = {
+  name: t('Пружина'),
+  text: t('Тримає вагу авто й приймає удари від дороги. Від її жорсткості залежать висота кузова й частота його коливань. Тут вона стоїть просто на кулаці, тож стискається майже на стільки ж, на скільки піднімається колесо.'),
+};
+
+const ON_COILOVER: Record<string, PartInfo> = {
+  'susp.top-mount': {
+    name: t('Верхня опора'),
+    text: t('Кріпить шток амортизатора до кузова через гуму, яка гасить шум і дає амортизатору трохи хитатися, коли колесо ходить.'),
+  },
+  'susp.body': {
+    name: t('Кузов'),
+    text: t('Опора амортизатора, лонжерон і кронштейн, на якому хитаються верхні ланки. Сюди приходять сили від колеса, а вагу авто пружина передає через верхню опору амортизатора.'),
+  },
+};
+
+/** A damper with the coil spring apart from it, on its own seats. */
+const SPRING_APART: Record<string, PartInfo> = {
+  'susp.damper': {
+    name: t('Амортизатор'),
+    text: t('Корпус з оливою й поршнем. Нижнім вушком стоїть на важелі, тязі чи кулаці, верхнім кінцем кріпиться до кузова. Пружина стоїть окремо від нього, а ланкою він не працює: кулак тримають важелі чи тяги, тож бічні сили шток не згинають.'),
+  },
+  'susp.top-mount': {
+    name: t('Верхня опора'),
+    text: t('Кріпить шток амортизатора до кузова через гуму, яка гасить шум і дає амортизатору трохи хитатися, коли колесо ходить.'),
+  },
+  'susp.body': {
+    name: t('Кузов'),
+    text: t('Опора амортизатора, лонжерон і кронштейн, на якому хитаються верхні ланки. Сюди приходять сили від колеса, а вагу авто пружина передає через свою верхню чашку.'),
+  },
+};
+
+const ON_SPLIT_STRUT: Record<string, PartInfo> = {
+  'susp.strut': {
+    name: t('Стійка'),
+    text: t('Корпус амортизатора, жорстко з’єднаний з носієм. Як у звичайній стійці Макферсона, він працює ланкою: його вісь тримає верх носія, тому шток згинають бічні сили від колеса.'),
+  },
+  'susp.top-mount': {
+    name: t('Верхня опора'),
+    text: t('Кріпить шток до чашки кузова через гуму, яка гасить шум. Стійка тут з кермом не повертається: повертається лише колісний кулак у носії.'),
+  },
+  'susp.ball-joint': {
+    name: t('Шарнір носія'),
+    text: t('З’єднує нижній важіль з носієм стійки. Носій з кермом не повертається, тож шарнір лише дає йому хитатися разом із важелем. У RevoKnuckle тут втулка.'),
+  },
+  'susp.lower-arm': {
+    name: t('Нижній важіль'),
+    text: t('Тримає низ носія стійки й передає на кузов поздовжні й бічні сили від колеса. Хитається на двох сайлентблоках.'),
+  },
+};
+
+const UNDRIVEN: Record<string, PartInfo> = {
+  'susp.hub': {
+    name: t('Маточина'),
+    text: t('Обертається на підшипнику в кулаці. До її фланця кріпляться гальмівний диск і колесо. Це колесо не ведуче, тож піввісі до маточини немає.'),
+  },
+};
+
+/** A driven wheel that does not steer: its shaft comes from a differential, and the outer joint never sees the lock. */
+const DRIVEN_UNSTEERED: Record<string, PartInfo> = {
+  'susp.halfshaft': {
+    name: t('Піввісь'),
+    text: t('Передає момент від диференціала до колеса. На її кінцях стоять шарніри рівних кутових швидкостей, тож колесо крутиться рівномірно, хоч піввісь нахиляється з ходом підвіски. Біля диференціала її обрізано.'),
+  },
+  'susp.cv-outer': {
+    name: t('Зовнішній ШРУС'),
+    text: t('Кульковий шарнір рівних кутових швидкостей біля маточини. Кермом це колесо не повертається, тож кути в шарнірі невеликі, а довжини він не змінює.'),
+  },
+};
+
+/** The spring's card for where it sits: on a wishbone, on a rod, or on the knuckle. */
+function springCard(spec: AxleSpec): PartInfo | null {
+  const s = spec.spring;
+  if (s.wheel === 'strut') return null;
+  if (!s.on) return SPRING_ON_KNUCKLE;
+  return spec.linkage.wishbones.some((w) => w.id === s.on) ? SPRING_ON_ARM : SPRING_ON_LINK;
+}
+
+/** Whether the spring and the damper sit on the same points: a coilover. */
+export function isCoilover(spec: AxleSpec): boolean {
+  const s = spec.spring;
+  const d = spec.damper;
+  const same = (a: Vec3 | 'strut', b: Vec3 | 'strut'): boolean => (a === 'strut' || b === 'strut' ? a === b : a.every((x, i) => Math.abs(x - b[i]!) < 1e-9));
+  return same(s.body, d.body) && same(s.wheel, d.wheel) && (s.on ?? null) === (d.on ?? null);
+}
+
+/**
+ * The cards of one corner: the shared ones with the texts its layout needs. The knuckle, the ball joints and the
+ * shaft read differently on a wheel that does not steer, and the spring and damper by where they sit.
+ */
+export function cornerParts(spec: AxleSpec): Record<string, PartInfo> {
+  const link = spec.linkage;
+  const steered = link.rods.some((r) => r.steer);
+  const wheel = spec.halfshaft ? (steered ? {} : DRIVEN_UNSTEERED) : UNDRIVEN;
+  if (link.knuckle) return { ...SUSPENSION_PARTS, ...ON_SPLIT_STRUT, ...wheel };
+  if (link.strut) return { ...SUSPENSION_PARTS, ...wheel };
+  const wishbones = link.wishbones.length >= 2;
+  const knuckle = wishbones ? (steered ? ON_WISHBONES : ON_WISHBONES_UNSTEERED) : steered ? ON_LINKS : ON_LINKS_UNSTEERED;
+  const spring = springCard(spec);
+  return { ...SUSPENSION_PARTS, ...knuckle, ...(isCoilover(spec) ? ON_COILOVER : SPRING_APART), ...(spring ? { 'susp.spring': spring } : {}), ...wheel };
+}

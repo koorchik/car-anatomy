@@ -2,8 +2,9 @@
 // `node scripts/calibrate-road-load.ts`. The rule is decision 13 of the gearbox plan (docs/vehicle-model.md):
 // - k_EPA is the mean C_EPA / (½ρ·Cd·A) over cars that have both an EPA row and the maker's Cd and frontal area;
 //   outside 1.0-1.4 the script stops, because then something is wrong with the list, not with the rule;
-// - a car whose top speed no limiter holds and whose v_max is checked gets the C_dA at which the lap's power at the
-//   wheels just matches the road load at v_max;
+// - a car whose top speed no limiter holds and whose v_max is checked gets the C_dA at which the force at the wheels
+//   just matches the road load at v_max: from the gearbox model in the best gear if the car can drive (its DriveCar
+//   has dynamics, stage K2b), else from the lap's peak power;
 // - any other car gets the maker's Cd·A times k_EPA.
 // Rows are copied from the EPA test car lists as printed (lbf, lbf/mph, lbf/mph²); the cold CO rows, whose road load
 // EPA raises by 10 %, are never used.
@@ -11,9 +12,12 @@
 import { writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { CAR_LIST } from '../src/data/cars.ts';
+import { driveCarById } from '../src/data/drive-cars.ts';
 import { engineById, engineFacts } from '../src/data/engines.ts';
 import { evaluate } from '../src/designer/physics.ts';
 import { designFromSpec } from '../src/designer/presets.ts';
+import { buildCarDrive } from '../src/drivetrain/car-model.ts';
+import { bestWheelForce, steadyTopSpeed } from '../src/drivetrain/runs.ts';
 import { DRIVELINE } from '../src/lubrication/scenario.ts';
 import { lapTorqueCurve } from '../src/lubrication/torque.ts';
 import type { CarRecord } from '../src/vehicle/car.ts';
@@ -146,6 +150,9 @@ export interface Calibration {
 
 const round = (x: number, digits: number): number => Number(x.toFixed(digits));
 
+/** A car the gearbox model can drive: its DriveCar has the dynamics of stage K2b. */
+export const drives = (car: CarRecord): boolean => !!driveCarById(car.id)?.dynamics;
+
 /** The lap's peak engine power, W: the engine model scaled to the published figure, so it follows engineFacts. */
 function lapPeakPowerW(car: CarRecord): number {
   const spec = engineById(car.engine);
@@ -194,10 +201,17 @@ export function calibrateRoadLoad(cars: readonly CarRecord[] = CAR_LIST): Calibr
     if (rule === 'vmax') {
       const v = car.published.vmaxKmh / 3.6;
       const m = drivingMassKg(car);
-      const power = lapPeakPowerW(car) * DRIVELINE.efficiency;
       const rollingN = trim.rolling.aPerKg * m + trim.rolling.bPerKg * m * v;
-      cdA = (power / v - rollingN) / (0.5 * AIR_DENSITY * v * v);
-      detail = `${(power / 1000).toFixed(1)} kW at the wheels holds ${car.published.vmaxKmh} km/h`;
+      const geared = drives(car) ? bestWheelForce(buildCarDrive(car.id), v) : null;
+      if (drives(car) && !geared) throw new Error(`${car.id}: the gearbox model cannot reach ${car.published.vmaxKmh} km/h below the rev limit`);
+      if (geared) {
+        cdA = (geared.force - rollingN) / (0.5 * AIR_DENSITY * v * v);
+        detail = `the gearbox model pulls ${geared.force.toFixed(0)} N in gear ${geared.gear.name} at ${car.published.vmaxKmh} km/h`;
+      } else {
+        const power = lapPeakPowerW(car) * DRIVELINE.efficiency;
+        cdA = (power / v - rollingN) / (0.5 * AIR_DENSITY * v * v);
+        detail = `${(power / 1000).toFixed(1)} kW at the wheels holds ${car.published.vmaxKmh} km/h`;
+      }
     } else {
       cdA = car.aero!.cd * car.aero!.areaM2 * trim.kEpa;
       detail = `Cd ${car.aero!.cd} x ${car.aero!.areaM2} m² x k_EPA`;
@@ -246,8 +260,10 @@ function report(cal: Calibration): void {
     const rl = roadLoadCoeffs(car, cal.trim);
     const rule = car.roadLoad ? 'epa' : cal.trim.cars[car.id]!.rule;
     const f = (kmh: number): string => roadLoadN(rl, kmh / 3.6, 0).toFixed(0).padStart(10);
-    const vmax = topSpeed({ roadLoad: rl }, lapPeakPowerW(car), DRIVELINE.efficiency) * 3.6;
-    const off = `${vmax >= car.published.vmaxKmh ? '+' : ''}${((vmax / car.published.vmaxKmh - 1) * 100).toFixed(1)} %`;
+    const lap = topSpeed({ roadLoad: rl }, lapPeakPowerW(car), DRIVELINE.efficiency) * 3.6;
+    // A car the gearbox model drives reaches its top speed there; the lap's ideal gearbox comes after it (K7).
+    const vmax = drives(car) ? steadyTopSpeed(buildCarDrive(car.id), rl).v * 3.6 : lap;
+    const off = `${vmax >= car.published.vmaxKmh ? '+' : ''}${((vmax / car.published.vmaxKmh - 1) * 100).toFixed(1)} %${drives(car) ? ` (gearbox; lap ${lap.toFixed(0)})` : ''}`;
     console.log(
       `${car.id.padEnd(28)} ${rule.padEnd(8)} ${rl.massKg.toFixed(0).padStart(7)} ${rl.a.toFixed(0).padStart(6)} ${rl.b.toFixed(2).padStart(8)} ${rl.c.toFixed(4).padStart(10)} ${((2 * rl.c) / AIR_DENSITY).toFixed(3).padStart(8)} ${f(100)} ${f(200)}  ${vmax.toFixed(0)}/${car.published.vmaxKmh} (${off})  (C_rr equiv. ${(rl.a / (rl.massKg * G)).toFixed(4)})`,
     );

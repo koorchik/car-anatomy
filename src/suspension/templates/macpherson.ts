@@ -98,8 +98,6 @@ export function macphersonJtekt(intent: MacphersonIntent): AxleSpec {
   const rearBush = add(pivot, scale(axis, -0.35));
   const kind = intent.knuckle ?? 'plain';
   const split = kind === 'plain' ? null : splitAxis(kind, intent, wc, ball, top, axis);
-  // The steering arm and the tie rod move outboard with a split axis, so the arm keeps its place relative to the axis.
-  const tieShift: Vec3 = [0, split ? split.tieShiftY : 0, 0];
   // Outer CV joint: the point of the hub axis nearest the steering axis, where designers put it to keep the plunge
   // small while steering. The inner joint 0.25 m from the car's centre line, level with it: an estimate.
   const outer = split
@@ -114,9 +112,11 @@ export function macphersonJtekt(intent: MacphersonIntent): AxleSpec {
       wishbones: [{ id: 'lower-arm', front: pivot, rear: rearBush, ball, part: 'susp.lower-arm' }],
       rods: [
         {
+          // Where JTEKT measured it on every knuckle. Moved outboard with a split axis, the steering arm's joint would
+          // sit 4 mm outboard of the wheel's centre plane, 120 mm from the hub axis: inside the brake disc.
           id: 'tie-rod',
-          body: add(fromJtekt(J.tieRodInner, h), tieShift),
-          knuckle: add(fromJtekt(J.tieRodOuter, h), tieShift),
+          body: fromJtekt(J.tieRodInner, h),
+          knuckle: fromJtekt(J.tieRodOuter, h),
           part: 'susp.tie-rod',
           steer: true,
         },
@@ -176,8 +176,7 @@ export function macphersonJtekt(intent: MacphersonIntent): AxleSpec {
 /**
  * The split steering axis of a dual-axis or RevoKnuckle strut on the JTEKT corner: KPI and kingpin offset at the hub
  * from the intent, the plain axis's caster, through the plain axis's x at hub height; its bearings below and above the
- * wheel centre. The carrier's hold turns about the lower arm's axis. Also how far the axis moved out at the tie-rod
- * height, which the steering arm follows.
+ * wheel centre. The carrier's hold turns about the lower arm's axis.
  */
 function splitAxis(
   kind: Exclude<KnuckleKind, 'plain'>,
@@ -186,7 +185,7 @@ function splitAxis(
   ball: Vec3,
   top: Vec3,
   armAxis: Vec3,
-): { knuckle: SplitKnuckle; tieShiftY: number } {
+): { knuckle: SplitKnuckle } {
   const d = SPLIT_KNUCKLE_DEFAULTS[kind];
   const offset = intent.kingpinOffsetM ?? d.kingpinOffsetM;
   const kpi = ((intent.kpiDeg ?? d.kpiDeg) * Math.PI) / 180;
@@ -197,7 +196,6 @@ function splitAxis(
   const dir = unit([-Math.tan(caster), -Math.tan(kpi), 1]);
   const hub: Vec3 = [plainAt(h)[0], wc[1] - offset, h];
   const at = (z: number): Vec3 => add(hub, scale(dir, (z - h) / dir[2]));
-  const tieZ = fromJtekt(JTEKT_TABLE1.tieRodOuter, h)[2];
   const strutAxis = unit(sub(top, fromJtekt(JTEKT_TABLE1.strutBottom, h)));
   return {
     knuckle: {
@@ -208,7 +206,6 @@ function splitAxis(
       carrierPart: 'susp.strut-carrier',
       knucklePart: 'susp.steering-knuckle',
     },
-    tieShiftY: at(tieZ)[1] - plainAt(tieZ)[1],
   };
 }
 
