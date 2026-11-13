@@ -7,13 +7,16 @@
 // - A spur pair has no helix to give: its tooth sum must span the centre distance as it is, and a profile shift sum of
 //   up to ±1 lets it reach the sums next to 2a/m_n. So spur ratios sit on a coarser grid: the real compromise of
 //   racing boxes.
-// - Shift x = max(0, (17 − z)/17) on the smaller gear and its negative on the mate, so the centre distance stays.
+// - Shift on the smaller gear: the least that keeps the generating rack from undercutting it (gear-geometry.ts
+//   undercut()), which at 20° on a spur gear is the plan's x = max(0, (17 − z)/17), and its negative on the mate, so
+//   the centre distance stays. No picked gear is undercut: a mate that would be takes its own limit, and two small
+//   gears of a helical pair get a positive shift sum and the helix that then closes the centre.
 // - Shared gears are one unknown: the reverse idler meshes both reverse gears with one module and one helix, and its
 //   own axis follows from its two centre distances (layouts/*.ts place it).
 //
 // Picks are cached: the sensitivity checks run the model twice per control, and most controls leave the teeth alone.
 
-import { centreDistance, shiftSumForCentre } from '../drivetrain/gear-geometry.ts';
+import { centreDistance, helixForCentre, shiftSumForCentre, undercut } from '../drivetrain/gear-geometry.ts';
 import { gcd, pairCandidates, type PairPick } from '../drivetrain/gear-pick.ts';
 import { HELIX_SPREAD, MAX_HELIX, MAX_TEETH, MIN_TEETH, type FinalSetting, type PairSetting, type ReverseSetting } from './design.ts';
 
@@ -31,19 +34,40 @@ export interface PickedPair extends PairSetting {
   hand: boolean;
 }
 
-/** Undercut-free shift of a small gear by the simple rule of the plan, rounded to a thousandth. */
-export const smallGearShift = (teeth: number): number => Math.round(Math.max(0, (17 - teeth) / 17) * 1000) / 1000;
+/** Least profile shift with which the generating rack does not undercut this gear, signed (gear-geometry.ts undercut()). */
+export const undercutLimit = (teeth: number, helix: number, pressureAngle: number): number => undercut(teeth, 0, helix, pressureAngle).minShift;
+
+const upToThousandth = (v: number): number => Math.ceil(v * 1000 - 1e-6) / 1000;
 
 /**
- * A pair's two shifts. Without a sum: the rule on the smaller gear and its negative on the mate. A spur pair's sum
- * goes half to each gear when it is positive; a negative one all to the larger gear, so the small one keeps clear of
- * undercut.
+ * Undercut-free shift of a small gear, rounded up to a thousandth: the rack's limit at this pressure angle and helix,
+ * and none for a gear that needs none. At 20° on a spur gear it is the plan's x = max(0, (17 − z)/17) to within 0.004.
  */
-export function pairShift(teeth: [number, number], sum = 0): [number, number] {
+export const smallGearShift = (teeth: number, helix = 0, pressureAngle = 20): number => Math.max(0, upToThousandth(undercutLimit(teeth, helix, pressureAngle)));
+
+/** Fewest teeth an unshifted gear has without undercut at this pressure angle and helix (spur: 17 at 20°, 22 at 17.5°). */
+export function unshiftedMinTeeth(pressureAngle: number, helix = 0): number {
+  let z = MIN_TEETH;
+  while (undercut(z, 0, helix, pressureAngle).undercut) z++;
+  return z;
+}
+
+/**
+ * A pair's two shifts for a shift sum, or null when no split keeps both gears clear of undercut. The smaller gear
+ * gets its undercut-free shift and the mate its negative; a positive sum goes half to each gear, a negative one to the
+ * larger gear. A mate that would then be undercut takes its own limit, and the smaller gear the rest.
+ */
+export function pairShift(teeth: [number, number], sum = 0, helix = 0, pressureAngle = 20): [number, number] | null {
   const small = teeth[0] <= teeth[1] ? 0 : 1;
-  const x = smallGearShift(teeth[small]);
-  const xs = sum >= 0 ? x + sum / 2 : x;
-  const xb = sum >= 0 ? -x + sum / 2 : sum - x;
+  const x = smallGearShift(teeth[small], helix, pressureAngle);
+  let xs = sum >= 0 ? x + sum / 2 : x;
+  let xb = sum - xs;
+  const limitBig = undercutLimit(teeth[1 - small]!, helix, pressureAngle);
+  if (xb < limitBig) {
+    xb = upToThousandth(limitBig);
+    xs = sum - xb;
+  }
+  if (xs < undercutLimit(teeth[small], helix, pressureAngle) - 1e-9) return null;
   // Plain 0, never −0, which toEqual and snapshots tell apart.
   const zero = (v: number): number => (v === 0 ? 0 : v);
   return small === 0 ? [zero(xs), zero(xb)] : [zero(xb), zero(xs)];
@@ -64,8 +88,11 @@ export interface CylRequest {
   faceWidth: number;
 }
 
+/** A candidate pair with the shift sum that closes the centre distance and its two shifts. */
+type Candidate = PairPick & { shiftSum: number; shift: [number, number] };
+
 /** Nearest first; the grid step around the target, as gear-pick.ts measures it. */
-function nearest(found: Array<PairPick & { shiftSum: number }>): { pick: PairPick & { shiftSum: number }; step: number } | null {
+function nearest(found: Candidate[]): { pick: Candidate; step: number } | null {
   if (!found.length) return null;
   const EXACT = 1e-12;
   const exact = found.some((p) => Math.abs(p.error) <= EXACT);
@@ -76,15 +103,34 @@ function nearest(found: Array<PairPick & { shiftSum: number }>): { pick: PairPic
   return { pick, step };
 }
 
-/** Candidates of one request: coprime when there are any, else all. */
-function candidates(req: CylRequest, shiftSum: number): Array<PairPick & { shiftSum: number }> {
+/**
+ * A candidate with its shifts, or null when it cannot be cut without undercut. A spur pair's shift sum is the one
+ * that closes the centre distance. Two small gears of a helical pair may both need a positive shift: then the pair
+ * takes the sum of their limits and the helix that closes the centre with it, if that helix stays in the range.
+ */
+function withShifts(p: PairPick, shiftSum: number, req: CylRequest): Candidate | null {
+  const alpha = req.pressureAngle;
+  const shift = pairShift(p.teeth, shiftSum, p.helix, alpha);
+  if (shift) return { ...p, shiftSum, shift };
+  if (p.helix === 0) return null;
+  const small = p.teeth[0] <= p.teeth[1] ? 0 : 1;
+  const sum = smallGearShift(p.teeth[small], p.helix, alpha) + upToThousandth(undercutLimit(p.teeth[1 - small]!, p.helix, alpha));
+  const helix = helixForCentre(req.centreMm, req.module, p.teeth[0], p.teeth[1], alpha, sum);
+  const [lo, hi] = helixRange(req.helix);
+  if (!(helix >= lo - 1e-9 && helix <= hi + 1e-9)) return null;
+  const shifted = pairShift(p.teeth, sum, helix, alpha);
+  return shifted ? { ...p, helix, shiftSum: sum, shift: shifted } : null;
+}
+
+/** Candidates of one request that can be cut without undercut: coprime when there are any, else all. */
+function candidates(req: CylRequest, shiftSum: number): Candidate[] {
   const base = {
     ratio: req.ratio, centreMm: req.centreMm, module: req.module, helixRange: helixRange(req.helix), pressureAngle: req.pressureAngle,
     shiftSum, minTeeth: MIN_TEETH, maxTeeth: MAX_TEETH,
   };
-  let found = pairCandidates(base);
-  if (!found.length) found = pairCandidates({ ...base, coprime: false });
-  return found.map((p) => ({ ...p, shiftSum }));
+  const fit = (list: PairPick[]): Candidate[] => list.flatMap((p) => withShifts(p, shiftSum, req) ?? []);
+  const found = fit(pairCandidates(base));
+  return found.length ? found : fit(pairCandidates({ ...base, coprime: false }));
 }
 
 /** Spur tooth sums the centre distance allows with a shift sum within ±1, and that sum. */
@@ -114,7 +160,7 @@ const remember = <T>(cache: Map<string, T>, key: string, make: () => T): T => {
 export function pickCylPair(req: CylRequest): PickedPair | null {
   const key = `${req.ratio}|${req.centreMm}|${req.module}|${req.helix}|${req.pressureAngle}|${req.faceWidth}`;
   return remember(pairCache, key, () => {
-    const spur = (): Array<PairPick & { shiftSum: number }> =>
+    const spur = (): Candidate[] =>
       spurSums(req.centreMm, req.module, req.pressureAngle).flatMap(({ sum, shiftSum }) =>
         candidates({ ...req, helix: 0 }, shiftSum).filter((p) => p.teeth[0] + p.teeth[1] === sum),
       );
@@ -125,7 +171,7 @@ export function pickCylPair(req: CylRequest): PickedPair | null {
     if (!best) return null;
     const teeth: [number, number] = [best.pick.teeth[0], best.pick.teeth[1]];
     return {
-      teeth, module: req.module, faceWidth: req.faceWidth, shift: pairShift(teeth, best.pick.shiftSum),
+      teeth, module: req.module, faceWidth: req.faceWidth, shift: [best.pick.shift[0], best.pick.shift[1]],
       ratio: teeth[1] / teeth[0], target: req.ratio, step: best.step, coprime: gcd(teeth[0], teeth[1]) === 1, hand: false,
     };
   });
@@ -147,8 +193,8 @@ const tipRadius = (teeth: number, module: number, helix: number, shift: number):
 const TIP_CLEARANCE = 0.5;
 /** The idler sits off the line between the shafts by at least this share of the centre distance [layout rule]. */
 const IDLER_OFFSET = 0.4;
-/** A transaxle's reverse gears carry no profile shift in the layout, so they keep clear of undercut. */
-const TRANSAXLE_REVERSE_MIN = 15;
+// The idler and a transaxle's reverse gears carry no profile shift (layouts/transaxle.ts has none for reverse), so they
+// start at the fewest teeth an unshifted gear has without undercut at the design's pressure angle.
 
 export interface PickedReverse extends ReverseSetting {
   /** Shift of each gear (layshaft only; zeros otherwise). */
@@ -174,9 +220,9 @@ export const handReverse = (r: ReverseSetting, shift?: number[]): PickedReverse 
   ratio: reverseRatio(r.teeth), target: null, hand: true,
 });
 
-/** The smallest idler from MIN_TEETH up whose axis sits at least IDLER_OFFSET·a off the shafts' line. */
+/** The smallest unshifted idler clear of undercut whose axis sits at least IDLER_OFFSET·a off the shafts' line. */
 function pickIdler(a: number, m: number, alpha: number, z1: number, z2: number, x1: number, x2: number): number | null {
-  for (let zi = MIN_TEETH; zi <= MAX_TEETH; zi++) {
+  for (let zi = unshiftedMinTeeth(alpha); zi <= MAX_TEETH; zi++) {
     const d1 = centreDistance(m, z1, zi, 0, alpha, x1);
     const d2 = centreDistance(m, zi, z2, 0, alpha, x2);
     const h = idlerOffset(a, d1, d2);
@@ -199,13 +245,13 @@ export function pickReverse(kind: 'layshaft' | 'transaxle', ratio: number, centr
   return remember(reverseCache, key, () => {
     const a = centreMm;
     const m = module;
-    const min = kind === 'layshaft' ? MIN_TEETH : TRANSAXLE_REVERSE_MIN;
+    const min = kind === 'layshaft' ? MIN_TEETH : unshiftedMinTeeth(pressureAngle);
     let best: { teeth: [number, number]; err: number; shift: [number, number] } | null = null;
     for (let z1 = min; z1 <= MAX_TEETH; z1++) {
       const z2 = Math.round(ratio * z1);
       for (const zz of [z2 - 1, z2, z2 + 1]) {
         if (zz < min || zz > MAX_TEETH) continue;
-        const shift: [number, number] = kind === 'layshaft' ? [smallGearShift(z1), smallGearShift(zz)] : [0, 0];
+        const shift: [number, number] = kind === 'layshaft' ? [smallGearShift(z1, 0, pressureAngle), smallGearShift(zz, 0, pressureAngle)] : [0, 0];
         if (tipRadius(z1, m, 0, shift[0]) + tipRadius(zz, m, 0, shift[1]) > a - TIP_CLEARANCE * m) continue;
         const err = Math.abs(zz / z1 - ratio);
         // The nearest ratio; among equals the larger gears, which carry the load on more teeth.
@@ -234,12 +280,12 @@ export function pickReverse(kind: 'layshaft' | 'transaxle', ratio: number, centr
  * zOut; i = (zI1/zIn)·(zOut/zI2). Each idler gear's tips must clear the other shaft that passes through its plane.
  */
 function compoundReverse(ratio: number, a: number, m: number, faceWidth: number, pressureAngle: number): PickedReverse | null {
-  const min = TRANSAXLE_REVERSE_MIN;
+  const min = unshiftedMinTeeth(pressureAngle);
   const shaft = shaftRadius(a);
   let best: { teeth: number[]; err: number; size: number } | null = null;
   for (let zIn = min; zIn <= min + 10; zIn++) {
     for (let zI2 = min; zI2 <= min + 12; zI2++) {
-      for (let zI1 = min; zI1 <= 60; zI1++) {
+      for (let zI1 = min; zI1 <= min + 45; zI1++) {
         const zOut = Math.round((ratio * zIn * zI2) / zI1);
         if (zOut < min || zOut > MAX_TEETH) continue;
         const d1 = centreDistance(m, zIn, zI1, 0, pressureAngle);
@@ -273,10 +319,12 @@ const PINION_PREFERRED = { helical: 18, bevel: 9 } as const;
 /**
  * The final drive's teeth. Its centre distance is its own (a helical pair spans what its teeth and helix give; a
  * crown wheel's axis crosses the shafts), so the nearest ratio wins outright: coprime first, then the pinion nearest
- * the usual size.
+ * the usual size. A helical pair carries no profile shift in the layout, so its pinion starts where it is clear of
+ * undercut; a crown wheel's pinion takes the undercut-free shift.
  */
-export function pickFinal(kind: 'helical' | 'bevel', ratio: number, module: number, helix: number, faceWidth: number): PickedFinal {
-  const [lo, hi] = PINION_RANGE[kind];
+export function pickFinal(kind: 'helical' | 'bevel', ratio: number, module: number, helix: number, faceWidth: number, pressureAngle: number): PickedFinal {
+  const lo = kind === 'helical' ? Math.max(PINION_RANGE.helical[0], unshiftedMinTeeth(pressureAngle, helix)) : PINION_RANGE.bevel[0];
+  const hi = Math.max(lo, PINION_RANGE[kind][1]);
   let best: { teeth: [number, number]; score: number } | null = null;
   for (let zp = lo; zp <= hi; zp++) {
     const zr = Math.round(ratio * zp);
@@ -286,7 +334,7 @@ export function pickFinal(kind: 'helical' | 'bevel', ratio: number, module: numb
   }
   const teeth = best!.teeth;
   return {
-    kind, teeth, module, faceWidth, helix: kind === 'helical' ? helix : 0, shift: kind === 'bevel' ? smallGearShift(teeth[0]) : 0,
+    kind, teeth, module, faceWidth, helix: kind === 'helical' ? helix : 0, shift: kind === 'bevel' ? smallGearShift(teeth[0], 0, pressureAngle) : 0,
     ratio: teeth[1] / teeth[0], target: ratio, hand: false,
   };
 }

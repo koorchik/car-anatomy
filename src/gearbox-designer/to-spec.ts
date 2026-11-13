@@ -84,7 +84,7 @@ export function designTeeth(d: GearboxDesign): DesignTeeth {
   const finalKind = d.drive === 'fwd' ? 'helical' : 'bevel';
   let final: PickedFinal | null = null;
   if (!layshaft) {
-    final = d.finalPair ? handFinal(finalKind, d.finalPair) : pickFinal(finalKind, d.finalDrive, d.mainModule, d.helix, faceFor(d, d.mainModule));
+    final = d.finalPair ? handFinal(finalKind, d.finalPair) : pickFinal(finalKind, d.finalDrive, d.mainModule, d.helix, faceFor(d, d.mainModule), alpha);
     // A crown wheel's face is at most a third of its cone distance.
     if (finalKind === 'bevel') final = { ...final, faceWidth: Math.min(final.faceWidth, bevelMaxFace(final.module, final.teeth[0], final.teeth[1])) };
   }

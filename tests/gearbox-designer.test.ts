@@ -5,7 +5,8 @@ import { DRIVE_CARS } from '../src/data/drive-cars.ts';
 import { ALL_GEARBOXES, gearboxById } from '../src/data/gearboxes.ts';
 import { buildCarDrive } from '../src/drivetrain/car-model.ts';
 import { gearboxSpec } from '../src/drivetrain/catalogue.ts';
-import { centreDistance } from '../src/drivetrain/gear-geometry.ts';
+import { centreDistance, helixForCentre, shiftSumForCentre, undercut } from '../src/drivetrain/gear-geometry.ts';
+import { gcd } from '../src/drivetrain/gear-pick.ts';
 import { quasiStaticRun } from '../src/drivetrain/runs.ts';
 import { decodeGearboxDesign, encodeGearboxDesign } from '../src/gearbox-designer/codec.ts';
 import { paramRange, resolveGearboxDesign, type NumericKey } from '../src/gearbox-designer/constraints.ts';
@@ -176,6 +177,52 @@ describe('2. ratios from the teeth', () => {
     expect(checked).toBeGreaterThan(200);
   });
 
+  it('no coprime pair that spans the centre distance without undercut is nearer the target than the pick (counted apart from the picker)', () => {
+    // The grid counted here from gear-geometry.ts alone: a helical pair's tooth sum Z spans the centre at
+    // β = acos(m·Z/2a) within ±8° of the nominal helix; a spur pair's sum is closed by a shift sum S of at most ±1. A pair
+    // is cut without undercut when its shift sum reaches the two gears' limits.
+    let checked = 0;
+    const DEG = 180 / Math.PI;
+    for (const d of designs) {
+      const { teeth } = designBuild(d);
+      const a = d.centreMm;
+      const alpha = d.pressureAngle;
+      for (const p of [...teeth.speeds, teeth.main]) {
+        if (!p || p.hand || !p.coprime) continue;
+        const m = p.module;
+        const beta = helixForCentre(a, m, p.teeth[0], p.teeth[1], alpha, p.shift[0] + p.shift[1]);
+        const spur = d.helix === 0;
+        if (!spur && !(beta > 0)) continue;
+        const sums: Array<{ sum: number; shiftSum: number; helix: number }> = [];
+        if (spur) {
+          for (let sum = Math.floor((2 * a) / m) - 3; sum <= Math.ceil((2 * a) / m) + 3; sum++) {
+            const shiftSum = Math.abs((m * sum) / 2 - a) < 1e-9 ? 0 : shiftSumForCentre(a, m, 1, sum - 1, 0, alpha);
+            if (Math.abs(shiftSum) <= 1) sums.push({ sum, shiftSum, helix: 0 });
+          }
+        } else {
+          for (let sum = 24; sum <= 240; sum++) {
+            const c = (m * sum) / (2 * a);
+            const helix = Math.acos(c) * DEG;
+            if (c <= 1 && helix >= Math.max(0, d.helix - 8) && helix <= Math.min(40, d.helix + 8)) sums.push({ sum, shiftSum: 0, helix });
+          }
+        }
+        let nearest = Infinity;
+        for (const { sum, shiftSum, helix } of sums) {
+          for (let z1 = Math.max(12, sum - 120); z1 <= Math.min(120, sum - 12); z1++) {
+            const z2 = sum - z1;
+            if (gcd(z1, z2) !== 1) continue;
+            const limits = undercut(z1, 0, helix, alpha).minShift + undercut(z2, 0, helix, alpha).minShift;
+            if (shiftSum < limits + 0.002) continue;
+            nearest = Math.min(nearest, Math.abs(z2 / z1 - p.target!));
+          }
+        }
+        expect(Math.abs(p.ratio - p.target!), `${d.type} ${p.teeth} for ${p.target}`).toBeLessThanOrEqual(nearest + 1e-12);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(200);
+  });
+
   it('a forward gear is the product of its pairs: the target within the grid, through the constant-mesh pair', () => {
     for (const d of designs) {
       const { teeth } = designBuild(d);
@@ -202,16 +249,22 @@ describe('2. ratios from the teeth', () => {
     }
   });
 
-  it('every pair the picker makes keeps at least twelve teeth on each gear, and shifts a small one out of undercut', () => {
-    for (const d of designs) {
-      for (const p of designBuild(d).teeth.speeds) {
-        if (!p || p.hand) continue;
-        expect(Math.min(...p.teeth)).toBeGreaterThanOrEqual(12);
-        const small = p.teeth[0] <= p.teeth[1] ? 0 : 1;
-        // A spur pair's positive shift sum goes half to each gear, a negative one to the larger gear.
-        expect(p.shift[small] - Math.max(0, p.shift[0] + p.shift[1]) / 2).toBeCloseTo(Math.max(0, (17 - p.teeth[small]) / 17), 2);
+  it('every gear the picker makes has at least twelve teeth and is clear of undercut by the generating rack', () => {
+    // As every gear of the catalogue (gear-geometry.test.ts): pressure angles of 17.5–25°, spur and helical, the
+    // reverse with its idler and a transaxle's final drive. Hand-set parts are the link's and are left out.
+    let shifted = 0;
+    for (const raw of designs) {
+      const d = resolveGearboxDesign({ ...raw, pairs: raw.pairs.map(() => null), mainPair: null, reverse: null, finalPair: null });
+      for (const g of designBuild(d).spec.gears) {
+        // A crown wheel's pinion may have fewer, with its shift (the 911's has nine).
+        if (g.id !== 'final-pinion') expect(g.teeth, `${d.type} ${g.id}`).toBeGreaterThanOrEqual(12);
+        // A bevel gear by Tredgold's virtual teeth z/cos δ, a spur or helical one by its own.
+        const z = g.cone === undefined ? g.teeth : g.teeth / Math.cos((g.cone * Math.PI) / 180);
+        expect(undercut(z, g.shift, Math.abs(g.helix), g.pressureAngle).undercut, `${d.type} α ${d.pressureAngle} ${g.id} z ${g.teeth} x ${g.shift}`).toBe(false);
+        if (g.shift > 0) shifted++;
       }
     }
+    expect(shifted).toBeGreaterThan(20);
   });
 });
 
