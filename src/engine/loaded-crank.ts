@@ -130,7 +130,10 @@ export class LoadedCrank {
     let idleTarget = 0;
     if (running) {
       const error = idleOmega - omega;
-      this.idleIntegral = clamp(this.idleIntegral + ki * error * dt, -0.2, 0.3);
+      // No wind-up into a saturated output: far above idle the governor asks for nothing, and a car that ran for a
+      // minute above idle would otherwise come back with the integral at its floor and sag far below idle.
+      const raw = holdCharge(map, map.idleRpm) + kp * error + this.idleIntegral;
+      if (!(raw <= 0 && error < 0) && !(raw >= IDLE_MAX && error > 0)) this.idleIntegral = clamp(this.idleIntegral + ki * error * dt, -0.2, 0.3);
       idleTarget = clamp(holdCharge(map, map.idleRpm) + kp * error + this.idleIntegral, 0, IDLE_MAX);
     } else {
       this.idleIntegral = 0;
