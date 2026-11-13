@@ -3446,9 +3446,11 @@ body.dyno-mode {
 }
 
 @media (max-width: 860px) {
+  /* Under the scale bar: on a phone the row of view options ends with the systems switches. */
   .valve-state {
     right: 10px;
-    bottom: calc(var(--dash-h) + 44px);
+    top: 212px;
+    bottom: auto;
     max-width: 52vw;
   }
 
