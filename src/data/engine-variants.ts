@@ -1070,7 +1070,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueRpm: 4600,
       voiceEvidence: 'default',
       unverified: ['firingOrder', 'redline', 'blockMaterial', 'fuel', 'years'],
-      sources: ['https://www.auto-data.net/en/daewoo-matiz-i-0.8-i-52hp-16373', 'https://www.auto-spec.ro/en/daewoo-matiz-0-8-i-52-cp/6331', 'https://auto.ru/catalog/cars/daewoo/matiz/5139789/5139790/specifications/'],
+      sources: ['https://www.auto-data.net/en/daewoo-matiz-i-0.8-i-52hp-16373', 'https://www.auto-spec.ro/en/daewoo-matiz-0-8-i-52-cp/6331'],
       factory: {
         idleRpm: 930,
         revTimeS: 3.05,
