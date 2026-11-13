@@ -6,6 +6,7 @@ import type { SumpKind } from '../engine/systems-spec.ts';
 import { t } from '../i18n/t.ts';
 import { derivedOilL } from '../systems/oil-capacity.ts';
 import { displacementL, isRotary, type Design } from './design.ts';
+import { FUELS } from './fuels.ts';
 
 export const SUMP_NAMES: Record<SumpKind, string> = {
   wet: t('мокрий картер'),
@@ -41,7 +42,7 @@ export const effectiveSump = (d: Design): SumpKind => d.sump ?? 'wet';
 const litres = (d: Design): number => displacementL(d) * (isRotary(d) ? 2 : 1);
 
 /** Oil capacity the design's size and sump imply, litres. */
-export const derivedDesignOilL = (d: Design): number => derivedOilL(litres(d), effectiveSump(d));
+export const derivedDesignOilL = (d: Design): number => derivedOilL(litres(d), effectiveSump(d), FUELS[d.fuel].diesel);
 
 export const effectiveOilL = (d: Design): number => d.oilL ?? derivedDesignOilL(d);
 

@@ -130,6 +130,16 @@ describe('the catalogue', () => {
     }
   });
 
+  it('gives no catalogue engine a low-oil warning: every factory pan covers its pickup at the limiter', () => {
+    for (const id of ids) {
+      const d = designFromSpec(engineById(id)!);
+      if (isRotary(d)) continue;
+      expect(lubricationFigures(d).immersionMm, id).toBeGreaterThanOrEqual(20);
+    }
+    const starved = resolveDesign({ ...LS3, oilL: paramRange(LS3, 'oilL').min });
+    expect(diagnose(starved, evaluate(starved)).some((x) => x.id === 'low-oil')).toBe(true);
+  });
+
   it('names every field it could not verify', () => {
     for (const [page, { base, variants }] of Object.entries(ENGINE_VARIANTS)) {
       for (const facts of [base, ...variants]) for (const name of facts.unverified.filter((n) => n === 'sump' || n === 'oilL')) expect(FIELD_NAMES[name], `${page} ${name}`).toBeDefined();

@@ -51,4 +51,20 @@ export const LUBRICATION_EN: Record<string, string> = {
   'Вісь колінвала стоїть на {mm} мм над дном піддона: двигун доведеться посадити вище, або піддон зачепить дорогу.':
     'The crank axis is {mm} mm above the pan floor: the engine has to sit higher, or the pan will hit the road.',
   'Менше оливи або сухий картер з окремим баком.': 'Less oil, or a dry sump with a separate tank.',
+  'Замало оливи': 'Too little oil',
+  'Навіть на прямій на межі обертів забірник лише на {mm} мм під оливою: решта в головках і на стінках.':
+    'Even on a straight at the rev limit the pickup is only {mm} mm under the oil: the rest is in the heads and on the walls.',
+  'Більше оливи, глибший піддон або сухий картер.': 'More oil, a deeper pan or a dry sump.',
+  // The bearing failure (src/designer/reliability.ts)
+  'Голодування вкладишів': 'Bearing oil starvation',
+  'Олива не доходить до шатунних шийок, коли тиск у магістралі падає нижче потрібного.': 'Oil does not reach the crankpins when the gallery pressure falls below what they need.',
+  'Більше оливи, перегородки в піддоні або сухий картер.': 'More oil, baffles in the pan or a dry sump.',
+  'Провернуло шатунний вкладиш: олива не дійшла до підшипника.': 'A rod bearing spun: the oil did not reach it.',
+  // The car selection (src/data/sump-cars.ts)
+  'Заводський мокрий картер великого V8: багато оливи, але й багато її в обігу на високих обертах.': 'The factory wet sump of a big V8: plenty of oil, but plenty of it in circulation at high revs too.',
+  'Опозитний мокрий картер: на довгому повороті олива збирається в головці на зовнішньому боці.': 'A boxer’s wet sump: in a long corner the oil collects in the head on the outside.',
+  'Поперечний двигун: у повороті олива тече вздовж колінвала, а на гальмуванні поперек піддона.': 'A transverse engine: in a corner the oil runs along the crank, under braking across the pan.',
+  'Інтегрований сухий картер 9A1: олива в самому двигуні, але ступені відкачування забирають її з головок.': 'The 9A1’s integrated dry sump: the oil stays in the engine, but scavenge stages pull it out of the heads.',
+  'Сухий картер з окремим баком. Двигун стоїть шківом назад, тож гальмування жене оливу до маховика.': 'A dry sump with a separate tank. The engine sits pulley rearward, so braking drives the oil toward the flywheel.',
+  'Шестиступінчастий сухий картер з окремим відкачуванням кожного відсіку колінвала.': 'A six-stage dry sump that scavenges every crank bay separately.',
 };

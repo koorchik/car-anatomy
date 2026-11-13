@@ -93,7 +93,7 @@ export function systemsOf(spec: EngineSpec): SystemsSpec {
     oilPump: rotary ? 'chain' : 'crank',
     oilFilter: true,
     sump: 'wet',
-    oilL: derivedOilL(specLitres(spec), 'wet'),
+    oilL: derivedOilL(specLitres(spec), 'wet', diesel),
     boostBar: boosted ? 0.8 : 0,
     intercooler: boosted && spec.aspiration !== 'supercharged' ? 0.7 : 0,
     supercharger: spec.aspiration === 'supercharged' ? 'roots' : null,

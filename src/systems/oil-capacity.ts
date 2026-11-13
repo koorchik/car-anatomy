@@ -6,10 +6,11 @@ import type { SumpKind } from '../engine/systems-spec.ts';
 /**
  * Oil capacity with the filter, litres: 2.4·Vd^0.55 for a wet sump, more for the dry kinds, whose tank or extra stages
  * hold oil too (estimates, fitted to petrol car engines). Checks against GM TechLink: a C7 Corvette LT1 6.2 wet
- * takes 6.6 L and its Z51 dry sump 9.3 L, the formula gives 6.9 and 9.3 L. A small single gets about a litre.
+ * takes 6.6 L and its Z51 dry sump 9.3 L, the formula gives 6.9 and 9.3 L. A small single gets about a litre. A diesel
+ * holds 40 % more: its oil carries soot and cools the pistons (estimate).
  */
-export function derivedOilL(litres: number, sump: SumpKind): number {
-  const wet = Math.max(0.6, 2.4 * Math.max(0, litres) ** 0.55);
+export function derivedOilL(litres: number, sump: SumpKind, diesel = false): number {
+  const wet = Math.max(0.6, 2.4 * Math.max(0, litres) ** 0.55) * (diesel ? 1.4 : 1);
   const factor = sump === 'dry' ? 1.35 : sump === 'integrated-dry' ? 1.2 : 1;
   return Math.round(wet * factor * 10) / 10;
 }

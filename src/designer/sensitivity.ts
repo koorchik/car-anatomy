@@ -29,7 +29,7 @@ export function metricsOf(perf: Performance, rel: Reliability): Metric[] {
     { id: 'peakRpm', name: t('Оберти піку потужності'), value: perf.peakPower.rpm, format: 'rpm' },
     { id: 'safeRpm', name: t('Безпечні оберти'), value: rel.safeRpm, format: 'rpm' },
   ];
-  for (const item of rel.items) metrics.push({ id: item.id, name: item.name, value: item.load, format: 'load' });
+  for (const item of rel.items) if (!item.trackOnly) metrics.push({ id: item.id, name: item.name, value: item.load, format: 'load' });
   return metrics;
 }
 

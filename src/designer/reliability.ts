@@ -12,7 +12,15 @@ import { FUELS } from './fuels.ts';
 import { rodFailStress, rodStressAt, type Performance, type RpmPoint } from './physics.ts';
 
 /** Which part to show as broken. */
-export type FailedPart = 'rod' | 'piston' | 'valve' | 'gasket' | 'turbo' | 'rotor' | 'exhaust' | 'mounts';
+export type FailedPart = 'rod' | 'piston' | 'valve' | 'gasket' | 'turbo' | 'rotor' | 'exhaust' | 'mounts' | 'bearing';
+
+/** The oil reaching the bearings at this moment, from the oil-on-track model (src/lubrication). */
+export interface OilCondition {
+  /** Gallery pressure over what the bearings need at this speed. */
+  margin: number;
+  /** False once the film in the clearances and the crank drillings is used up. */
+  reserveLeft: boolean;
+}
 
 export interface LimitItem {
   id: string;
@@ -27,7 +35,9 @@ export interface LimitItem {
   failure: string;
   part: FailedPart;
   /** Load at a given speed and throttle share, for wear while driving. */
-  at: (rpm: number, throttle: number) => number;
+  at: (rpm: number, throttle: number, oil?: OilCondition) => number;
+  /** Wears only on track, from the live oil condition: not part of the verdict and not listed on the designer's panel. */
+  trackOnly?: boolean;
 }
 
 export type VerdictId = 'solid' | 'sport' | 'race' | 'oneshot' | 'doomed';
@@ -250,6 +260,19 @@ export function assessReliability(d: Design, perf: Performance): Reliability {
     });
   }
 
+  if (!rotary) {
+    items.push({
+      id: 'oil-starvation',
+      name: t('Голодування вкладишів'),
+      detail: t('Олива не доходить до шатунних шийок, коли тиск у магістралі падає нижче потрібного.'),
+      fix: t('Більше оливи, перегородки в піддоні або сухий картер.'),
+      failure: t('Провернуло шатунний вкладиш: олива не дійшла до підшипника.'),
+      part: 'bearing',
+      trackOnly: true,
+      at: (rpm, throttle, oil) => (oil ? starvationLoad(rpm, throttle, oil) : 0),
+    });
+  }
+
   const finished: LimitItem[] = items.map((item) => {
     let load = 0;
     for (const p of points) load = Math.max(load, item.at(p.rpm, 1));
@@ -281,6 +304,20 @@ export function assessReliability(d: Design, perf: Performance): Reliability {
 /** Below this load a part doesn't wear in any way worth showing. */
 export const SAFE_LOAD = 0.88;
 
+/**
+ * Load on a rod bearing whose film has run out: past the safe load by the pressure deficit, more at speed and under
+ * load. Full starvation at 6000 rpm and full throttle reaches 0.96, which wears 1.5 % of the bearings' life per second
+ * (calibrated so that a one-second dip is survived, as track logs show; docs/lubrication-model.md).
+ */
+export function starvationLoad(rpm: number, throttle: number, oil: OilCondition): number {
+  if (oil.reserveLeft) return 0;
+  const deficit = Math.min(1, Math.max(0, 1 - oil.margin));
+  return SAFE_LOAD + 0.08 * deficit * (rpm / 6000) * (0.6 + 0.4 * Math.min(1, Math.max(0, throttle)));
+}
+
+/** Share of life used per second at a load, as wearNow counts it. */
+export const wearRateAt = (load: number): number => (load <= SAFE_LOAD ? 0 : ((load - SAFE_LOAD) / (1 - SAFE_LOAD)) ** 2 / SECONDS_AT_LIMIT);
+
 /** A part at load 1 lasts about this long, seconds. Compressed so wear shows in minutes rather than years. */
 const SECONDS_AT_LIMIT = 30;
 
@@ -301,12 +338,12 @@ export function restartOutlook(reliability: Reliability, idleRpm: number, rpmLim
   return 'fine';
 }
 
-export function wearNow(reliability: Reliability, rpm: number, throttle: number): WearStep {
+export function wearNow(reliability: Reliability, rpm: number, throttle: number, oil?: OilCondition): WearStep {
   let rate = 0;
   let worst: LimitItem | null = null;
   let highest = SAFE_LOAD;
   for (const item of reliability.items) {
-    const load = item.at(rpm, throttle);
+    const load = item.at(rpm, throttle, oil);
     if (load <= SAFE_LOAD) continue;
     const over = (load - SAFE_LOAD) / (1 - SAFE_LOAD);
     rate += (over * over) / SECONDS_AT_LIMIT;
