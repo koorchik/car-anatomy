@@ -1,12 +1,16 @@
-// A MacPherson corner in 3D: knuckle, lower arm, strut with spring, damper, bump stop and top mount, tie rod with a
-// piece of the rack, hub, brake, wheel, a tyre pressed onto the road, the halfshaft with its two joints, a glass piece
-// of the body and a strip of road. Scene = (y, z, x)·10 of ISO 8855 (kinematics.ts), 1 unit = 100 mm; the model's
-// origin is on the road under the middle of the axle at design ride height, like the hardpoints'.
+// One independent corner on links in 3D, any `links` set (CornerLinkage): a MacPherson strut with a plain knuckle or a
+// split one (dual-axis, RevoKnuckle), a double wishbone, a multilink. The parts are the same everywhere: the knuckle
+// (with a split one, the strut carrier and the wheel knuckle that turns in it), the links (link-builder.ts), the strut
+// or a coilover with its spring, damper, bump stop and top mount (damper-unit.ts), a tie rod with a piece of the rack
+// on a steered corner, hub, brake, wheel, a tyre pressed onto the road, the halfshaft with its two joints on a driven
+// one, a glass piece of the body and a strip of road. Scene = (y, z, x)·10 of ISO 8855 (kinematics.ts), 1 unit =
+// 100 mm; the model's origin is on the road under the middle of the axle at design ride height, like the hardpoints'.
 //
 // Every frame the knuckle's pose is solved exactly (Axle.solvePose, warm from the last frame), and each link is posed
-// from its two ends: the lower arm turns about its bush axis until it meets the ball joint, the tie rod points from
-// the rack to the steering arm, the strut's rod hangs from the top mount along the strut's own axis. Every link is
-// rigid geometry of its real length, so nothing stretches (tests/suspension-scene.test.ts).
+// from its two ends: an arm turns about its bush axis until it meets its ball joint, a rod points from its body end
+// to its knuckle end, the strut's rod hangs from the top mount along the strut's own axis, a coilover stands on the
+// arm, link or knuckle it sits on and points at its top mount. Every link is rigid geometry of the solver's length,
+// so nothing stretches (tests/suspension-scene.test.ts).
 //
 // Implements the shell's SceneModel<CornerFrame> structurally (whole-car plan, the Stage section); O2b adds
 // the type, and this class then declares it.
@@ -21,31 +25,26 @@ import type { QuarterOut } from '../../suspension/quarter.ts';
 import type { RoadProfile } from '../../suspension/road.ts';
 import type { ResolvedCorner } from '../../suspension/setup.ts';
 import { POSE_SIZE } from '../../suspension/solve.ts';
+import type { Vec3 } from '../../suspension/spec.ts';
 import { tyreVertical } from '../../vehicle/tyre-data.ts';
 import type { PartInfo } from '../parts-info.ts';
-import { SUSPENSION_PARTS } from './parts.ts';
-import {
-  annulus,
-  Bellows,
-  boss,
-  capsule,
-  CoilSpring,
-  knuckleGeometry,
-  lathe,
-  latheAlong,
-  rimProfile,
-  ringProfile,
-  rodBetween,
-  slab,
-  toScene,
-  tyreProfile,
-} from './geometry.ts';
+import { cornerParts, isCoilover } from './parts.ts';
+import { armTo, Bellows, boss, knuckleGeometry, lathe, latheAlong, ringProfile, rodBetween, toScene, tyreProfile, type KnuckleEnd } from './geometry.ts';
+import { linkBody, strutBody } from './corner-body.ts';
+import { DamperUnit, LoneSpring } from './damper-unit.ts';
+import { DRAWING, springWireM } from './drawing.ts';
 import { HalfshaftView } from './halfshaft.ts';
+import { armPlane, axisPivots, holdEnd, PIVOT_BOSS, type DiscRoom, type Hold } from './knuckle-shapes.ts';
+import { LinkSet, type DrawnLink, type RodView } from './link-builder.ts';
 import { createCornerMaterials, disposeMaterials, type CornerMaterials } from './materials.ts';
 import { CamberLaser, ForceArrows } from './overlays.ts';
 import { COLUMN_DZ, RoadStrip, type RoadView } from './road-strip.ts';
-import { CornerSchematic } from './schematic.ts';
+import { CornerSchematic, type SchematicPoints } from './schematic.ts';
 import { ROAD_SAMPLES, roadPressUniforms, type RoadPressUniforms } from './tyre-press.ts';
+import { caliperGeometry, discGeometry, wheelGeometry } from './wheel-geometry.ts';
+
+export { DRAWING, springWireM } from './drawing.ts';
+export type { DrawnLink } from './link-builder.ts';
 
 /** What the corner shows this frame. Lengths in metres, forces in newtons along their elements (QuarterOut). */
 export interface CornerFrame {
@@ -84,50 +83,16 @@ export function frameFromQuarter(out: QuarterOut, frame: CornerFrame): CornerFra
   return frame;
 }
 
-/**
- * Sizes the hardpoints do not give, metres: typical of a compact car's front corner, for the drawing only. The model
- * reads nothing from them.
- */
-export const DRAWING = {
-  /** Wheel offset (ET): the hub face outboard of the wheel's centre plane. */
-  wheelOffsetM: 0.045,
-  rimWidthM: 0.2032,
-  discOuterM: 0.15,
-  discInnerM: 0.088,
-  discThickM: 0.026,
-  /** The disc's braking ring sits this far inboard of the hub face. */
-  hatDepthM: 0.039,
-  strutTubeRadiusM: 0.026,
-  rodRadiusM: 0.011,
-  /** Coil spring: mean radius, total turns and closed turns at each end. */
-  springMeanRadiusM: 0.06,
-  springTurns: 6,
-  springEndTurns: 0.75,
-  /** Rod guide at the top of the strut tube, and the margin below the piston at full bump. */
-  guideM: 0.02,
-} as const;
-
-/** Shear modulus of carbon steel, Pa: the handbook value (Shigley, table A-5), not checked against a primary source. */
-const STEEL_SHEAR_PA = 79.3e9;
-
-/**
- * Wire diameter (m) of a coil of DRAWING's size that has `rate` (N/m): k = G·d⁴ / (8·D³·n), the helical spring formula,
- * with n the active turns. 25 N/mm gives 11.8 mm.
- */
-export function springWireM(rate: number): number {
-  const D = 2 * DRAWING.springMeanRadiusM;
-  const n = DRAWING.springTurns - 2 * DRAWING.springEndTurns;
-  return ((8 * rate * D ** 3 * n) / STEEL_SHEAR_PA) ** 0.25;
-}
-
 /** Everything that decides the model's geometry: two resolved corners with the same key share a model. */
 export function cornerGeometryKey(r: ResolvedCorner): string {
   const spec = r.corner.axle;
   const link = spec.linkage;
   return JSON.stringify([
     link.wishbones.map((w) => [w.front, w.rear, w.ball]),
-    link.rods.map((rod) => [rod.body, rod.knuckle]),
+    link.rods.map((rod) => [rod.body, rod.knuckle, !!rod.steer]),
     link.strut ? [link.strut.top, link.strut.lower] : null,
+    link.knuckle ? [link.knuckle.kind, link.knuckle.axisLower, link.knuckle.axisUpper] : null,
+    [spec.spring.body, spec.spring.wheel, spec.spring.on ?? null, spec.damper.body, spec.damper.wheel, spec.damper.on ?? null],
     spec.wheelCentre,
     spec.spinAxis,
     spec.spring.strutSeats,
@@ -143,16 +108,6 @@ export function cornerGeometryKey(r: ResolvedCorner): string {
 
 const X = new THREE.Vector3(1, 0, 0);
 const UP = new THREE.Vector3(0, 1, 0);
-const DOWN = new THREE.Vector3(0, -1, 0);
-
-/** A link as drawn: the object that carries it and both ends in that object's own frame, for the stretch test. */
-export interface DrawnLink {
-  name: string;
-  object: THREE.Object3D;
-  /** End on the body (or rack) and end on the knuckle, local to `object`. */
-  bodyEnd: THREE.Vector3;
-  knuckleEnd: THREE.Vector3;
-}
 
 /** A mesh that swaps material with the view. */
 interface Shell {
@@ -161,23 +116,35 @@ interface Shell {
   glass: THREE.Material;
 }
 
-/** A MacPherson corner (the left one: outboard is +X). */
+/** Where the wheel end of a coilover (or a lone coil) sits: on an arm, on a link's line, or on the knuckle. */
+type Seat =
+  | { kind: 'arm'; arm: number; at: THREE.Vector3 }
+  | { kind: 'rod'; rod: number; along: number }
+  /** On the knuckle (a split knuckle's carrier): the point in the scene and as given (ISO), both at design. */
+  | { kind: 'knuckle'; at: THREE.Vector3; iso: Vec3 };
+
+/** An independent corner on links (the left one: outboard is +X). */
 export class CornerModel {
   readonly group = new THREE.Group();
   /** Everything on the body: moves with bodyZ. Overlays live here too. */
   readonly body = new THREE.Group();
-  readonly parts: Record<string, PartInfo> = SUSPENSION_PARTS;
+  readonly parts: Record<string, PartInfo>;
   readonly materials: CornerMaterials;
   readonly press: RoadPressUniforms = roadPressUniforms();
   /** The links as drawn, for tests and for anyone checking that nothing stretches. */
-  readonly links: DrawnLink[] = [];
+  readonly links: DrawnLink[];
+  readonly linkSet: LinkSet;
+  /** The knuckle the wheel turns in (a split knuckle's wheel knuckle), and a split knuckle's strut carrier. */
   readonly knuckle = new THREE.Group();
+  readonly carrier: THREE.Group | null;
+  readonly damper: DamperUnit;
+  readonly loneSpring: LoneSpring | null;
   readonly halfshaft: HalfshaftView | null;
   /** The knuckle's pose this frame (solver layout) and the travel and rack it was solved for. */
   readonly pose = new Float64Array(POSE_SIZE);
   readonly road: RoadStrip;
   readonly tyre: THREE.Mesh;
-  readonly forces = new ForceArrows();
+  readonly forces: ForceArrows;
   readonly laser = new CamberLaser();
   readonly schematic: CornerSchematic;
   private resolved: ResolvedCorner;
@@ -205,32 +172,26 @@ export class CornerModel {
   // Points of the drawing, scene units, body frame at design.
   private readonly c0: THREE.Vector3;
   private readonly spinAxis0: THREE.Vector3;
-  private readonly armFront: THREE.Vector3;
-  private readonly armRear: THREE.Vector3;
-  private readonly ball0: THREE.Vector3;
-  private readonly tieInner0: THREE.Vector3;
-  private readonly tieOuter0: THREE.Vector3;
-  private readonly strutTop0: THREE.Vector3;
-  private readonly strutLower0: THREE.Vector3;
-  private readonly upperSeat: number;
-  private readonly lowerSeat: number;
-  private readonly tubeTop: number;
-  private readonly rodLength: number;
-  private readonly stopLength: number;
+  /** The strut's top mount and lower point, or the coilover's ends; a split knuckle's axis point and direction. */
+  private readonly top0: THREE.Vector3;
+  private readonly lower0: THREE.Vector3;
+  private readonly unitSeat: Seat;
+  private readonly springSeat: Seat | null;
+  private readonly springTop0: THREE.Vector3 | null;
+  private readonly axisPoint0: THREE.Vector3 | null;
+  private readonly axisDir0: THREE.Vector3 | null;
+  /** The steered rod, its rack, and where the rack's housing ends. */
+  private readonly steerRod: RodView | null;
+  private readonly rack: THREE.Group | null;
+  private readonly rackBar: THREE.Mesh | null;
+  private readonly rackBoot: Bellows | null;
+  private readonly rackHousingEnd: number;
+  private readonly bellX0: number;
+  /** Height the steering axis is drawn up to in the mechanism view. */
+  private readonly axisTopY: number;
+  private springWire: number;
 
   // Moving groups.
-  private readonly arm = new THREE.Group();
-  private readonly tie = new THREE.Group();
-  private readonly tieRodMesh: THREE.Mesh;
-  private readonly rack = new THREE.Group();
-  private readonly rackBar: THREE.Mesh;
-  private readonly rackBoot = new Bellows(0.3, 0.16, 7, 0.07);
-  private readonly strutTop = new THREE.Group();
-  private readonly topMount: THREE.Mesh;
-  private readonly bumpStop: THREE.Mesh;
-  private readonly springMesh: THREE.Mesh;
-  private readonly spring: CoilSpring;
-  private springWire: number;
   private readonly hubFrame = new THREE.Group();
   private readonly spin = new THREE.Group();
   private readonly hub: THREE.Mesh;
@@ -240,21 +201,19 @@ export class CornerModel {
   private readonly nuts: THREE.Mesh;
   private readonly bodyShell: THREE.Mesh;
   private readonly subframe: THREE.Mesh;
-  private readonly bumpSqueeze = { value: 0 };
 
   // Scratch, so update() allocates nothing.
   private readonly v1 = new THREE.Vector3();
   private readonly v2 = new THREE.Vector3();
   private readonly v3 = new THREE.Vector3();
   private readonly v4 = new THREE.Vector3();
-  private readonly v5 = new THREE.Vector3();
   private readonly q1 = new THREE.Quaternion();
+  private readonly q2 = new THREE.Quaternion();
   private readonly m1 = new THREE.Matrix4();
-  private readonly ball = new THREE.Vector3();
-  private readonly tieOuter = new THREE.Vector3();
-  private readonly tieInner = new THREE.Vector3();
-  private readonly lower = new THREE.Vector3();
   private readonly top = new THREE.Vector3();
+  private readonly lower = new THREE.Vector3();
+  private readonly springTop = new THREE.Vector3();
+  private readonly springLower = new THREE.Vector3();
   private readonly wheelCentre = new THREE.Vector3();
   private readonly axis = new THREE.Vector3();
   private readonly inPlaneUp = new THREE.Vector3();
@@ -262,7 +221,18 @@ export class CornerModel {
   private readonly outerJoint = new THREE.Vector3();
   private readonly force = new THREE.Vector3();
   private readonly forceB = new THREE.Vector3();
+  private readonly push = new THREE.Vector3();
+  private readonly s1 = new THREE.Vector3();
+  private readonly s2 = new THREE.Vector3();
+  private readonly s3 = new THREE.Vector3();
+  private readonly steerTop = new THREE.Vector3();
+  private readonly steerRoad = new THREE.Vector3();
+  private readonly schematicPoints: SchematicPoints;
   private readonly fa = [0, 0, 0];
+  private readonly axisPoint = new Float64Array(3);
+  private readonly axisDir = new Float64Array(3);
+  /** Per link (arms first, then rods): an applied force from the coilover that sits on it, scene axes, N. */
+  private readonly seatForce: THREE.Vector3[];
 
   constructor(resolved: ResolvedCorner, profile: RoadProfile | null = null) {
     this.resolved = resolved;
@@ -271,141 +241,118 @@ export class CornerModel {
     this.view.profile = profile;
     const spec = resolved.corner.axle;
     const link = spec.linkage;
-    const strut = link.strut;
-    const wishbone = link.wishbones[0];
-    const rod = link.rods.find((r) => r.steer) ?? link.rods[0];
-    if (!strut || !wishbone || !rod || spec.spring.wheel !== 'strut') throw new Error('CornerModel draws a MacPherson strut corner');
+    const strut = link.strut ?? null;
+    const split = link.knuckle ?? null;
+    if (strut ? spec.damper.wheel !== 'strut' : spec.damper.wheel === 'strut') throw new Error('A strut corner has its damper in the strut, and only a strut corner does');
+    this.parts = cornerParts(spec);
     const m = (this.materials = createCornerMaterials(this.press));
 
     // ---- Points of the drawing (scene, design) ----
     this.c0 = toScene(spec.wheelCentre);
     this.spinAxis0 = toScene(spec.spinAxis).normalize();
-    this.armFront = toScene(wishbone.front);
-    this.armRear = toScene(wishbone.rear);
-    this.ball0 = toScene(wishbone.ball);
-    this.tieInner0 = toScene(rod.body);
-    this.tieOuter0 = toScene(rod.knuckle);
-    this.strutTop0 = toScene(strut.top);
-    this.strutLower0 = toScene(strut.lower);
-    const seats = spec.spring.strutSeats ?? { upperM: 0.03, lowerM: 0.15 };
-    this.upperSeat = seats.upperM * 10;
-    this.lowerSeat = seats.lowerM * 10;
-    this.stopLength = resolved.bumpStop.lengthM * 10;
-    // The tube's top meets the bump stop exactly when the damper is as short as the stop's contact length.
-    this.tubeTop = resolved.bumpStop.contactM * 10 - this.upperSeat - this.stopLength;
-    // The rod is long enough to keep the piston under the guide at top-out.
-    this.rodLength = resolved.topOutM * 10 - this.tubeTop + DRAWING.guideM * 10 + 0.1;
+    this.group.add(this.body);
+
+    // ---- Links ----
+    const solver = this.axle.solver;
+    const nW = link.wishbones.length;
+    const rodLengths = link.rods.map((_, i) => solver.lengthOf(2 * nW + i) * 10);
+    this.linkSet = new LinkSet(link, rodLengths, this.c0.y, m);
+    this.links = this.linkSet.drawn;
+    this.body.add(this.linkSet.group);
+    for (const arm of this.linkSet.arms) this.solidOnly.push(arm.arm, arm.bushes, arm.joint);
+    for (const rod of this.linkSet.rods) this.solidOnly.push(rod.mesh);
+    if (this.linkSet.bushes) this.solidOnly.push(this.linkSet.bushes);
+    this.seatForce = [...this.linkSet.arms, ...this.linkSet.rods].map(() => new THREE.Vector3());
+    this.steerRod = this.linkSet.rods.find((r) => r.tie) ?? null;
+
+    // ---- Spring and damper: the strut, or a coilover (and a coil of its own where it sits elsewhere) ----
+    const seatOf = (wheel: Vec3, on: string | undefined): Seat => {
+      const arm = this.linkSet.arms.findIndex((a) => a.spec.id === on);
+      if (arm >= 0) return { kind: 'arm', arm, at: toScene(wheel) };
+      const rod = link.rods.findIndex((r) => r.id === on);
+      if (rod >= 0) {
+        const r = link.rods[rod]!;
+        const d = [r.knuckle[0] - r.body[0], r.knuckle[1] - r.body[1], r.knuckle[2] - r.body[2]];
+        const along = ((wheel[0] - r.body[0]) * d[0]! + (wheel[1] - r.body[1]) * d[1]! + (wheel[2] - r.body[2]) * d[2]!) / (d[0]! ** 2 + d[1]! ** 2 + d[2]! ** 2);
+        return { kind: 'rod', rod, along };
+      }
+      if (on) throw new Error(`A spring or damper sits on a link the corner lacks: ${on}`);
+      return { kind: 'knuckle', at: toScene(wheel), iso: wheel };
+    };
+    const damperWheel = spec.damper.wheel;
     const shortest = this.axle.value('damperLen', this.axle.table.travel0 + (this.axle.table.n - 1) * this.axle.table.step) * 10;
-    const tubeBottom = Math.min(-0.1, shortest - this.rodLength - 0.25);
-    const strutDir0 = this.strutTop0.clone().sub(this.strutLower0).normalize();
+    const coilOnUnit = strut ? spec.spring.wheel === 'strut' : isCoilover(spec);
+    if (strut) {
+      this.top0 = toScene(strut.top);
+      this.lower0 = toScene(strut.lower);
+      this.unitSeat = { kind: 'knuckle', at: this.lower0, iso: strut.lower };
+    } else {
+      this.top0 = toScene(spec.damper.body);
+      this.lower0 = toScene(damperWheel as Vec3);
+      this.unitSeat = seatOf(damperWheel as Vec3, spec.damper.on);
+    }
+    const seats = strut
+      ? spec.spring.strutSeats ?? { upperM: 0.03, lowerM: 0.15 }
+      : { upperM: DRAWING.coiloverUpperSeatM, lowerM: DRAWING.coiloverLowerSeatM };
+    const meanR = strut ? DRAWING.springMeanRadiusM : DRAWING.coiloverSpringMeanRadiusM;
+    this.springWire = springWireM(resolved.spring.rate, meanR) * 10;
+    const strutDir0 = this.top0.clone().sub(this.lower0).normalize();
+    this.damper = new DamperUnit(
+      {
+        strut: !!strut,
+        part: strut ? 'susp.strut' : 'susp.damper',
+        tubeR: (strut ? DRAWING.strutTubeRadiusM : DRAWING.coiloverTubeRadiusM) * 10,
+        rodR: (strut ? DRAWING.rodRadiusM : DRAWING.coiloverRodRadiusM) * 10,
+        springMeanR: meanR * 10,
+        springTurns: DRAWING.springTurns,
+        springEndTurns: DRAWING.springEndTurns,
+        upperSeat: seats.upperM * 10,
+        lowerSeat: seats.lowerM * 10,
+        stopLength: resolved.bumpStop.lengthM * 10,
+        contact: resolved.bumpStop.contactM * 10,
+        topOut: resolved.topOutM * 10,
+        shortest,
+        guide: DRAWING.guideM * 10,
+        wire: coilOnUnit ? this.springWire : null,
+        seatR: meanR * 10 + 0.15,
+      },
+      m,
+      strut ? { lower: this.lower0, dir: strutDir0 } : null,
+    );
+    const unit = this.damper;
+    unit.wire = this.springWire;
+    this.body.add(unit.topMount, unit.top);
+    if (!strut) this.body.add(unit.bottom);
+    this.solidOnly.push(unit.topMount, unit.upper, unit.rod, unit.bumpStop, unit.tube);
+    this.xrayOnly.push(unit.piston, unit.oil);
+    this.shells.push({ mesh: unit.bumpStop, solid: m.bumpStop, glass: m.bumpStopGlass }, { mesh: unit.tube, solid: m.strut, glass: m.strutGlass });
+    if (!coilOnUnit && spec.spring.wheel !== 'strut') {
+      this.loneSpring = new LoneSpring(meanR * 10, DRAWING.springTurns, DRAWING.springEndTurns, this.springWire, m);
+      this.springTop0 = toScene(spec.spring.body);
+      this.springSeat = seatOf(spec.spring.wheel, spec.spring.on);
+      this.body.add(this.loneSpring.group);
+      this.solidOnly.push(this.loneSpring.seats, this.loneSpring.lowerSeat);
+    } else {
+      this.loneSpring = null;
+      this.springTop0 = null;
+      this.springSeat = null;
+    }
 
     // ---- Body: glass piece of the shell and the subframe ----
-    this.group.add(this.body);
-    const T = this.strutTop0;
-    const iso = (x: number, y: number, z: number): THREE.Vector3 => toScene([x, y, z]);
-    const towerR = 0.95;
-    const bodyParts = [
-      // Strut tower round the top mount, closed at the top.
-      latheAlong(
-        [
-          [towerR, -1.15],
-          [towerR, 0.32],
-          [towerR - 0.15, 0.4],
-          [0.0001, 0.4],
-        ],
-        T,
-        UP,
-        32,
-      ),
-      // Inner fender from the tower to the front, and the frame rail under it along the car.
-      slab(iso(-0.5, 0.452, 0.71), iso(0.42, 0.452, 0.71), X, 3.2, 0.15),
-      slab(iso(-0.6, 0.395, 0.55), iso(0.6, 0.395, 0.55), X, 1.0, 0.7),
-    ];
-    this.bodyShell = tag(new THREE.Mesh(merge(bodyParts), m.body), 'susp.body');
+    const pieces = strut ? strutBody(this.top0) : linkBody(spec);
+    this.bodyShell = tag(new THREE.Mesh(pieces.shell, m.body), 'susp.body');
     this.bodyShell.renderOrder = 2;
-    const subParts = [
-      slab(iso(-0.26, 0.275, 0.225), iso(0.3, 0.275, 0.225), UP, 0.5, 0.5),
-      slab(iso(0.22, 0.29, 0.21), iso(0.22, 0.34, 0.26), X, 0.5, 0.7),
-      slab(iso(-0.128, 0.29, 0.21), iso(-0.128, 0.33, 0.295), X, 0.5, 0.7),
-    ];
-    this.subframe = tag(new THREE.Mesh(merge(subParts), m.body), 'susp.subframe');
+    this.subframe = tag(new THREE.Mesh(pieces.subframe, m.body), 'susp.subframe');
     this.subframe.renderOrder = 2;
     this.body.add(this.bodyShell, this.subframe);
     this.shells.push({ mesh: this.bodyShell, solid: m.body, glass: m.bodyXray }, { mesh: this.subframe, solid: m.body, glass: m.bodyXray });
 
-    // ---- Top mount on the body (moves with the camber plates) ----
-    this.topMount = tag(
-      new THREE.Mesh(
-        merge([
-          latheAlong(ringProfile(0.12, 0.72, -0.12, 0.05), new THREE.Vector3(), UP, 32, true),
-          latheAlong(ringProfile(0.12, 0.62, 0.05, 0.12), new THREE.Vector3(), UP, 32, true),
-        ]),
-        m.rubber,
-      ),
-      'susp.top-mount',
-    );
-    this.body.add(this.topMount);
-    this.solidOnly.push(this.topMount);
-
-    // ---- Strut top: rod, upper seat and bearing, bump stop, spring; local −Y runs down the strut axis ----
-    this.strutTop.name = 'strut-top';
-    this.body.add(this.strutTop);
-    const seatR = DRAWING.springMeanRadiusM * 10 + 0.15;
-    const upper = tag(
-      new THREE.Mesh(
-        merge([
-          // Bearing under the mount, a neck down to the upper spring seat, and the seat itself.
-          latheAlong(ringProfile(0.15, 0.5, -0.2, -0.12), new THREE.Vector3(), UP, 28, true),
-          latheAlong(ringProfile(0.15, 0.36, -this.upperSeat + 0.04, -0.2), new THREE.Vector3(), UP, 28, true),
-          latheAlong(ringProfile(0.15, seatR, -this.upperSeat, -this.upperSeat + 0.04), new THREE.Vector3(), UP, 36, true),
-          // The nut on the rod's end above the mount: the same steel, so the same draw call.
-          boss(new THREE.Vector3(0, 0.3, 0), UP, 0.17, 0.12, 6),
-        ]),
-        m.steel,
-      ),
-      'susp.top-mount',
-    );
-    const rodMesh = tag(new THREE.Mesh(rodBetween(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, -this.rodLength, 0), DRAWING.rodRadiusM * 10, 16), m.chrome), 'susp.damper-rod');
-    const pistonY = -this.rodLength;
-    const piston = tag(
-      new THREE.Mesh(
-        merge([
-          boss(new THREE.Vector3(0, pistonY, 0), UP, 0.19, 0.1, 24),
-          boss(new THREE.Vector3(0, pistonY + 0.09, 0), UP, 0.15, 0.025, 24),
-          boss(new THREE.Vector3(0, pistonY + 0.12, 0), UP, 0.12, 0.02, 24),
-          boss(new THREE.Vector3(0, pistonY - 0.09, 0), UP, 0.15, 0.025, 24),
-          boss(new THREE.Vector3(0, pistonY - 0.12, 0), UP, 0.12, 0.02, 24),
-          boss(new THREE.Vector3(0, pistonY - 0.17, 0), UP, 0.08, 0.06, 6),
-        ]),
-        m.piston,
-      ),
-      'susp.damper-piston',
-    );
-    this.xrayOnly.push(piston);
-    // Bump stop: corrugated, hung under the upper seat, squeezed by scaling along the rod.
-    const stopProfile: Array<[number, number]> = [];
-    const folds = 4;
-    for (let i = 0; i <= 48; i++) {
-      const u = i / 48;
-      stopProfile.push([0.24 + 0.06 * (0.5 - 0.5 * Math.cos(2 * Math.PI * folds * u)) + 0.03 * u, -u * this.stopLength]);
-    }
-    stopProfile.reverse();
-    this.bumpStop = tag(new THREE.Mesh(lathe([[0.12, -this.stopLength], ...stopProfile, [0.12, 0]], 28), m.bumpStop), 'susp.bump-stop');
-    this.bumpStop.position.y = -this.upperSeat;
-    this.shells.push({ mesh: this.bumpStop, solid: m.bumpStop, glass: m.bumpStopGlass });
-    this.spring = new CoilSpring(DRAWING.springMeanRadiusM * 10, DRAWING.springTurns, DRAWING.springEndTurns);
-    this.springWire = springWireM(resolved.spring.rate) * 10;
-    this.springMesh = tag(new THREE.Mesh(this.spring.geometry, m.spring), 'susp.spring');
-    this.springMesh.position.y = -this.upperSeat;
-    this.springMesh.frustumCulled = false;
-    this.strutTop.add(upper, rodMesh, piston, this.bumpStop, this.springMesh);
-    this.solidOnly.push(upper, rodMesh, this.bumpStop);
-
-    // ---- Knuckle and everything rigid with it ----
+    // ---- Knuckle (and a split knuckle's carrier) and everything rigid with it ----
     this.body.add(this.knuckle);
     const caliperAngle = 0.62;
-    const hubBossLength = 0.6;
-    const hubBossCentre = this.c0.clone().addScaledVector(this.spinAxis0, -0.15);
+    const ringIn = -DRAWING.hatDepthM * 10 + DRAWING.wheelOffsetM * 10 - DRAWING.discThickM * 10;
+    const ringOut = ringIn + DRAWING.discThickM * 10;
+    const disc: DiscRoom = { outer: DRAWING.discOuterM * 10 };
     const rear = new THREE.Vector3(0, 0, -1);
     const lug = (sign: number): THREE.Vector3 =>
       this.c0
@@ -413,60 +360,98 @@ export class CornerModel {
         .addScaledVector(this.spinAxis0, -0.5)
         .addScaledVector(rear, Math.cos(caliperAngle) * 1.25)
         .addScaledVector(UP, sign * Math.sin(caliperAngle) * 1.25);
-    const knuckleGeo = knuckleGeometry({
-      hub: { centre: hubBossCentre, axis: this.spinAxis0, radius: 0.6, length: hubBossLength },
-      clamp: {
-        from: this.strutLower0.clone().addScaledVector(strutDir0, tubeBottom - 0.04),
-        to: this.strutLower0.clone().addScaledVector(strutDir0, 0.45),
-        radius: DRAWING.strutTubeRadiusM * 10 + 0.08,
-      },
-      ends: [
-        { at: this.ball0.clone().addScaledVector(UP, 0.25), axis: UP, radius: 0.24, length: 0.4, arm: 0.2 },
-        { at: this.tieOuter0.clone().addScaledVector(UP, 0.12), axis: UP, radius: 0.17, length: 0.3, arm: 0.15 },
-        { at: lug(1), axis: this.spinAxis0, radius: 0.15, length: 0.3, arm: 0.13 },
-        { at: lug(-1), axis: this.spinAxis0, radius: 0.15, length: 0.3, arm: 0.13 },
-      ],
-    });
-    const knuckleMesh = tag(new THREE.Mesh(knuckleGeo, m.knuckle), 'susp.knuckle');
-    // Strut tube with the lower spring seat, and the oil inside it.
-    const tubeR = DRAWING.strutTubeRadiusM * 10;
-    const tube = tag(
-      new THREE.Mesh(
-        merge([
-          latheAlong(
-            [
-              [0.0001, tubeBottom],
-              [tubeR, tubeBottom],
-              [tubeR, this.tubeTop - 0.06],
-              [tubeR - 0.06, this.tubeTop],
-              [DRAWING.rodRadiusM * 10 + 0.02, this.tubeTop],
-            ],
-            this.strutLower0,
-            strutDir0,
-            28,
-            true,
-          ),
-          latheAlong(ringProfile(tubeR, seatR, this.lowerSeat - 0.05, this.lowerSeat), this.strutLower0, strutDir0, 36, true),
-        ]),
-        m.strut,
-      ),
-      'susp.strut',
-    );
-    this.shells.push({ mesh: tube, solid: m.strut, glass: m.strutGlass });
-    const oil = tag(
-      new THREE.Mesh(latheAlong([[0.0001, tubeBottom + 0.04], [tubeR - 0.04, tubeBottom + 0.04], [tubeR - 0.04, this.tubeTop - 0.35], [0.0001, this.tubeTop - 0.35]], this.strutLower0, strutDir0, 24, true), m.oil),
-      'susp.damper-oil',
-    );
-    oil.renderOrder = 1;
-    this.xrayOnly.push(oil);
-    // Caliper on the knuckle, straddling the disc at the rear.
-    const ringIn = -DRAWING.hatDepthM * 10 + DRAWING.wheelOffsetM * 10 - DRAWING.discThickM * 10;
-    const ringOut = ringIn + DRAWING.discThickM * 10;
+    const hub = { centre: this.c0.clone().addScaledVector(this.spinAxis0, -0.15), axis: this.spinAxis0, radius: 0.6, length: 0.6 };
+    const end = (hold: Hold): KnuckleEnd => holdEnd(hold, this.c0, this.spinAxis0, disc);
+    const tubeBottom = unit.tubeBottom;
+    let axisTop = 0;
+    if (split) {
+      // The wheel knuckle: hub boss, the axis's two bearings, the steering arm, the caliper's lugs. The carrier: the
+      // strut clamp, the lower arm's joint and the bearings' ears, reaching round behind the caliper.
+      const lower = toScene(split.axisLower);
+      const upper = toScene(split.axisUpper);
+      const pivots = axisPivots(this.c0, this.spinAxis0, lower, upper, DRAWING.discOuterM * 10 + 0.25);
+      this.axisPoint0 = lower;
+      this.axisDir0 = upper.clone().sub(lower).normalize();
+      const wheelEnds = [
+        end({ at: pivots.above, kind: 'pivot', axis: pivots.dir, side: -1 }),
+        end({ at: pivots.below, kind: 'pivot', axis: pivots.dir, side: 1 }),
+        ...this.linkSet.rods.map((r) => end({ at: r.knuckle0, kind: r.tie ? 'steer' : 'link' })),
+        end({ at: lug(1), kind: 'lug' }),
+        end({ at: lug(-1), kind: 'lug' }),
+      ];
+      const knuckleMesh = tag(new THREE.Mesh(knuckleGeometry({ hub, ends: wheelEnds, rootShare: 0.5 }), m.knuckle), split.knucklePart);
+      this.knuckle.add(knuckleMesh);
+      this.carrier = new THREE.Group();
+      this.body.add(this.carrier);
+      const clampFrom = this.lower0.clone().addScaledVector(strutDir0, tubeBottom - 0.04);
+      const clampTo = this.lower0.clone().addScaledVector(strutDir0, 0.45);
+      const clampR = DRAWING.strutTubeRadiusM * 10 + 0.08;
+      const root = clampFrom.clone().lerp(clampTo, 0.35);
+      // Round the back of the wheel, behind the caliper and clear of the halfshaft, at the hub's height.
+      const behind = this.c0.clone().addScaledVector(this.spinAxis0, -1.05).addScaledVector(rear, 1.25);
+      const ear = (at: THREE.Vector3, side: 1 | -1): KnuckleEnd => ({ at: at.clone().addScaledVector(pivots.dir, (side * PIVOT_BOSS) / 2), axis: pivots.dir, radius: 0.18, length: PIVOT_BOSS, arm: 0.13 });
+      const above = ear(pivots.above, 1);
+      const below = ear(pivots.below, -1);
+      // Behind the disc, out past its edge in the arms' plane, then outboard to the ear.
+      below.via = [behind, armPlane(below.at, this.c0, this.spinAxis0)];
+      const carrierParts = [
+        rodBetween(clampFrom, clampTo, clampR, 20),
+        ...armTo(root, above),
+        ...armTo(root, below),
+        ...this.linkSet.arms.flatMap((a) => armTo(root, { ...end({ at: a.ball0, kind: 'ball' }), via: [behind] })),
+      ];
+      const carrierMesh = tag(new THREE.Mesh(merge(carrierParts), m.carrier), split.carrierPart);
+      this.carrier.add(carrierMesh, unit.tube, unit.oil);
+      axisTop = Math.max(pivots.above.y, upper.y);
+    } else {
+      this.carrier = null;
+      this.axisPoint0 = null;
+      this.axisDir0 = null;
+      const ends: KnuckleEnd[] = [];
+      let knuckleGeo: THREE.BufferGeometry;
+      if (strut) {
+        // The plain strut's knuckle as the strut corner of the page has it: the clamp, the ball joint, the steering
+        // arm and the lugs straight from the hub boss.
+        const wishbone = link.wishbones[0]!;
+        const ball0 = toScene(wishbone.ball);
+        for (const rod of this.linkSet.rods) ends.push({ at: rod.knuckle0.clone().addScaledVector(UP, 0.12), axis: UP, radius: 0.17, length: 0.3, arm: 0.15 });
+        knuckleGeo = knuckleGeometry({
+          rootShare: 0.5,
+          hub,
+          clamp: {
+            from: this.lower0.clone().addScaledVector(strutDir0, tubeBottom - 0.04),
+            to: this.lower0.clone().addScaledVector(strutDir0, 0.45),
+            radius: DRAWING.strutTubeRadiusM * 10 + 0.08,
+          },
+          ends: [
+            { at: ball0.clone().addScaledVector(UP, 0.25), axis: UP, radius: 0.24, length: 0.4, arm: 0.2 },
+            ...ends,
+            { at: lug(1), axis: this.spinAxis0, radius: 0.15, length: 0.3, arm: 0.13 },
+            { at: lug(-1), axis: this.spinAxis0, radius: 0.15, length: 0.3, arm: 0.13 },
+          ],
+        });
+        axisTop = this.top0.y;
+      } else {
+        const holds: Hold[] = [
+          ...this.linkSet.arms.map((a): Hold => ({ at: a.ball0, kind: 'ball' })),
+          ...this.linkSet.rods.map((r): Hold => ({ at: r.knuckle0, kind: r.tie ? 'steer' : 'link' })),
+        ];
+        axisTop = Math.max(...holds.map((h) => h.at.y));
+        if (this.unitSeat.kind === 'knuckle') holds.push({ at: this.unitSeat.at, kind: 'link' });
+        holds.push({ at: lug(1), kind: 'lug' }, { at: lug(-1), kind: 'lug' });
+        knuckleGeo = knuckleGeometry({ hub, ends: holds.map(end), rootShare: 0.5 });
+      }
+      const knuckleMesh = tag(new THREE.Mesh(knuckleGeo, m.knuckle), 'susp.knuckle');
+      this.knuckle.add(knuckleMesh);
+      if (strut) this.knuckle.add(unit.tube, unit.oil);
+    }
+    this.axisTopY = axisTop + 1.5;
+    // Caliper on the wheel knuckle, straddling the disc at the rear.
     this.caliper = tag(new THREE.Mesh(caliperGeometry(ringIn, ringOut, caliperAngle - 0.08), m.caliper), 'susp.caliper');
     this.caliper.position.copy(this.c0);
     this.caliper.quaternion.setFromUnitVectors(X, this.spinAxis0);
-    this.knuckle.add(knuckleMesh, tube, oil, this.caliper);
-    this.solidOnly.push(tube, this.caliper);
+    this.knuckle.add(this.caliper);
+    this.solidOnly.push(this.caliper);
 
     // Hub frame on the knuckle at the wheel centre, local +X along the spin axis; the spinning parts under it.
     this.hubFrame.position.copy(this.c0);
@@ -498,64 +483,38 @@ export class CornerModel {
     this.spin.add(this.hub, this.disc, this.wheel, this.nuts, this.tyre);
     this.solidOnly.push(this.hub, this.disc, this.wheel, this.nuts, this.tyre);
 
-    // ---- Lower arm: two tubes and a web between them, the bushes and the ball joint; turns about the bush axis ----
-    const armR = 0.16;
-    const web = webGeometry(this.armFront, this.armRear, this.ball0, 0.1);
-    const armMesh = tag(new THREE.Mesh(merge([capsule(this.armFront, this.ball0, armR, armR * 0.9), capsule(this.armRear, this.ball0, armR, armR * 0.9), web]), m.arm), 'susp.lower-arm');
-    const bushAxis = this.armRear.clone().sub(this.armFront).normalize();
-    const bushes = tag(
-      new THREE.Mesh(
-        merge([boss(this.armFront, bushAxis, 0.32, 0.62, 20), boss(this.armRear, bushAxis, 0.34, 0.7, 20)]),
-        m.rubber,
-      ),
-      'susp.bush',
-    );
-    const ballJoint = tag(
-      new THREE.Mesh(
-        merge([
-          boss(this.ball0.clone().addScaledVector(UP, -0.12), UP, 0.27, 0.26, 20),
-          new THREE.SphereGeometry(0.17, 16, 12).translate(this.ball0.x, this.ball0.y, this.ball0.z),
-          latheAlong([[0.22, 0], [0.24, 0.06], [0.17, 0.16], [0.1, 0.22]], this.ball0.clone().addScaledVector(UP, 0.02), UP, 18),
-        ]),
-        m.boot,
-      ),
-      'susp.ball-joint',
-    );
-    this.arm.add(armMesh, bushes, ballJoint);
-    this.body.add(this.arm);
-    this.solidOnly.push(armMesh, bushes, ballJoint);
-    this.links.push(
-      { name: 'lower-arm.front', object: this.arm, bodyEnd: this.armFront.clone(), knuckleEnd: this.ball0.clone() },
-      { name: 'lower-arm.rear', object: this.arm, bodyEnd: this.armRear.clone(), knuckleEnd: this.ball0.clone() },
-    );
-
-    // ---- Tie rod (along local +Y from the rack end) and the rack's end with its boot ----
-    this.tieRodMesh = tag(new THREE.Mesh(tieRodGeometry(this.tieLength()), m.steel), 'susp.tie-rod');
-    this.tie.add(this.tieRodMesh);
-    this.body.add(this.tie);
-    this.solidOnly.push(this.tieRodMesh);
-    this.links.push({ name: 'tie-rod', object: this.tie, bodyEnd: new THREE.Vector3(), knuckleEnd: new THREE.Vector3(0, this.tieLength(), 0) });
-    const housingEnd = this.tieInner0.x - 0.75;
-    const housing = tag(
-      new THREE.Mesh(
-        merge([
-          latheAlong([[0.0001, 0], [0.3, 0], [0.3, housingEnd - 0.4], [0.36, housingEnd - 0.35], [0.36, housingEnd], [0.0001, housingEnd]], new THREE.Vector3(0, this.tieInner0.y, this.tieInner0.z), X, 28, true),
-        ]),
-        m.steel,
-      ),
-      'susp.rack',
-    );
-    this.rackBar = tag(new THREE.Mesh(rodBetween(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 0, 0), 0.12, 14), m.chrome), 'susp.rack');
-    const rackBootMesh = tag(new THREE.Mesh(this.rackBoot.geometry, m.boot), 'susp.rack');
-    rackBootMesh.frustumCulled = false;
-    rackBootMesh.userData.solid = m.boot;
-    rackBootMesh.userData.glass = m.bootGlass;
-    this.shells.push({ mesh: housing, solid: m.steel, glass: m.strutGlass }, { mesh: rackBootMesh, solid: m.boot, glass: m.bootGlass });
-    this.rack.add(housing, this.rackBar, rackBootMesh);
-    this.body.add(this.rack);
-    this.rackHousingEnd = housingEnd;
-    this.solidOnly.push(housing, rackBootMesh);
-    this.xrayOnly.push(this.rackBar);
+    // ---- The rack's end with its boot, inboard of a steered rod ----
+    if (this.steerRod) {
+      const inner = this.steerRod.body0;
+      const housingEnd = inner.x - 0.75;
+      const housing = tag(
+        new THREE.Mesh(
+          merge([
+            latheAlong([[0.0001, 0], [0.3, 0], [0.3, housingEnd - 0.4], [0.36, housingEnd - 0.35], [0.36, housingEnd], [0.0001, housingEnd]], new THREE.Vector3(0, inner.y, inner.z), X, 28, true),
+          ]),
+          m.steel,
+        ),
+        'susp.rack',
+      );
+      this.rackBar = tag(new THREE.Mesh(rodBetween(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 0, 0), 0.12, 14), m.chrome), 'susp.rack');
+      this.rackBoot = new Bellows(0.3, 0.16, 7, 0.07);
+      const rackBootMesh = tag(new THREE.Mesh(this.rackBoot.geometry, m.boot), 'susp.rack');
+      rackBootMesh.frustumCulled = false;
+      rackBootMesh.userData.solid = m.boot;
+      rackBootMesh.userData.glass = m.bootGlass;
+      this.shells.push({ mesh: housing, solid: m.steel, glass: m.strutGlass }, { mesh: rackBootMesh, solid: m.boot, glass: m.bootGlass });
+      this.rack = new THREE.Group();
+      this.rack.add(housing, this.rackBar, rackBootMesh);
+      this.body.add(this.rack);
+      this.rackHousingEnd = housingEnd;
+      this.solidOnly.push(housing, rackBootMesh);
+      this.xrayOnly.push(this.rackBar);
+    } else {
+      this.rack = null;
+      this.rackBar = null;
+      this.rackBoot = null;
+      this.rackHousingEnd = 0;
+    }
 
     // ---- Halfshaft ----
     if (spec.halfshaft) {
@@ -577,16 +536,21 @@ export class CornerModel {
     const tyreHalf = (resolved.tyre.widthM / 2) * 10;
     this.road = new RoadStrip(m.road, spec.wheelCentre[0], this.c0.x - tyreHalf - 2.2, this.c0.x + tyreHalf + 1.6);
     this.group.add(this.road.mesh);
+    this.forces = new ForceArrows(this.linkSet.arms.length + this.linkSet.rods.length);
     this.body.add(this.forces.group, this.laser.group);
-    this.schematic = new CornerSchematic(m);
+    this.schematicPoints = this.schematicLayout(!!strut);
+    this.schematic = new CornerSchematic(m, this.schematicPoints);
     this.body.add(this.schematic.group);
 
     // Lines and sprites sort by renderOrder too, so the band takes every object, overlays included, not only meshes.
     this.group.traverse((o) => this.orders.set(o, o.renderOrder));
     // Shadows from what can cast one: not the road, not the overlays, and not parts that sit inside others (the piston,
-    // the oil, the tripod's spider and the joint's balls, the rack's bar in its housing) or under the wheel (the nuts).
+    // the oil, the tripod's spider and the joint's balls, the rack's bar in its housing, the links' bushes in their
+    // eyes, a lone coil's seat cups under its end turns) or under the wheel (the nuts).
     const inside = new Set<THREE.Object3D>([...this.xrayOnly, this.nuts]);
+    if (this.loneSpring) inside.add(this.loneSpring.seats).add(this.loneSpring.lowerSeat);
     if (this.halfshaft) for (const o of [this.halfshaft.spider, this.halfshaft.balls]) inside.add(o);
+    if (this.linkSet.bushes) inside.add(this.linkSet.bushes);
     this.group.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh && o.userData.part && o !== this.road.mesh && !inside.has(o)) mesh.castShadow = true;
@@ -595,12 +559,34 @@ export class CornerModel {
     this.update(this.frame);
   }
 
-  private readonly rackHousingEnd: number;
-  private readonly bellX0: number;
-
-  private tieLength(): number {
-    const rod = this.resolved.axle.spec.linkage.rods.find((r) => r.steer) ?? this.resolved.axle.spec.linkage.rods[0]!;
-    return (rod.lengthM ?? Math.hypot(rod.body[0] - rod.knuckle[0], rod.body[1] - rod.knuckle[1], rod.body[2] - rod.knuckle[2])) * 10;
+  /** The mechanism view's joints, bars and lines, as references to the live points update() keeps. */
+  private schematicLayout(strut: boolean): SchematicPoints {
+    const joints: SchematicPoints['joints'] = [];
+    const bars: SchematicPoints['bars'] = [];
+    for (const arm of this.linkSet.arms) {
+      joints.push({ at: arm.front, part: 'susp.bush' }, { at: arm.rear, part: 'susp.bush' }, { at: arm.ball, part: 'susp.ball-joint' });
+      bars.push({ a: arm.front, b: arm.ball, part: arm.spec.part }, { a: arm.rear, b: arm.ball, part: arm.spec.part });
+    }
+    for (const rod of this.linkSet.rods) {
+      joints.push({ at: rod.bodyEnd, part: rod.tie ? 'susp.rack' : 'susp.bush' }, { at: rod.knuckleEnd, part: rod.spec.part });
+      bars.push({ a: rod.bodyEnd, b: rod.knuckleEnd, part: rod.spec.part });
+    }
+    joints.push({ at: this.top, part: 'susp.top-mount' });
+    if (!strut) joints.push({ at: this.lower, part: 'susp.damper' });
+    bars.push({ a: this.top, b: this.lower, part: strut ? 'susp.strut' : 'susp.damper' });
+    if (this.loneSpring) bars.push({ a: this.springTop, b: this.springLower, part: 'susp.spring' });
+    const hs = this.halfshaft;
+    joints.push({ at: hs ? hs.inner : null, part: 'susp.cv-inner' }, { at: hs ? this.outerJoint : null, part: 'susp.cv-outer' });
+    bars.push({ a: hs ? hs.inner : null, b: hs ? this.outerJoint : null, part: 'susp.halfshaft' });
+    return {
+      joints,
+      bars,
+      bushAxes: this.linkSet.arms.map((a): [THREE.Vector3, THREE.Vector3] => [a.front, a.rear]),
+      steer: { top: this.steerTop, road: this.steerRoad, shown: false },
+      wheelCentre: this.wheelCentre,
+      axis: this.axis,
+      freeRadius: this.resolved.tyre.freeRadiusM * 10,
+    };
   }
 
   /**
@@ -612,10 +598,12 @@ export class CornerModel {
     this.resolved = resolved;
     this.axle = resolved.axle;
     this.statics = new KnuckleStatics(this.axle);
-    this.springWire = springWireM(resolved.spring.rate) * 10;
-    this.tieRodMesh.geometry.dispose();
-    this.tieRodMesh.geometry = tieRodGeometry(this.tieLength());
-    this.links.find((l) => l.name === 'tie-rod')!.knuckleEnd.set(0, this.tieLength(), 0);
+    const meanR = this.damper.size.springMeanR / 10;
+    this.springWire = springWireM(resolved.spring.rate, meanR) * 10;
+    this.damper.wire = this.springWire;
+    if (this.loneSpring) this.loneSpring.wire = this.springWire;
+    const nW = this.linkSet.arms.length;
+    this.linkSet.rods.forEach((rod, i) => rod.setLength(this.axle.solver.lengthOf(2 * nW + i) * 10));
     this.pose.fill(0);
     this.update(this.frame);
   }
@@ -651,7 +639,7 @@ export class CornerModel {
     this.bodyShell.visible = !mech;
     this.subframe.visible = !mech;
     this.schematic.group.visible = mech;
-    this.springMesh.visible = true;
+    if (this.damper.springMesh) this.damper.springMesh.visible = true;
     this.update(this.frame);
   }
 
@@ -732,9 +720,9 @@ export class CornerModel {
     const out: Record<string, THREE.Vector3> = {
       wheelCentre: toModel(this.wheelCentre),
       contact: toModel(this.contact),
-      strutTop: toModel(this.top),
-      rackEnd: toModel(this.tieInner),
     };
+    out[this.damper.size.strut ? 'strutTop' : 'damperTop'] = toModel(this.top);
+    if (this.steerRod) out.rackEnd = toModel(this.steerRod.bodyEnd);
     if (this.halfshaft) out.diffOutput = toModel(this.halfshaft.inner);
     return out;
   }
@@ -748,6 +736,26 @@ export class CornerModel {
       for (const m of [mat].flat() as Array<THREE.Material | undefined>) if (m) list.add(m);
     });
     return [...list];
+  }
+
+  /** Where a seat is now (body frame, scene), from the posed links and knuckle. */
+  private seatPoint(seat: Seat, out: THREE.Vector3): THREE.Vector3 {
+    if (seat.kind === 'arm') {
+      const arm = this.linkSet.arms[seat.arm]!;
+      arm.object.updateMatrix();
+      return out.copy(seat.at).applyMatrix4(arm.object.matrix);
+    }
+    if (seat.kind === 'rod') {
+      // On the rod's line, and with the rod where the explode has moved it (its object stands on its body end).
+      const rod = this.linkSet.rods[seat.rod]!;
+      return out.copy(rod.bodyEnd).lerp(rod.knuckleEnd, seat.along).add(rod.object.position).sub(rod.bodyEnd);
+    }
+    return out.copy(seat.at).applyMatrix4(this.carrierMatrix());
+  }
+
+  /** The strut carrier's matrix, or the knuckle's on a corner without a split. */
+  private carrierMatrix(): THREE.Matrix4 {
+    return (this.carrier ?? this.knuckle).matrix;
   }
 
   update(frame: CornerFrame): void {
@@ -771,73 +779,69 @@ export class CornerModel {
     this.knuckle.position.set(this.c0.x + P[1]! * 10 - this.v1.x, this.c0.y + P[2]! * 10 - this.v1.y, this.c0.z + P[0]! * 10 - this.v1.z);
     this.knuckle.updateMatrix();
     const K = this.knuckle.matrix;
-    this.ball.copy(this.ball0).applyMatrix4(K);
-    this.tieOuter.copy(this.tieOuter0).applyMatrix4(K);
-    this.lower.copy(this.strutLower0).applyMatrix4(K);
+    if (this.carrier && this.axisPoint0 && this.axisDir0) {
+      // The carrier is the knuckle turned back by ψ about the split axis, which both share: its axis point stays put.
+      this.q2.setFromAxisAngle(this.axisDir0, -P[7]!);
+      this.carrier.quaternion.multiplyQuaternions(this.q1, this.q2);
+      const A = this.v1.copy(this.axisPoint0).applyMatrix4(K);
+      this.carrier.position.copy(A).sub(this.v2.copy(this.axisPoint0).applyQuaternion(this.carrier.quaternion));
+      this.carrier.updateMatrix();
+    }
+    const C = this.carrierMatrix();
     this.wheelCentre.copy(this.c0).applyMatrix4(K);
     this.axis.copy(this.spinAxis0).applyQuaternion(this.q1);
-    const shift = spec.linkage.strut!.topShift ?? [0, 0, 0];
-    this.top.set(this.strutTop0.x + shift[1] * 10, this.strutTop0.y + shift[2] * 10, this.strutTop0.z + shift[0] * 10);
-    this.tieInner.copy(this.tieInner0).setX(this.tieInner0.x + f.rack * 10);
 
-    // Lower arm: turn about the bush axis until the ball joint meets the knuckle's.
-    {
-      const u = this.v1.copy(this.armRear).sub(this.armFront).normalize();
-      const a = this.v2.copy(this.ball0).sub(this.armFront);
-      a.addScaledVector(u, -a.dot(u));
-      const b = this.v3.copy(this.ball).sub(this.armFront);
-      b.addScaledVector(u, -b.dot(u));
-      const angle = Math.atan2(this.v4.crossVectors(a, b).dot(u), a.dot(b));
-      this.arm.quaternion.setFromAxisAngle(u, angle);
-      this.arm.position.copy(this.armFront).sub(this.v5.copy(this.armFront).applyQuaternion(this.arm.quaternion));
-      // Exploded: away from the knuckle along the arm.
-      const away = this.v2.copy(this.armFront).add(this.armRear).multiplyScalar(0.5).sub(this.ball);
-      const len = away.length();
-      this.arm.position.addScaledVector(away.divideScalar(len), e * 0.6 * len);
+    // Links: arms meet their ball joints on the knuckle (a split knuckle's carrier), rods run from the body (the rack
+    // for a steered one) to the knuckle.
+    for (const arm of this.linkSet.arms) arm.ball.copy(arm.ball0).applyMatrix4(C);
+    for (const rod of this.linkSet.rods) {
+      rod.knuckleEnd.copy(rod.knuckle0).applyMatrix4(K);
+      rod.bodyEnd.copy(rod.body0);
+      if (rod.tie) rod.bodyEnd.x += f.rack * 10;
     }
+    this.linkSet.update(e);
 
-    // Tie rod from the rack end to the steering arm; exploded towards the rack, which goes inboard with it.
-    {
-      const d = this.v1.copy(this.tieOuter).sub(this.tieInner);
+    // The rack's end: bar from the car's centre to the inner joint, boot from the housing's end to the rod, both in
+    // the rack's group, which the explode moves inboard by as much as the rod.
+    if (this.steerRod && this.rack && this.rackBar && this.rackBoot) {
+      const rod = this.steerRod;
+      const d = this.v1.copy(rod.knuckleEnd).sub(rod.bodyEnd);
       const len = d.length();
       d.divideScalar(len);
-      this.tie.quaternion.setFromUnitVectors(UP, d);
-      this.tie.position.copy(this.tieInner).addScaledVector(d, -e * 0.6 * len);
-      this.rack.position.set(-e * 0.6 * len, 0, 0);
-      // Rack bar from the car's centre to the inner joint, and the boot from the housing's end to the rod. Both live
-      // in the rack's group, which the explode moves inboard by the same amount as the rod.
       const shiftT = e * 0.6 * len;
-      this.rackBar.position.set(0, this.tieInner0.y, this.tieInner0.z);
-      this.rackBar.scale.set(Math.max(0.01, this.tieInner.x - d.x * shiftT + shiftT), 1, 1);
-      this.v2.set(this.rackHousingEnd, this.tieInner0.y, this.tieInner0.z);
-      this.v3.copy(this.tieInner).addScaledVector(d, 0.45 - shiftT);
+      this.rack.position.set(-shiftT, 0, 0);
+      const inner0 = rod.body0;
+      this.rackBar.position.set(0, inner0.y, inner0.z);
+      this.rackBar.scale.set(Math.max(0.01, rod.bodyEnd.x - d.x * shiftT + shiftT), 1, 1);
+      this.v2.set(this.rackHousingEnd, inner0.y, inner0.z);
+      this.v3.copy(rod.bodyEnd).addScaledVector(d, 0.45 - shiftT);
       this.v3.x += shiftT;
       this.rackBoot.update(this.v2, X, this.v3, d);
     }
 
-    // Strut: the rod hangs from the top mount along the strut's axis through the knuckle's strut point.
-    const L = this.v1.copy(this.lower).sub(this.top).length();
-    {
-      const down = this.v2.copy(this.lower).sub(this.top).divideScalar(L);
-      this.strutTop.quaternion.setFromUnitVectors(DOWN, down);
-      this.strutTop.position.copy(this.top).addScaledVector(down, -e * 0.6 * L);
-      this.topMount.position.copy(this.top).addScaledVector(UP, e * 0.6 * L + e * 1.2);
-      const springLength = L - this.upperSeat - this.lowerSeat;
-      this.spring.update(springLength, mech ? 0.035 : this.springWire / 2);
-      this.springMesh.position.y = -this.upperSeat + e * 2.2;
-      // Bump stop: squeezed by the tube's top once the gap closes. Red past 20 % (suspensions plan, 3D parts).
-      const room = L - this.tubeTop - this.upperSeat;
-      const squeeze = Math.min(0.85, Math.max(0, 1 - room / this.stopLength));
-      this.bumpStop.scale.y = 1 - squeeze;
-      this.bumpSqueeze.value = squeeze;
-      // Written only when it changes, and never over a failure's own mark.
-      const red = squeeze > 0.2;
-      if (red !== this.stopRed && this.failed !== 'susp.bump-stop') {
-        this.stopRed = red;
-        for (const mat of [this.materials.bumpStop, this.materials.bumpStopGlass]) {
-          mat.emissive.set(red ? '#ff2a10' : '#000000');
-          mat.emissiveIntensity = 1;
-        }
+    // Strut or coilover: from the top mount to the strut's point on the knuckle (carrier), or to its seat.
+    if (this.damper.size.strut) {
+      const shift = spec.linkage.strut!.topShift ?? [0, 0, 0];
+      this.top.set(this.top0.x + shift[1] * 10, this.top0.y + shift[2] * 10, this.top0.z + shift[0] * 10);
+      this.lower.copy(this.lower0).applyMatrix4(C);
+    } else {
+      this.top.copy(this.top0);
+      this.seatPoint(this.unitSeat, this.lower);
+    }
+    this.damper.update(this.top, this.lower, e, mech);
+    if (this.loneSpring && this.springSeat && this.springTop0) {
+      this.springTop.copy(this.springTop0);
+      this.seatPoint(this.springSeat, this.springLower);
+      this.loneSpring.update(this.springTop, this.springLower, e, mech);
+    }
+    // Bump stop red past 20 % of its squeeze (suspensions plan, 3D parts). Written only when it changes, and never
+    // over a failure's own mark.
+    const red = this.damper.squeeze > 0.2;
+    if (red !== this.stopRed && this.failed !== 'susp.bump-stop') {
+      this.stopRed = red;
+      for (const mat of [this.materials.bumpStop, this.materials.bumpStopGlass]) {
+        mat.emissive.set(red ? '#ff2a10' : '#000000');
+        mat.emissiveIntensity = 1;
       }
     }
 
@@ -885,23 +889,24 @@ export class CornerModel {
       const camber = -Math.atan2(this.axis.y, Math.hypot(this.axis.x, this.axis.z));
       this.laser.update(this.contact, this.wheelCentre, this.inPlaneUp, this.axis, camber);
     }
-    if (mech) {
-      this.schematic.update({
-        armFront: this.armFront,
-        armRear: this.armRear,
-        ball: this.ball,
-        tieInner: this.tieInner,
-        tieOuter: this.tieOuter,
-        top: this.top,
-        lower: this.lower,
-        wheelCentre: this.wheelCentre,
-        axis: this.axis,
-        contact: this.contact,
-        freeRadius: this.resolved.tyre.freeRadiusM * 10,
-        diffOutput: this.halfshaft?.inner ?? null,
-        outerJoint: this.halfshaft ? this.outerJoint : null,
-      });
+    if (mech) this.updateSchematic(f);
+  }
+
+  /** The steering axis from the solver's pose, drawn from above the knuckle to the road, and the rest by reference. */
+  private updateSchematic(f: CornerFrame): void {
+    const shown = this.axle.steeringAxis(this.pose, f.rack, this.axisPoint, this.axisDir);
+    const p = this.schematicPoints.steer;
+    p.shown = shown;
+    if (shown) {
+      // ISO (x, y, z) → scene (y, z, x)·10.
+      const a = this.axisPoint;
+      const d = this.axisDir;
+      const pt = this.v1.set(a[1]! * 10, a[2]! * 10, a[0]! * 10);
+      const dir = this.v2.set(d[1]!, d[2]!, d[0]!);
+      p.top.copy(pt).addScaledVector(dir, (this.axisTopY - pt.y) / dir.y);
+      p.road.copy(pt).addScaledVector(dir, (this.contact.y - pt.y) / dir.y);
     }
+    this.schematic.update();
   }
 
   private updatePress(): void {
@@ -920,46 +925,94 @@ export class CornerModel {
     for (let i = 0; i < ROAD_SAMPLES; i++) h[i] = onRoad ? strip.heightAt(this.view, strip.columnZ(first + i)) * 10 : -1e3;
   }
 
+  /**
+   * The forces of one free-body picture: the tyre at the contact patch, the unsprung weight at the wheel centre, the
+   * spring, damper and bump stop along their unit (on the knuckle for a strut, on the arm or link for a coilover), and
+   * what each link puts on the knuckle, from the knuckle's statics. A coilover on an arm turns it about its bush
+   * axis, so its push reaches the knuckle through the arm's ball joint: an applied force there with the same moment
+   * about that axis. On a link it reaches the knuckle end in the share of its seat along the link.
+   */
   private updateForces(f: CornerFrame): void {
     const arrows = this.forces;
     const v = this.force;
-    // Tyre: up at the contact patch.
     arrows.set('tyre', this.contact, v.set(0, f.tyreN, 0));
-    // Along the strut, pushing the knuckle away from the top mount: spring at its lower seat, damper and stop at the
+    // Along the unit, pushing its lower end away from the top mount: spring at its lower seat, damper and stop at the
     // tube's top.
+    const unit = this.damper;
     const down = this.v1.copy(this.lower).sub(this.top).normalize();
-    const seat = this.v2.copy(this.lower).addScaledVector(down, -this.lowerSeat);
-    arrows.set('spring', seat, v.copy(down).multiplyScalar(f.springN));
-    const tubeTop = this.v3.copy(this.lower).addScaledVector(down, -this.tubeTop);
+    const springAt = this.loneSpring ? this.v2.copy(this.springLower) : this.v2.copy(this.lower).addScaledVector(down, -unit.size.lowerSeat);
+    const springDir = this.loneSpring ? this.v4.copy(this.springLower).sub(this.springTop).normalize() : down;
+    arrows.set('spring', springAt, v.copy(springDir).multiplyScalar(f.springN));
+    const tubeTop = this.v3.copy(this.lower).addScaledVector(down, -unit.tubeTop);
     arrows.set('damper', tubeTop, v.copy(down).multiplyScalar(f.damperN));
-    if (f.stopN !== 0) arrows.set('stop', this.v4.copy(tubeTop).addScaledVector(down, -0.15), v.copy(down).multiplyScalar(f.stopN));
+    if (f.stopN !== 0) arrows.set('stop', this.forceB.copy(tubeTop).addScaledVector(down, -0.15), v.copy(down).multiplyScalar(f.stopN));
     else arrows.hide('stop');
     const weight = this.resolved.unsprungKg * G;
     arrows.set('weight', this.wheelCentre, v.set(0, -weight, 0));
 
-    // Links: statics of the knuckle under those forces (in the ISO body frame, metres: ISO (x, y, z) = scene (z, x, y)/10).
+    // Statics of the knuckle under those forces, in the ISO body frame, metres: ISO (x, y, z) = scene (z, x, y)/10.
     const s = this.statics;
     s.begin(this.pose, f.travel, f.rack);
     const c = this.contact;
     s.force(c.z / 10, c.x / 10, c.y / 10, 0, 0, f.tyreN);
-    const strutN = f.springN + f.damperN + f.stopN;
-    const l = this.lower;
-    s.force(l.z / 10, l.x / 10, l.y / 10, down.z * strutN, down.x * strutN, down.y * strutN);
     const w = this.wheelCentre;
     s.force(w.z / 10, w.x / 10, w.y / 10, 0, 0, -weight);
+    for (const sf of this.seatForce) sf.set(0, 0, 0);
+    const spec = this.axle.spec;
+    const unitN = f.damperN + f.stopN + (this.loneSpring ? 0 : f.springN);
+    if (unit.size.strut) s.carrierForce(spec.linkage.strut!.lower, down.z * unitN, down.x * unitN, down.y * unitN);
+    else this.seatPush(this.unitSeat, this.lower, this.push.copy(down).multiplyScalar(unitN));
+    if (this.loneSpring && this.springSeat) this.seatPush(this.springSeat, this.springLower, this.push.copy(springDir).multiplyScalar(f.springN));
     if (!s.solve()) {
-      arrows.hide('arm');
-      arrows.hide('tieRod');
+      arrows.hideLinks();
       arrows.hide('strutTop');
       arrows.commit();
       return;
     }
-    // Rows: the arm's two legs, the tie rod, then the strut's two (CornerSolver; the constructor demands this shape).
-    const n = s.solver.distanceRows;
-    arrows.set('arm', this.ball, this.rowSum(0, 2, this.forceB));
-    arrows.set('tieRod', this.tieOuter, this.rowSum(n - 1, n, this.forceB));
-    arrows.set('strutTop', this.top, this.rowSum(n, n + 2, this.forceB));
+    // Rows: two per wishbone, then one per rod, then the strut's two (CornerSolver's order).
+    const { arms, rods } = this.linkSet;
+    const nW = arms.length;
+    for (let i = 0; i < nW; i++) arrows.setLink(i, arms[i]!.ball, this.rowSum(2 * i, 2 * i + 2, this.forceB).add(this.seatForce[i]!));
+    for (let j = 0; j < rods.length; j++) arrows.setLink(nW + j, rods[j]!.knuckleEnd, this.rowSum(2 * nW + j, 2 * nW + j + 1, this.forceB).add(this.seatForce[nW + j]!));
+    if (unit.size.strut) {
+      const n = s.solver.distanceRows;
+      arrows.set('strutTop', this.top, this.rowSum(n, n + 2, this.forceB));
+    } else arrows.hide('strutTop');
     arrows.commit();
+  }
+
+  /**
+   * A coilover's (or a lone coil's) push `F` (scene axes, N) on what it sits on, as an applied force on the knuckle:
+   * kept in seatForce for that link's arrow, and handed to the statics.
+   */
+  private seatPush(seat: Seat, at: THREE.Vector3, F: THREE.Vector3): void {
+    const s = this.statics;
+    if (seat.kind === 'knuckle') {
+      // On the knuckle itself (the carrier, on a split one).
+      s.carrierForce(seat.iso, F.z, F.x, F.y);
+      return;
+    }
+    const out = this.s1;
+    if (seat.kind === 'rod') {
+      // A link with ball ends takes no moment: the share of the push the knuckle end carries is the seat's share of
+      // the way along it.
+      const rod = this.linkSet.rods[seat.rod]!;
+      out.copy(F).multiplyScalar(seat.along);
+      this.seatForce[this.linkSet.arms.length + seat.rod]!.add(out);
+      const p = rod.knuckleEnd;
+      s.force(p.z / 10, p.x / 10, p.y / 10, out.z, out.x, out.y);
+      return;
+    }
+    // The same moment about the arm's bush axis from a force at its ball joint, square to the arm's radius there. The
+    // ball is on the knuckle, or on a split knuckle's carrier.
+    const arm = this.linkSet.arms[seat.arm]!;
+    const u = this.s2.copy(arm.rear).sub(arm.front).normalize();
+    const moment = u.dot(this.s3.copy(at).sub(arm.front).cross(F));
+    const r = this.s3.copy(arm.ball).sub(arm.front);
+    r.addScaledVector(u, -r.dot(u));
+    out.crossVectors(u, r).multiplyScalar(moment / r.lengthSq());
+    this.seatForce[seat.arm]!.add(out);
+    s.carrierForce(arm.spec.ball, out.z, out.x, out.y);
   }
 
   /** Sum of the forces rows [from, to) put on the knuckle, scene axes, N. */
@@ -977,7 +1030,7 @@ export class CornerModel {
 
   /** How far the bump stop is squeezed, 0..1 of its length (for tests and pages). */
   get bumpStopSqueeze(): number {
-    return this.bumpSqueeze.value;
+    return this.damper.squeeze;
   }
 
   dispose(): void {
@@ -986,6 +1039,7 @@ export class CornerModel {
     this.schematic.dispose();
     this.halfshaft?.dispose();
     this.road.dispose();
+    this.linkSet.dispose();
     const seen = new Set<THREE.BufferGeometry>();
     this.group.traverse((o) => {
       const g = (o as THREE.Mesh).geometry;
@@ -998,141 +1052,3 @@ export class CornerModel {
   }
 }
 
-/** Ventilated disc with its hat, built along +X from the wheel centre (hub frame). */
-function discGeometry(face: number, ringIn: number, ringOut: number): THREE.BufferGeometry {
-  const outer = DRAWING.discOuterM * 10;
-  const inner = DRAWING.discInnerM * 10;
-  const plate = (ringOut - ringIn) * 0.32;
-  const parts = [
-    annulus(inner, outer, ringIn, ringIn + plate, 64),
-    annulus(inner, outer, ringOut - plate, ringOut, 64),
-    // Hat: a cylinder from the ring up to the hub face and the face itself, with the hub's bore.
-    lathe(
-      [
-        [inner, ringOut],
-        [0.78, ringOut],
-        [0.78, face + 0.07],
-        [0.36, face + 0.07],
-        [0.36, face],
-        [0.72, face],
-        [0.72, ringOut + 0.04],
-        [inner, ringOut + 0.04],
-      ],
-      48,
-      true,
-    ),
-  ];
-  const vanes = 36;
-  for (let i = 0; i < vanes; i++) {
-    const a = (i / vanes) * Math.PI * 2;
-    const r = (inner + outer) / 2;
-    const vane = new THREE.BoxGeometry(outer - inner - 0.06, ringOut - ringIn - 2 * plate + 0.01, 0.05);
-    vane.rotateZ(Math.PI / 2);
-    vane.rotateY(-a + Math.PI / 2);
-    vane.translate(Math.cos(a) * r, (ringIn + ringOut) / 2, Math.sin(a) * r);
-    parts.push(vane);
-  }
-  return merge(parts).rotateZ(-Math.PI / 2);
-}
-
-/** Wheel: the rim and five spokes from the centre disc to the outer lip, along +X from the wheel centre. */
-function wheelGeometry(rimR: number, rimW: number, face: number): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [lathe(rimProfile(rimR, rimW), 72)];
-  // Centre disc with the bore, at the hub face.
-  parts.push(lathe([[0.36, face], [0.9, face], [0.95, face + 0.08], [0.85, face + 0.2], [0.36, face + 0.2], [0.36, face]], 48, true));
-  // Lathe frame: y is the axle, x and z are radial. Spokes slope outboard from the centre disc to the outer lip.
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2 + Math.PI / 10;
-    const c = Math.cos(a);
-    const s = Math.sin(a);
-    // From inside the centre disc into the barrel by the outer flange, so each spoke grows out of both.
-    const p0 = new THREE.Vector3(c * 0.62, face + 0.14, s * 0.62);
-    const p1 = new THREE.Vector3(c * (rimR - 0.03), rimW / 2 - 0.02, s * (rimR - 0.03));
-    parts.push(capsuleFlat(p0, p1, 0.6, 0.36, 0.22));
-  }
-  return merge(parts).rotateZ(-Math.PI / 2);
-}
-
-/** A flat spoke from p0 to p1 (lathe frame: x and z radial, y axial), wider at the hub. */
-function capsuleFlat(p0: THREE.Vector3, p1: THREE.Vector3, w0: number, w1: number, thick: number): THREE.BufferGeometry {
-  const len = p0.distanceTo(p1);
-  const shape = new THREE.Shape();
-  shape.moveTo(-w0 / 2, 0);
-  shape.lineTo(w0 / 2, 0);
-  shape.lineTo(w1 / 2, len);
-  shape.lineTo(-w1 / 2, len);
-  shape.closePath();
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: thick, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 2 });
-  geo.translate(0, 0, -thick / 2);
-  // Local Y along the spoke, local Z across the wheel's face (the axial direction, roughly).
-  const y = p1.clone().sub(p0).normalize();
-  const axial = new THREE.Vector3(0, 1, 0);
-  const z = axial.clone().addScaledVector(y, -axial.dot(y)).normalize();
-  const x = new THREE.Vector3().crossVectors(y, z);
-  geo.applyMatrix4(new THREE.Matrix4().makeBasis(x, y, z).setPosition(p0));
-  return geo;
-}
-
-/**
- * Caliper straddling the disc's ring: an inboard body over the pistons, an outboard finger and the bridge over the
- * disc's edge, an arc about the hub axis centred at the rear. Built in the hub frame (+X outboard).
- */
-function caliperGeometry(ringIn: number, ringOut: number, span: number): THREE.BufferGeometry {
-  const r0 = 1.05;
-  const r1 = DRAWING.discOuterM * 10 + 0.07;
-  const r2 = r1 + 0.2;
-  const sector = (ra: number, rb: number): THREE.Shape => {
-    const s = new THREE.Shape();
-    const steps = 16;
-    for (let i = 0; i <= steps; i++) {
-      const a = Math.PI + (-span + (2 * span * i) / steps);
-      const x = Math.cos(a) * rb;
-      const y = Math.sin(a) * rb;
-      if (i === 0) s.moveTo(x, y);
-      else s.lineTo(x, y);
-    }
-    for (let i = steps; i >= 0; i--) {
-      const a = Math.PI + (-span + (2 * span * i) / steps);
-      s.lineTo(Math.cos(a) * ra, Math.sin(a) * ra);
-    }
-    return s;
-  };
-  const block = (ra: number, rb: number, x0: number, x1: number): THREE.BufferGeometry => {
-    const g = new THREE.ExtrudeGeometry(sector(ra, rb), { depth: x1 - x0, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 2, curveSegments: 4 });
-    g.translate(0, 0, x0);
-    // Shape plane (x, y) → (scene Z, Y) round the hub axis; extrusion along +X.
-    g.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0)));
-    return g;
-  };
-  return merge([block(r0, r2, ringIn - 0.38, ringIn - 0.03), block(r0 + 0.12, r2, ringOut + 0.03, ringOut + 0.2), block(r1, r2, ringIn - 0.03, ringOut + 0.03)]);
-}
-
-/** Tie rod along +Y from its inner ball joint (origin) to the outer joint at `length`. */
-function tieRodGeometry(length: number): THREE.BufferGeometry {
-  const o = new THREE.Vector3();
-  const end = new THREE.Vector3(0, length, 0);
-  return merge([
-    new THREE.SphereGeometry(0.17, 16, 12),
-    rodBetween(o.clone().setY(0.1), end.clone().setY(length - 0.35), 0.1, 14),
-    rodBetween(end.clone().setY(length - 0.5), end.clone().setY(length - 0.18), 0.15, 6),
-    new THREE.SphereGeometry(0.21, 16, 12).translate(0, length, 0),
-    // The joint's housing across the rod: upright on the car, where the rod runs across it.
-    boss(end.clone(), new THREE.Vector3(1, 0, 0), 0.2, 0.18, 16),
-  ]);
-}
-
-/** The arm's web: a plate inside the triangle of its pivots and ball joint, inset so the tubes stay visible. */
-function webGeometry(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, thickness: number): THREE.BufferGeometry {
-  const centre = a.clone().add(b).add(c).divideScalar(3);
-  const inset = (p: THREE.Vector3): THREE.Vector3 => p.clone().lerp(centre, 0.22);
-  const [pa, pb, pc] = [inset(a), inset(b), inset(c)];
-  const e1 = pb.clone().sub(pa).normalize();
-  const n = new THREE.Vector3().crossVectors(pb.clone().sub(pa), pc.clone().sub(pa)).normalize();
-  const e2 = new THREE.Vector3().crossVectors(n, e1);
-  const to2 = (p: THREE.Vector3): THREE.Vector2 => new THREE.Vector2(p.clone().sub(pa).dot(e1), p.clone().sub(pa).dot(e2));
-  const shape = new THREE.Shape([to2(pa), to2(pb), to2(pc)]);
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
-  geo.translate(0, 0, -thickness / 2);
-  geo.applyMatrix4(new THREE.Matrix4().makeBasis(e1, e2, n).setPosition(pa));
-  return geo;
-}

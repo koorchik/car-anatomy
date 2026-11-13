@@ -16,7 +16,7 @@ import { GEARBOX_PARTS } from '../../src/scene/gearbox/parts.ts';
 import { defineModel, type Values } from '../model-api.ts';
 
 const record = gearboxById('manual-rwd')!;
-const factory = record.layout.desc;
+const factory = record.layout.desc as LayshaftDesc;
 const mainRatio = factory.main.teeth[1] / factory.main.teeth[0];
 const factorySecond = factory.speeds[1] as PairDesc;
 const factorySecondRatio = mainRatio * (factorySecond.teeth[1] / factorySecond.teeth[0]);

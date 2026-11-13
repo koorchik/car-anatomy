@@ -5,6 +5,7 @@
 
 import { AIR_DENSITY, G } from './constants.ts';
 import { roadLoadN, type RoadLoadCoeffs } from './road-load.ts';
+import { TYRE_MU } from './tyre-data.ts';
 
 export { AIR_DENSITY, G };
 
@@ -23,10 +24,10 @@ export interface TyreSpec {
  * of a 1980s car, which the oil page does not offer; 0.8 is an estimate. Sources and status in docs/vehicle-model.md.
  */
 export const TYRES: Record<TyreId, TyreSpec> = {
-  classic: { id: 'classic', mu: 0.8 },
-  street: { id: 'street', mu: 1.0 },
-  semi: { id: 'semi', mu: 1.25 },
-  slick: { id: 'slick', mu: 1.6 },
+  classic: { id: 'classic', mu: TYRE_MU.classic },
+  street: { id: 'street', mu: TYRE_MU.street },
+  semi: { id: 'semi', mu: TYRE_MU.semi },
+  slick: { id: 'slick', mu: TYRE_MU.slick },
 };
 
 /** The tyres the oil page offers. */

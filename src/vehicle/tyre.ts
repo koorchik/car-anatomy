@@ -21,8 +21,8 @@
 
 import { drivingMassKg, type CarRecord } from './car.ts';
 import { G } from './constants.ts';
-import { MF_185_80R14, TYRE_SETS, type MfSet } from './tyre-data.ts';
-import { TYRES, type TyreId } from './vehicle.ts';
+import { MF_185_80R14, TYRE_MU, TYRE_SETS, type MfSet } from './tyre-data.ts';
+import type { TyreId } from './vehicle.ts';
 
 export type TyreSide = 'left' | 'right';
 
@@ -239,7 +239,7 @@ const saturationKappa = (p: MfSet): number => (p.PDX1 * p.LMUX) / p.PKX1;
  * ellipse, the slick's 13 %; rescaled, every set stays within 0.93–1.04 of it, as mf_185_80R14 does with its own weights
  * (tests/suspension-tyre.test.ts).
  */
-export function tyreAt(id: TyreId, wheelLoadN: number, mu: number = TYRES[id].mu): Tyre {
+export function tyreAt(id: TyreId, wheelLoadN: number, mu: number = TYRE_MU[id]): Tyre {
   if (!(wheelLoadN > 0)) throw new Error(`Wheel load must be positive: ${wheelLoadN}`);
   const base = TYRE_SETS[id];
   const fitted: MfSet = { ...base, LFZO: wheelLoadN / base.FNOMIN, LMUX: mu / base.PDX1, LMUY: mu / base.PDY1 };
@@ -356,7 +356,8 @@ export function stepTyre(t: Tyre, side: TyreSide, s: TyreState, omega: number, r
   const capY = sy * Math.min(TAN_ALPHA_MAX, Math.max((slide * dyPeak) / kyk, Math.abs(vy) / vRef));
   const cappedX = Math.abs(ux) > capX;
   if (cappedX) ux = capX * sgn(ux);
-  if (Math.abs(uy) > capY) uy = capY * sgn(uy);
+  const cappedY = Math.abs(uy) > capY;
+  if (cappedY) uy = capY * sgn(uy);
 
   const kappa = ux / sx;
   const alpha = Math.atan(uy / sy);
@@ -374,11 +375,13 @@ export function stepTyre(t: Tyre, side: TyreSide, s: TyreState, omega: number, r
   const blendY = (1 - w) * scratch.fy + w * syF;
 
   // The damper. It cannot push the force past the friction peak (the MF force itself may: one direction peaks at
-  // D + S_V).
+  // D + S_V). A patch held at the sliding bound passes the friction force alone: the bound moves with the load, and
+  // its change is no deflection rate, so damping it would pull against the sliding (a wheel spinning on ice whose
+  // load rocks flipped its force to −D).
   const cx = (w * LOW_SPEED_DAMPING_S * kxk) / sx;
   const cy = (w * LOW_SPEED_DAMPING_S * kyk) / sy;
-  let fx = blendX + (cx * (ux - s.ux)) / dt;
-  let fy = blendY - (cy * (uy - s.uy)) / dt;
+  let fx = blendX + (cappedX ? 0 : (cx * (ux - s.ux)) / dt);
+  let fy = blendY - (cappedY ? 0 : (cy * (uy - s.uy)) / dt);
   const limitX = Math.max(dxPeak, Math.abs(blendX));
   const limitY = Math.max(dyPeak, Math.abs(blendY));
   const clampedX = Math.abs(fx) > limitX;

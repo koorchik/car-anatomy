@@ -3,10 +3,11 @@
 // different pages does not touch the same file.
 
 import { layshaftSpec, type LayshaftDesc } from './layouts/layshaft.ts';
+import { transaxleSpec, type TransaxleDesc } from './layouts/transaxle.ts';
 import type { GearboxSpec } from './spec.ts';
 
-/** Grows with each layout: transaxle, dct, sequential, planetary… */
-export type GearboxLayout = { kind: 'layshaft'; desc: LayshaftDesc };
+/** Grows with each layout: dct, sequential, planetary… */
+export type GearboxLayout = { kind: 'layshaft'; desc: LayshaftDesc } | { kind: 'transaxle'; desc: TransaxleDesc };
 
 /** Figures as published, to compare with what the teeth give. */
 export interface PublishedGearbox {
@@ -18,6 +19,8 @@ export interface PublishedGearbox {
   ratedTorqueNm: number | null;
   /** Countershaft to mainshaft (or input to output shaft), mm. */
   centreMm: number | null;
+  /** A transaxle's final drive, inside the case. */
+  finalDrive?: number;
 }
 
 export interface GearboxRecord {
@@ -48,5 +51,7 @@ export function gearboxSpec(record: GearboxRecord): GearboxSpec {
   switch (record.layout.kind) {
     case 'layshaft':
       return layshaftSpec(record.layout.desc);
+    case 'transaxle':
+      return transaxleSpec(record.layout.desc);
   }
 }

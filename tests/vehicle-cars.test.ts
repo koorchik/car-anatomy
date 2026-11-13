@@ -1,9 +1,13 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { calibrateRoadLoad, epaForceN, K_EPA_LIST, type EpaRow } from '../scripts/calibrate-road-load.ts';
+import { calibrateRoadLoad, drives, epaForceN, K_EPA_LIST, type EpaRow } from '../scripts/calibrate-road-load.ts';
 import { CAR_LIST, carById, CARS } from '../src/data/cars.ts';
+import { DRIVE_CARS, driveCarById } from '../src/data/drive-cars.ts';
+import { buildCarDrive } from '../src/drivetrain/car-model.ts';
+import { steadyTopSpeed } from '../src/drivetrain/runs.ts';
 import { engineById, engineFacts } from '../src/data/engines.ts';
+import { gearboxById } from '../src/data/gearboxes.ts';
 import { genericCar, SUMP_CARS } from '../src/data/sump-cars.ts';
 import { SECTOR_NAMES, sectorName, TYRE_NAMES } from '../src/data/vehicle-names.ts';
 import { evaluate } from '../src/designer/physics.ts';
@@ -47,6 +51,9 @@ import { buildTrack, TEST_CIRCUIT, TEST_SECTORS } from '../src/vehicle/track.ts'
 import { outerDiameterM, parseTyreSize, rollingRadiusM } from '../src/vehicle/tyre-size.ts';
 import { dragForce, G, TYRES, type EngineMount, type VehicleSpec } from '../src/vehicle/vehicle.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
+import { gearboxSpec } from '../src/drivetrain/catalogue.ts';
+import { finalRatio } from '../src/drivetrain/layouts/transaxle.ts';
+import { transaxleDiffOutput } from '../src/vehicle/gearbox-place.ts';
 
 /** Reads a dotted path like 'body.trackFrontM'; undefined when the record has no such field. */
 const at = (car: CarRecord, path: string): unknown =>
@@ -81,6 +88,10 @@ describe('car records', () => {
 
     it('links to a gearbox and suspensions by name only once those sections have them', () => {
       if (car.gearbox !== null) expect(car.gearbox).toMatch(/^[a-z0-9-]+(\/[a-z0-9-]+)?$/);
+      // A gearbox link names a record of the catalogue, the same one the car's drivetrain uses.
+      if (car.gearbox !== null) expect(gearboxById(car.gearbox), car.gearbox).toBeDefined();
+      const drive = driveCarById(car.id);
+      if (drive) expect(car.gearbox).toBe(drive.gearbox);
       if (car.suspension !== null) for (const type of [car.suspension.front, car.suspension.rear]) expect(type).toMatch(/^[a-z0-9-]+$/);
     });
 
@@ -253,6 +264,10 @@ describe('road load', () => {
       // An unchecked or limited top speed says nothing about drag: the maker's Cd·A times k_EPA, marked unverified.
       expect(rl.c).toBeCloseTo(0.5 * AIR_DENSITY * car.aero!.cd * car.aero!.areaM2 * ROAD_LOAD_TRIM.kEpa, 3);
       expect(car.unverified.some((p) => p.startsWith('published.vmax')) || car.published.vmaxLimited).toBe(true);
+    } else if (drives(car)) {
+      // A car the gearbox model drives is calibrated on its force at the wheels: the model's steady top speed is the
+      // published one (the lap's ideal gearbox takes its real one at stage K7).
+      expect(steadyTopSpeed(buildCarDrive(car.id), rl).v * 3.6).toBeCloseTo(car.published.vmaxKmh, 0);
     } else {
       // The lap's own top speed with this road load is the published one.
       const design = designFromSpec(engineById(car.engine)!);
@@ -264,8 +279,8 @@ describe('road load', () => {
   it('refuses a car nobody calibrated instead of guessing its drag', () => {
     const e30 = CARS['bmw-m3-e30']!;
     expect(() => roadLoadCoeffs({ ...e30, id: 'uncalibrated' })).toThrow(/calibrate-road-load/);
-    // The record's rule changed (a checked top speed) but the trim was not rerun.
-    expect(() => roadLoadCoeffs({ ...e30, unverified: e30.unverified.filter((p) => !p.startsWith('published.vmax')) })).toThrow(/calibrate-road-load/);
+    // The record's rule changed (its top speed no longer checked) but the trim was not rerun.
+    expect(() => roadLoadCoeffs({ ...e30, unverified: [...e30.unverified, 'published.vmaxKmh'] })).toThrow(/calibrate-road-load/);
   });
 
   it.each(CAR_LIST.map((c) => [c.id, c] as const))('%s: rolls the lap on the driven tyres\' radius, from their size', (_id, car) => {
@@ -488,8 +503,9 @@ describe('links between sections', () => {
   it('links only to pages that exist', () => {
     const engines = pageIndex({ engines: (id) => !!engineById(id) });
     expect(carLinks(e30, engines)).toEqual([{ section: 'engines', target: 'i4/bmw-m3-e30-s14', href: '#/engines/i4/bmw-m3-e30-s14' }]);
-    // No gearbox link while the record has none, even if the page exists.
-    expect(carLinks(e30, pageIndex({ gearboxes: () => true }))).toEqual([]);
+    // No gearbox link while the record has none, even if the page exists; the E30 has one since stage K2b.
+    expect(carLinks({ ...e30, gearbox: null }, pageIndex({ gearboxes: () => true }))).toEqual([]);
+    expect(carLinks(e30, pageIndex({ gearboxes: () => true })).map((l) => l.href)).toEqual(['#/gearboxes/manual-rwd']);
     const linked: CarRecord = { ...e30, gearbox: 'manual-rwd', suspension: { front: 'macpherson', rear: 'semi-trailing' } };
     expect(carLinks(linked, pageIndex({ gearboxes: () => true, suspensions: (type) => type === 'semi-trailing' })).map((l) => l.href)).toEqual([
       '#/gearboxes/manual-rwd',
@@ -502,6 +518,59 @@ describe('links between sections', () => {
     for (const sump of SUMP_CARS) expect(carLinks(CARS[sump.car!]!, pages).map((l) => l.section)).toEqual(['engines', 'sump']);
   });
 });
+
+describe('gearbox links', () => {
+  it('the Civic and the 911 drive the two gearboxes of the manual-transaxle page', () => {
+    expect(CARS['civic-type-r-fk8']!.gearbox).toBe('manual-transaxle');
+    expect(CARS['porsche-911-carrera-t-992']!.gearbox).toBe('manual-transaxle/porsche-911-carrera-t-992');
+  });
+
+  it.each(CAR_LIST.filter((c) => c.gearbox !== null).map((c) => [c.id, c] as const))(
+    '%s names a gearbox of its own, and its drive car names the same one',
+    (_id, car) => {
+      expect(gearboxById(car.gearbox!)?.car).toBe(car.id);
+      expect(DRIVE_CARS[car.id]?.gearbox).toBe(car.gearbox);
+    },
+  );
+
+  it("the drive car of every linked car has its driven axle's inner joints, a transaxle its final drive", () => {
+    for (const car of CAR_LIST.filter((c) => c.gearbox !== null)) {
+      const drive = DRIVE_CARS[car.id]!;
+      const axle = car.drive === 'fwd' ? 'front' : 'rear';
+      expect(drive.driveline.diffOutputs[axle], car.id).toBeDefined();
+      // The left joint, inside the left wheel.
+      const joint = drive.driveline.diffOutputs[axle]!;
+      expect(joint[1], car.id).toBeGreaterThan(0);
+      expect(joint[1], car.id).toBeLessThan(wheelCentre(car, axle, 'left')[1] - 0.25);
+      // A transaxle's teeth give the published final drive; a layshaft box leaves it to the car's axle.
+      if (gearboxSpec(gearboxById(car.gearbox!)!).finalDrive) {
+        expect(Math.abs(Math.abs(stateRatioFinal(car.gearbox!)) - drive.finalDrive.ratio), car.id).toBeLessThanOrEqual(0.005);
+      }
+    }
+  });
+
+  it('a transaxle car keeps the inner joint its gearbox gives, bolted to the engine at crankFront (to 1 mm)', () => {
+    for (const id of ['civic-type-r-fk8', 'porsche-911-carrera-t-992']) {
+      const car = CARS[id]!;
+      const axle = car.drive === 'fwd' ? 'front' : 'rear';
+      const joint = transaxleDiffOutput(car, buildEngine(engineById(car.engine)!), gearboxSpec(gearboxById(car.gearbox!)!));
+      const stored = DRIVE_CARS[id]!.driveline.diffOutputs[axle]!;
+      for (let k = 0; k < 3; k++) expect(Math.abs(stored[k]! - joint[k]!), `${id} ${k}`).toBeLessThanOrEqual(0.001);
+      // The differential sits on the driven axle's line, a little below the wheel centres, and the halfshaft reaches
+      // the wheel at less than 10° in plan and in elevation.
+      const wheel = wheelCentre(car, axle, 'left');
+      const span = wheel[1] - joint[1];
+      expect(Math.abs(Math.atan2(wheel[0] - joint[0], span)), id).toBeLessThan((10 * Math.PI) / 180);
+      expect(Math.abs(Math.atan2(wheel[2] - joint[2], span)), id).toBeLessThan((10 * Math.PI) / 180);
+    }
+  });
+});
+
+/** The final drive inside a transaxle's case, from its teeth. */
+function stateRatioFinal(gearbox: string): number {
+  const spec = gearboxSpec(gearboxById(gearbox)!);
+  return finalRatio(spec) ?? NaN;
+}
 
 describe('names of the vehicle core', () => {
   it('name every tyre and every sector of the test circuit', () => {

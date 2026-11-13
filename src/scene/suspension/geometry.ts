@@ -85,25 +85,44 @@ export const ringProfile = (inner: number, outer: number, y0: number, y1: number
 export interface KnuckleShape {
   /** Hub boss: centre and axis (outboard). */
   hub: { centre: THREE.Vector3; axis: THREE.Vector3; radius: number; length: number };
-  /** Strut clamp around the bottom of the strut tube. */
-  clamp: { from: THREE.Vector3; to: THREE.Vector3; radius: number };
-  /** Ends of the arms with the boss each carries. */
-  ends: Array<{ at: THREE.Vector3; axis: THREE.Vector3; radius: number; length: number; arm: number }>;
+  /** Strut clamp around the bottom of the strut tube; none on a knuckle that carries no strut. */
+  clamp?: { from: THREE.Vector3; to: THREE.Vector3; radius: number };
+  /** Ends of the arms with the boss each carries. An arm with `via` bends through those points (round the disc). */
+  ends: KnuckleEnd[];
+  /** How far inboard of the hub boss's centre the arms leave it, as a share of its length: 0.15 by default. */
+  rootShare?: number;
+}
+
+export interface KnuckleEnd {
+  at: THREE.Vector3;
+  axis: THREE.Vector3;
+  radius: number;
+  length: number;
+  arm: number;
+  via?: THREE.Vector3[];
 }
 
 export function knuckleGeometry(shape: KnuckleShape): THREE.BufferGeometry {
   const { hub, clamp, ends } = shape;
   const parts: THREE.BufferGeometry[] = [boss(hub.centre, hub.axis, hub.radius, hub.length, 28)];
-  parts.push(rodBetween(clamp.from, clamp.to, clamp.radius, 20));
-  const clampMid = clamp.from.clone().lerp(clamp.to, 0.35);
   // The arms leave the boss from its inboard half, where the casting is thickest.
-  const root = hub.centre.clone().addScaledVector(hub.axis, -hub.length * 0.15);
-  parts.push(capsule(root, clampMid, hub.radius * 0.62, clamp.radius * 0.8));
-  for (const end of ends) {
-    parts.push(capsule(root, end.at, end.arm * 1.35, end.arm));
-    parts.push(boss(end.at, end.axis, end.radius, end.length, 16));
+  const root = hub.centre.clone().addScaledVector(hub.axis, -hub.length * (shape.rootShare ?? 0.15));
+  if (clamp) {
+    parts.push(rodBetween(clamp.from, clamp.to, clamp.radius, 20));
+    const clampMid = clamp.from.clone().lerp(clamp.to, 0.35);
+    parts.push(capsule(root, clampMid, hub.radius * 0.62, clamp.radius * 0.8));
   }
+  for (const end of ends) parts.push(...armTo(root, end));
   return merge(parts);
+}
+
+/** An arm of a casting from `root` to an end and the end's boss: tapered on its first leg, then even. */
+export function armTo(root: THREE.Vector3, end: KnuckleEnd): THREE.BufferGeometry[] {
+  const path = [root, ...(end.via ?? []), end.at];
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i + 1 < path.length; i++) parts.push(capsule(path[i]!, path[i + 1]!, i === 0 ? end.arm * 1.35 : end.arm, end.arm));
+  parts.push(boss(end.at, end.axis, end.radius, end.length, 16));
+  return parts;
 }
 
 /** Tyre cross-section as [radius, axial] from the inner bead round the tread to the outer bead. */
