@@ -2,10 +2,12 @@
 // overview, rear engine and staggered tyres. Porsche's US technical specifications (November 2022) give the mass
 // (curb weight 3254 lb in the manual's column, although the row is labelled "PDK / manual"; the PDK's is the heavier
 // 3338 lb), wheelbase, tracks, length, width without mirrors, height, tyres and the 181 mph top speed. The road load
-// is the EPA coast-down of the same car, "911 T" with 379 hp, the 7MT and the 3.56 axle. The gearbox link comes with
-// the gearbox data (stage K6a-3d), which also places its output flanges at packaging.ts's wheel centres.
+// is the EPA coast-down of the same car, "911 T" with 379 hp, the 7MT and the 3.56 axle. The gearbox (stage K6a-3d)
+// is the 7MT variant of the manual-transaxle page.
 // Porsche publishes no weight split, overhangs, ground clearance or positions of parts, so those are estimates; that
-// the charge-air coolers sit over the engine under the rear lid is Porsche's (the 2019 powertrain article).
+// the charge-air coolers sit over the engine under the rear lid is Porsche's (the 2019 powertrain article). The
+// engine's place along the car follows from the transaxle bolted to it: its crown wheel's axis sits on the rear
+// axle's line (stage K6a-3d moved crankFront 0.15 m back from A1c's first estimate for that).
 
 import type { CarRecord } from '../../vehicle/car.ts';
 
@@ -14,7 +16,7 @@ export const CAR: CarRecord = {
   name: 'Porsche 911 Carrera T (992)',
   years: '2022-2024',
   engine: 'b6/porsche-992-carrera-3-0',
-  gearbox: null,
+  gearbox: 'manual-transaxle/porsche-911-carrera-t-992',
   suspension: null,
   mount: { axis: 'longitudinal', front: 'rearward', position: 'rear' },
   massKg: 1476,
@@ -36,7 +38,7 @@ export const CAR: CarRecord = {
   },
   packaging: {
     // Timing end to the tail: the flywheel faces the transaxle just behind the rear axle.
-    crankFront: [-3.04, 0, 0.4],
+    crankFront: [-3.19, 0, 0.4],
     bay: { min: [-3.32, -0.65, 0.14], max: [-2.45, 0.65, 0.92] },
     exhaustExit: { at: [-3.5, 0.1, 0.3], side: 'both' },
     fuelTank: [0.05, 0, 0.4],

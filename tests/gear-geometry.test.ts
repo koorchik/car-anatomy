@@ -15,7 +15,8 @@ import {
 import { buildGearbox } from '../src/drivetrain/topology.ts';
 
 const boxes = ALL_GEARBOXES.map((record) => buildGearbox(gearboxSpec(record)));
-const meshes = boxes.flatMap((box) => box.meshes.map((mesh) => ({ box, mesh })));
+// Pairs on parallel axes: a crown wheel and its pinion cross the shafts, and the transverse section does not apply.
+const meshes = boxes.flatMap((box) => box.meshes.filter((mesh) => !mesh.bevel).map((mesh) => ({ box, mesh })));
 const axisOf = (box: (typeof boxes)[number], member: string) => {
   const axis = box.spec.members.find((m) => m.id === member)!.axis;
   return box.spec.axes.find((a) => a.id === axis)!;

@@ -52,4 +52,29 @@ export const GEARBOX_PARTS_EN: Record<string, string> = {
     'A ball or roller bearing in the case wall. It keeps the shaft in place and takes the axial forces of the helical teeth.',
   'Фланець виходу': 'Output flange',
   'Кінець вторинного вала. До нього кріпиться кардан, часто через еластичну муфту.': 'The end of the output shaft. The driveshaft bolts to it, often through a flexible coupling.',
+  'Виходить із картера зчеплення й крутиться разом із диском зчеплення. На ньому шестерні всіх передач: одні нарізані на самому валу, інші крутяться на ньому вільно, доки муфта не з’єднає їх із валом.':
+    'It comes out of the bellhousing and turns with the clutch disc. It carries a gear for every speed: some are cut on the shaft itself, the others run free on it until a sleeve locks them to it.',
+  'Стоїть паралельно первинному, і кожна передача — одна пара шестерень між цими двома валами. На його кінці біля двигуна ведуча шестерня головної передачі, тож вал крутить диференціал.':
+    'It runs parallel to the input shaft, and every speed is one pair of gears between the two shafts. At its end next to the engine sits the final drive pinion, so the shaft turns the differential.',
+  'Шестерня на валу': 'Fixed gear',
+  'Нарізана на валу або закріплена на ньому й крутиться разом із ним. Завжди зачеплена з шестернею передачі на другому валу. Число передачі — це відношення зубців пари: у скільки разів вторинний вал крутиться повільніше за первинний.':
+    'It is cut on the shaft or fixed to it and turns with it. It is always in mesh with a speed gear on the other shaft. The gear ratio is the ratio of the pair’s teeth: how many times slower the output shaft turns than the input shaft.',
+  'Крутиться на своєму валу вільно, на голчастому підшипнику, і завжди зачеплена з шестернею другого вала. Передача вмикається, коли муфта синхронізатора з’єднує цю шестерню з валом. Шестерні нижчих передач зазвичай вільні на вторинному валу, вищих — на первинному.':
+    'It runs free on its shaft on a needle bearing and is always in mesh with a gear of the other shaft. The gear is engaged when a synchronizer sleeve locks this gear to the shaft. The gears of the low speeds usually run free on the output shaft, those of the high speeds on the input shaft.',
+  'Сидить на шліцах свого вала й крутиться разом із ним. По її зовнішніх шліцах ковзає муфта. У двовальній коробці муфти стоять на обох валах, біля вільних шестерень.':
+    'It sits on splines of its shaft and turns with it. The sleeve slides on its outer splines. In a two-shaft transmission the sleeves sit on both shafts, next to the free-running gears.',
+  'Стоїть між двома валами на окремій осі. Ще одне зачеплення міняє напрям обертання, тому авто їде назад. Подвійна проміжна має дві шестерні з різною кількістю зубців, і так невелика коробка отримує потрібне число заднього ходу.':
+    'It sits between the two shafts on an axis of its own. One more mesh reverses the direction of rotation, so the car moves backward. A compound idler has two gears with different tooth counts, which gives a compact transmission the reverse ratio it needs.',
+  'Головна передача': 'Final drive',
+  'Ведуча шестерня на вторинному валу крутить велике ведене колесо на корпусі диференціала. Її число множиться на число кожної передачі. Коли двигун стоїть упоперек, це косозуба пара на паралельних осях; коли вздовж, — конічна, бо колеса крутяться поперек валів коробки.':
+    'The pinion on the output shaft turns a large gear on the differential case. Its ratio multiplies the ratio of every speed. With a transverse engine it is a helical pair on parallel axes; with a longitudinal one it is a bevel pair, because the wheels turn across the transmission’s shafts.',
+  'Корпус диференціала': 'Differential case',
+  'Крутиться разом із веденим колесом головної передачі. Сателіти й напівосьові шестерні всередині дають колесам у повороті крутитися з різною швидкістю. Вільний диференціал дає обом колесам однаковий момент, тож колесо, що буксує, обмежує тягу обох. У самоблоці тертя дисків чи косозубих сателітів передає більше моменту колесу, яке тримає дорогу.':
+    'It turns with the final drive gear. The spider gears and side gears inside let the wheels turn at different speeds in a corner. An open differential gives both wheels the same torque, so a spinning wheel limits the drive to both. In a limited-slip differential, the friction of its plates or of its helical planet gears sends more torque to the wheel that grips.',
+  'Піввісь': 'Halfshaft',
+  'Веде від диференціала до колеса. Тут видно лише її початок біля коробки: решту показує підвіска.':
+    'It runs from the differential to the wheel. Only its start next to the transmission is shown here; the suspension shows the rest.',
+  'Внутрішній ШРУС': 'Inner CV joint',
+  'Шарнір рівних кутових швидкостей на внутрішньому кінці піввісі. Дає піввісі змінювати кут і довжину, коли колесо ходить угору й униз, і передає обертання рівно, без ривків.':
+    'The constant-velocity joint at the inner end of the halfshaft. It lets the halfshaft change its angle and length as the wheel moves up and down, and passes the rotation on smoothly.',
 };

@@ -240,8 +240,11 @@ export function toothOutline(gear: GearGeometry, steps = 10): Float32Array {
   return out;
 }
 
-/** One tooth from the middle of the gap before it to the middle of the gap after it, as (ρ, angle) pairs. */
-function singleTooth(gear: GearGeometry, steps: number): number[] {
+/**
+ * One tooth from the middle of the gap before it to the middle of the gap after it, as (ρ, angle) pairs. A bevel gear
+ * draws it on its back cone, from the equivalent spur gear (gear-mesh's bevel builder); the teeth need not be whole.
+ */
+export function singleTooth(gear: GearGeometry, steps: number): number[] {
   const halfPitch = Math.PI / gear.teeth;
   const start = Math.max(gear.rb, gear.rf);
   const flankRoot = halfToothAngle(gear, start);
