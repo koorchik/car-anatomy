@@ -23,7 +23,7 @@ import { FiringDiagram, legendHtml } from './ui/firing-diagram.ts';
 import { Spectrum } from './ui/spectrum.ts';
 import { tableHtml } from './ui/table.ts';
 import { LANGUAGE_GROUP_LABEL, LANGUAGE_LABELS, locale, switchLocale, type Locale } from './i18n/locale.ts';
-import { t } from './i18n/t.ts';
+import { plural, t } from './i18n/t.ts';
 import { Tacho } from './ui/tacho.ts';
 import { SystemsView } from './ui/systems-view.ts';
 import { shownAdvance, type SystemsFrame } from './systems/sim.ts';
@@ -1253,7 +1253,9 @@ function frame(now: number): void {
   const rotaryFires = (snap.rpm / 60) * spec.cylinders;
   const firingHz = engine.isRotary ? rotaryFires : firesPerSecond;
   spectrum.draw(drive.audioReady ? drive.analyser : null, drive.sampleRate, snap.state === 'off' ? 0 : firingHz);
-  const firingText = snap.state === 'off' ? '' : t('{count} спалахів за секунду', { count: Math.round(firingHz) });
+  const fires = Math.round(firingHz);
+  const firingText =
+    snap.state === 'off' ? '' : plural(fires, { one: t('{count} спалах за секунду', { count: fires }), few: t('{count} спалахи за секунду', { count: fires }), many: t('{count} спалахів за секунду', { count: fires }) });
   if (firingText !== firingTextShown) {
     $('firing-text').textContent = firingText;
     firingTextShown = firingText;

@@ -15,7 +15,7 @@ import type { EngineModel, ViewMode } from '../../scene/model-types.ts';
 import type * as THREE from 'three';
 import { HP_PER_KW, powerKw, type EngineTorqueMap } from '../../engine/torque-map.ts';
 import { numberLocale } from '../../i18n/locale.ts';
-import { t } from '../../i18n/t.ts';
+import { plural, t } from '../../i18n/t.ts';
 import { RpmChart, type ChartSeries } from '../designer/chart.ts';
 import { publishedText } from '../published.ts';
 import { RunRecorder, StepTest, peaksOf, shownPoint, turboSag, type Run, type RunKind } from './runs.ts';
@@ -679,12 +679,14 @@ export class DynoPanel {
     const absorberNm = Math.max(0, this.shown.absorber);
     const force = absorberNm / ARM_M;
     const heatKw = powerKw(absorberNm, rpm);
-    this.$('feel').textContent = t('Датчик: {n} Н ({kg} кг) на важелі {arm} м. Тепло у воду: {kw} кВт, як {kettles} чайників; на {rise} °C нагріву це {litres} л/хв.', {
+    const kettles = Math.round(heatKw / KETTLE_KW);
+    const n = num(kettles);
+    this.$('feel').textContent = t('Датчик: {n} Н ({kg} кг) на важелі {arm} м. Тепло у воду: {kw} кВт, як {kettles}; на {rise} °C нагріву це {litres} л/хв.', {
       n: num(force),
       kg: num(force / 9.81),
       arm: num(ARM_M, 2),
       kw: num(heatKw),
-      kettles: num(heatKw / KETTLE_KW),
+      kettles: plural(kettles, { one: t('{n} чайник', { n }), few: t('{n} чайники', { n }), many: t('{n} чайників', { n }) }),
       rise: WATER_RISE_K,
       litres: num((heatKw / (WATER_HEAT * WATER_RISE_K)) * 60),
     });

@@ -50,8 +50,11 @@ export const DYNO_EN: Record<string, string> = {
   'Зняти зі стенда': 'Off the dyno',
   'авто': 'auto',
   '{kw} кВт = {nm} Н·м × {rpm} об/хв ÷ 9549 = {hp} к.с.': '{kw} kW = {nm} N·m × {rpm} rpm ÷ 9549 = {hp} hp',
-  'Датчик: {n} Н ({kg} кг) на важелі {arm} м. Тепло у воду: {kw} кВт, як {kettles} чайників; на {rise} °C нагріву це {litres} л/хв.':
-    'Load cell: {n} N ({kg} kg) on a {arm} m arm. Heat into the water: {kw} kW, as much as {kettles} kettles; warmed by {rise} °C that is {litres} L/min.',
+  'Датчик: {n} Н ({kg} кг) на важелі {arm} м. Тепло у воду: {kw} кВт, як {kettles}; на {rise} °C нагріву це {litres} л/хв.':
+    'Load cell: {n} N ({kg} kg) on a {arm} m arm. Heat into the water: {kw} kW, as much as {kettles}; warmed by {rise} °C that is {litres} L/min.',
+  '{n} чайник': '{n} kettle',
+  '{n} чайники': '{n} kettles',
+  '{n} чайників': '{n} kettles',
   'Збігається з заводськими {figures}.': 'Matches the published {figures}.',
   'Запусти двигун, щоб почати замір.': 'Start the engine to begin a run.',
   '{absorber} гальмо не втримує стільки моменту на цих обертах.': '{absorber} absorber cannot hold this much torque at this speed.',

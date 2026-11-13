@@ -70,6 +70,8 @@ export const UI_EN: Record<string, string> = {
   'Торкнись будь-якої деталі, щоб дізнатися, що це': 'Tap any part to find out what it is',
   'Наведи на будь-яку деталь, щоб побачити її назву. Клацни, щоб дізнатися, що вона робить': 'Hover over any part to see its name. Click to find out what it does',
   'клацни, щоб дізнатись більше': 'click to learn more',
+  '{count} спалах за секунду': '{count} firing event per second',
+  '{count} спалахи за секунду': '{count} firing events per second',
   '{count} спалахів за секунду': '{count} firing events per second',
   'основний тон {hz} Гц': 'fundamental {hz} Hz',
 
