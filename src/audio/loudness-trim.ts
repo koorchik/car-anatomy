@@ -48,7 +48,6 @@ export const LOUDNESS_TRIM: Record<string, number> = {
   'i3/daewoo-matiz-08': 0.430,
   'i4/corolla-18-2zr-fe': 0.324,
   'i4/bmw-m3-e30-s14': 0.285,
-  'i4/vaz-2101': 0.360,
   'i4/civic-type-r-k20c1': 0.530,
   'i4d/vw-20-tdi-ea288': 0.582,
   'i4d/bmw-320d-n47': 0.580,
