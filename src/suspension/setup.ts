@@ -15,7 +15,6 @@
 import type { CornerLinkage, CornerSpec, DamperSpec, Vec3 } from './spec.ts';
 import { Axle, newCornerSample, type CornerSample } from './kinematics.ts';
 import { CornerSolver } from './solve.ts';
-import { dist } from './vec.ts';
 import { coilCompression, coilForce, bumpStopForce, dampingFromZeta, G } from './forces.ts';
 import { patchLengthM, tyreVertical, verticalStiffness } from '../vehicle/tyre-data.ts';
 
@@ -162,19 +161,11 @@ export interface ResolvedCorner {
 
 const DEG = Math.PI / 180;
 
-/** Length of the damper (top mount to the strut's lower point, or body point to knuckle point) for a solved pose. */
-function damperLength(solver: CornerSolver, spec: CornerSpec['axle'], pose: Float64Array): number {
-  const p = [0, 0, 0];
-  const strut = spec.linkage.strut;
-  if (strut) {
-    solver.point(pose, strut.lower, p);
-    const shift = strut.topShift ?? [0, 0, 0];
-    return dist([strut.top[0] + shift[0], strut.top[1] + shift[1], strut.top[2] + shift[2]], [p[0], p[1], p[2]]);
-  }
-  const d = spec.damper;
-  if (d.wheel === 'strut') throw new Error('A damper on a strut needs a strut');
-  solver.point(pose, d.wheel, p);
-  return dist(d.body, [p[0], p[1], p[2]]);
+/** Length of the damper of the corner as drawn at `travel`, by an exact solve (wherever the damper sits). */
+function drawnDamperLength(axle: Axle, travel: number): number {
+  const s = newCornerSample();
+  axle.measureAt(travel, s);
+  return s.damperLen;
 }
 
 /** Travel in [from, to] where the damper is `len` long (it shortens in bump), by bisection on the table; the nearer
@@ -205,14 +196,9 @@ export function resolveCorner(corner: CornerSpec, raw: CornerSetup): ResolvedCor
   const tieRow = solver.steerRow();
   const tieRodDesign = tieRow >= 0 ? solver.lengthOf(tieRow) : 0;
   // The damper's end stops are hardware, so their lengths come from the corner as drawn, before any alignment.
-  const drawnDamper = (travel: number): number => {
-    const p = CornerSolver.identity();
-    const res = solver.solve(p, travel, 0, 40);
-    if (!res.ok) throw new Error(`The corner does not reach ${(travel * 1000).toFixed(0)} mm of travel: ${res.worst}`);
-    return damperLength(solver, spec, p);
-  };
-  const contactM = drawnDamper(0) - spec.bumpStop.gapM;
-  const topOutM = drawnDamper(-spec.travel.droopM);
+  const drawn = new Axle(spec);
+  const contactM = drawnDamperLength(drawn, 0) - spec.bumpStop.gapM;
+  const topOutM = drawnDamperLength(drawn, -spec.travel.droopM);
   const camberSet = !!strut && setup.camberDeg !== 'factory';
   const toeSet = tieRow >= 0 && (setup.toeDeg !== 'factory' || camberSet);
   let shiftY = 0;
