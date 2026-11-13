@@ -235,6 +235,42 @@ describe.each(CORNERS)('the %s in 3D', (_name, resolved) => {
     model.dispose();
   });
 
+  it('keeps a coilover or a lone coil on the link or arm it sits on when the corner is pulled apart', () => {
+    const model = new CornerModel(resolved);
+    const frame = cornerFrame();
+    const local = new THREE.Vector3();
+    const inv = new THREE.Matrix4();
+    // A coilover's lower eye, and a lone coil's lower seat.
+    const ends: Array<{ on: string | undefined; wheel: Vec3 | 'strut'; lower: () => THREE.Vector3 }> = [
+      { on: spec.damper.on, wheel: spec.damper.wheel, lower: () => model.damper.bottom.position },
+    ];
+    if (model.loneSpring) ends.push({ on: spec.spring.on, wheel: spec.spring.wheel, lower: () => (model as unknown as { springLower: THREE.Vector3 }).springLower });
+    for (const explode of [0, 0.5, 1]) {
+      model.setExplode(explode);
+      model.update(frame);
+      for (const { on, wheel, lower } of ends) {
+        if (!on || wheel === 'strut') continue;
+        const rodIndex = link.rods.findIndex((r) => r.id === on);
+        if (rodIndex >= 0) {
+          // On the drawn rod's own axis (its local +Y from the body end), between its eyes.
+          const rod = model.linkSet.rods[rodIndex]!;
+          rod.object.updateMatrix();
+          local.copy(lower()).applyMatrix4(inv.copy(rod.object.matrix).invert());
+          expect(Math.hypot(local.x, local.z), `${on} at explode ${explode}`).toBeLessThan(1e-9);
+          expect(local.y).toBeGreaterThan(0);
+          expect(local.y).toBeLessThan(rod.length);
+        } else {
+          // Rigid with the drawn arm: where the hardpoint is in the arm's own frame.
+          const arm = model.linkSet.arms.find((a) => a.spec.id === on)!;
+          arm.object.updateMatrix();
+          local.copy(lower()).applyMatrix4(inv.copy(arm.object.matrix).invert());
+          expect(local.distanceTo(scene(wheel)), `${on} at explode ${explode}`).toBeLessThan(1e-9);
+        }
+      }
+    }
+    model.dispose();
+  });
+
   it('has a card for every part, in every view', () => {
     const model = new CornerModel(resolved);
     for (const view of ['solid', 'xray', 'mechanism'] as const) {

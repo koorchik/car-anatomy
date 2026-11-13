@@ -746,8 +746,9 @@ export class CornerModel {
       return out.copy(seat.at).applyMatrix4(arm.object.matrix);
     }
     if (seat.kind === 'rod') {
+      // On the rod's line, and with the rod where the explode has moved it (its object stands on its body end).
       const rod = this.linkSet.rods[seat.rod]!;
-      return out.copy(rod.bodyEnd).lerp(rod.knuckleEnd, seat.along);
+      return out.copy(rod.bodyEnd).lerp(rod.knuckleEnd, seat.along).add(rod.object.position).sub(rod.bodyEnd);
     }
     return out.copy(seat.at).applyMatrix4(this.carrierMatrix());
   }
