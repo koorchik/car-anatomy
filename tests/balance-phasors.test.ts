@@ -49,7 +49,10 @@ const axisGap = (a: number, b: number): number => {
   return Math.min(d, 180 - d);
 };
 
-/** Second harmonic of one piston's exact acceleration, per unit of crank radius: lambda (1 + lambda^2 / 4 + ...). */
+/**
+ * Second harmonic of one piston's exact acceleration, per unit of crank radius, held to the textbook series
+ * A2 = lambda + lambda^3 / 4 + 15 lambda^5 / 128 + ..., lambda = r / l, so a slip in the kinematics cannot hide in it.
+ */
 const secondHarmonic = (e: Engine): number => {
   const c = { ...e.cylinders[0]!, pin: e.cylinders[0]!.alpha };
   let sum = 0;
@@ -57,7 +60,11 @@ const secondHarmonic = (e: Engine): number => {
     const g = i / 10;
     sum += pistonAcceleration(e, c, g) * Math.cos((2 * g * Math.PI) / 180);
   }
-  return -sum / 1800 / e.r;
+  const a2 = -sum / 1800 / e.r;
+  const lambda = e.r / e.l;
+  // The next term of the series is of order lambda^7, about 1e-4 of A2 at lambda = 0.3.
+  expect(a2 / (lambda + lambda ** 3 / 4 + (15 * lambda ** 5) / 128)).toBeCloseTo(1, 3);
+  return a2;
 };
 
 /** Distance between neighbouring crank throws, m. */
@@ -108,6 +115,17 @@ describe('the views add up to what the kinematics leave', () => {
       // The peaks the card and the article print.
       expect(Math.abs(size(plus1) + size(minus1) - residual[`${q}1`]), `${q}1`).toBeLessThan(unit[q]);
       expect(Math.abs(size(plusOf(second, q)) + size(minusOf(second, q)) - residual[`${q}2`]), `${q}2`).toBeLessThan(unit[q]);
+    }
+    // Why the counterweight is split: its turning share cancels the big ends of its own throw, force and couple, and
+    // its piston share is exactly the half of each piston's first order that turns with the crank.
+    const tight = { force: bf.primary * 1e-9, couple: bf.primary * bf.lever * 1e-9 };
+    const turning = ph.view('rotating', WEIGHTS);
+    const pistons = ph.view('order1', WEIGHTS);
+    for (const q of ['force', 'couple'] as const) {
+      expect(turning[q].locus.major, `turning ${q}`).toBeLessThan(tight[q]);
+      if (bf.engine.isRotary) continue;
+      expect(size(pistons[q].plus), `pistons ${q} with the crank`).toBeLessThan(tight[q]);
+      expect(apart(pistons[q].minus, ph.view('order1', BARE)[q].minus), `pistons ${q} against the crank`).toBeLessThan(tight[q]);
     }
   });
 
@@ -268,6 +286,38 @@ describe('loci from the physics', () => {
     expect(v.force.locus.shape).toBe('point');
     expect(v.couple.locus.major / (ph.forces.primary * throwSpacing(ph.forces.engine))).toBeCloseTo(Math.sqrt(6) * a2, 3);
     expect(v.couple.locus.shape).toBe('line');
+    // Each 90° pair on one pin pushes sideways at twice crank speed, so the couple yaws the engine.
+    expect(axisGap(v.couple.locus.axis, 90)).toBeLessThan(1e-6);
+  });
+
+  it('inline three: a first-order couple of √3 along the cylinders, and √3/2 turning against the crank after counterweights', () => {
+    const ph = phasors('i3');
+    const bf = ph.forces;
+    const a = throwSpacing(bf.engine);
+    const bare = ph.view('order1', BARE);
+    expect(bare.force.locus.shape).toBe('point');
+    expect(bare.couple.locus.shape).toBe('line');
+    expect(bare.couple.locus.major / (bf.primary * a)).toBeCloseTo(Math.sqrt(3), 6);
+    const weighted = ph.view('order1', WEIGHTS).couple.locus;
+    expect(weighted).toMatchObject({ shape: 'circle', sense: -1 });
+    expect(weighted.major / (bf.primary * a)).toBeCloseTo(Math.sqrt(3) / 2, 6);
+    const second = ph.view('order2', BARE).couple.locus;
+    expect(second.shape).toBe('line');
+    expect(second.major / (bf.primary * a)).toBeCloseTo(Math.sqrt(3) * secondHarmonic(bf.engine), 3);
+  });
+
+  it('balance shafts close the view of their order: Lanchester shafts on an I4, one shaft on a single', () => {
+    const i4 = phasors('i4', 2);
+    expect(i4.view('order2', BARE).force.locus.shape).toBe('line');
+    const lanchester = i4.view('order2', ALL);
+    expect(lanchester.force.locus.major).toBeLessThan(i4.forces.primary * 1e-9);
+    expect(lanchester.couple.locus.major).toBeLessThan(i4.forces.primary * i4.forces.lever * 1e-9);
+    const single = phasors('i1', 1);
+    const shaft = single.view('order1', ALL).force.locus;
+    expect(shaft.shape).toBe('point');
+    expect(shaft.major).toBeLessThan(single.forces.primary * 1e-9);
+    // The shaft alone, without counterweights, takes only the half turning against the crank.
+    expect(single.view('order1', { counterweights: false, shafts: true }).force.locus).toMatchObject({ shape: 'circle', sense: 1 });
   });
 
   it('flat four: no force, a second-order couple of 2·h that yaws along a line', () => {
