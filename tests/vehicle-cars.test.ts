@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { calibrateRoadLoad, drives, epaForceN, K_EPA_LIST, type EpaRow } from '../scripts/calibrate-road-load.ts';
 import { CAR_LIST, carById, CARS } from '../src/data/cars.ts';
 import { DRIVE_CARS, driveCarById } from '../src/data/drive-cars.ts';
-import { buildCarDrive } from '../src/drivetrain/car-model.ts';
+import { buildCarDrive } from '../src/data/car-drive.ts';
 import { steadyTopSpeed } from '../src/drivetrain/runs.ts';
 import { engineById, engineFacts } from '../src/data/engines.ts';
 import { gearboxById } from '../src/data/gearboxes.ts';
