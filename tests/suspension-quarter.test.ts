@@ -338,6 +338,18 @@ describe('rough road', () => {
     expect(evaluateQuarter(rc)).toEqual(ea);
   });
 
+  it('gives a car standing still no ride instead of NaN, and the same ride backwards', () => {
+    const lin = lineariseQuarter(base);
+    const opts = { patchM: base.tyre.patchM, tyre: tyreAt('street', lin.staticN) };
+    const still = roughRoadEstimate(lin, { roadClass: 'C', speedMs: 0 }, opts);
+    for (const v of [still.comfortAw, still.bodyAccRms, still.dlc, still.travelRmsM, still.airShare]) expect(v).toBe(0);
+    expect(still.availableGrip).toBe(1);
+    expect(roughRoadEstimate(lin, { roadClass: 'C', speedMs: -15 }, opts).comfortAw).toBe(
+      roughRoadEstimate(lin, EVALUATE_ROADS.rough, opts).comfortAw,
+    );
+    expect(() => roughRoadEstimate(lin, { roadClass: 'E' as RoadClass, speedMs: 15 }, opts)).toThrow();
+  });
+
   it('pulls the damper two ways: comfort wants it soft, grip firm', () => {
     // Comfort preset corner, damping swept in the frequency domain on both roads of the designer.
     const zetas = Array.from({ length: 96 }, (_, i) => 0.05 + i * 0.01);

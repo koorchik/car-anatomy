@@ -265,7 +265,16 @@ function patchGain(n: number, patchM: number): number {
 /** Comfort, grip and travel of a linear quarter car on an ISO 8608 road (see the head of the file). */
 export function roughRoadEstimate(lin: QuarterLinear, road: RoughRoad, o: RoughRoadOptions): RoughRoadEstimate {
   const gd0 = typeof road.roadClass === 'number' ? road.roadClass : ISO_8608_CLASSES[road.roadClass];
-  const v = road.speedMs;
+  if (!(gd0 >= 0)) throw new Error(`Unknown road class: ${road.roadClass}`);
+  // Backwards the wheel meets the same spectrum; standing still or on a perfect road, nothing moves (the band below
+  // would collapse to 0 Hz and every sum to NaN).
+  const v = Math.abs(road.speedMs);
+  if (!(v > 0) || gd0 === 0) {
+    return {
+      road, comfortAw: 0, bodyAccRms: 0, tyreForceRmsN: 0, dlc: 0, travelRmsM: 0, travelRateRmsMs: 0, airShare: 0,
+      availableGrip: 1, dampingNsm: lin.c,
+    };
+  }
   const intervals = o.intervals ?? 300;
   const f1 = ISO_8608_BAND[0] * v;
   const f2 = ISO_8608_BAND[1] * v;
@@ -343,7 +352,7 @@ export const EVALUATE_ROADS = {
 /** Everything the designer reads about a corner's ride. */
 export interface QuarterEvaluation {
   linear: QuarterLinear;
-  /** Ride frequency from the ride rate (spring and tyre in series) and hop frequency, Hz, as the setup gives them. */
+  /** Ride frequency from the ride rate (spring and tyre in series), Hz, as the setup gives it; `body` is the mode. */
   rideHz: number;
   body: QuarterMode;
   hop: QuarterMode;
