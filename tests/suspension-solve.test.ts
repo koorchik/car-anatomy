@@ -622,6 +622,35 @@ describe('solid axle solver (weighted least squares)', () => {
     }
   });
 
+  it('halves a step that converges too slowly, and stops only where a leaf’s shackle reaches its dead point', () => {
+    const leafAxle = (leaf: Partial<SolidAxleIntent['leaf']>) => build({ ...SOLID_TYPICAL.leaf, leaf: { ...SOLID_TYPICAL.leaf.leaf, ...leaf } });
+    // A well-arched leaf drooping on one side: a 10 mm step needs more than 40 iterations, its halves fewer.
+    const arched = leafAxle({ archM: 0.12, frontShare: 0.4, slopeDeg: -3 });
+    const s = arched.rest();
+    arched.solve(s, -0.1, 0);
+    const tr = [0, 0];
+    arched.solver.travels(s, tr);
+    expect(Math.abs(tr[0] + 0.1) + Math.abs(tr[1])).toBeLessThan(1e-10);
+    // The leaf's links keep their length but for the hundredths of a millimetre its soft rows pull them by in roll.
+    const residuals = new Float64Array(arched.solver.rows.length);
+    arched.solver.residuals(s, residuals);
+    arched.solver.rows.forEach((row, i) => {
+      if (/\.(front|rear)$/.test(row)) expect(Math.abs(residuals[i]), row).toBeLessThan(1e-4);
+    });
+    // A 60 mm shackle on 90 mm of arch: in droop the shackle swings ever faster as it lines up with the leaf, and a
+    // little past −88 mm there is no pose at all. The walk stops there, not at a round step.
+    const short = leafAxle({ archM: 0.09, shackleM: 0.06 });
+    expect(() => short.solve(short.rest(), -0.1, -0.1)).toThrow(/does not solve at -8\d \/ -8\d mm/);
+    const rate = (z: number) => {
+      const at = short.rest();
+      short.solve(at, z, z);
+      const d = new Float64Array(short.solver.n);
+      short.solver.derivatives(at, z, z, d, null);
+      return Math.abs(d[6]);
+    };
+    expect(rate(-0.088)).toBeGreaterThan(5 * rate(-0.06));
+  });
+
   it('refuses a step whose corrector lands on another assembly: a crossed Watt rocker', () => {
     // The determinant of the least-squares KKT matrix keeps its sign on every assembly (JᵀW²J is never indefinite),
     // so it cannot guard the branch; the corrector's distance from the prediction does.

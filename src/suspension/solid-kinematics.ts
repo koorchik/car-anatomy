@@ -32,6 +32,11 @@ const STEP_M = 0.01;
  *  assembly (a crossed Watt rocker, a shackle over its dead point) lies a good part of a radian away. */
 const JUMP_M = 0.005;
 const JUMP_RAD = 0.1;
+/** Iterations a step may take before the walk halves it, and the shortest step it halves down to, m. A step of the
+ *  templates takes up to 6. Near a shackle's dead point a leaf axle converges ever more slowly, and past it there is no
+ *  pose: a short shackle on a well-arched leaf reaches it in droop (a 60 mm shackle on 90 mm of arch at about −90 mm). */
+const STEP_ITERATIONS = 40;
+const MIN_STEP_M = 0.0005;
 const X_AXIS: Vec3 = [1, 0, 0];
 
 const travelText = (zL: number, zR: number): string => `${(zL * 1000).toFixed(0)} / ${(zR * 1000).toFixed(0)} mm of travel`;
@@ -135,6 +140,7 @@ export class SolidAxle {
   private readonly q = new Float64Array(3);
   private readonly s = new Float64Array(3);
   private readonly predicted = new Float64Array(AXLE_STATE_SIZE);
+  private readonly before = new Float64Array(AXLE_STATE_SIZE);
   private readonly slopes: Slopes = {
     tanBeta: 0, tanThetaCP: 0, tanThetaWC: 0, camberGain: 0, bumpSteer: 0, mrSpring: 0, mrDamper: 0,
   };
@@ -166,9 +172,10 @@ export class SolidAxle {
   }
 
   /**
-   * Walks `state` to the travels `zL`, `zR` in steps of at most 10 mm, each started by a first-order predictor; throws
-   * when a step does not solve or its corrector lands on another assembly of the linkage (farther from the prediction
-   * than JUMP_M or JUMP_RAD). Returns the last step's result: its iterations and binding.
+   * Walks `state` to the travels `zL`, `zR` in steps of at most 10 mm, each started by a first-order predictor. A step
+   * whose corrector does not converge in STEP_ITERATIONS, or lands on another assembly of the linkage (farther from the
+   * prediction than JUMP_M or JUMP_RAD), is taken again in halves; below MIN_STEP_M the walk throws. Returns the last
+   * step's result: its iterations and binding.
    */
   solve(state: Float64Array, zL: number, zR: number): AxleSolveResult {
     if (!Number.isFinite(zL) || !Number.isFinite(zR)) throw new Error(`The solid axle's travels must be numbers, not ${zL} / ${zR}`);
@@ -177,20 +184,37 @@ export class SolidAxle {
     solver.travels(state, from);
     const zL0 = from[0];
     const zR0 = from[1];
-    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(zL - zL0), Math.abs(zR - zR0)) / STEP_M - 1e-9));
+    const span = Math.max(Math.abs(zL - zL0), Math.abs(zR - zR0));
+    // The walk in shares of the way: done, and the next step.
+    const full = span > STEP_M ? STEP_M / span : 1;
+    let done = 0;
+    let share = full;
     let res: AxleSolveResult | null = null;
-    let atL = zL0;
-    let atR = zR0;
-    for (let k = 1; k <= steps; k++) {
-      const toL = zL0 + ((zL - zL0) * k) / steps;
-      const toR = zR0 + ((zR - zR0) * k) / steps;
+    while (done < 1) {
+      const next = Math.min(1, done + share);
+      const atL = zL0 + (zL - zL0) * done;
+      const atR = zR0 + (zR - zR0) * done;
+      const toL = zL0 + (zL - zL0) * next;
+      const toR = zR0 + (zR - zR0) * next;
+      this.before.set(state);
       this.predict(state, atL, atR, toL - atL, toR - atR);
       this.predicted.set(state);
-      res = solver.solve(state, toL, toR);
-      if (!res.ok) throw new Error(`The solid axle does not solve at ${travelText(toL, toR)} (${res.worst})`);
-      if (this.jumped(this.predicted, state)) throw new Error(`The solid axle jumps to another assembly at ${travelText(toL, toR)}`);
-      atL = toL;
-      atR = toR;
+      res = solver.solve(state, toL, toR, STEP_ITERATIONS);
+      const jumped = res.ok && this.jumped(this.predicted, state);
+      if (!res.ok || jumped) {
+        state.set(this.before);
+        if ((next - done) * span <= MIN_STEP_M) {
+          throw new Error(
+            jumped
+              ? `The solid axle jumps to another assembly at ${travelText(toL, toR)}`
+              : `The solid axle does not solve at ${travelText(toL, toR)}${res.worst ? ` (${res.worst})` : ''}`,
+          );
+        }
+        share = (next - done) / 2;
+        continue;
+      }
+      done = next;
+      share = Math.min(2 * share, full);
     }
     return res!;
   }
