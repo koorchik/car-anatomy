@@ -1,7 +1,7 @@
 // English for the page shell, articles and scene: Ukrainian source text to English.
 export const UI_EN: Record<string, string> = {
   'Інтерактивна база знань про будову автомобіля: 3D-моделі двигунів, які можна крутити, запускати і слухати.': 'An interactive guide to how cars work: 3D engine models you can rotate, start and listen to.',
-  // Page shell (main.ts)
+  // Page shell (src/shell/skeleton.ts, src/ui/engines/markup.ts)
   'Тривимірна модель двигуна. Перетягуй, щоб обертати, коліщатком наближай.': '3D model of the engine. Drag to rotate, scroll to zoom.',
   'Анатомія авто': 'Car Anatomy',
   'Розділи': 'Sections',

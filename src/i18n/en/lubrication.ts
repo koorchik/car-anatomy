@@ -147,7 +147,7 @@ export const LUBRICATION_EN: Record<string, string> = {
   'Тиск оливи і перевантаження за останні 20 секунд': 'Oil pressure and g-load over the last 20 seconds',
   'тиск, бар': 'pressure, bar',
   'олива на сітці': 'oil at the screen',
-  // The page (src/ui/sump/sump-page.ts, src/main.ts)
+  // The page (src/ui/sump/sump-page.ts, src/ui/engines/sump-host.ts)
   'знос незначний': 'wear negligible',
   'сотні кіл': 'hundreds of laps',
   'десятки кіл': 'tens of laps',

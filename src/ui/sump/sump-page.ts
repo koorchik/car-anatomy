@@ -1,7 +1,7 @@
 // The oil-on-track page (#/sump): a real engine in its car laps the test circuit while the oil sloshes in its pan.
 // The lap and the oil are worked out ahead (src/vehicle, src/lubrication) and played back here, so the 3D, the gauges,
 // the comparison table and the tests all see the same numbers. The engine on stage, the sound and the systems layers
-// belong to main.ts and are reached through SumpHost.
+// belong to the engines section (src/ui/engines/sump-host.ts) and are reached through SumpHost.
 
 import { engineById, engineFacts } from '../../data/engines.ts';
 import { DEFAULT_SUMP_CAR, genericCar, SUMP_CARS, sumpCarFor, type SumpCar } from '../../data/sump-cars.ts';
