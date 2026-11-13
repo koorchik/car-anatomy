@@ -219,4 +219,7 @@ export const LUBRICATION_EN: Record<string, string> = {
   'тиск тримається': 'pressure holds',
   'короткі провали до {s} с': 'short dips up to {s} s',
   'голодування: вкладиші витримають {band}': 'starving: the bearings last {band}',
+  // The oil page's keys, for the help of the keys (ui/engines/section.ts).
+  'Поїхали або пауза': 'Go or pause',
+  'На 5 с назад або вперед': '5 s back or forward',
 };

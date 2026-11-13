@@ -118,4 +118,6 @@ export const DYNO_EN: Record<string, string> = {
     'Where the figures come from: the curve comes from the same model as the designer. On an engine\'s page it is brought to the published figures in the article. Below them the curve keeps the model\'s shape; where it reaches them, it runs flat at the published torque or at constant published power, so the peak speeds can differ from the model\'s. In the designer the dyno shows the model itself, and the open rings there show the published figures for comparison.',
   'Тиск у колекторі стенд не міряє, його дає модель. На холостому вона показує 0,1–0,2 бар абсолютного тиску, а справжній двигун тримає 0,3–0,4: блок керування пізнім запалюванням тримає запас моменту, і частину заряду займають залишкові гази. Модель про це не знає.':
     'The dyno does not measure manifold pressure; the model gives it. At idle the model shows 0.1–0.2 bar absolute, where a real engine holds 0.3–0.4: the engine computer retards the spark to keep a torque reserve, and residual gas takes up part of the charge. The model does not know about either.',
+  // What the time control says beside slow motion while the engine is on the dyno (ui/engines/section.ts).
+  'Стенд не працює на {rpm} об/хв': 'The dyno does not run at {rpm} rpm',
 };
