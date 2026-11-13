@@ -247,11 +247,29 @@ describe.each(CORNERS)('the %s in 3D', (_name, resolved) => {
 describe('the corners side by side', () => {
   it('keeps the plain strut’s cards and gives the others their own', () => {
     const models = CORNERS.map(([, r]) => new CornerModel(r)) as Model[];
-    const [plain, dual, , dw, , ml] = models;
+    const [plain, dual, , dw, , ml, , apart] = models;
     expect(plain!.parts['susp.knuckle']!.text).not.toBe(dw!.parts['susp.knuckle']!.text);
     expect(dw!.parts['susp.knuckle']!.text).not.toBe(ml!.parts['susp.knuckle']!.text);
     expect(dual!.parts['susp.strut']!.text).not.toBe(plain!.parts['susp.strut']!.text);
     expect(dw!.parts['susp.spring']!.text).not.toBe(plain!.parts['susp.spring']!.text);
+    // The coil on a link is not on an arm, and a damper with its coil apart has none wound round it.
+    expect(ml!.parts['susp.spring']!.text).not.toBe(dw!.parts['susp.spring']!.text);
+    expect(apart!.parts['susp.damper']!.text).not.toBe(dw!.parts['susp.damper']!.text);
     for (const m of models) m.dispose();
+  });
+
+  it('says nothing of steering on a wheel that does not steer, nor of a gearbox at a driven rear wheel', () => {
+    for (const [name, resolved] of CORNERS) {
+      if (resolved.axle.spec.linkage.rods.some((r) => r.steer)) continue;
+      const model = new CornerModel(resolved);
+      for (const view of ['solid', 'xray', 'mechanism'] as const) {
+        model.setView(view);
+        for (const key of shownKeys(model.group)) {
+          const card = model.parts[key]!;
+          expect(`${card.name}. ${card.text}`, `${name}: ${key}`).not.toMatch(/керм|Поворотний|коробк/);
+        }
+      }
+      model.dispose();
+    }
   });
 });

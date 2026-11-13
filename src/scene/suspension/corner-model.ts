@@ -25,10 +25,10 @@ import type { QuarterOut } from '../../suspension/quarter.ts';
 import type { RoadProfile } from '../../suspension/road.ts';
 import type { ResolvedCorner } from '../../suspension/setup.ts';
 import { POSE_SIZE } from '../../suspension/solve.ts';
-import type { AxleSpec, Vec3 } from '../../suspension/spec.ts';
+import type { Vec3 } from '../../suspension/spec.ts';
 import { tyreVertical } from '../../vehicle/tyre-data.ts';
 import type { PartInfo } from '../parts-info.ts';
-import { cornerParts } from './parts.ts';
+import { cornerParts, isCoilover } from './parts.ts';
 import { armTo, Bellows, boss, knuckleGeometry, lathe, latheAlong, ringProfile, rodBetween, toScene, tyreProfile, type KnuckleEnd } from './geometry.ts';
 import { linkBody, strutBody } from './corner-body.ts';
 import { DamperUnit, LoneSpring } from './damper-unit.ts';
@@ -281,7 +281,7 @@ export class CornerModel {
     };
     const damperWheel = spec.damper.wheel;
     const shortest = this.axle.value('damperLen', this.axle.table.travel0 + (this.axle.table.n - 1) * this.axle.table.step) * 10;
-    const coilOnUnit = strut ? spec.spring.wheel === 'strut' : sameMount(spec);
+    const coilOnUnit = strut ? spec.spring.wheel === 'strut' : isCoilover(spec);
     if (strut) {
       this.top0 = toScene(strut.top);
       this.lower0 = toScene(strut.lower);
@@ -1050,10 +1050,3 @@ export class CornerModel {
   }
 }
 
-/** Whether the spring and the damper sit on the same points: a coilover. */
-function sameMount(spec: AxleSpec): boolean {
-  const s = spec.spring;
-  const d = spec.damper;
-  const same = (a: Vec3 | 'strut', b: Vec3 | 'strut'): boolean => (a === 'strut' || b === 'strut' ? a === b : a.every((x, i) => Math.abs(x - b[i]!) < 1e-9));
-  return same(s.body, d.body) && same(s.wheel, d.wheel) && (s.on ?? null) === (d.on ?? null);
-}
