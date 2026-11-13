@@ -7,8 +7,9 @@
 //   [ M + h·C   Bᵀ ] [ φ̈ ]   [ f(φ, φ̇) ]
 //   [ B         0  ] [ −μ ] = [ r       ]        φ̇ ← φ̇ + h·φ̈,   φ ← φ + h·φ̇   (symplectic Euler)
 //
-// f: external torques on the members, springs, the spin loss and the slipping elements; C: their slopes in φ̇
-// (damper damping, spin loss, the Stribeck slope of a slipping clutch). B: rows of the locked elements and of the
+// f: external torques on the members, springs, the spin loss, the torque-proportional losses (gear meshes, final
+// drive) and the slipping elements; C: their slopes in φ̇ (damper damping, the losses' fade at rest, the Stribeck
+// slope of a slipping clutch). B: rows of the locked elements and of the
 // members held at a set speed; μ: their torques. Springs stay explicit, so they keep their energy; damping is
 // implicit, so a stiff viscous law cannot shake a long step apart.
 //
@@ -20,6 +21,11 @@
 //
 // The KKT system is factorised on every pass: C changes with every slipping element, and the sizes are tiny (a
 // dozen coordinates, a handful of rows).
+//
+// The halfshaft springs end on the wheels, which the chassis side integrates (src/vehicle/wheel.ts): before a step
+// the caller writes the wheel angles and speeds into anchorAngle and anchorSpeed, and after it reads springApplied,
+// the exact torque each spring used in the step, implicit damping included. The wheel gets that torque and the side
+// gear its opposite, so the momentum crossing the port is the same on both sides.
 
 import { DOG, type DrivetrainCore, FRICTION, ONEWAY, SYNCHRO } from './core.ts';
 import { BELL_HOUSING_C, DISC_COOLING_S, LOCK_SLIP, SPIN_LOSS_FADE, SYNC_WINDOW, stribeckMu, stribeckSlope } from './elements.ts';
@@ -77,6 +83,13 @@ export class DrivetrainSolver {
   readonly energy: Float64Array;
   /** Temperature of what the element heats, °C (elements with a heat capacity). */
   readonly temperature: Float64Array;
+  /** Angle and speed of what anchored springs end on (the wheels), rad and rad/s; the caller writes them. */
+  readonly anchorAngle: Float64Array;
+  readonly anchorSpeed: Float64Array;
+  /** Torque each spring passed to its b end (an anchor: the wheel) in the last step, implicit damping included, N·m. */
+  readonly springApplied: Float64Array;
+  /** Energy the spin loss and the torque-proportional losses have taken, J, cumulative. */
+  lossEnergy = 0;
   /** Events of the last steps; the reader empties it. */
   events: DrivetrainEvent[] = [];
   /** Simulated time, s. */
@@ -108,6 +121,10 @@ export class DrivetrainSolver {
   private readonly Sp: Float64Array;
   private readonly impulse: Float64Array;
   private readonly impact: Float64Array;
+  /** Magnitude of each torque-proportional loss for this step, N·m, and the torque it put on its member. */
+  private readonly lossMag: Float64Array;
+  private readonly lossApplied: Float64Array;
+  private dragApplied = 0;
   private rows = 0;
 
   constructor(core: DrivetrainCore) {
@@ -127,6 +144,11 @@ export class DrivetrainSolver {
     this.slip = new Float64Array(ne);
     this.energy = new Float64Array(ne);
     this.temperature = new Float64Array(ne).fill(BELL_HOUSING_C);
+    this.anchorAngle = new Float64Array(core.anchorSlots);
+    this.anchorSpeed = new Float64Array(core.anchorSlots);
+    this.springApplied = new Float64Array(core.springs.ids.length);
+    this.lossMag = new Float64Array(core.losses.length);
+    this.lossApplied = new Float64Array(core.losses.length);
     this.A = new Float64Array(n * n);
     this.f = new Float64Array(n);
     this.z = new Float64Array(n);
@@ -162,15 +184,22 @@ export class DrivetrainSolver {
     return this.dotRow(this.core.P, i, this.phi);
   }
 
-  /** Twist of a spring, rad. */
+  /** Twist of a spring, rad: member a against member b or the anchor. */
   springTwist(j: number): number {
-    return this.dotRow(this.core.springs.rows, j, this.phi);
+    const slot = this.core.springs.anchor[j]!;
+    return this.dotRow(this.core.springs.rows, j, this.phi) - (slot >= 0 ? this.anchorAngle[slot]! : 0);
   }
 
-  /** Torque a spring puts on its member b (what it passes on), N·m. */
+  /** Twist rate of a spring, rad/s. */
+  springRate(j: number): number {
+    const slot = this.core.springs.anchor[j]!;
+    return this.dotRow(this.core.springs.rows, j, this.phiDot) - (slot >= 0 ? this.anchorSpeed[slot]! : 0);
+  }
+
+  /** Torque a spring puts on its member b (what it passes on) in the present state, N·m. */
   springTorque(j: number): number {
     const { springs } = this.core;
-    return springs.stiffness[j]! * this.springTwist(j) + springs.damping[j]! * this.dotRow(springs.rows, j, this.phiDot);
+    return springs.stiffness[j]! * this.springTwist(j) + springs.damping[j]! * this.springRate(j);
   }
 
   /** Kinetic energy of the whole drivetrain, J. */
@@ -193,6 +222,13 @@ export class DrivetrainSolver {
     const E = core.elements;
     const ne = E.ids.length;
     const { cls, crossed } = this;
+
+    // 0. Differentials take their capacity from the torque on the case (the two halfshafts) at the start of the step.
+    const D = core.diffs;
+    for (let d = 0; d < D.element.length; d++) {
+      const t = this.springTorque(D.left[d]!) + this.springTorque(D.right[d]!);
+      this.command[D.element[d]!] = (D.preload[d]! + (t >= 0 ? D.drive[d]! : D.coast[d]!) * Math.abs(t)) / 2;
+    }
 
     // 1. Which elements hold, slip, or are offered the lock this step.
     for (let e = 0; e < ne; e++) {
@@ -219,6 +255,23 @@ export class DrivetrainSolver {
       this.released[e] = 0;
       this.heat[e] = 0;
       if (c === SLIP && Math.abs(dw) > 1e-9) this.slipDir[e] = Math.sign(dw);
+    }
+
+    // Torque-proportional losses: the share of the gear the locks select, on the torque the source springs carry now.
+    for (let l = 0; l < core.losses.length; l++) {
+      const L = core.losses[l]!;
+      let share = L.share;
+      for (const st of L.states) {
+        let all = true;
+        for (let k = 0; k < st.elements.length; k++) if (cls[st.elements[k]!] !== LOCKED) all = false;
+        if (all) {
+          share = st.share;
+          break;
+        }
+      }
+      let src = 0;
+      if (share !== 0) for (let k = 0; k < L.springs.length; k++) src += L.gains[k]! * this.springTorque(L.springs[k]!);
+      this.lossMag[l] = share * Math.abs(src);
     }
 
     // 2. Solve; let go the most overloaded lock and solve again, up to MAX_PASSES times.
@@ -249,6 +302,12 @@ export class DrivetrainSolver {
       this.released[worst] = 1;
     }
 
+    // What each spring passed on with the final accelerations: the explicit stiffness and the implicit damping.
+    const S = core.springs;
+    for (let j = 0; j < S.ids.length; j++) {
+      this.springApplied[j] = S.stiffness[j]! * this.springTwist(j) + S.damping[j]! * (this.springRate(j) + h * this.dotRow(S.rows, j, this.acc));
+    }
+
     // 3. Newly locked elements: project the speeds onto the locks (an inelastic impact for a dog).
     let fresh = false;
     for (let e = 0; e < ne; e++) if (cls[e] === LOCKED && this.state[e] !== LOCKED) fresh = true;
@@ -262,6 +321,8 @@ export class DrivetrainSolver {
       this.phi[k]! += h * this.phiDot[k]!;
     }
     this.time += h;
+    if (core.drag.member >= 0) this.lossEnergy -= h * this.dragApplied * this.dotRow(core.P, core.drag.member, this.phiDot);
+    for (let l = 0; l < core.losses.length; l++) this.lossEnergy -= h * this.lossApplied[l]! * this.dotRow(core.P, core.losses[l]!.member, this.phiDot);
 
     // 5. Element readouts, slip work, sign changes, heat.
     let row = 0;
@@ -323,10 +384,10 @@ export class DrivetrainSolver {
       const t = this.memberTorque[i]!;
       if (t !== 0) for (let k = 0; k < n; k++) f[k]! += P[i * n + k]! * t;
     }
-    // Springs: explicit stiffness, implicit damping.
+    // Springs: explicit stiffness, implicit damping; an anchored one against its outside angle and speed.
     const S = core.springs;
     for (let j = 0; j < S.ids.length; j++) {
-      const t = -(S.stiffness[j]! * this.dotRow(S.rows, j, this.phi) + S.damping[j]! * this.dotRow(S.rows, j, v));
+      const t = -(S.stiffness[j]! * this.springTwist(j) + S.damping[j]! * this.springRate(j));
       this.addRank1(S.rows, j, t, h * S.damping[j]!);
     }
     // Spin loss at the input: a·sat(ω/ω₀) + b·ω against the rotation.
@@ -335,7 +396,20 @@ export class DrivetrainSolver {
       const w = this.dotRow(P, d.member, v);
       const fade = Math.abs(w) < SPIN_LOSS_FADE;
       const t = -((fade ? w / SPIN_LOSS_FADE : Math.sign(w)) * d.a + d.b * w);
+      this.dragApplied = t;
       this.addRank1(P, d.member, t, h * (d.b + (fade ? d.a / SPIN_LOSS_FADE : 0)));
+    }
+    // Torque-proportional losses against the rotation of their member, fading out at rest like the spin loss.
+    for (let l = 0; l < core.losses.length; l++) {
+      const mag = this.lossMag[l]!;
+      this.lossApplied[l] = 0;
+      if (mag === 0) continue;
+      const m = core.losses[l]!.member;
+      const w = this.dotRow(P, m, v);
+      const fade = Math.abs(w) < SPIN_LOSS_FADE;
+      const t = -(fade ? w / SPIN_LOSS_FADE : Math.sign(w)) * mag;
+      this.lossApplied[l] = t;
+      this.addRank1(P, m, t, fade ? (h * mag) / SPIN_LOSS_FADE : 0);
     }
     // Slipping elements: their kinetic torque, and the Stribeck slope (a falling one capped, see above).
     let falling = 0;

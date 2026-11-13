@@ -5,7 +5,9 @@
 //
 // The pieces come as drafts in member space: members with their inertia, rigid links, springs, elements. Merging
 // drafts and taking the null space of all links once gives base coordinates for the whole drivetrain, ω = P·φ̇, with
-// the mass matrix M = Pᵀ·diag(J)·P constant for good. Stage K2b adds the axle as one more draft.
+// the mass matrix M = Pᵀ·diag(J)·P constant for good. The axle is one more draft (final-drive.ts): its halfshaft
+// springs end on wheel angles the chassis integrates (anchors), its plate differential takes a capacity from the
+// halfshaft torques, and the gearbox and the final drive lose a share of the torque they carry.
 
 import { DISC_HUB, DRY_STRIBECK, ESTIMATED_SYNCHRO, MANUAL_SPIN_LOSS, clampTorque, plateHeatCapacity } from './elements.ts';
 import { type Matrix, nullSpace } from './linalg.ts';
@@ -31,8 +33,42 @@ export interface DraftSpring {
   id: string;
   a: string;
   b: string | null;
+  /**
+   * With b null: the spring ends on an angle outside the drivetrain, slot `anchor` of the solver's anchorAngle and
+   * anchorSpeed (a wheel: the WheelBus index). What it passes on is the solver's springApplied.
+   */
+  anchor?: number;
   stiffness: number;
   damping: number;
+}
+
+/**
+ * A differential's friction element whose capacity follows the torque on the case, re-read every step from the two
+ * halfshaft springs: T_high − T_low = preload + S·|T_case|, so the element between the side gears holds half of it
+ * (spec.ts, the plate differential).
+ */
+export interface DraftDiff {
+  element: string;
+  /** Halfshaft springs of the left and right outputs. */
+  left: string;
+  right: string;
+  /** Locking value S on drive (case torque forward) and on coast. */
+  lockDrive: number;
+  lockCoast: number;
+  /** Breakaway torque with the case held (one wheel turned, the other turns back), N·m. */
+  preloadNm: number;
+}
+
+/**
+ * A loss proportional to the torque a part carries: −share·|Σ gain·T_spring| against the turning of `member`, so it
+ * brakes on drive and on coast alike (the gearbox plan, losses). `states` makes the share depend on which shift
+ * elements are locked (a gearbox: 1 − η of the gear); without them the share is fixed (the final drive).
+ */
+export interface DraftLoss {
+  member: string;
+  source: Array<[string, number]>;
+  share: number;
+  states?: Array<{ elements: string[]; share: number }>;
 }
 
 export type DraftElement =
@@ -52,6 +88,8 @@ export interface CoreDraft {
   drag: { member: string; loss: SpinLossDef } | null;
   /** Gear meshes for the sound and the reports: member and teeth on each side. */
   meshes: Array<{ a: string; teethA: number; b: string; teethB: number }>;
+  diffs?: DraftDiff[];
+  losses?: DraftLoss[];
 }
 
 export interface CoreSprings {
@@ -60,6 +98,27 @@ export interface CoreSprings {
   rows: Float64Array;
   stiffness: Float64Array;
   damping: Float64Array;
+  /** Anchor slot of each spring's b end, −1 for a member or the case. */
+  anchor: Int32Array;
+}
+
+/** Differentials with a torque-dependent capacity (DraftDiff), as indices. */
+export interface CoreDiffs {
+  element: Int32Array;
+  left: Int32Array;
+  right: Int32Array;
+  drive: Float64Array;
+  coast: Float64Array;
+  preload: Float64Array;
+}
+
+/** A DraftLoss as indices: the state table lists element indices. */
+export interface CoreLoss {
+  member: number;
+  springs: Int32Array;
+  gains: Float64Array;
+  share: number;
+  states: Array<{ elements: Int32Array; share: number }>;
 }
 
 export interface CoreElements {
@@ -100,9 +159,13 @@ export interface DrivetrainCore {
   /** Spin loss a + b·ω at a member; member −1 for none. */
   drag: { member: number; a: number; b: number };
   meshes: { a: Int32Array; teethA: Float64Array; b: Int32Array; teethB: Float64Array };
+  /** Number of outside angles springs may end on (the wheels: 4), 0 without any. */
+  anchorSlots: number;
+  diffs: CoreDiffs;
+  losses: CoreLoss[];
 }
 
-const emptyDraft = (): CoreDraft => ({ members: [], links: [], springs: [], elements: [], prefer: [], drag: null, meshes: [] });
+const emptyDraft = (): CoreDraft => ({ members: [], links: [], springs: [], elements: [], prefer: [], drag: null, meshes: [], diffs: [], losses: [] });
 
 /** One draft of several: members, links, springs and elements side by side; the first drag wins. */
 export function mergeDrafts(...drafts: CoreDraft[]): CoreDraft {
@@ -114,6 +177,8 @@ export function mergeDrafts(...drafts: CoreDraft[]): CoreDraft {
     out.elements.push(...d.elements);
     out.prefer.push(...d.prefer);
     out.meshes.push(...d.meshes);
+    out.diffs!.push(...(d.diffs ?? []));
+    out.losses!.push(...(d.losses ?? []));
     out.drag ??= d.drag;
   }
   return out;
@@ -265,8 +330,19 @@ export function buildCore(draft: CoreDraft): DrivetrainCore {
     rows: new Float64Array(draft.springs.length * n),
     stiffness: Float64Array.from(draft.springs, (s) => s.stiffness),
     damping: Float64Array.from(draft.springs, (s) => s.damping),
+    anchor: Int32Array.from(draft.springs, (s) => s.anchor ?? -1),
   };
-  draft.springs.forEach((s, j) => springs.rows.set(relRow(s.a, s.b, `spring ${s.id}`), j * n));
+  draft.springs.forEach((s, j) => {
+    if (s.anchor !== undefined && (s.b !== null || !(Number.isInteger(s.anchor) && s.anchor >= 0))) {
+      throw new Error(`drivetrain: spring ${s.id} needs b null and a slot index to end on an anchor`);
+    }
+    springs.rows.set(relRow(s.a, s.b, `spring ${s.id}`), j * n);
+  });
+  const springAt = (id: string, what: string): number => {
+    const j = springs.ids.indexOf(id);
+    if (j < 0) throw new Error(`drivetrain: ${what} names unknown spring ${id}`);
+    return j;
+  };
 
   const ne = draft.elements.length;
   const elements: CoreElements = {
@@ -320,6 +396,32 @@ export function buildCore(draft: CoreDraft): DrivetrainCore {
     }
   });
 
+  const elementAt = (id: string, what: string): number => {
+    const j = elements.ids.indexOf(id);
+    if (j < 0) throw new Error(`drivetrain: ${what} names unknown element ${id}`);
+    return j;
+  };
+  const diffs = draft.diffs ?? [];
+  for (const d of diffs) {
+    if (draft.elements[elementAt(d.element, 'a differential')]!.kind !== 'friction') throw new Error(`drivetrain: differential ${d.element} is not a friction element`);
+  }
+  const coreDiffs: CoreDiffs = {
+    element: Int32Array.from(diffs, (d) => elementAt(d.element, 'a differential')),
+    left: Int32Array.from(diffs, (d) => springAt(d.left, `differential ${d.element}`)),
+    right: Int32Array.from(diffs, (d) => springAt(d.right, `differential ${d.element}`)),
+    drive: Float64Array.from(diffs, (d) => d.lockDrive),
+    coast: Float64Array.from(diffs, (d) => d.lockCoast),
+    preload: Float64Array.from(diffs, (d) => d.preloadNm),
+  };
+  const losses: CoreLoss[] = (draft.losses ?? []).map((l) => ({
+    member: at(l.member, 'a loss'),
+    springs: Int32Array.from(l.source, ([id]) => springAt(id, `the loss at ${l.member}`)),
+    gains: Float64Array.from(l.source, ([, g]) => g),
+    share: l.share,
+    states: (l.states ?? []).map((st) => ({ elements: Int32Array.from(st.elements, (id) => elementAt(id, `the loss at ${l.member}`)), share: st.share })),
+  }));
+  const anchorSlots = draft.springs.reduce((m, s) => Math.max(m, s.anchor === undefined ? 0 : s.anchor + 1), 0);
+
   return {
     n,
     coords: free.map((i) => members[i]!),
@@ -337,15 +439,32 @@ export function buildCore(draft: CoreDraft): DrivetrainCore {
       b: Int32Array.from(draft.meshes, (m) => at(m.b, 'a mesh')),
       teethB: Float64Array.from(draft.meshes, (m) => m.teethB),
     },
+    anchorSlots,
+    diffs: coreDiffs,
+    losses,
   };
+}
+
+/**
+ * The gearbox's mesh losses at its input: in each gear, 1 − η of its power path (StateInfo.efficiency: η_m per
+ * loaded mesh) times the torque the damper spring passes on. The direct gear loses nothing; neutral and a gear
+ * half-engaged lose nothing either, since no state matches. Needs the launch draft's damper.
+ */
+export function gearLossDraft(box: Gearbox): CoreDraft {
+  const d = emptyDraft();
+  const states = box.states
+    .filter((s) => s.kind === 'gear' && s.efficiency !== null && s.efficiency < 1)
+    .map((s) => ({ elements: s.closed, share: 1 - s.efficiency! }));
+  if (states.length) d.losses!.push({ member: box.spec.input, source: [[DAMPER, 1]], share: 0, states });
+  return d;
 }
 
 /** What hangs on the gearbox output before the axle exists (stage K2a). */
 export type OutputStub = { kind: 'brake'; capacityNm: number } | { kind: 'free' };
 
-/** The whole drivetrain of stage K2a: launch parts, the gearbox and an output stub. */
+/** The drivetrain of stage K2a: launch parts, the gearbox with its mesh losses and an output stub. */
 export function drivetrainCore(box: Gearbox, launch: LaunchParts, output: OutputStub = { kind: 'free' }): DrivetrainCore {
-  const parts = [launchDraft(box.spec.input, launch), gearboxDraft(box)];
+  const parts = [launchDraft(box.spec.input, launch), gearboxDraft(box), gearLossDraft(box)];
   if (output.kind === 'brake') parts.push(brakeDraft(box.spec.output, output.capacityNm));
   return buildCore(mergeDrafts(...parts));
 }
