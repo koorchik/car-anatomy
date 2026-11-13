@@ -19,7 +19,9 @@ const walk = (dir: string): string[] =>
   });
 // The catalogue is written in the source language and has its own English files.
 const SOURCE_DATA = ['src/data/engines.ts', 'src/data/engine-variants.ts'];
-const files = walk('src').filter((f) => !f.startsWith('src/i18n/') && !SOURCE_DATA.includes(f));
+// So are the gearbox pages, one data file per page with its English in src/i18n/en/gearbox-<page>.ts.
+const SOURCE_DATA_DIRS = ['src/data/gearboxes/'];
+const files = walk('src').filter((f) => !f.startsWith('src/i18n/') && !SOURCE_DATA.includes(f) && !SOURCE_DATA_DIRS.some((d) => f.startsWith(d)));
 const CALL = /\bt\(\s*(['"])((?:\\.|(?!\1).)*)\1/gs;
 const unescape = (text: string): string => text.replace(/\\(['"\\])/g, '$1').replace(/\\n/g, '\n');
 const ENGLISH = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN };
@@ -115,6 +117,20 @@ describe('the site running in English', () => {
         clean(group.title + group.intro, group.id);
         for (const param of group.params) clean(param.label + param.help, param.key);
       }
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+  });
+});
+
+describe('the gearbox catalogue running in English', () => {
+  it('has no Ukrainian left in any record', async () => {
+    vi.resetModules();
+    vi.stubGlobal('location', { search: '?lang=en' });
+    try {
+      const { ALL_GEARBOXES } = await import('../src/data/gearboxes.ts');
+      for (const record of ALL_GEARBOXES) expect(CYRILLIC.test(JSON.stringify(record)), record.id).toBe(false);
     } finally {
       vi.unstubAllGlobals();
       vi.resetModules();
