@@ -132,6 +132,22 @@ export interface GearboxSpec {
   spinLoss?: SpinLossDef;
   /** Mesh efficiency per tooth contact, rolling power. */
   meshEfficiency: number;
+  /** Where the shift sleeves sit along their shaft, for the 3D and the shift lever. Layouts without sleeves leave it out. */
+  sleeves?: SleevePlace[];
+}
+
+/** A shift sleeve on its shaft: its hub sits still at `z`, the sleeve slides toward the gear on either side. */
+export interface SleevePlace {
+  id: string;
+  /** Middle of the hub, mm behind the gearbox front face (like GearDef.z). */
+  z: number;
+  /** Hub and sleeve width, mm. */
+  width: number;
+  /** Space between the hub and the gear face on each side, for the dog ring and the blocker ring, mm. */
+  gap: number;
+  /** Element engaged by pushing the sleeve forward (toward the engine) and backward; null engages nothing. */
+  front: string | null;
+  back: string | null;
 }
 
 export type LaunchDef =

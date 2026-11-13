@@ -9,7 +9,7 @@
 // follows from the shared centre distance, its module, its teeth and its profile shift.
 
 import { centreDistance, gearGeometry, helixForCentre } from '../gear-geometry.ts';
-import type { AxisDef, ElementDef, GearboxSpec, GearDef, GearState, MemberDef, MeshDef } from '../spec.ts';
+import type { AxisDef, ElementDef, GearboxSpec, GearDef, GearState, MemberDef, MeshDef, SleevePlace } from '../spec.ts';
 
 export interface PairDesc {
   /** Driving and driven teeth: input gear and countershaft gear for the main pair, countershaft gear and loose output-shaft gear for a speed. */
@@ -126,6 +126,7 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
   const gears: GearDef[] = [];
   const meshes: MeshDef[] = [];
   const elements: ElementDef[] = [];
+  const sleeves: SleevePlace[] = [];
 
   // Along the shafts: the main pair, then each sleeve with its front gear, the sleeve itself and its back gear.
   let z = FRONT_WALL;
@@ -198,7 +199,11 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
     if (!direct) z += GAP;
     if (s.front !== null) addSpeed(s.front);
     z += CONE;
-    place(desc.sleeveWidth);
+    const middle = place(desc.sleeveWidth);
+    sleeves.push({
+      id: s.id, z: middle, width: desc.sleeveWidth, gap: CONE,
+      front: s.front === null ? null : elementId(s.front), back: s.back === null ? null : elementId(s.back),
+    });
     z += CONE;
     if (s.back !== null) addSpeed(s.back);
   });
@@ -221,6 +226,7 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
     input: 'input',
     output: 'output',
     meshEfficiency: desc.meshEfficiency,
+    sleeves,
   };
 }
 
