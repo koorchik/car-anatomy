@@ -3507,3 +3507,21 @@ body.dyno-mode {
     display: none;
   }
 }
+
+/* The force arrows' switch shares a column with "exaggerate vibration". It is on the page before the arrows' code and
+ * their card's styles (src/ui/balance-panel.css) have loaded, and so is the article's button that shows them. */
+.tool-checks {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Two switches stacked fit the height of the other tools. On a phone the switch is alone and keeps its full height. */
+@media (min-width: 861px) {
+  .tool-checks .check {
+    height: 26px;
+  }
+}
+
+.forces-show {
+  margin-top: 8px;
+}

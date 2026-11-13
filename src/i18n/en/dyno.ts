@@ -1,16 +1,6 @@
 // English for the engine dyno and the published figures beside the designer's own.
 
 export const DYNO_EN: Record<string, string> = {
-  'Цифри вище рахує модель, тому кожна зміна дає фізичну різницю.': 'The figures above come from the model, so every change makes a physical difference.',
-  'Гальмо стенда': 'Dyno absorber',
-  'Ротор, який крутить двигун, гальмують вихрові струми або вода. Корпус гальма підвішено на опорах, тому момент, з яким ротор тягне його за собою, і є моментом двигуна. Уся потужність двигуна стає тут теплом в охолодній воді.':
-    'The rotor the engine turns is braked by eddy currents or by water. The absorber casing hangs on bearings, so the torque with which the rotor drags it along is the engine\'s torque. All of the engine\'s power becomes heat in the cooling water here.',
-  'Карданний вал стенда': 'Dyno driveshaft',
-  'З’єднує маховик із ротором гальма. Шарніри прощають невелике зміщення осей, а сам вал витримує весь момент двигуна.':
-    'Connects the flywheel to the absorber rotor. Its joints forgive a small misalignment, and the shaft carries all of the engine\'s torque.',
-  'Тензодатчик': 'Load cell',
-  'Корпус гальма спирається важелем на датчик сили. Сила, помножена на довжину важеля, дає момент. Так стенд і міряє двигун.':
-    'The absorber casing rests on a force sensor through a lever. Force times the lever length gives the torque. That is how the dyno measures the engine.',
   'Вихрострумове': 'Eddy-current',
   'Гідравлічне': 'Water',
   'Двигун зламався на {rpm} об/хв.': 'The engine broke at {rpm} rpm.',
@@ -20,7 +10,6 @@ export const DYNO_EN: Record<string, string> = {
   'Двигун більше не тягне на {rpm} об/хв.': 'The engine stops pulling at {rpm} rpm.',
   'Момент на стенді за обертами': 'Torque on the dyno by engine speed',
   'Потужність на стенді за обертами': 'Power on the dyno by engine speed',
-  'На стенд': 'On the dyno',
   'Динамометричний стенд': 'Engine dynamometer',
   'Графік': 'Chart',
   'Покази': 'Readings',
@@ -118,6 +107,4 @@ export const DYNO_EN: Record<string, string> = {
     'Where the figures come from: the curve comes from the same model as the designer. On an engine\'s page it is brought to the published figures in the article. Below them the curve keeps the model\'s shape; where it reaches them, it runs flat at the published torque or at constant published power, so the peak speeds can differ from the model\'s. In the designer the dyno shows the model itself, and the open rings there show the published figures for comparison.',
   'Тиск у колекторі стенд не міряє, його дає модель. На холостому вона показує 0,1–0,2 бар абсолютного тиску, а справжній двигун тримає 0,3–0,4: блок керування пізнім запалюванням тримає запас моменту, і частину заряду займають залишкові гази. Модель про це не знає.':
     'The dyno does not measure manifold pressure; the model gives it. At idle the model shows 0.1–0.2 bar absolute, where a real engine holds 0.3–0.4: the engine computer retards the spark to keep a torque reserve, and residual gas takes up part of the charge. The model does not know about either.',
-  // What the time control says beside slow motion while the engine is on the dyno (ui/engines/section.ts).
-  'Стенд не працює на {rpm} об/хв': 'The dyno does not run at {rpm} rpm',
 };

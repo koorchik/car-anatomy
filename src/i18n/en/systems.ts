@@ -1,38 +1,5 @@
 // English for the engine systems layers and their designer controls: Ukrainian source text to English.
 export const SYSTEMS_EN: Record<string, string> = {
-  // Hardware names (src/designer/systems.ts)
-  'карбюратор': 'carburetor',
-  'механічне безперервне упорскування': 'mechanical continuous injection',
-  'упорскування у впускні канали': 'port injection',
-  'безпосереднє упорскування': 'direct injection',
-  'упорскування в канали й у циліндри': 'port and direct injection',
-  'дизель із форкамерою': 'prechamber diesel',
-  'дизель із насосом високого тиску': 'diesel with an injection pump',
-  'насос-форсунки': 'unit injectors',
-  'Common Rail': 'common rail',
-  'рідинне': 'liquid',
-  'повітряне, вентилятором': 'air, by a fan',
-  'повітряне, набігаючим потоком': 'air, by ram air',
-  'теплообмінник у рідину': 'oil-to-coolant heat exchanger',
-  'радіатор у потоці повітря': 'air-cooled oil cooler',
-  'котушка на кожній свічці': 'coil-on-plug',
-  'холоста іскра': 'wasted spark',
-  'розподільник': 'distributor',
-  'на носку колінвала': 'on the crank nose',
-  'у піддоні, ланцюгом': 'in the pan, chain-driven',
-  'у піддоні, валиком': 'in the pan, shaft-driven',
-  // Article
-  'Подача палива': 'Fuel delivery',
-  'Охолодження': 'Cooling',
-  'систему живлення': 'fuel system',
-  'тип охолодження': 'cooling type',
-  'оливний радіатор': 'oil cooler',
-  'охолодження поршнів оливою': 'piston cooling jets',
-  'кількість свічок': 'number of spark plugs',
-  'систему запалювання': 'ignition system',
-  'свічки розжарювання': 'glow plugs',
-  'привід оливного насоса': 'oil pump drive',
-  'оливний фільтр': 'oil filter',
   // Designer controls
   'Яке саме обладнання подає паливо: карбюратор, форсунки в каналах чи в циліндрах, насос-форсунки дизеля. Видно в шарі палива в рентгені. Модель потужності знає лише, чи упорскування безпосереднє.':
     'Which hardware delivers the fuel: a carburetor, injectors in the ports or in the cylinders, diesel unit injectors. Shown in the fuel layer of the X-ray. The power model only knows whether injection is direct.',
@@ -124,24 +91,6 @@ export const SYSTEMS_EN: Record<string, string> = {
   'Оливна форсунка ротора': 'Rotor oil nozzle',
   'Сопло дозувального насоса. На 13B одне стоїть у впускному каналі, друге вгорі корпусу ротора: олива потрапляє до ущільнень разом із сумішшю.':
     'A nozzle of the metering pump. On the 13B one sits in the intake port and another at the top of the rotor housing: the oil reaches the seals with the mixture.',
-  // Systems switches and readout (src/ui/systems-view.ts)
-  'Олива': 'Oil',
-  'Шлях оливи: насос, фільтр, магістраль, підшипники, головка': 'Oil path: pump, filter, gallery, bearings, head',
-  'Системи': 'Systems',
-  'Шари систем у рентгені': 'System layers in the X-ray',
-  'Стан систем двигуна': 'Engine systems status',
-  'Холодний пуск': 'Cold start',
-  'Прогріти': 'Warm up',
-  'Прогрів показано у {n} разів швидше': 'Warm-up shown {n} times faster',
-  'Шари систем видно в рентгені': 'System layers show in the X-ray',
-  'Двигун не заведено: показано холостий хід': 'Engine not started: showing idle',
-  'Сповільнено: як на холостому ходу': 'Slowed down: as at idle',
-  'Тиск оливи {p} бар': 'Oil pressure {p} bar',
-  'олива {t} °C': 'oil {t} °C',
-  'Редукційний клапан відкритий': 'Relief valve open',
-  'Форсунки поршнів працюють': 'Piston jets spraying',
-  'Тиск оливи майже нуль': 'Oil pressure almost zero',
-  'Редукційний клапан відкрився': 'Relief valve opened',
   // Coolant layer
   'Насос охолоджувальної рідини': 'Water pump',
   'Відцентровий насос: крильчатка відкидає рідину до стінок і жене її в сорочку блока. Подача росте разом з обертами. Приводить його ремінь від колінвала або ремінь чи ланцюг ГРМ.':
@@ -173,14 +122,6 @@ export const SYSTEMS_EN: Record<string, string> = {
   'Рідина в корпусі ротора': 'Coolant in the rotor housing',
   'У роторного двигуна рідина йде каналами в стінках корпусів роторів і бічних корпусів уздовж усього двигуна. Найгарячіше місце біля свічок, де відбуваються спалахи.':
     'In a rotary engine the coolant runs through passages in the walls of the rotor housings and side housings along the whole engine. The hottest spot is by the plugs, where combustion happens.',
-  'Охолодження: насос, сорочка, термостат, патрубки радіатора': 'Cooling: pump, water jacket, thermostat, radiator hoses',
-  'Рідина {t} °C': 'Coolant {t} °C',
-  'термостат {s} %': 'thermostat {s} %',
-  'Повітряне охолодження · олива {t} °C': 'Air cooling · oil {t} °C',
-  'велике коло: через радіатор': 'radiator circuit: through the radiator',
-  'мале коло: радіатор закритий': 'bypass circuit: radiator shut',
-  'термостат відкривається: частина йде в радіатор': 'thermostat opening: some goes to the radiator',
-  'Перегрів': 'Overheating',
   // Fuel and ignition layer
   'Паливна магістраль': 'Fuel line',
   'Трубка від бака. Електричний насос у баку гонить паливо до двигуна, а надлишок повертається назад. Бака тут не намальовано.':
@@ -239,29 +180,9 @@ export const SYSTEMS_EN: Record<string, string> = {
   'Відстаюча свічка': 'Trailing plug',
   'Верхня свічка роторного двигуна. Вона іскрить на 10–15° пізніше за провідну і допалює суміш у задній частині довгої камери.':
     'The upper plug of a rotary engine. It fires 10-15° after the leading one and burns the mixture at the rear of the long chamber.',
-  'Паливо і запалювання: форсунки, свічки, котушки': 'Fuel and ignition: injectors, plugs, coils',
-  '{deg}° до ВМТ': '{deg}° before TDC',
-  '{deg}° після ВМТ': '{deg}° after TDC',
-  'Карбюратор: потік повітря підхоплює паливо в дифузорі': 'Carburetor: the airflow draws fuel in the venturi',
-  'Безперервне упорскування: форсунки бризкають весь час': 'Continuous injection: the injectors spray all the time',
-  'основне упорскування {a}': 'main injection {a}',
-  'Тиск у рампі {p} бар': 'Rail pressure {p} bar',
-  'пілотне перед ним': 'a pilot before it',
-  'Упорскування': 'Injection',
-  'Іскра': 'Spark',
-  'Упорскування {ms} мс, закінчується за {deg}° до відкриття впускного клапана': 'Injection {ms} ms, ending {deg}° before the intake valve opens',
-  'Упорскування {ms} мс, закінчується за {deg}° до відкриття впускного вікна': 'Injection {ms} ms, ending {deg}° before the intake port opens',
   'Електромагнітний клапан, що бризкає паливо в канал перед впускним вікном. Клапанів у роторного двигуна немає: вікно відкриває і закриває сама грань ротора, яка проходить повз нього. Блок керування рахує, скільки мілісекунд тримати форсунку відкритою.':
     'A solenoid valve that sprays fuel into the runner ahead of the intake port. A rotary has no valves: the rotor face sweeping past opens and closes the port itself. The control unit works out how many milliseconds to hold it open.',
-  'Тиск {p} бар': 'Pressure {p} bar',
-  'упорскування на такті впуску, {ms} мс': 'injection on the intake stroke, {ms} ms',
-  'У канали {share} %, решта в циліндри': 'Ports {share} %, the rest into the cylinders',
-  'Двигун стоїть: палива немає': 'Engine stopped: no fuel',
-  'Свічки розжарювання ввімкнено': 'Glow plugs on',
-  'Провідна свічка {a}, відстаюча {b}': 'Leading plug {a}, trailing {b}',
-  'Іскра {a}': 'Spark {a}',
   // Air layer
-  'Повітря': 'Air',
   'Повітряний фільтр': 'Air filter',
   'Коробка з паперовим фільтром, крізь яку двигун вдихає повітря. Забірний патрубок зазвичай бере холодне повітря подалі від гарячого двигуна.':
     'A box with a paper filter that the engine breathes through. Its snorkel usually draws cool air from away from the hot engine.',
@@ -280,11 +201,4 @@ export const SYSTEMS_EN: Record<string, string> = {
   'Механічний нагнітач': 'Supercharger',
   'Насос, який крутить ремінь від колінвала, нагнітає повітря у впуск. Тиск є вже з низів, але нагнітач забирає частину потужності і гріє повітря.':
     'A pump turned by a belt from the crank forces air into the intake. It gives boost from low rpm, but takes some power and heats the air.',
-  'Повітря: фільтр, дросель, ресивер, патрубки, наддув': 'Air: filter, throttle, plenum, runners, boost',
-  'Повітря {g} г/с': 'Air {g} g/s',
-  'Двигун стоїть: повітря не йде': 'Engine stopped: no air flows',
-  'Наддув {b} бар · після компресора {t2} °C · після інтеркулера {t3} °C': 'Boost {b} bar · after the compressor {t2} °C · after the intercooler {t3} °C',
-  'Дроселя немає: дизелем керує кількість палива': 'No throttle: a diesel is run by the amount of fuel',
-  'Тиск у ресивері {p} бар': 'Plenum pressure {p} bar',
-  'Наддув {b} бар · після компресора {t2} °C': 'Boost {b} bar · after the compressor {t2} °C',
 };

@@ -42,7 +42,7 @@ export class CataloguePage {
     s.showEngine(next, keepCamera);
     // Each catalogue engine starts warm: the usual picture. A cold start is the visitor's own choice.
     s.features.systems.reset('warm');
-    s.features.dyno.setEngine(next, { kind: 'catalogue' });
+    s.features.setDynoEngine(next, { kind: 'catalogue' });
     const spec = s.engine.spec;
     this.renderVariants(spec.id);
     $('engine-title').textContent = spec.title;

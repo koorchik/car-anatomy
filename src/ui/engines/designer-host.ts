@@ -1,9 +1,12 @@
 // The designer page (`#/designer`) inside the engines section: what its DesignerPage asks of the page around it.
+// The designer's chunk starts here (chunks.ts): its code loads the first time the page is opened.
 
 import { t } from '../../i18n/t.ts';
 import { DesignerPage } from '../designer/designer-page.ts';
 import { $ } from './dom.ts';
 import type { EnginesSection } from './section.ts';
+
+export { DesignerPage };
 
 export class DesignerHost {
   readonly page: DesignerPage;
@@ -19,7 +22,7 @@ export class DesignerHost {
         s.showEngine(next, true);
       },
       sameShape(next) {
-        s.features.balance.updateEngine(next);
+        s.features.balance?.updateEngine(next);
       },
       heading: () => {
         this.syncHeading();
@@ -29,14 +32,14 @@ export class DesignerHost {
         s.drive.setEngine(next);
         // Mixture, ignition and boost change the systems' numbers without changing the model.
         s.features.systems.retune(next);
-        s.features.dyno.setEngine(next, { kind: 'designer', design: this.page.current, perf });
+        s.features.setDynoEngine(next, { kind: 'designer', design: this.page.current, perf });
         if (running && !perf.catches) s.drive.stop();
       },
       setTrim(trim) {
         s.drive.setTrim(trim);
       },
       wreck: () => {
-        s.features.dyno.abort('broken');
+        s.features.dyno?.abort('broken');
         s.drive.bang();
         s.drive.setDistress(0);
         s.drive.stop();

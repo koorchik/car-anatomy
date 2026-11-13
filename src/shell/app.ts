@@ -1,6 +1,7 @@
 // The shell: the page's skeleton and its layout, the stage, the frame loop, the address, the keys, the time and the
 // parts' cards. Sections (section.ts) fill the skeleton and draw their pages; the shell hands them the context.
 
+import '../style.css';
 import { locale, switchLocale, type Locale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import { Stage } from '../scene/stage.ts';
@@ -9,6 +10,7 @@ import type { FreezeOptions } from './freeze.ts';
 import { ShellIdle } from './idle.ts';
 import { SHELL_KEYS, ShellKeys } from './keys.ts';
 import { partUi } from './part-ui.ts';
+import type { SectionEntry } from './registry.ts';
 import { router } from './router.ts';
 import type { Route } from './routes.ts';
 import { ShellRuns } from './run-store.ts';
@@ -28,7 +30,9 @@ export class Shell {
   readonly stage: Stage;
   private readonly context: SectionContext;
   private readonly root: HTMLElement;
-  private readonly sections: readonly Section[];
+  private readonly sections: readonly SectionEntry[];
+  /** Each section's code, made once and kept for coming back. */
+  private readonly loaded = new Map<string, Promise<Section>>();
   private readonly elements: SkeletonElements;
   private readonly audio = new ShellAudio();
   private readonly idle = new ShellIdle();
@@ -40,12 +44,14 @@ export class Shell {
   private readonly mounted = new Set<Section>();
   private shown: Section | null = null;
   private route: Route | null = null;
+  /** Counts the addresses gone to, so that a section that loads late does not cover a later one. */
+  private navigation = 0;
   private readonly open: Record<PanelSide, boolean>;
   private wasSmall: boolean;
   private lastFrame = performance.now();
 
   /** Builds the skeleton in `root`. The first section is the home of every address no other section claims. */
-  constructor(root: HTMLElement, sections: readonly Section[]) {
+  constructor(root: HTMLElement, sections: readonly SectionEntry[]) {
     this.root = root;
     this.sections = sections;
     document.documentElement.lang = locale;
@@ -111,10 +117,13 @@ export class Shell {
     window.addEventListener('hashchange', () => this.go(router.current));
   }
 
-  /** Shows the section of the current address and starts the frame loop. */
-  start(): void {
+  /**
+   * Shows the section of the current address and starts the frame loop. The loader has brought that section
+   * alongside the shell's own code.
+   */
+  start(section: Section): void {
     const route = router.current;
-    const section = this.sectionFor(route);
+    this.loaded.set(section.id, Promise.resolve(section));
     this.show(section);
     new ResizeObserver(() => this.relayout()).observe(this.root);
     this.relayout();
@@ -132,8 +141,20 @@ export class Shell {
     if (!options) this.stage.freeze(null);
   }
 
-  private sectionFor(route: Route): Section {
+  private entryFor(route: Route): SectionEntry {
     return this.sections.find((s) => s.id === route.section) ?? this.sections[0]!;
+  }
+
+  /** A section's code, loaded the first time it is wanted. */
+  private load(entry: SectionEntry, route: Route): Promise<Section> {
+    let section = this.loaded.get(entry.id);
+    if (!section) {
+      section = entry.load(route);
+      this.loaded.set(entry.id, section);
+      // A failed download may work on the next visit to the address.
+      section.catch(() => this.loaded.delete(entry.id));
+    }
+    return section;
   }
 
   private show(section: Section): void {
@@ -147,10 +168,26 @@ export class Shell {
     this.time.refresh();
   }
 
+  /** Another address. A section not shown yet loads first; the page stays as it is until then. */
   private go(route: Route): void {
+    const ticket = ++this.navigation;
+    const entry = this.entryFor(route);
+    if (this.shown?.id === entry.id) {
+      this.enter(this.shown, route);
+      return;
+    }
+    this.load(entry, route).then(
+      (section) => {
+        // Another address came while this one's section was loading: that one is shown instead.
+        if (ticket === this.navigation) this.enter(section, route);
+      },
+      (error: unknown) => console.error(error),
+    );
+  }
+
+  private enter(section: Section, route: Route): void {
     const from = this.route;
     this.route = route;
-    const section = this.sectionFor(route);
     if (section !== this.shown) {
       this.shown?.leave(route);
       this.show(section);

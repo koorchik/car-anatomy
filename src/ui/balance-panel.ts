@@ -10,6 +10,7 @@ import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import { BalanceOverlay, FORCE_COLORS } from '../scene/balance-arrows.ts';
 import type { EngineModel } from '../scene/model-types.ts';
+import { forcesToggle } from './forces-toggle.ts';
 import './balance-panel.css';
 
 const num = (v: number): string => roughly(v).toLocaleString(numberLocale, { maximumFractionDigits: v < 10 ? 1 : 0 });
@@ -79,23 +80,13 @@ export class BalancePanel {
   private shownRpm = -1;
   private lastText = 0;
 
-  /** @param tools Row of view options under the stage, where the switch goes. */
-  constructor(tools: HTMLElement, host: HTMLElement) {
-    const label = document.createElement('label');
-    label.className = 'check tool-forces';
-    label.innerHTML = `<input type="checkbox" /> ${t('Сили інерції')}`;
-    this.checkbox = label.querySelector('input')!;
+  /**
+   * @param tools Row of view options under the stage, where the switch goes.
+   * @param checkbox The switch, when the page put it there before this code loaded (forces-toggle.ts).
+   */
+  constructor(tools: HTMLElement, host: HTMLElement, checkbox: HTMLInputElement = forcesToggle(tools)) {
+    this.checkbox = checkbox;
     this.checkbox.addEventListener('change', () => this.show(this.checkbox.checked));
-    // Stacked under the shake switch, which is about the same thing, so the row of tools does not grow.
-    const shake = tools.querySelector('.tool-shake');
-    if (shake) {
-      const column = document.createElement('div');
-      column.className = 'tool-checks';
-      shake.replaceWith(column);
-      column.append(shake, label);
-    } else {
-      tools.append(label);
-    }
 
     this.card.className = 'forces-card';
     this.card.hidden = true;

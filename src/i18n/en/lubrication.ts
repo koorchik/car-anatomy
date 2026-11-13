@@ -15,20 +15,6 @@ export const LUBRICATION_EN: Record<string, string> = {
   'Дорожні': 'Street',
   'Напівсліки': 'Semi-slicks',
   'Сліки': 'Slicks',
-  // Sump kinds and the article (src/designer/lubrication.ts, src/ui/article.ts)
-  'мокрий картер': 'wet sump',
-  'мокрий картер із перегородками': 'baffled wet sump',
-  'інтегрований сухий картер': 'integrated dry sump',
-  'сухий картер': 'dry sump',
-  'Мащення': 'Lubrication',
-  '{kind}, {litres} л оливи': '{kind}, {litres} L of oil',
-  'тип мащення': 'the lubrication system',
-  'об’єм оливи': 'the oil capacity',
-  '{link}: як олива в піддоні поводиться на треку і чи дістане її насос.': '{link}: how the oil in the pan behaves on track and whether the pump can still reach it.',
-  'Мащення на треку': 'Oil on track',
-  // Designer limits (src/designer/constraints.ts)
-  'З меншою кількістю оливи забірник не буде під нею навіть на стоянці.': 'With less oil the pickup would not be covered even at rest.',
-  'Більше оливи вже не вміститься в розумний піддон чи бак.': 'More oil would no longer fit a sensible pan or tank.',
   // Designer controls, figures and diagnosis (src/ui/designer/params.ts, src/designer/*.ts)
   'Картер': 'Sump',
   'Мокрий': 'Wet',
@@ -173,7 +159,6 @@ export const LUBRICATION_EN: Record<string, string> = {
   'Швидкість програвання': 'Playback speed',
   'Звук': 'Sound',
   'З початку': 'Restart',
-  'Налаштування': 'Settings',
   'Ресурс вкладишів': 'Bearing life',
   'Вкладиші цього двигуна. Інший картер, шини чи олива їх не відновлюють, лише ремонт; інший двигун приходить з новими.': 'This engine’s bearings. Another sump, tires or oil level doesn’t restore them, only a repair does; another engine comes with new ones.',
   'Вкладиші': 'Bearings',
@@ -182,7 +167,6 @@ export const LUBRICATION_EN: Record<string, string> = {
   'Коло': 'Lap',
   'Останні 20 секунд': 'Last 20 seconds',
   'Свій з конструктора: {name}': 'Your own from the designer: {name}',
-  'Олива на треку': 'Oil on track',
   '{car} · {sump} · {mass} кг': '{car} · {sump} · {mass} kg',
   'Рахую коло…': 'Working out the lap…',
   'Мін. тиск, бар': 'Min. pressure, bar',
@@ -212,14 +196,10 @@ export const LUBRICATION_EN: Record<string, string> = {
   'До гідрокомпенсаторів дійшла олива з повітрям: на справжньому двигуні вони просідають': 'Aerated oil has reached the hydraulic lifters: in a real engine they would bleed down',
   'Акумулятор віддає оливу': 'The accumulator gives oil',
   'Тиск оливи нижче потрібного': 'Oil pressure below the need',
-  'Олива на треку: як картер тримає оливу в поворотах': 'Oil on track: how the sump keeps oil at the pickup in corners',
   // The designer's track widget (src/ui/designer/track-widget.ts)
   'На треку': 'On track',
   'Перевірити на треку': 'Try it on track',
   'тиск тримається': 'pressure holds',
   'короткі провали до {s} с': 'short dips up to {s} s',
   'голодування: вкладиші витримають {band}': 'starving: the bearings last {band}',
-  // The oil page's keys, for the help of the keys (ui/engines/section.ts).
-  'Поїхали або пауза': 'Go or pause',
-  'На 5 с назад або вперед': '5 s back or forward',
 };

@@ -12,8 +12,8 @@
 // The script runs at the acceptance of a stage, not in `npm test`; it exits with 1 when a limit is broken.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 const REPO = resolve(import.meta.dirname, '..');
@@ -36,10 +36,11 @@ interface PagePath {
   label: string;
   /** The page's own source file: until it exists, the page is not built yet and is reported so. */
   exists: string;
-  /** Modules the loader imports for this page, besides the shell: lazy chunks in the order they are asked for. */
+  /**
+   * Modules the loader imports for this page, besides the shell: lazy chunks in the order they are asked for. In
+   * English each comes after the dictionaries its withDictionaries() names, which the English path adds.
+   */
   modules: string[];
-  /** Dictionaries of src/i18n/dictionaries.ts the page registers in English, as source modules. */
-  english: string[];
   /** The page's limit, kB gzip. */
   limit: number;
   limitText: string;
@@ -47,18 +48,17 @@ interface PagePath {
 
 const SHELL = 'src/shell/app.ts';
 const ENGINES = 'src/ui/engines/section.ts';
-const ENGINES_EN = ['src/i18n/en/engine-ui.ts'];
 
 const PAGES: PagePath[] = [
-  { id: 'catalogue', label: 'каталог двигуна', exists: ENGINES, modules: [ENGINES], english: ENGINES_EN, limit: 0.8 * P_D6, limitText: '0,8 · P_Д6' },
-  { id: 'designer', label: 'конструктор', exists: ENGINES, modules: [ENGINES, 'src/ui/engines/designer-chunk.ts'], english: [...ENGINES_EN, 'src/i18n/en/designer.ts'], limit: P_D6, limitText: 'P_Д6' },
-  { id: 'dyno', label: 'стенд', exists: ENGINES, modules: [ENGINES, 'src/ui/dyno/dyno-panel.ts'], english: [...ENGINES_EN, 'src/i18n/en/dyno.ts'], limit: P_D6, limitText: 'P_Д6' },
-  { id: 'systems', label: 'шари систем', exists: ENGINES, modules: [ENGINES, 'src/ui/systems-view.ts', 'src/scene/systems/index.ts'], english: [...ENGINES_EN, 'src/i18n/en/systems.ts'], limit: P_D6, limitText: 'P_Д6' },
-  { id: 'forces', label: 'сили й фази', exists: ENGINES, modules: [ENGINES, 'src/ui/engines/forces-chunk.ts', 'src/ui/valve-readout.ts'], english: ENGINES_EN, limit: P_D6, limitText: 'P_Д6' },
-  { id: 'sump', label: 'олива на треку', exists: ENGINES, modules: [ENGINES, 'src/ui/sump/sump-page.ts'], english: [...ENGINES_EN, 'src/i18n/en/systems.ts', 'src/i18n/en/lubrication.ts'], limit: P_D6, limitText: 'P_Д6' },
-  { id: 'gearbox', label: 'коробка', exists: 'src/ui/gearboxes/section.ts', modules: ['src/ui/gearboxes/section.ts'], english: [], limit: 400, limitText: '400' },
-  { id: 'suspension', label: 'підвіска', exists: 'src/ui/suspensions/section.ts', modules: ['src/ui/suspensions/section.ts'], english: [], limit: 400, limitText: '400' },
-  { id: 'overview', label: 'огляд авто', exists: 'src/ui/car/section.ts', modules: ['src/ui/car/section.ts'], english: [], limit: 450, limitText: '450' },
+  { id: 'catalogue', label: 'каталог двигуна', exists: ENGINES, modules: [ENGINES], limit: 0.8 * P_D6, limitText: '0,8 · P_Д6' },
+  { id: 'designer', label: 'конструктор', exists: ENGINES, modules: [ENGINES, 'src/ui/engines/designer-host.ts'], limit: P_D6, limitText: 'P_Д6' },
+  { id: 'dyno', label: 'стенд', exists: ENGINES, modules: [ENGINES, 'src/ui/dyno/dyno-panel.ts'], limit: P_D6, limitText: 'P_Д6' },
+  { id: 'systems', label: 'шари систем', exists: ENGINES, modules: [ENGINES, 'src/ui/systems-view.ts', 'src/scene/systems/index.ts'], limit: P_D6, limitText: 'P_Д6' },
+  { id: 'forces', label: 'сили й фази', exists: ENGINES, modules: [ENGINES, 'src/ui/balance-panel.ts', 'src/ui/valve-readout.ts'], limit: P_D6, limitText: 'P_Д6' },
+  { id: 'sump', label: 'олива на треку', exists: ENGINES, modules: [ENGINES, 'src/ui/sump/sump-page.ts'], limit: P_D6, limitText: 'P_Д6' },
+  { id: 'gearbox', label: 'коробка', exists: 'src/ui/gearboxes/section.ts', modules: ['src/ui/gearboxes/section.ts'], limit: 400, limitText: '400' },
+  { id: 'suspension', label: 'підвіска', exists: 'src/ui/suspensions/section.ts', modules: ['src/ui/suspensions/section.ts'], limit: 400, limitText: '400' },
+  { id: 'overview', label: 'огляд авто', exists: 'src/ui/car/section.ts', modules: ['src/ui/car/section.ts'], limit: 450, limitText: '450' },
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -124,6 +124,26 @@ async function buildSite(root: string, outDir: string): Promise<Manifest> {
   return JSON.parse(readFileSync(join(outDir, '.vite', 'manifest.json'), 'utf8')) as Manifest;
 }
 
+/**
+ * The English dictionaries each lazy module waits for, read from the sources: withDictionaries([...], () =>
+ * import('...')) calls, and the modules of src/i18n/dictionaries.ts. Empty for code from before the dictionaries.
+ */
+function dictionariesOf(root: string): Map<string, string[]> {
+  const list = join(root, 'src/i18n/dictionaries.ts');
+  if (!existsSync(list)) return new Map();
+  const moduleOf = new Map([...readFileSync(list, 'utf8').matchAll(/['"]?([\w-]+)['"]?:\s*\{\s*module:\s*'([^']+)'/g)].map((m) => [m[1]!, m[2]!]));
+  const walk = (dir: string): string[] => readdirSync(dir).flatMap((name) => (statSync(join(dir, name)).isDirectory() ? walk(join(dir, name)) : name.endsWith('.ts') ? [join(dir, name)] : []));
+  const out = new Map<string, string[]>();
+  for (const file of walk(join(root, 'src'))) {
+    for (const m of readFileSync(file, 'utf8').matchAll(/withDictionaries\(\s*\[([^\]]*)\]\s*,\s*\(\)\s*=>\s*import\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+      const target = relative(root, join(dirname(file), m[2]!)).split('\\').join('/');
+      const names = [...m[1]!.matchAll(/['"]([^'"]+)['"]/g)].map((n) => n[1]!);
+      out.set(target, [...(out.get(target) ?? []), ...names.map((n) => moduleOf.get(n)!).filter(Boolean)]);
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Sizes
 
@@ -165,11 +185,13 @@ function main(options: Options, manifest: Manifest, dist: string, root: string, 
   const loader = total(loaderFiles);
   const mainSize = total(mainFiles);
 
+  const dictionaries = dictionariesOf(root);
   const pages = PAGES.map((page) => {
     if (!existsSync(join(root, page.exists))) return { ...page, built: false, uk: 0, en: 0 };
     const keys = [entry, shellKey, ...page.modules.filter((m) => manifest[m])];
+    const english = page.modules.flatMap((m) => dictionaries.get(m) ?? []).filter((m) => manifest[m]);
     const uk = closure(keys);
-    const en = closure([...keys, ...page.english.filter((m) => manifest[m])]);
+    const en = closure([...keys, ...english]);
     return { ...page, built: true, uk: total(uk), en: total(en) };
   });
 

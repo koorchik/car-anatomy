@@ -1,10 +1,11 @@
 // The oil-on-track page (`#/sump`) inside the engines section: its own panel, dash and summary, the X-ray with the oil
-// layer on. The page's code loads the first time it is visited.
+// layer on. The page's code is a chunk of its own (chunks.ts) and loads the first time the page is visited.
 
 import type { ViewMode } from '../../scene/model-types.ts';
 import type { SystemLayer } from '../../scene/systems/layer.ts';
 import { t } from '../../i18n/t.ts';
 import type { SumpHost, SumpPage } from '../sump/sump-page.ts';
+import { SUMP } from './chunks.ts';
 import { $ } from './dom.ts';
 import type { EnginesSection } from './section.ts';
 
@@ -15,7 +16,6 @@ export class SumpMode {
   flattenedLayer: SystemLayer | null = null;
   readonly host: SumpHost;
   private readonly section: EnginesSection;
-  private code: Promise<typeof import('../sump/sump-page.ts')> | null = null;
   private oilLayerBefore = false;
   /** The force arrows are about the crank, not the oil: they are put away on the oil page and come back after it. */
   private forcesBefore = false;
@@ -88,7 +88,7 @@ export class SumpMode {
     for (const id of ['sump-host', 'sump-dash', 'sump-summary']) $(id).hidden = !on;
     if (on) {
       if (s.onDesigner) {
-        s.designer.page.leave();
+        s.designer?.page.leave();
         s.onDesigner = false;
         document.body.classList.remove('designer-mode');
         $('designer-host').hidden = true;
@@ -103,9 +103,9 @@ export class SumpMode {
       s.ctx.slots.panelTitle.textContent = t('Олива на треку');
       for (const id of ['prev', 'next', 'to-designer']) $(id).hidden = true;
       // The lap drives the engine through drive.lock, which a dyno load would fight.
-      dyno.setActive(false);
-      this.forcesBefore = balance.isOn;
-      balance.show(false);
+      dyno?.setActive(false);
+      this.forcesBefore = balance?.isOn ?? false;
+      balance?.show(false);
       // The lap works the pedal and lets it go on leaving: a held pedal would come back showing a throttle the engine no longer gets.
       s.dash.pedal.letGo();
       s.drive.stop();
@@ -131,7 +131,7 @@ export class SumpMode {
       systems.setExplode(this.explodeBefore);
       if (!this.oilLayerBefore && systems.isOn('oil')) systems.toggle('oil', false);
       systems.sim.oilSupply = 1;
-      if (this.forcesBefore) balance.show(true);
+      if (this.forcesBefore) balance?.show(true);
       $('article').hidden = false;
       for (const id of ['prev', 'next', 'to-designer']) $(id).hidden = false;
       stage.fitScale = 0.68;
@@ -145,8 +145,7 @@ export class SumpMode {
 
   /** Each address of the page: loads its code the first time, then hands it the route. */
   enter(): void {
-    this.code ??= import('../sump/sump-page.ts');
-    void this.code.then(({ SumpPage }) => {
+    void SUMP.load().then(({ SumpPage }) => {
       if (!this.on) return;
       if (!this.page) {
         this.page = new SumpPage(this.host);
