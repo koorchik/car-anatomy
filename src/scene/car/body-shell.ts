@@ -170,6 +170,7 @@ export function bodyShape(car: CarRecord, arches: WheelArch[]): BodyShape {
   const d = car.dimensions;
   const p = car.packaging;
   if (!d || !p) throw new Error(`${car.id} has no dimensions and packaging yet`);
+  if (arches.length === 0) throw new Error('A body needs the wheel arches of its axles: the floor and the wells come from them');
   const L = car.body.wheelbaseM;
   const H = d.heightM;
   const W = d.widthM;

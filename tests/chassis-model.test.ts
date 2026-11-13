@@ -393,5 +393,7 @@ describe('the body’s shape', () => {
     const e30 = CARS['bmw-m3-e30']!;
     const bare: CarRecord = { ...e30, dimensions: undefined, packaging: undefined };
     expect(() => bodyShape(bare, [])).toThrow(/dimensions/);
+    // And the arches it is shaped round, which the chassis gives.
+    expect(() => bodyShape(CARS['civic-type-r-fk8']!, [])).toThrow(/arches/);
   });
 });
