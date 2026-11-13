@@ -18,8 +18,9 @@
 // table with linear interpolation, the 3D solves each frame exactly starting from the table (solvePose), so links on
 // screen never stretch.
 
-import type { AxleSpec, Vec3 } from './spec.ts';
+import type { AnyCornerLinkage, AxleSpec, CornerLinkage, Vec3 } from './spec.ts';
 import { CornerSolver, POSE_SIZE, type SolveResult } from './solve.ts';
+import { PivotSolver } from './solve-pivot.ts';
 import { dist, nlerpInto, rotateQuatBy } from './vec.ts';
 
 export type Side = 'left' | 'right';
@@ -85,8 +86,8 @@ export interface AxleTable {
   detSign: number;
 }
 
-export class Axle {
-  readonly spec: AxleSpec;
+export class Axle<L extends AnyCornerLinkage = CornerLinkage> {
+  readonly spec: AxleSpec<L>;
   readonly solver: CornerSolver;
   readonly table: AxleTable;
   /** Loaded radius at design: the contact point is this far below the wheel centre in the wheel plane. */
@@ -104,18 +105,23 @@ export class Axle {
   private readonly s = new Float64Array(3);
   private readonly k = new Float64Array(3);
 
-  constructor(spec: AxleSpec) {
+  constructor(spec: AxleSpec<L>) {
     this.spec = spec;
-    this.solver = new CornerSolver(spec);
+    const link: AnyCornerLinkage = spec.linkage;
+    // A single pivot axis has a closed form (solve-pivot.ts); links go through Newton.
+    this.solver =
+      link.kind === 'pivot'
+        ? new PivotSolver({ ...spec, linkage: link })
+        : new CornerSolver({ ...spec, linkage: link });
     this.radius = spec.wheelCentre[2];
-    const link = spec.linkage;
-    const strut = link.strut;
+    const strut = link.kind === 'links' ? link.strut : undefined;
     this.strutLower = strut ? strut.lower : null;
     const shift = strut?.topShift ?? [0, 0, 0];
     this.strutTop = strut ? [strut.top[0] + shift[0], strut.top[1] + shift[1], strut.top[2] + shift[2]] : null;
     // Steering axis: lower ball joint to strut top (MacPherson), or lower to upper ball joint (two wishbones).
-    this.kingpinLower = link.wishbones[0]?.ball ?? null;
-    this.kingpinUpper = strut ? null : (link.wishbones[1]?.ball ?? null);
+    // A pivot arm is not steered: no steering axis.
+    this.kingpinLower = link.kind === 'links' ? (link.wishbones[0]?.ball ?? null) : null;
+    this.kingpinUpper = link.kind === 'links' && !strut ? (link.wishbones[1]?.ball ?? null) : null;
     const seats = spec.spring.strutSeats;
     this.seats = seats ? seats.upperM + seats.lowerM : 0;
     const shaft = spec.halfshaft;
@@ -424,6 +430,6 @@ export function mirrorPose(left: Float64Array, out: Float64Array): void {
   out[6] = left[6];
 }
 
-export function buildAxle(spec: AxleSpec): Axle {
+export function buildAxle<L extends AnyCornerLinkage = CornerLinkage>(spec: AxleSpec<L>): Axle<L> {
   return new Axle(spec);
 }

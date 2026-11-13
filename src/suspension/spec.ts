@@ -38,6 +38,16 @@ export type CornerLinkage = {
   strut?: StrutSpec;
 };
 
+/**
+ * Trailing arm, semi-trailing arm and swing axle: the knuckle is rigid to one arm turning about the body axis through
+ * `axisA` and `axisB` (the two bushes, or the inner joint and a point along the axis). Solved in closed form.
+ */
+export interface PivotLinkage { kind: 'pivot'; axisA: Vec3; axisB: Vec3; armPart: string }
+
+/** Every way an independent corner is located. Code that takes any corner says AxleSpec<AnyCornerLinkage> and narrows
+ *  on `kind`; plain AxleSpec is a corner of links, which is what most code handles. */
+export type AnyCornerLinkage = CornerLinkage | PivotLinkage;
+
 export type SpringKind = 'coil' | 'torsion' | 'leaf' | 'air' | 'hydro';
 
 export interface SpringSpec {
@@ -90,12 +100,12 @@ export interface HalfshaftSpec {
   diameterM: number;
 }
 
-/** One axle of the car. Stage 1a: an independent corner, given for the left side; the right one is its mirror. */
-export interface AxleSpec {
+/** One axle of the car: an independent corner, given for the left side; the right one is its mirror. */
+export interface AxleSpec<L extends AnyCornerLinkage = CornerLinkage> {
   layout: LayoutId;
   /** Track at design ride height, m. */
   track: number;
-  linkage: CornerLinkage;
+  linkage: L;
   /** Wheel centre at design ride height (a knuckle point), left corner. */
   wheelCentre: Vec3;
   /** Spin axis of the left wheel at design, unit, pointing outboard (+y with zero camber and toe). */
