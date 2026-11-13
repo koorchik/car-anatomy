@@ -11,7 +11,7 @@ import { LoadedCrank } from '../src/engine/loaded-crank.ts';
 import { PEDAL_TOP_SPEED } from '../src/engine/sim.ts';
 import { catalogueTorqueMap } from '../src/designer/torque-map.ts';
 import { carById } from '../src/data/cars.ts';
-import { buildCarDrive } from '../src/drivetrain/car-model.ts';
+import { buildCarDrive } from '../src/data/car-drive.ts';
 import { vehicleLoadSpec } from '../src/drivetrain/car-load.ts';
 import { DriveStory, type StoryOptions } from '../src/drivetrain/drive-story.ts';
 import { VehicleLoad } from '../src/vehicle/vehicle-load.ts';

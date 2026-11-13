@@ -9,7 +9,8 @@ import { CLUTCH, CRANK, drivetrainCore, elementIndex, memberIndex } from '../src
 import { DISC_DAMPER, DRY_STRIBECK, dryClutch } from '../src/drivetrain/elements.ts';
 import { DrivetrainSolver, SLIP } from '../src/drivetrain/solver.ts';
 import { buildGearbox, stateByName } from '../src/drivetrain/topology.ts';
-import { buildCarDrive, carVehicle } from '../src/drivetrain/car-model.ts';
+import { buildCarDrive } from '../src/data/car-drive.ts';
+import { carVehicle } from '../src/drivetrain/car-model.ts';
 
 describe('15. budget', () => {
   it('BMW M3 E30 without a car, clutch slipping on the falling Stribeck slope: under 10 µs per step', () => {

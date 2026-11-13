@@ -7,7 +7,7 @@ import { synthConfig } from '../src/audio/synth.ts';
 import { carById } from '../src/data/cars.ts';
 import { engineById } from '../src/data/engines.ts';
 import { vehicleLoadSpec } from '../src/drivetrain/car-load.ts';
-import { buildCarDrive } from '../src/drivetrain/car-model.ts';
+import { buildCarDrive } from '../src/data/car-drive.ts';
 import { LAUNCH_RPM } from '../src/drivetrain/control/manual.ts';
 import { anchorCrank, buildCore, CRANK } from '../src/drivetrain/core.ts';
 import { DriveStory, runStory } from '../src/drivetrain/drive-story.ts';

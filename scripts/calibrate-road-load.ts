@@ -16,7 +16,7 @@ import { driveCarById } from '../src/data/drive-cars.ts';
 import { engineById, engineFacts } from '../src/data/engines.ts';
 import { evaluate } from '../src/designer/physics.ts';
 import { designFromSpec } from '../src/designer/presets.ts';
-import { buildCarDrive } from '../src/drivetrain/car-model.ts';
+import { buildCarDrive } from '../src/data/car-drive.ts';
 import { bestWheelForce, steadyTopSpeed } from '../src/drivetrain/runs.ts';
 import { DRIVELINE } from '../src/lubrication/scenario.ts';
 import { lapTorqueCurve } from '../src/lubrication/torque.ts';

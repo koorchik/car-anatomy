@@ -7,7 +7,7 @@ import { G } from '../vehicle/constants.ts';
 import { longitudinalSpec } from '../vehicle/longitudinal.ts';
 import { CRANK_SLOT, type VehicleLoadSpec } from '../vehicle/vehicle-load.ts';
 import { FL, FR, RL, RR } from '../vehicle/wheel-bus.ts';
-import { buildCarDrive, CLUTCH, PROPSHAFT, type CarDrive } from './car-model.ts';
+import { CLUTCH, PROPSHAFT, type CarDrive } from './car-model.ts';
 import type { ManualSpec } from './control/manual.ts';
 import { anchorCrank, buildCore, elementIndex, memberIndex, type DrivetrainCore } from './core.ts';
 import { stableStep } from './modes.ts';
@@ -63,6 +63,3 @@ export function vehicleLoadSpec(cd: CarDrive): VehicleLoadSpec {
     maxStepS: Math.min(0.001, stableStep(core)),
   };
 }
-
-/** A catalogue car's load by its id. */
-export const carLoadSpec = (carId: string): VehicleLoadSpec => vehicleLoadSpec(buildCarDrive(carId));

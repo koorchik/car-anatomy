@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { CARS } from '../src/data/cars.ts';
 import { DRIVE_CARS } from '../src/data/drive-cars.ts';
-import { buildCarDrive, carVehicle, CLUTCH, CRANK, type CarDrive } from '../src/drivetrain/car-model.ts';
+import { buildCarDrive } from '../src/data/car-drive.ts';
+import { carVehicle, CLUTCH, CRANK, type CarDrive } from '../src/drivetrain/car-model.ts';
 import { buildCore, elementIndex, memberIndex } from '../src/drivetrain/core.ts';
 import { nullSpace } from '../src/drivetrain/linalg.ts';
 import { dynamicRun, dynamicTopSpeed, inputForForce, quasiStaticRun, setRolling, steadyTopSpeed } from '../src/drivetrain/runs.ts';

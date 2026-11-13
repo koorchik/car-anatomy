@@ -1,12 +1,9 @@
 // A catalogue car as a drivetrain the solver steps and a vehicle the tests and tables drive: the engine's torque map
 // and inertia, the clutch and damper, the gearbox, the axle from its DriveCar record, the wheels and the tyre from
 // its CarRecord. Main thread, scripts and tests only: it derives (topology.ts), and the worklet gets the flat core.
+// It takes the records themselves: buildCarDrive in src/data/car-drive.ts finds them by the car's id, so this core
+// file imports no text data (tests/worklet-imports.test.ts).
 
-import { carById } from '../data/cars.ts';
-import { driveCarById } from '../data/drive-cars.ts';
-import { engineById } from '../data/engines.ts';
-import { gearboxById } from '../data/gearboxes.ts';
-import { catalogueTorqueMap } from '../designer/torque-map.ts';
 import { peakTorque, type EngineTorqueMap } from '../engine/torque-map.ts';
 import { drivingMassKg, tyreRadiiM, type CarRecord } from '../vehicle/car.ts';
 import { LongitudinalChassis, longitudinalSpec } from '../vehicle/longitudinal.ts';
@@ -67,19 +64,23 @@ export interface CarDrive {
 const pathLength = (points: readonly (readonly number[])[]): number =>
   points.slice(1).reduce((s, p, i) => s + Math.hypot(p[0]! - points[i]![0]!, p[1]! - points[i]![1]!, p[2]! - points[i]![2]!), 0);
 
-/** A car of DRIVE_CARS ready to drive: throws when its record has no dynamics yet. */
-export function buildCarDrive(carId: string, o: CarDriveOptions = {}): CarDrive {
-  const drive = driveCarById(carId);
-  const car = carById(carId);
-  if (!drive || !car) throw new Error(`no drive car ${carId}`);
+/** The records a car's drive is built from, found by the car's id in src/data/car-drive.ts. */
+export interface CarDriveRecords {
+  car: CarRecord;
+  drive: DriveCar;
+  gearbox: GearboxRecord;
+  /** The engine's torque map, catalogueTorqueMap of the car's engine. */
+  map: EngineTorqueMap;
+}
+
+/** A car ready to drive from its records: throws when its DriveCar has no dynamics yet. */
+export function carDriveOf(records: CarDriveRecords, o: CarDriveOptions = {}): CarDrive {
+  const { car, drive, gearbox, map } = records;
+  const carId = car.id;
   const dyn = drive.dynamics;
   if (!dyn) throw new Error(`${carId}: its DriveCar has no dynamics yet (stage K2b)`);
-  const gearbox = gearboxById(drive.gearbox);
-  const engine = engineById(car.engine);
-  if (!gearbox || !engine) throw new Error(`${carId}: gearbox ${drive.gearbox} or engine ${car.engine} not in the catalogue`);
   if (car.drive === 'awd') throw new Error(`${carId}: four-wheel drive comes with stage K16a`);
   const box = buildGearbox(gearboxSpec(gearbox));
-  const map = catalogueTorqueMap(engine);
 
   const clutch = dryClutch(peakTorque(map).nm, dyn.clutch.outerMm, dyn.clutch.innerMm);
   if (dyn.clutch.clampN !== null) clutch.clampN = dyn.clutch.clampN;
