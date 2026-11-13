@@ -34,6 +34,13 @@
 //
 // Fixed step 1 ms, semi-implicit Euler as in quarter.ts; a step makes no objects (chassis-axle.ts writes its samples by
 // name for that).
+//
+// The tyres here make whatever side force a_y asks, so a car pushed past what it can hold goes over: with both wheels
+// of one side off the road, gravity's moment about the outer contact patches falls as the body tips while the side
+// force's grows, and the roll runs away (a 1.1 g step does it to the typical hot hatch, whose rigid limit t/2h is
+// 1.3 g). Past ROLLOVER_RAD the small-angle model no longer holds, so the simulation stops there and says so
+// (`rolledOver`) instead of rolling through 90° into nonsense and NaN. Whether real tyres would let go first is for the
+// wheel's force limit (stage P9-core) and the designer's rollover diagnosis.
 
 import type { Chassis } from './chassis.ts';
 import { newWheelSample, type WheelSample } from './chassis-axle.ts';
@@ -44,6 +51,10 @@ export const CHASSIS_STEP_S = 0.001;
 
 /** Positions: z, φ, θ, w_FL, w_FR, w_RL, w_RR. */
 export const CHASSIS_DOF = 7;
+
+/** Body roll over the road past which the car is on two wheels and going over, rad (20°): the typical cars that
+ *  recover from lifting both inner wheels after a 1 g step roll 13° at most, and none comes back from here. */
+export const ROLLOVER_RAD = 0.35;
 
 /** What one evaluation leaves behind, per corner in the order FL, FR, RL, RR. Forces in N. */
 export interface ChassisOut {
@@ -101,6 +112,8 @@ export class ChassisSim {
   /** Lateral acceleration of the car, m/s² (positive to the left: a left turn). */
   ay = 0;
   t = 0;
+  /** The body rolled past ROLLOVER_RAD (or its state stopped being finite): step() stands still until reset(). */
+  rolledOver = false;
   /** Positions and velocities: z, φ, θ, w_FL, w_FR, w_RL, w_RR. */
   readonly pos = new Float64Array(CHASSIS_DOF);
   readonly vel = new Float64Array(CHASSIS_DOF);
@@ -130,6 +143,7 @@ export class ChassisSim {
     const r = this.chassis.rest;
     this.t = 0;
     this.ay = 0;
+    this.rolledOver = false;
     this.road.fill(0);
     this.roadRate.fill(0);
     this.vel.fill(0);
@@ -288,9 +302,10 @@ export class ChassisSim {
 
   /**
    * One semi-implicit Euler step of `h` seconds. `out` describes the state the step started from (the forces that
-   * moved it).
+   * moved it). Does nothing once the car has rolled over.
    */
   step(h = CHASSIS_STEP_S): void {
+    if (this.rolledOver) return;
     const { pos, vel, acc } = this;
     this.accelerations(pos, vel, acc, true);
     for (let i = 0; i < CHASSIS_DOF; i++) {
@@ -298,6 +313,8 @@ export class ChassisSim {
       pos[i] += h * vel[i];
     }
     this.t += h;
+    // Written so that NaN counts as rolled over too.
+    if (!(Math.abs(pos[1]) <= ROLLOVER_RAD)) this.rolledOver = true;
   }
 
   /** Fills `out` for the current state without stepping. */

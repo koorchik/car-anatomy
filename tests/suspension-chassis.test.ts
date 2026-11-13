@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { buildChassis, type Chassis } from '../src/suspension/chassis.ts';
-import { ChassisSim } from '../src/suspension/chassis-sim.ts';
+import { ChassisSim, ROLLOVER_RAD } from '../src/suspension/chassis-sim.ts';
 import { newWheelSample, type WheelSample } from '../src/suspension/chassis-axle.ts';
 import { TwistBeamAxle, newBeamSample } from '../src/suspension/beam-kinematics.ts';
 import { SolidAxle, newSolidSample } from '../src/suspension/solid-kinematics.ts';
@@ -442,6 +442,44 @@ describe('the step of a side force', () => {
       for (let i = 0; i < 4; i++) near(sim.out.fz[i], s.fz[i], 0.005);
     },
   );
+});
+
+describe('past what the car can hold', () => {
+  it('the scene’s sharp turn, 1 g in 0.3 s, puts none of the layouts over', () => {
+    for (const car of LAYOUTS) {
+      const sim = new ChassisSim(chassis(car));
+      for (let i = 0; i < 2500; i++) {
+        sim.ay = G * Math.min(1, sim.t / 0.3);
+        sim.step();
+      }
+      expect(sim.rolledOver).toBe(false);
+      expect(Math.abs(sim.out.roll)).toBeLessThan(10 * DEG);
+    }
+  });
+
+  it('a 1.2 g step tips the hot hatch over: the simulation stops at 20° with a finite state, and reset() stands it up', () => {
+    // Its rigid limit t/(2h) is 1.3 g, and the step overshoots: once both inner wheels are up, gravity's moment about
+    // the outer patches falls as the body tips while the side force's grows.
+    const sim = new ChassisSim(chassis(HOT_HATCH));
+    sim.ay = 1.2 * G;
+    let both = false;
+    for (let i = 0; i < 5000 && !sim.rolledOver; i++) {
+      sim.step();
+      both ||= sim.out.inAir[0] === 1 && sim.out.inAir[2] === 1;
+    }
+    expect(sim.rolledOver).toBe(true);
+    expect(both).toBe(true);
+    const t = sim.t;
+    sim.step();
+    expect(sim.t).toBe(t);
+    const o = sim.observe();
+    expect(Math.abs(o.roll)).toBeGreaterThan(ROLLOVER_RAD);
+    expect(Math.abs(o.roll)).toBeLessThan(ROLLOVER_RAD + 0.01);
+    for (const a of [o.fz, o.travel, o.supportN, o.wheelZ]) for (const x of a) expect(Number.isFinite(x)).toBe(true);
+    sim.reset();
+    expect(sim.rolledOver).toBe(false);
+    expect(sim.observe().roll).toBe(0);
+  });
 });
 
 describe('camber in roll', () => {
