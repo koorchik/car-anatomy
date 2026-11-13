@@ -24,6 +24,9 @@ import { actionsHtml, afterDashHtml, badgeHtml, dashHtml, panelHtml, resultsHtml
 import { enginesPage, type EnginesPage } from './routes.ts';
 import { SumpMode } from './sump-host.ts';
 
+/** No cylinder resting, shared so that the frame does not make a new list each time. */
+const NONE_RESTING: number[] = [];
+
 export class EnginesSection implements Section {
   readonly id = 'engines' as const;
   readonly solidLabel = t('Двигун');
@@ -57,6 +60,10 @@ export class EnginesSection implements Section {
   private readonly systemsActive: boolean[] = [];
   private firingTextShown = '';
   private spectrumTextShown = '';
+  /** What the dash's lines were last built from (dashTexts). */
+  private textFires = Number.NaN;
+  private textOff = false;
+  private textFailed = false;
 
   mount(ctx: SectionContext): void {
     this.ctx = ctx;
@@ -483,7 +490,7 @@ export class EnginesSection implements Section {
     if (this.onDesigner) this.designer.page.frame(snap.rpm, running, snap.load, dt, snap.valves);
     valves.withhold(sump.on && !running);
     valves.update(snap.valves, running && !demo);
-    firing.setInactive(running ? (snap.valves?.off ?? []) : []);
+    firing.setInactive(running ? (snap.valves?.off ?? NONE_RESTING) : NONE_RESTING);
     firing.draw(theta);
 
     // Resting cylinders don't fire: the firing tone drops with them.
@@ -491,21 +498,28 @@ export class EnginesSection implements Section {
     const rotaryFires = (snap.rpm / 60) * spec.cylinders;
     const firingHz = this.engine.isRotary ? rotaryFires : firesPerSecond;
     spectrum.draw(drive.audioReady ? drive.analyser : null, drive.sampleRate, snap.state === 'off' ? 0 : firingHz);
-    const fires = Math.round(firingHz);
-    const firingText =
-      snap.state === 'off' ? '' : plural(fires, { one: t('{count} спалах за секунду', { count: fires }), few: t('{count} спалахи за секунду', { count: fires }), many: t('{count} спалахів за секунду', { count: fires }) });
+    this.dashTexts(Math.round(firingHz), snap.state === 'off', drive.audioFailed);
+
+    const shouldBeOn = snap.state === 'running' || snap.state === 'cranking';
+    if (shouldBeOn !== ignition.on && !demo && !this.starting) ignition.show(shouldBeOn);
+  }
+
+  /** The lines over the firing diagram and the spectrum. Built only when what they say changes: not every frame. */
+  private dashTexts(fires: number, off: boolean, failed: boolean): void {
+    if (fires === this.textFires && off === this.textOff && failed === this.textFailed) return;
+    this.textFires = fires;
+    this.textOff = off;
+    this.textFailed = failed;
+    const firingText = off ? '' : plural(fires, { one: t('{count} спалах за секунду', { count: fires }), few: t('{count} спалахи за секунду', { count: fires }), many: t('{count} спалахів за секунду', { count: fires }) });
     if (firingText !== this.firingTextShown) {
       $('firing-text').textContent = firingText;
       this.firingTextShown = firingText;
     }
-    const spectrumText = snap.state === 'off' || drive.audioFailed ? (drive.audioFailed ? t('звук недоступний') : '') : t('основний тон {hz} Гц', { hz: Math.round(firingHz) });
+    const spectrumText = off || failed ? (failed ? t('звук недоступний') : '') : t('основний тон {hz} Гц', { hz: fires });
     if (spectrumText !== this.spectrumTextShown) {
       $('spectrum-text').textContent = spectrumText;
       this.spectrumTextShown = spectrumText;
     }
-
-    const shouldBeOn = snap.state === 'running' || snap.state === 'cranking';
-    if (shouldBeOn !== ignition.on && !demo && !this.starting) ignition.show(shouldBeOn);
   }
 
   /** How fast the crank turns on screen in the readable mode. */
