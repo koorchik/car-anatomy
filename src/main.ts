@@ -284,6 +284,8 @@ let onSump = false;
 let sump: SumpPage | null = null;
 let sumpCode: Promise<typeof import('./ui/sump/sump-page.ts')> | null = null;
 let oilLayerBefore = false;
+/** The force arrows are about the crank, not the oil: they are put away on the oil page and come back after it. */
+let forcesBefore = false;
 /** The view and the explode slider before the page, given back on leaving it. */
 let viewBefore: ViewMode = 'xray';
 let explodeBefore = 0;
@@ -523,6 +525,10 @@ function setSumpMode(on: boolean): void {
     $('variants').hidden = true;
     $('panel-title').textContent = t('Олива на треку');
     for (const id of ['prev', 'next', 'to-designer']) $(id).hidden = true;
+    // The lap drives the engine through drive.lock, which a dyno load would fight.
+    dyno.setActive(false);
+    forcesBefore = balancePanel.isOn;
+    balancePanel.show(false);
     drive.stop();
     viewBefore = view;
     explodeBefore = explode;
@@ -546,6 +552,7 @@ function setSumpMode(on: boolean): void {
     systems.setExplode(explodeBefore);
     if (!oilLayerBefore && systems.isOn('oil')) systems.toggle('oil', false);
     systems.sim.oilSupply = 1;
+    if (forcesBefore) balancePanel.show(true);
     $('article').hidden = false;
     for (const id of ['prev', 'next', 'to-designer']) $(id).hidden = false;
     stage.fitScale = 0.68;

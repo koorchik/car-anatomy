@@ -152,6 +152,10 @@ export class BalancePanel {
     if (this.on) this.build();
   }
 
+  get isOn(): boolean {
+    return this.on;
+  }
+
   show(on: boolean): void {
     this.on = on;
     this.checkbox.checked = on;
