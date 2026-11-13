@@ -5,6 +5,10 @@ import { clampSetup, factorySetup, resolveCorner, SETUP_RANGES, type CornerSetup
 import { dist } from '../src/suspension/vec.ts';
 import { CornerSolver } from '../src/suspension/solve.ts';
 import { PRESSURE_KT_SLOPE, patchLengthM, TYRE_FILES, tyreVertical, verticalStiffness } from '../src/vehicle/tyre-data.ts';
+import type { Axle } from '../src/suspension/kinematics.ts';
+import { pivotAxisDirection, pivotAxle, pivotLayout, PIVOT_TYPICAL, type PivotIntent } from '../src/suspension/templates/pivot.ts';
+import { pivotAsLinks, pivotFrontViewCentre, PivotSolver } from '../src/suspension/solve-pivot.ts';
+import type { PivotLinkage, Vec3 } from '../src/suspension/spec.ts';
 
 const DEG = Math.PI / 180;
 
@@ -288,5 +292,249 @@ describe('tyre pressure', () => {
     const F = (corner.sprungKg + corner.unsprungKg) * 9.81;
     expect(hard.tyre.patchM).toBeCloseTo(patchLengthM(hard.tyre.freeRadiusM, F / hard.tyre.kt), 12);
     expect(Math.abs(hard.tyre.patchM / (2 * Math.sqrt((2 * hard.tyre.freeRadiusM * F) / hard.tyre.kt)) - 1)).toBeLessThan(0.02);
+  });
+});
+
+// Single pivot axis (templates/pivot.ts, solve-pivot.ts). Expected values come from the geometry of a rotation about
+// one axis: the front-view instant centre is where the axis pierces the transverse plane of the contact patch, the
+// roll centre is where the line from the patch through it crosses the centre line, and the wheel's spin axis turns
+// with the arm, so sin(camber) = sin θ·sin α on a level axis swept by α.
+describe('single pivot axis: trailing arm, semi-trailing arm, swing axle', () => {
+  // At design, where the patch rises with the wheel centre (dC_z/dq = 1), tanβ = dC_y/dq gives the roll centre.
+  const rollCentre = (s: { contactY: number; tanBeta: number }): number => s.contactY * s.tanBeta;
+  /** Roll centre height above the patch by the instant-centre construction. */
+  const rollCentreByAxis = (link: PivotLinkage, s: { contactX: number; contactY: number; contactZ: number }): number => {
+    const ic = pivotFrontViewCentre(link, s.contactX);
+    if (!ic) return 0;
+    return ((ic.z - s.contactZ) * s.contactY) / (s.contactY - ic.y);
+  };
+  const nodes = (a: { table: { n: number; travel0: number; step: number } }): number[] =>
+    Array.from({ length: a.table.n }, (_, i) => a.table.travel0 + i * a.table.step);
+
+  it('trailing arm on a level transverse axis: camber and toe stay as at design, roll centre on the road', () => {
+    const spec = pivotAxle(PIVOT_TYPICAL['trailing-arm']);
+    expect(spec.layout).toBe('trailing-arm');
+    const axle = buildAxle(spec);
+    const s = newCornerSample();
+    for (const z of nodes(axle)) {
+      axle.sample('left', z, 0, s);
+      expect(Math.abs(s.camber)).toBeLessThan(1e-12);
+      expect(Math.abs(s.toe)).toBeLessThan(1e-12);
+      expect(Math.abs(rollCentre(s))).toBeLessThan(0.001);
+    }
+    // The wheel swings on an arc about the bushes ahead of it: the spring seat at 3/4 of the arm moves 3/4 as far.
+    axle.measureAt(0, s);
+    expect(s.mrSpring).toBeCloseTo(0.75, 9);
+    expect(Number.isNaN(s.kpi)).toBe(true);
+  });
+
+  it('semi-trailing arm: camber ≈ θ·sin α within 2 % over ±20 mm, toe-in both ways, roll centre as the axis gives', () => {
+    const intent = PIVOT_TYPICAL['semi-trailing'];
+    const spec = pivotAxle(intent);
+    expect(spec.layout).toBe('semi-trailing');
+    const axle = buildAxle(spec);
+    const solver = axle.solver as PivotSolver;
+    const sinA = Math.sin(intent.sweepDeg * DEG);
+    const s = newCornerSample();
+    for (let mm = -20; mm <= 20; mm += 2) {
+      if (mm === 0) continue;
+      const pose = axle.measureAt(mm / 1000, s);
+      const theta = solver.angleOf(pose);
+      // Bump turns the arm up (θ > 0) and leans the wheel's top in.
+      expect(Math.sign(theta)).toBe(Math.sign(mm));
+      expect(Math.abs(s.camber / (-theta * sinA) - 1)).toBeLessThan(0.02);
+    }
+    for (const z of nodes(axle)) {
+      if (Math.abs(z) < 1e-9) continue;
+      axle.sample('left', z, 0, s);
+      expect(s.toe).toBeGreaterThan(0);
+    }
+    // At design: camber gain −sin α / d, d the plan-view lever of the arm; roll centre by the instant centre to 1 mm
+    // and inside the research's 90–120 mm for a rear axle.
+    axle.measureAt(0, s);
+    const e = pivotAxisDirection(intent.sweepDeg, intent.svAngleDeg);
+    const r: Vec3 = [spec.wheelCentre[0] - intent.armM, spec.wheelCentre[1] - intent.pivotYM, 0];
+    const lever = e[0] * r[1] - e[1] * r[0];
+    const h = 1e-5;
+    const camberAt = (z: number): number => {
+      const c = newCornerSample();
+      axle.measureAt(z, c);
+      return c.camber;
+    };
+    const gain = (camberAt(h) - camberAt(-h)) / (2 * h);
+    expect(Math.abs(gain / (-sinA / lever) - 1)).toBeLessThan(1e-6);
+    expect(Math.abs(rollCentre(s) - rollCentreByAxis(spec.linkage, s))).toBeLessThan(0.001);
+    expect(rollCentre(s)).toBeGreaterThan(0.09);
+    expect(rollCentre(s)).toBeLessThan(0.12);
+  });
+
+  it('swing axle: roll centre at the height the axis gives, and side force jacks the body up', () => {
+    const intent = PIVOT_TYPICAL['swing-axle'];
+    const spec = pivotAxle(intent);
+    expect(spec.layout).toBe('swing-axle');
+    const axle = buildAxle(spec);
+    const s = newCornerSample();
+    axle.measureAt(0, s);
+    const yC = spec.wheelCentre[1];
+    expect(Math.abs(rollCentre(s) - (intent.pivotZM * yC) / (yC - intent.pivotYM))).toBeLessThan(0.001);
+    // Off design the wheel leans and the patch no longer rises with the centre, but it still moves square to the
+    // line from the instant centre, which stays at the joint.
+    const ic = pivotFrontViewCentre(spec.linkage, 0)!;
+    expect([ic.y, ic.z]).toEqual([intent.pivotYM, intent.pivotZM]);
+    for (const z of [-0.06, -0.03, 0.03, 0.06]) {
+      const up = newCornerSample();
+      const down = newCornerSample();
+      const h = 1e-5;
+      axle.measureAt(z + h, up);
+      axle.measureAt(z - h, down);
+      axle.measureAt(z, s);
+      const riseZ = (up.contactZ - down.contactZ) / (2 * h);
+      expect(Math.abs(riseZ - 1)).toBeGreaterThan(0.01);
+      expect(Math.abs(s.tanBeta * (s.contactY - ic.y) + riseZ * (s.contactZ - ic.z))).toBeLessThan(1e-7);
+    }
+    // Virtual work: a side force F toward the turn centre at the outer patch pushes that wheel toward droop by F·tanβ
+    // (the patch moves out in bump), lifting the body; at the inner patch it pulls the body down. With more grip on
+    // the loaded outer wheel the sum lifts the body, most on the swing axle and not at all on the trailing arm.
+    const lift = (a: Axle<PivotLinkage>, rollTravel: number): number => {
+      const outer = newCornerSample();
+      const inner = newCornerSample();
+      a.sample('right', rollTravel, 0, outer);
+      a.sample('left', -rollTravel, 0, inner);
+      const fo = 3000;
+      const fi = 2000;
+      // tanβ of the right corner is mirrored in the sample; in its own side's terms it is −outer.tanBeta.
+      return fo * -outer.tanBeta - fi * inner.tanBeta;
+    };
+    const semi = buildAxle(pivotAxle(PIVOT_TYPICAL['semi-trailing']));
+    const trailing = buildAxle(pivotAxle(PIVOT_TYPICAL['trailing-arm']));
+    for (const z of [0, 0.02, 0.04]) {
+      expect(lift(axle, z)).toBeGreaterThan(0);
+      expect(lift(axle, z)).toBeGreaterThan(lift(semi, z));
+      expect(Math.abs(lift(trailing, z))).toBeLessThan(1e-9);
+    }
+    // At design, (F_o − F_i)·h_pivot/(y_C − y_pivot): the research's statics of a swing axle, its joint off the centre.
+    expect(lift(axle, 0)).toBeCloseTo((1000 * intent.pivotZM) / (yC - intent.pivotYM), 9);
+  });
+
+  it('the roll centre rises from zero to the pivot height as the axis turns from 0° to 90°', () => {
+    // A central pivot, so that at 90° the axis runs along the centre line, as on a swing axle with one joint.
+    const base: PivotIntent = { ...PIVOT_TYPICAL['semi-trailing'], pivotYM: 0, driven: false };
+    const s = newCornerSample();
+    let last = -Infinity;
+    for (let deg = 0; deg <= 90; deg++) {
+      const spec = pivotAxle({ ...base, sweepDeg: deg });
+      expect(spec.layout).toBe(pivotLayout(deg));
+      buildAxle(spec).measureAt(0, s);
+      const rc = rollCentre(s);
+      expect(Math.abs(rc - rollCentreByAxis(spec.linkage, s))).toBeLessThan(0.001);
+      if (deg > 0) expect(rc).toBeGreaterThan(last);
+      // Smoothly: no degree of sweep moves it by more than 25 mm.
+      if (deg > 1) expect(rc - last).toBeLessThan(0.025);
+      last = rc;
+      if (deg === 0) expect(Math.abs(rc)).toBeLessThan(0.001);
+    }
+    expect(Math.abs(last - base.pivotZM)).toBeLessThan(0.001);
+    expect([pivotLayout(0), pivotLayout(15), pivotLayout(89.9), pivotLayout(90)]).toEqual([
+      'trailing-arm',
+      'semi-trailing',
+      'semi-trailing',
+      'swing-axle',
+    ]);
+  });
+
+  it('the swing-axle half-shaft has no plunge and its wheel stays square to it; the semi-trailing one plunges', () => {
+    const swing = pivotAxle(PIVOT_TYPICAL['swing-axle']);
+    const shaft = swing.halfshaft!;
+    expect([shaft.inner, shaft.outer]).toEqual(['cross', 'none']);
+    const axle = buildAxle(swing);
+    const s = newCornerSample();
+    for (const z of nodes(axle)) {
+      const pose = axle.measureAt(z, s);
+      expect(Math.abs(s.plunge)).toBeLessThan(1e-12);
+      expect(s.cvOuter).toBeLessThan(1e-6);
+      // The shaft's angle at its joint is the wheel's camber.
+      expect(Math.abs(s.cvInner - Math.abs(s.camber))).toBeLessThan(1e-7);
+      const hub = [0, 0, 0];
+      axle.knucklePoint(pose, shaft.outerJoint, hub);
+      expect(Math.abs(dist(shaft.diffOutput, [hub[0], hub[1], hub[2]]) - dist(shaft.diffOutput, shaft.outerJoint))).toBeLessThan(1e-12);
+    }
+
+    const semi = pivotAxle(PIVOT_TYPICAL['semi-trailing']);
+    const two = semi.halfshaft!;
+    const semiAxle = buildAxle(semi);
+    const len0 = dist(two.diffOutput, two.outerJoint);
+    let most = 0;
+    for (const z of nodes(semiAxle)) {
+      const pose = semiAxle.measureAt(z, s);
+      // The plunge and the joint angles are those of the two joint centres.
+      const o = [0, 0, 0];
+      semiAxle.knucklePoint(pose, two.outerJoint, o);
+      const d: Vec3 = [o[0] - two.diffOutput[0], o[1] - two.diffOutput[1], o[2] - two.diffOutput[2]];
+      const len = Math.hypot(d[0], d[1], d[2]);
+      expect(s.plunge).toBeCloseTo(len0 - len, 12);
+      expect(s.cvInner).toBeCloseTo(Math.acos(d[1] / len), 9);
+      const spin = [0, 0, 0];
+      semiAxle.solver.direction(pose, semi.spinAxis, spin);
+      expect(s.cvOuter).toBeCloseTo(Math.acos((d[0] * spin[0] + d[1] * spin[1] + d[2] * spin[2]) / len), 9);
+      expect(s.cvInner / DEG).toBeLessThanOrEqual(two.innerMaxDeg);
+      expect(s.cvOuter / DEG).toBeLessThanOrEqual(two.outerMaxDeg);
+      expect(s.plunge).toBeGreaterThanOrEqual(two.plungeM[0]);
+      expect(s.plunge).toBeLessThanOrEqual(two.plungeM[1]);
+      most = Math.max(most, Math.abs(s.plunge));
+    }
+    expect(most).toBeGreaterThan(0.005);
+  });
+
+  it('the closed form agrees with Newton on the same axis written as five distances', () => {
+    const intents: PivotIntent[] = [
+      PIVOT_TYPICAL['trailing-arm'],
+      PIVOT_TYPICAL['semi-trailing'],
+      PIVOT_TYPICAL['swing-axle'],
+      { ...PIVOT_TYPICAL['semi-trailing'], sweepDeg: 22, svAngleDeg: 6, pivotZM: 0.26 },
+    ];
+    const far: Vec3 = [0.2, 0.5, 0.6];
+    for (const intent of intents) {
+      const spec = pivotAxle(intent);
+      const axle = buildAxle(spec);
+      const exact = axle.solver;
+      const newton = new CornerSolver({ ...spec, linkage: pivotAsLinks(spec.linkage, spec.wheelCentre) });
+      const pose = CornerSolver.identity();
+      const dExact = new Float64Array(6);
+      const dNewton = new Float64Array(6);
+      for (const z of nodes(axle)) {
+        expect(newton.solve(pose, z, 0, 20).ok).toBe(true);
+        const table = new Float64Array(7);
+        const res = axle.solvePose(z, 0, null, table);
+        expect(res.ok && res.iterations === 0).toBe(true);
+        for (const k of [spec.wheelCentre, far]) {
+          const a = [0, 0, 0];
+          const b = [0, 0, 0];
+          exact.point(table, k, a);
+          newton.point(pose, k, b);
+          expect(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])).toBeLessThan(1e-9);
+        }
+        exact.derivatives(table, z, 0, dExact, null);
+        newton.derivatives(pose, z, 0, dNewton, null);
+        for (let i = 0; i < 6; i++) expect(Math.abs(dExact[i] - dNewton[i])).toBeLessThan(1e-9);
+      }
+      // And with central differences of the closed form itself.
+      const up = CornerSolver.identity();
+      const down = CornerSolver.identity();
+      const mid = CornerSolver.identity();
+      const h = 1e-5;
+      exact.solve(up, 0.03 + h, 0);
+      exact.solve(down, 0.03 - h, 0);
+      exact.solve(mid, 0.03, 0);
+      exact.derivatives(mid, 0.03, 0, dExact, null);
+      for (let k = 0; k < 3; k++) expect(Math.abs((up[k] - down[k]) / (2 * h) - dExact[k])).toBeLessThan(1e-6);
+    }
+  });
+
+  it('refuses an axis swept the wrong way round or beyond the car', () => {
+    // Swept back at the outer end the axis puts the roll centre below the road: the research's mistake to catch.
+    expect(() => pivotAxle({ ...PIVOT_TYPICAL['semi-trailing'], sweepDeg: -15 })).toThrow();
+    expect(() => pivotAxle({ ...PIVOT_TYPICAL['semi-trailing'], sweepDeg: 95 })).toThrow();
+    expect(() => pivotAxle({ ...PIVOT_TYPICAL['semi-trailing'], sweepDeg: NaN })).toThrow();
+    expect(() => pivotAxle({ ...PIVOT_TYPICAL['trailing-arm'], armM: 0 })).toThrow();
   });
 });
