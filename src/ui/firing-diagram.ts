@@ -47,6 +47,8 @@ export class FiringDiagram {
   private height = 0;
   private dpr = 1;
   private hover: { x: number; y: number } | null = null;
+  /** Cylinders resting now, drawn grey. */
+  private inactive = '';
   private readonly tooltip: HTMLElement;
   private markers: CycleMarkers | null = null;
 
@@ -81,6 +83,14 @@ export class FiringDiagram {
     this.element.setAttribute('aria-label', description);
   }
 
+  /** Greys out the rows of cylinders that rest. */
+  setInactive(cylinders: number[]): void {
+    const key = cylinders.join(',');
+    if (key === this.inactive) return;
+    this.inactive = key;
+    this.background = null;
+  }
+
   resize(width: number, height: number): void {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.width = width;
@@ -105,8 +115,17 @@ export class FiringDiagram {
     const gap = rowH > 7 ? 2 : 1;
     ctx.font = `${rowH < 10 ? 9 : 11}px "Fira Sans", sans-serif`;
     ctx.textBaseline = 'middle';
+    const resting = new Set(this.inactive ? this.inactive.split(',').map(Number) : []);
     this.rows.forEach((c, i) => {
       const y = t + i * rowH;
+      if (resting.has(c.n)) {
+        ctx.fillStyle = '#3d4547';
+        ctx.fillRect(l, y, plotW, rowH - gap);
+        ctx.fillStyle = '#7d8a87';
+        ctx.textAlign = 'right';
+        ctx.fillText(label(engine, c), l - 5, y + (rowH - gap) / 2 + 0.5);
+        return;
+      }
       for (let px = 0; px < plotW; px++) {
         const theta = (px / plotW) * engine.cycle;
         const phase = cyclePhase(engine, c, theta);

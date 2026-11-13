@@ -9,6 +9,7 @@ import { FUELS } from './fuels.ts';
 import { COLD_IGNITION_K, type Performance } from './physics.ts';
 import { designToSpec } from './to-spec.ts';
 import { lubricationFigures } from './lubrication-figures.ts';
+import { valvetrainDiagnostics } from './valvetrain-diagnostics.ts';
 
 export type Severity = 'fatal' | 'warning' | 'note';
 
@@ -64,7 +65,8 @@ export function diagnose(d: Design, perf: Performance): Diagnostic[] {
     add('rotor-failure', 'fatal', t('Ротор не витримає після {rpm} об/хв', { rpm: round(perf.failureRpm) }), t('Ексцентрик і підшипники навантажуються відцентровою силою ротора.'), t('Зменш межу обертів або ексцентриситет.'));
   }
   if (!rotary && perf.valveClearance < 0) {
-    add('valve-hit', 'fatal', t('Клапан б’є по поршню'), t('У перекритті фаз клапан заходить на {depth} мм туди, де вже стоїть поршень. Так двигун згинає клапани вже на першому оберті.', { depth: Math.abs(perf.valveClearance).toFixed(1) }), t('Зменш ступінь стиснення, підйом або тривалість фаз, або збільш кут між кулачками.'));
+    const phased = d.camPhaser !== 'none';
+    add('valve-hit', 'fatal', t('Клапан б’є по поршню'), phased ? t('У крайньому положенні фазообертача клапан заходить на {depth} мм туди, де вже стоїть поршень, навіть із виборками в днищі. Так двигун згинає клапани вже на першому оберті.', { depth: Math.abs(perf.valveClearance).toFixed(1) }) : t('У перекритті фаз клапан заходить на {depth} мм туди, де вже стоїть поршень. Так двигун згинає клапани вже на першому оберті.', { depth: Math.abs(perf.valveClearance).toFixed(1) }), phased ? t('Менший діапазон фазообертача, менше стиснення чи підйом.') : t('Зменш ступінь стиснення, підйом або тривалість фаз, або збільш кут між кулачками.'));
   } else if (!rotary && perf.valveClearance < 1.2) {
     add('valve-close', 'warning', t('Клапан майже торкається поршня'), t('Мінімальний зазор лише {gap} мм, а на нагрітому двигуні він ще менший.', { gap: perf.valveClearance.toFixed(1) }));
   }
@@ -171,6 +173,7 @@ export function diagnose(d: Design, perf: Performance): Diagnostic[] {
   if (!perf.cruise.reachable) {
     add('weak', 'note', t('Цей двигун не витягує круїз'), t('Для їзди 100 км/год потрібно близько 30 кВт при 2500 об/хв, а він стільки там не дає.'));
   }
+  out.push(...valvetrainDiagnostics(d, perf));
   const order: Record<Severity, number> = { fatal: 0, warning: 1, note: 2 };
   return out.sort((a, b) => order[a.severity] - order[b.severity]);
 }

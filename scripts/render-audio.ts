@@ -52,6 +52,8 @@ export interface RenderOptions {
   absorber?: AbsorberKind;
   /** Changes to the synth's configuration, for experiments. */
   config?: (cfg: SynthConfig) => SynthConfig;
+  /** Holds the variable valve gear at rest: phasers at park, the main cam, every cylinder firing. */
+  park?: boolean;
 }
 
 export interface Rendered {
@@ -66,7 +68,7 @@ export interface Rendered {
 export function render(id: string, steps: Step[], trim?: number, options: RenderOptions = {}): Rendered {
   const spec = engineById(id);
   if (!spec) throw new Error(`Unknown engine ${id}`);
-  const base = synthConfig(buildEngine(spec), trim);
+  const base = synthConfig(buildEngine(options.park ? { ...spec, vvt: undefined } : spec), trim);
   const synth = new EngineSynth(options.config ? options.config(base) : base, FS);
   let crank: LoadedCrank | null = null;
   let load: DynoLoad | null = null;

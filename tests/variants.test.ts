@@ -139,6 +139,21 @@ describe('real engines of each layout', () => {
     }
   });
 
+  it('the model’s warnings on real engines change only on purpose', () => {
+    // A shared change to the model (knock, residual gas, back pressure) moves engines across a threshold. Each
+    // flip must be looked at and named in the commit; update this snapshot only for flips that are meant.
+    const warnings: Record<string, string[]> = {};
+    for (const entry of CATALOGUE) {
+      for (const variant of [undefined, ...(ENGINE_VARIANTS[entry.id]?.variants ?? [])]) {
+        const d = { ...catalogueDesign(entry, variant), factory: null };
+        warnings[variant ? `${entry.id}/${variant.id}` : entry.id] = diagnose(d, evaluate(d))
+          .filter((x) => x.severity !== 'note')
+          .map((x) => `${x.severity}:${x.id}`);
+      }
+    }
+    expect(warnings).toMatchSnapshot();
+  });
+
   it('resolves an unknown variant to nothing, so the route can fall back', () => {
     expect(engineById('i3/no-such-engine')).toBeUndefined();
   });

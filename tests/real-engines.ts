@@ -28,3 +28,25 @@ export const REAL_FIGURES: Record<string, { hp: number; hpRpm: number; nm: numbe
   r4: { hp: 700, hpRpm: 9000, nm: 608, nmRpm: 6500 },
 };
 
+
+/**
+ * Bands the valve gear model must land in, from what manufacturers publish. The knock cases are engines that
+ * run a high compression on ordinary fuel thanks to the cam; the savings are claims over a whole test cycle,
+ * so the single cruise point may fall anywhere from a fraction of them up to them.
+ */
+export const REAL_VALVETRAIN = {
+  // Toyota 2ZR-FXE (Prius): 80.5 x 88.3 mm, 13 : 1, very late intake close, on regular fuel.
+  atkinson: { design: { bore: 80.5, stroke: 88.3, rodLength: 145, compression: 13, fuel: 'ai92', intakeValve: 31, exhaustValve: 26, lift: 9, rpmLimit: 5600 }, maxRetard: 8 },
+  // Mazda Skyactiv-G 2.0 for the US: 83.5 x 91.2 mm, 13 : 1 on regular, twin phasers and a 4-2-1 exhaust.
+  skyactiv: { design: { bore: 83.5, stroke: 91.2, rodLength: 150, compression: 13, fuel: 'ai92', rpmLimit: 6500, headerLength: 900 }, maxRetard: 12 },
+  // VW EA211 evo 1.5 TSI: 74.5 x 85.9 mm, 12.5 : 1 with an early intake close under boost.
+  miller: { design: { bore: 74.5, stroke: 85.9, rodLength: 140, compression: 12.5, fuel: 'ai95', charger: 'turbo', boostBar: 1, turboSizeHp: 170, intercooler: 0.8, directInjection: true, intakeDuration: 180, lobeSeparation: 96, intakeValve: 28, exhaustValve: 24, lift: 8.5, rpmLimit: 6200 } },
+  savings: {
+    // GM AFM: 5.5-7.5 % in the EPA cycle.
+    afm: [0.03, 0.12],
+    // Ford Ti-VCT: up to 4.5 % (NRC 2015, appendix H).
+    phasers: [0, 0.045],
+    // BMW Valvetronic and Fiat MultiAir: about 10 % (NRC 2015, appendix I).
+    liftControl: [0.02, 0.12],
+  },
+} as const;

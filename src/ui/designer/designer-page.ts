@@ -12,6 +12,7 @@ import { CATALOGUE_CHOICES, designFromSpec, editDesign, ODD_PRESETS, randomDesig
 import { designToSpec } from '../../designer/to-spec.ts';
 import { engineById } from '../../data/engines.ts';
 import { buildEngine, type Engine } from '../../engine/kinematics.ts';
+import { liveTiming, type ValveState } from '../../engine/valve-control.ts';
 import { assessReliability, restartOutlook, wearNow, type LimitItem, type Reliability } from '../../designer/reliability.ts';
 import { compareMetrics, snapshot, type Metric } from '../../designer/sensitivity.ts';
 import { numberLocale } from '../../i18n/locale.ts';
@@ -71,10 +72,14 @@ const summaryOf = (d: Design): string => {
   return parts.join(', ');
 };
 
+/** The parts of the valve gear that are drawn: not the schedule, which only moves them. */
+const drawnValves = (v: Engine['spec']['vvt']): unknown =>
+  v && [v.phaser, v.switching && [v.switching.cams, v.switching.kind, v.switching.low, v.switching.lowShare], v.lift?.kind, v.deactivation && [v.deactivation.kind, v.deactivation.sets]];
+
 /** Everything about the spec that changes what the 3D model looks like. */
 const geometryKey = (engine: Engine): string => {
   const s = engine.spec;
-  return JSON.stringify([s.layout, s.bore, s.stroke, s.rodRatio, s.compression, s.firingOrder, s.firingIntervals, s.valvetrain, s.valvesPerCyl, s.aspiration, s.valves, s.timing, s.blockMaterial, s.exhaust.groups, s.coverColor, s.tuning?.flywheelKg, s.tuning?.vibrationGain, s.tuning?.counterweightMm]);
+  return JSON.stringify([s.layout, s.bore, s.stroke, s.rodRatio, s.compression, s.firingOrder, s.firingIntervals, s.valvetrain, s.valvesPerCyl, s.aspiration, s.valves, s.timing, s.blockMaterial, s.exhaust.groups, s.coverColor, s.tuning?.flywheelKg, s.tuning?.vibrationGain, s.tuning?.counterweightMm, drawnValves(s.vvt)]);
 };
 
 export class DesignerPage {
@@ -388,8 +393,10 @@ export class DesignerPage {
   private failedItem: LimitItem | null = null;
 
   /** Called every frame while the page is shown. */
-  frame(rpm: number, running: boolean, throttle: number, dt: number): void {
+  frame(rpm: number, running: boolean, throttle: number, dt: number, valves?: ValveState): void {
     this.results.setMarker(rpm);
+    const spec = this.engine.spec;
+    this.controls.liveValves(running && valves && spec.timing ? liveTiming(spec.timing, spec.vvt, valves) : null, spec.valves?.lift ?? 10);
     if (!running || this.broken) {
       if (!this.broken) this.host.health(this.condition, null, 0);
       return;

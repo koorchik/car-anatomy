@@ -9,6 +9,8 @@
 
 import { mod, type Engine } from '../engine/kinematics.ts';
 import { EngineSim, type SimParams } from '../engine/sim.ts';
+import type { ValveTiming } from '../engine/spec.ts';
+import { interpolate, liveTiming } from '../engine/valve-control.ts';
 import { LOUDNESS_TRIM } from './loudness-trim.ts';
 import { Biquad, Noise, OnePoleHP, OnePoleLP, Pipe, softClip } from './dsp.ts';
 
@@ -51,6 +53,16 @@ export interface SynthConfig {
   supercharger: boolean;
   /** Intake runner length, metres. */
   intakeM: number;
+  /** Variable valve gear: what the live events are measured against. The gear itself is in sim.valves. */
+  valves?: SynthValves;
+}
+
+export interface SynthValves {
+  /** Events at park on the main cam, which evo and ivo of each cylinder already hold. */
+  timing: ValveTiming;
+  compression: number;
+  /** Rod length over stroke, for the cylinder volume at the moment the exhaust opens. */
+  rodRatio: number;
 }
 
 export function synthConfig(engine: Engine, trimOverride?: number): SynthConfig {
@@ -77,6 +89,7 @@ export function synthConfig(engine: Engine, trimOverride?: number): SynthConfig 
       torqueTable: tuning?.torqueTable,
       boostLagS: tuning?.boostLagS,
       catches: tuning?.catches,
+      valves: spec.vvt,
     },
     cylinders: engine.cylinders.map((c) => ({
       fire: c.fire,
@@ -101,7 +114,32 @@ export function synthConfig(engine: Engine, trimOverride?: number): SynthConfig 
     turbos,
     supercharger: tuning?.supercharger ?? false,
     intakeM: tuning?.intakeM ?? 0.32,
+    valves: spec.vvt && !isRotary ? { timing: engine.timing, compression: spec.compression, rodRatio: spec.rodRatio } : undefined,
   };
+}
+
+/** Cylinder volume over the chamber volume at a crank angle after firing TDC. */
+export function cylinderVolume(compression: number, rodRatio: number, angleDeg: number): number {
+  const g = (angleDeg * Math.PI) / 180;
+  const s = Math.sin(g);
+  const travel = 0.5 * (1 - Math.cos(g)) + rodRatio - Math.sqrt(rodRatio * rodRatio - 0.25 * s * s);
+  return 1 + (compression - 1) * travel;
+}
+
+/** What the valve gear does to each pulse right now. Recomputed when the controller's state changes. */
+interface LiveVoice {
+  /** Crank degrees the events moved from the configured evo and ivo. */
+  evoShift: number;
+  ivoShift: number;
+  /** Blowdown strength: charge trapped, and how far it has expanded when the valve opens. */
+  exhaustGain: number;
+  /** Intake pulse strength and length. */
+  intakeGain: number;
+  intakeTau: number;
+  off: Set<number>;
+  /** Share of cylinders firing. The others' work is done by those left. */
+  active: number;
+  fuelOnly: boolean;
 }
 
 interface Pulse {
@@ -119,12 +157,18 @@ class CylinderVoice {
   readonly angleOffset: number;
   readonly tauScale: number;
   readonly cfg: SynthCylinder;
+  /** Cylinder number: configs list cylinders in number order. */
+  readonly n: number;
   evoPrev = 0;
   ivoPrev = 0;
   firePrev = 0;
+  /** Crank degrees since the last blowdown and intake pulse: a moved event must not fire twice in one cycle. */
+  sinceExhaust = 1e9;
+  sinceIntake = 1e9;
 
-  constructor(cfg: SynthCylinder, fs: number, noise: Noise, rough: number) {
+  constructor(cfg: SynthCylinder, fs: number, noise: Noise, rough: number, n: number) {
     this.cfg = cfg;
+    this.n = n;
     // Primary pipe: a closed valve at one end, an open junction at the other.
     this.header = new Pipe(cfg.headerM, HOT_SOUND_SPEED, -0.38, 5200, fs);
     // No two cylinders are identical: this is what produces half-order content in real engines.
@@ -243,6 +287,10 @@ export class EngineSynth {
   private fadeTarget = 1;
   private fadeRate = 0;
   private pendingCfg: SynthConfig | null = null;
+  private live: LiveVoice | null = null;
+  /** The controller's state the live voice was made for, quantised; and the resting list it saw. */
+  private readonly liveKey = new Float64Array(6).fill(Number.NaN);
+  private liveOff: readonly number[] | null = null;
 
   constructor(cfg: SynthConfig, fs: number) {
     this.fs = fs;
@@ -270,7 +318,10 @@ export class EngineSynth {
   private applyConfig(cfg: SynthConfig): void {
     const fs = this.fs;
     this.cfg = cfg;
-    this.cyl = cfg.cylinders.map((c) => new CylinderVoice(c, fs, this.noise, cfg.rough));
+    this.cyl = cfg.cylinders.map((c, i) => new CylinderVoice(c, fs, this.noise, cfg.rough, i + 1));
+    this.live = null;
+    this.liveKey.fill(Number.NaN);
+    this.liveOff = null;
     const groupCount = cfg.groupPans.length;
     this.groups = Array.from({ length: groupCount }, (_, i) => new GroupVoice(cfg.pipeM, cfg.groupPans[i] ?? 0, fs, cfg.open));
     this.ampScale = pulseScale(cfg.sim.cylinders, cfg.displacementCc) * 2.1 * cfg.trim;
@@ -346,7 +397,10 @@ export class EngineSynth {
     const noise = this.noise;
 
     for (let s = 0; s < n; s++) {
-      if (s % 16 === 0) sim.step(dt * 16);
+      if (s % 16 === 0) {
+        sim.step(dt * 16);
+        if (this.cfg.valves) this.updateLive();
+      }
       if (this.fadeRate > 0) {
         this.fade += this.fade < this.fadeTarget ? this.fadeRate : -this.fadeRate;
         if (this.fade <= 0 && this.pendingCfg) {
@@ -364,7 +418,8 @@ export class EngineSynth {
       const nRpm = rpm / this.cfg.sim.redlineRpm;
       const stepDeg = rpm * 6 * dt;
       const running = sim.state === 'running';
-      const load = sim.load;
+      const live = this.live;
+      const load = live && live.active < 1 ? Math.min(1, sim.load / live.active) : sim.load;
       const firing = running && !sim.fuelCut;
       const movementAmp = rpm > 2 ? Math.min(1, rpm / 40) : 0;
 
@@ -373,23 +428,35 @@ export class EngineSynth {
       let ignitionKick = 0;
 
       for (const v of this.cyl) {
+        // A resting cylinder: with its valves shut it is silent, with only its fuel cut it just pumps air.
+        const resting = live !== null && live.off.has(v.n);
+        const shut = resting && !live!.fuelOnly;
+        v.sinceExhaust += stepDeg;
+        v.sinceIntake += stepDeg;
         // Event detection: each phase wraps at 0 when the crank passes its angle.
-        const evoPhase = mod(sim.angle - v.cfg.evo - v.angleOffset, cycle);
-        if (evoPhase < v.evoPrev && stepDeg > 0 && movementAmp > 0) this.triggerExhaust(v, firing, load, nRpm);
+        const evoPhase = mod(sim.angle - v.cfg.evo - (live?.evoShift ?? 0) - v.angleOffset, cycle);
+        if (evoPhase < v.evoPrev && stepDeg > 0 && movementAmp > 0 && v.sinceExhaust > cycle / 2) {
+          v.sinceExhaust = 0;
+          if (!shut) this.triggerExhaust(v, firing && !resting, load, nRpm);
+          if (live && !resting) v.exhaust.amp *= live.exhaustGain;
+        }
         v.evoPrev = evoPhase;
 
-        const ivoPhase = mod(sim.angle - v.cfg.ivo, cycle);
-        if (ivoPhase < v.ivoPrev && stepDeg > 0 && movementAmp > 0) {
-          v.intake.t = 0;
-          const flow = 0.1 + 0.9 * sim.throttle;
-          v.intake.amp = flow * v.gain * (0.35 + 0.65 * nRpm);
-          v.intake.tau = 0.0015 + 0.0024 * (1 - nRpm);
-          this.tickEnv = Math.max(this.tickEnv, 0.4 + 0.6 * noise.unit());
+        const ivoPhase = mod(sim.angle - v.cfg.ivo - (live?.ivoShift ?? 0), cycle);
+        if (ivoPhase < v.ivoPrev && stepDeg > 0 && movementAmp > 0 && v.sinceIntake > cycle / 2) {
+          v.sinceIntake = 0;
+          if (!shut) {
+            v.intake.t = 0;
+            const flow = 0.1 + 0.9 * sim.throttle;
+            v.intake.amp = flow * v.gain * (0.35 + 0.65 * nRpm) * (live?.intakeGain ?? 1);
+            v.intake.tau = (0.0015 + 0.0024 * (1 - nRpm)) * (live?.intakeTau ?? 1);
+            this.tickEnv = Math.max(this.tickEnv, 0.4 + 0.6 * noise.unit());
+          }
         }
         v.ivoPrev = ivoPhase;
 
         const firePhase = mod(sim.angle - v.cfg.fire - v.angleOffset, cycle);
-        if (firePhase < v.firePrev && stepDeg > 0 && movementAmp > 0 && firing) {
+        if (firePhase < v.firePrev && stepDeg > 0 && movementAmp > 0 && firing && !resting) {
           ignitionKick += (this.cfg.isDiesel ? 0.9 + 0.5 * (1 - load) : 0.2 + 0.8 * load) * (0.8 + 0.4 * noise.unit());
         }
         v.firePrev = firePhase;
@@ -409,7 +476,7 @@ export class EngineSynth {
         }
         // Displacement phase of the exhaust stroke: the piston pushing out what remains.
         const phi = (mod(sim.angle - v.cfg.fire, cycle) / cycle) * 4;
-        if (phi > 1 && phi < 2) {
+        if (phi > 1 && phi < 2 && !shut) {
           const w = Math.sin(Math.PI * (phi - 1));
           x += 0.1 * w * w * (0.2 + 0.8 * Math.min(1, nRpm * 1.6)) * (0.3 + 0.7 * load);
         }
@@ -474,7 +541,7 @@ export class EngineSynth {
       exR += pop;
 
       // Intake path.
-      const airflow = Math.max(0, sim.throttle) * Math.min(1, 0.15 + nRpm);
+      const airflow = Math.max(0, sim.throttle) * Math.min(1, 0.15 + nRpm) * (live?.intakeGain ?? 1);
       const run = this.runner.process(intakeIn * 0.5);
       const hiss = this.hiss.process(noise.next()) * airflow * (0.1 + 0.3 * nRpm) * 0.7;
       const plen = this.plenum.process(run);
@@ -561,6 +628,56 @@ export class EngineSynth {
       left[s] = outL;
       right[s] = outR;
     }
+  }
+
+  /**
+   * Live events and strengths from the valve controller. The blowdown follows the cylinder pressure when the
+   * exhaust opens: the charge trapped (high cam over low, from the performance model) and how far it has
+   * expanded by then, p ~ V^-1.3. Nothing here is a sound effect: only those physical quantities move.
+   */
+  private updateLive(): void {
+    const cfg = this.cfg;
+    const valves = cfg.valves!;
+    const vvt = cfg.sim.valves;
+    const st = this.sim.valves.state;
+    const load = Math.min(1, Math.max(0, this.sim.load));
+    // Runs on the audio thread every 16 samples: compare numbers, build nothing unless something moved.
+    const k = this.liveKey;
+    const a = Math.round(st.intakeShift * 10);
+    const b = Math.round(st.exhaustShift * 10);
+    const c = (st.highCam ? 1 : 0) + (st.lateOpen ? 2 : 0);
+    const e = Math.round(st.liftShare * 1000);
+    const f = Math.round(this.sim.rpm / 50);
+    const g = Math.round(load * 20);
+    if (k[0] === a && k[1] === b && k[2] === c && k[3] === e && k[4] === f && k[5] === g && this.liveOff === st.off) return;
+    k[0] = a;
+    k[1] = b;
+    k[2] = c;
+    k[3] = e;
+    k[4] = f;
+    k[5] = g;
+    this.liveOff = st.off;
+    const ref = valves.timing;
+    const now = liveTiming(ref, vvt, st);
+    const volume = (deg: number): number => cylinderVolume(valves.compression, valves.rodRatio, Math.min(180, Math.max(20, deg)));
+    const expansion = (volume(ref.exhaustOpen) / volume(now.timing.exhaustOpen)) ** 1.3;
+    const sw = vvt?.switching;
+    // Charge on the cam in use over the charge on the main cam, which the base loudness was set on. That ratio
+    // is the model's at full load; with the butterfly nearly shut the throttle sets the charge, not the cam.
+    const wot = sw && !st.highCam ? 1 / Math.max(0.3, interpolate(vvt!.wotRpm, sw.highGain, this.sim.rpm)) : 1;
+    const mass = 1 + (wot - 1) * load;
+    const refSpan = ref.intakeClose - ref.intakeOpen;
+    const span = now.timing.intakeClose - now.timing.intakeOpen;
+    this.live = {
+      evoShift: now.timing.exhaustOpen - ref.exhaustOpen,
+      ivoShift: now.timing.intakeOpen - ref.intakeOpen,
+      exhaustGain: mass * expansion,
+      intakeGain: mass * Math.sqrt(Math.max(0.02, now.intakeLift)),
+      intakeTau: Math.max(0.2, span / Math.max(refSpan, 1)),
+      off: new Set(st.off),
+      active: st.active,
+      fuelOnly: vvt?.deactivation?.kind === 'fuel',
+    };
   }
 
   private triggerExhaust(v: CylinderVoice, firing: boolean, load: number, nRpm: number): void {

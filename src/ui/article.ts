@@ -9,6 +9,7 @@ import { balance, groupIntervals, torqueCurve, type Engine } from '../engine/kin
 import { ASPIRATION_NAMES, VALVETRAIN_NAMES, type EngineSpec } from '../engine/spec.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
+import { VALVETRAIN_FIELD_NAMES, valvetrainArticleHtml, valvetrainFigures } from './valvetrain-article.ts';
 
 const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { maximumFractionDigits: digits, minimumFractionDigits: digits });
 
@@ -47,6 +48,7 @@ const figures = (engine: Engine): Array<[string, string]> => {
   if (s.systems) rows.push([t('Подача палива'), FUEL_SYSTEM_NAMES[s.systems.fuelSystem]], [t('Охолодження'), COOLING_NAMES[s.systems.cooling]]);
   if (s.systems) rows.push([t('Мащення'), t('{kind}, {litres} л оливи', { kind: SUMP_NAMES[s.systems.sump], litres: num(s.systems.oilL, s.systems.oilL % 1 ? 1 : 0) })]);
   rows.push([t('Межа обертів'), t('{rpm} об/хв', { rpm: num(s.redlineRpm) })]);
+  rows.push(...valvetrainFigures(engine));
   return rows;
 };
 
@@ -149,6 +151,7 @@ export const FIELD_NAMES: Record<string, string> = {
   fuelSystem: t('систему живлення'), cooling: t('тип охолодження'), oilCooler: t('оливний радіатор'), pistonJets: t('охолодження поршнів оливою'), sparkPlugs: t('кількість свічок'), ignition: t('систему запалювання'), glowPlugs: t('свічки розжарювання'), oilPump: t('привід оливного насоса'), oilFilter: t('оливний фільтр'),
   sump: t('тип мащення'), oilL: t('об’єм оливи'),
   flywheelKg: t('масу маховика'),
+  ...VALVETRAIN_FIELD_NAMES,
 };
 
 /** What this engine's exhaust is set to, in words, so the difference between engines of a page can be read as well as heard. */
@@ -211,6 +214,7 @@ export function articleHtml(engine: Engine): string {
     ${engine.isRotary ? '' : `<p class="note">${t('{link}: як олива в піддоні поводиться на треку і чи дістане її насос.', { link: `<a class="sibling" href="#/sump/${s.id}">${t('Мащення на треку')}</a>` })}</p>`}
     ${facts ? factsHtml(facts, voiceText(s)) : ''}
     <p>${t('{link} і подивитись, що зміниться.', { link: `<a class="sibling" href="#/designer/from/${s.id}">${t('Відкрити цей двигун у конструкторі')}</a>` })}</p>
+    ${valvetrainArticleHtml(engine)}
     ${isVariant ? `<h2 class="layout-general">${t('Про цю компоновку загалом')}</h2><p class="lead">${escapeHtml(a.lead)}</p>` : ''}
     <h3>${t('Як це влаштовано')}</h3>
     <p>${escapeHtml(a.how)}</p>

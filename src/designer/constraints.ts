@@ -8,6 +8,7 @@ import { DEFAULT_DESIGN, valveSplit, type Design, type DesignLayout, type Publis
 import { COOLINGS, FUEL_SYSTEMS, IGNITIONS, OIL_COOLERS, OIL_PUMP_DRIVES, SUMP_KINDS } from '../engine/systems-spec.ts';
 import { derivedDesignOilL } from './lubrication.ts';
 import { resolveSystems } from './systems.ts';
+import { resolveDeactivationWindow, resolveValvetrain } from './valvetrain.ts';
 
 export interface Range {
   min: number;
@@ -80,7 +81,8 @@ export type NumericKey =
   | 'intakeValve' | 'exhaustValve' | 'lift' | 'intakeDuration' | 'exhaustDuration' | 'lobeSeparation' | 'springForce'
   | 'runnerLength' | 'runnerDia' | 'boostBar' | 'turboSizeHp' | 'intercooler' | 'lambda' | 'ignitionOffset'
   | 'headerLength' | 'headerDia' | 'headerSpread' | 'pipeDia' | 'pipeLength' | 'rpmLimit' | 'rotorR' | 'rotorE' | 'rotorWidth'
-  | 'mufflerOpen' | 'rasp' | 'pops' | 'turboWhine' | 'oilL';
+  | 'mufflerOpen' | 'rasp' | 'pops' | 'turboWhine' | 'oilL'
+  | 'intakePhaseRange' | 'exhaustPhaseRange' | 'switchRpm' | 'lowLift' | 'lowDuration';
 
 export function paramRange(d: Design, key: NumericKey): Range {
   switch (key) {
@@ -181,6 +183,16 @@ export function paramRange(d: Design, key: NumericKey): Range {
         maxWhy: t('Більше оливи вже не вміститься в розумний піддон чи бак.'),
       };
     }
+    case 'intakePhaseRange':
+      return fixed(10, 80);
+    case 'exhaustPhaseRange':
+      return fixed(10, 60);
+    case 'switchRpm':
+      return { min: 1500, max: Math.max(1500, d.rpmLimit - 300), maxWhy: t('Вище відсічки високий кулачок уже не встигне попрацювати.') };
+    case 'lowLift':
+      return { min: 2, max: Math.max(2, d.lift - 0.5), maxWhy: t('Низький кулачок має бути нижчим за основний, інакше перемикати нічого.') };
+    case 'lowDuration':
+      return { min: 160, max: Math.max(160, d.intakeDuration - 10), maxWhy: t('Низький кулачок має бути коротшим за основний, інакше перемикати нічого.') };
   }
 }
 
@@ -207,6 +219,12 @@ const ALLOWED = {
   oilPump: [null, ...OIL_PUMP_DRIVES],
   sparkPlugs: [null, 1, 2],
   sump: [null, ...SUMP_KINDS],
+  camPhaser: ['none', 'intake', 'dual', 'coupled'],
+  camSwitch: ['none', 'intake', 'exhaust', 'both'],
+  switchKind: ['pin', 'slide'],
+  liftControl: ['cam', 'continuous', 'multiair'],
+  deactivation: ['none', 'valves', 'fuel'],
+  deactivateGroup: ['first', 'second', 'alternate'],
 };
 
 const ORDERED_KEYS: NumericKey[] = [
@@ -215,6 +233,8 @@ const ORDERED_KEYS: NumericKey[] = [
   'runnerLength', 'runnerDia', 'boostBar', 'turboSizeHp', 'intercooler', 'lambda', 'ignitionOffset',
   'headerLength', 'headerDia', 'headerSpread', 'pipeDia', 'pipeLength', 'rpmLimit', 'rotorR', 'rotorE', 'rotorWidth',
   'mufflerOpen', 'rasp', 'pops', 'turboWhine', 'oilL',
+  // After lift, intakeDuration and rpmLimit, which bound them.
+  'intakePhaseRange', 'exhaustPhaseRange', 'switchRpm', 'lowLift', 'lowDuration',
 ];
 
 /** Brings any design, however it arose, to a state that can be built. Pure and idempotent. */
@@ -240,11 +260,13 @@ export function resolveDesign(input: Design): Design {
   if (d.rasp !== null && !Number.isFinite(d.rasp)) d.rasp = null;
   if (d.pops !== null && !Number.isFinite(d.pops)) d.pops = null;
   if (d.oilL !== null && !Number.isFinite(d.oilL)) d.oilL = null;
+  resolveValvetrain(d);
   for (const key of ORDERED_KEYS) {
     if (d[key] === null) continue;
     const range = paramRange(d, key);
     (d[key] as number) = clamp(d[key] as number, range.min, range.max);
   }
+  resolveDeactivationWindow(d);
   resolveExhaustTables(d);
   resolveIdentity(d);
   for (const key of ['pistonJets', 'glowPlugs', 'oilFilter'] as const) if (d[key] !== true && d[key] !== false) d[key] = null;

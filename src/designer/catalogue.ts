@@ -9,6 +9,7 @@ import { axisAngle } from './crank.ts';
 import { DEFAULT_DESIGN, type CrankThrow, type Design, type PublishedFigures } from './design.ts';
 import type { SYSTEM_KEYS } from './systems.ts';
 import { factoryInputs, designToSpec } from './to-spec.ts';
+import { NO_MECHANISMS } from './valvetrain.ts';
 
 export interface CatalogueEntry {
   id: string;
@@ -90,7 +91,8 @@ export const publishedOf = (facts: EngineFacts | undefined): PublishedFigures | 
 export function catalogueDesign(entry: CatalogueEntry, variant?: EngineVariant, facts: EngineFacts | undefined = variant): Design {
   const name = variant?.name ?? entry.example;
   const trimKey = variant ? `${entry.id}/${variant.id}` : entry.id;
-  const base: Design = { ...DEFAULT_DESIGN, ...entry.design, ...variant?.design, ...(variant ? variant.systems : entry.systems), name };
+  // Valve gear is a fact about one engine, not about the layout: a variant states its own or has none.
+  const base: Design = { ...DEFAULT_DESIGN, ...entry.design, ...(variant ? NO_MECHANISMS : {}), ...variant?.design, ...(variant ? variant.systems : entry.systems), name };
   const rotary = base.layout === 'rotary';
   const firing = variant?.firing ?? entry.firing;
   const { order } = firing;

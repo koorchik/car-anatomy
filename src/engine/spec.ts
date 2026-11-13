@@ -3,6 +3,7 @@
 
 import { t } from '../i18n/t.ts';
 import type { SystemsSpec } from './systems-spec.ts';
+import type { VariableValves } from './valve-control.ts';
 
 export type Fuel = 'petrol' | 'diesel';
 export type Aspiration = 'na' | 'turbo' | 'twin-turbo' | 'quad-turbo' | 'supercharged';
@@ -142,6 +143,8 @@ export interface EngineSpec {
   verifyNote?: string;
   timing?: ValveTiming;
   valves?: ValveSizes;
+  /** Variable valve gear. Only engines that have some. `timing` is then its park position. */
+  vvt?: VariableValves;
   tuning?: EngineTuning;
   /** Oil, coolant, fuel, ignition and air hardware, for the systems layers. Built by hand in tests without it. */
   systems?: SystemsSpec;

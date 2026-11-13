@@ -3,6 +3,7 @@
 import { cylinderChoices, type NumericKey } from '../../designer/constraints.ts';
 import { effectiveOpen, effectivePops, effectiveRasp, isBoosted, isRotary, isTurbo, type Design } from '../../designer/design.ts';
 import { FUELS, type FuelId } from '../../designer/fuels.ts';
+import { VALVETRAIN_GROUP } from './valvetrain-params.ts';
 import type { Performance } from '../../designer/physics.ts';
 import { FUEL_SYSTEM_NAMES, fuelSystemsFor, shownSystems } from '../../designer/systems.ts';
 import { derivedDesignOilL, effectiveSump } from '../../designer/lubrication.ts';
@@ -33,12 +34,13 @@ export interface NumberParam {
 export interface ChoiceParam {
   kind: 'choice';
   key: 'layout' | 'cylinders' | 'pistonMaterial' | 'rodMaterial' | 'blockMaterial' | 'crankPreset' | 'balanceShafts' | 'valvetrain' | 'valvesPerCyl' | 'charger' | 'fuel' | 'collector' | 'muffler' | 'blowoff'
-    | 'fuelSystem' | 'cooling' | 'oilCooler' | 'ignition' | 'oilPump' | 'sparkPlugs' | 'sump';
+    | 'fuelSystem' | 'cooling' | 'oilCooler' | 'ignition' | 'oilPump' | 'sparkPlugs' | 'sump'
+    | 'camPhaser' | 'camSwitch' | 'switchKind' | 'liftControl' | 'deactivation' | 'deactivateGroup';
   label: string;
   /** Options, or a function when they depend on the rest of the design. */
   options: Array<[string | number, string]> | ((d: Design) => Array<[string | number, string]>);
   help: string;
-  /** Set when the choice changes nothing but the sound, or nothing but the systems layers. */
+  /** Set when the choice changes nothing but the sound, or nothing but the picture (the systems layers, the valve gear). */
   only?: 'sound' | 'looks';
   /** For optional fields: what to show while the field itself is null. */
   shown?: (d: Design) => string | number;
@@ -80,7 +82,7 @@ export interface ParamGroup {
   readouts?: (d: Design, perf: Performance) => Array<[string, string]>;
   applies?: (d: Design) => boolean;
   /** Extra widget rendered under the controls. */
-  widget?: 'crank' | 'pipes' | 'revs' | 'track';
+  widget?: 'crank' | 'pipes' | 'revs' | 'track' | 'cams';
 }
 
 const notRotary = (d: Design): boolean => !isRotary(d);
@@ -223,6 +225,7 @@ export const PARAM_GROUPS: ParamGroup[] = [
       [t('Зазор клапан-поршень'), t('{value} мм', { value: perf.valveClearance.toFixed(1) })],
     ],
   },
+  VALVETRAIN_GROUP,
   {
     id: 'intake',
     title: t('Впуск'),

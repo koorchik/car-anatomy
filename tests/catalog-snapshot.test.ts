@@ -28,6 +28,7 @@ const fingerprint = (text: string): string => {
 
 const describeEngine = (spec: EngineSpec): unknown => {
   const e = buildEngine(spec);
+  const sound = synthConfig(e);
   // The pan the 3D draws: how low the engine sits and how wide its pan is.
   const pan = panShape(e, systemsOf(spec));
   return round({
@@ -59,6 +60,7 @@ const describeEngine = (spec: EngineSpec): unknown => {
     exhaust: spec.exhaust,
     timing: spec.timing,
     valves: spec.valves,
+    vvt: spec.vvt,
     verifyNote: spec.verifyNote,
     flywheel: spec.tuning?.flywheelKg,
     counterweight: spec.tuning?.counterweightMm,
@@ -66,7 +68,8 @@ const describeEngine = (spec: EngineSpec): unknown => {
     article: fingerprint(JSON.stringify(spec.article)),
     systems: spec.systems,
     engine: { r: e.r, l: e.l, deck: e.deck, cycle: e.cycle, zMin: e.zMin, zMax: e.zMax, cc: e.displacementCc, intervals: e.intervals, cylinders: e.cylinders, banks: e.banks, throws: e.throws, rotary: e.isRotary },
-    sound: synthConfig(e),
+    // The valve gear is spec.vvt itself: stored once, above.
+    sound: { ...sound, sim: { ...sound.sim, valves: sound.sim.valves ? 'spec.vvt' : undefined } },
     pan: { crankHeightMm: pan.crankHeightMm, halfW: pan.halfW },
   });
 };

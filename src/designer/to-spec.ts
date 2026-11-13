@@ -1,12 +1,14 @@
 // Turns a resolved design into the same EngineSpec the catalogue uses, so 3D, sound and charts need no special cases.
 
 import type { Aspiration, EngineSpec, Family, Fuel } from '../engine/spec.ts';
+import { ruleSchedule, type VariableValves } from '../engine/valve-control.ts';
 import { firingFromCrank, layoutDef } from './crank.ts';
 import { safeCounterweight } from './constraints.ts';
 import { effectiveOpen, effectivePops, effectiveRasp, exhaustGroups, isRotary, isTurbo, type Design } from './design.ts';
 import { FUELS } from './fuels.ts';
-import { reciprocatingMass, rotatingMass, rotorMass, valveEvents, type Performance } from './physics.ts';
+import { Model, reciprocatingMass, rotatingMass, rotorMass, type Performance } from './physics.ts';
 import { systemsOfDesign } from './systems.ts';
+import { camAt, deactivationSets, deactivationWindow, hasVariableValves, phaserRanges, timingOf } from './valvetrain.ts';
 
 const FAMILY: Record<Design['layout'], Family> = {
   inline: 'inline',
@@ -55,8 +57,9 @@ const primaryLengths = (d: Design): number | number[] => {
   return Array.from({ length: d.cylinders }, (_, i) => nominal * (1 + d.headerSpread * pattern[i % pattern.length]! * 1.4));
 };
 
-/** The figures a spec takes from the performance model. */
-export type SpecInputs = Pick<Performance, 'events' | 'idleRpm' | 'redlineRpm' | 'revTimeS' | 'roughness' | 'torqueTable' | 'boostLagS' | 'catches'>;
+/** The figures a spec takes from the performance model. The schedule comes from it only after an engineering change. */
+export type SpecInputs = Pick<Performance, 'events' | 'idleRpm' | 'redlineRpm' | 'revTimeS' | 'roughness' | 'torqueTable' | 'boostLagS' | 'catches'> &
+  Partial<Pick<Performance, 'valvetrain' | 'cruise'>>;
 
 /** The same figures for a design on factory calibration, with no need to run the model. */
 const BLOWOFF_LEVEL = { recirculated: 0, soft: 0.35, vented: 1 };
@@ -65,7 +68,7 @@ export function factoryInputs(d: Design): SpecInputs {
   const f = d.factory;
   if (!f) throw new Error(`${d.name} has no factory calibration`);
   return {
-    events: valveEvents(d),
+    events: camAt(d, { high: true }).events,
     idleRpm: f.idleRpm,
     redlineRpm: d.rpmLimit,
     revTimeS: f.revTimeS,
@@ -73,6 +76,63 @@ export function factoryInputs(d: Design): SpecInputs {
     torqueTable: [],
     boostLagS: 0,
     catches: true,
+  };
+}
+
+/**
+ * Charge trapped on the high cam over the low one at the schedule speeds. Sound needs it even on factory
+ * calibration, so an engine with a cam switch pays for a handful of model points, and only that engine.
+ */
+function cheapHighGain(d: Design, rpms: number[]): number[] {
+  const model = new Model(d);
+  const fill = (rpm: number, high: boolean): number => model.at(rpm, { throttle: 1, lambda: d.lambda, noBoost: false, cam: camAt(d, { high }) }).fillRatio;
+  return rpms.map((rpm) => fill(rpm, true) / Math.max(fill(rpm, false), 1e-6));
+}
+
+/** The variable valve gear as the crank simulation, the sound and the 3D model read it. */
+export function variableValves(d: Design, perf: SpecInputs): VariableValves | undefined {
+  if (!hasVariableValves(d) || isRotary(d)) return undefined;
+  const ranges = phaserRanges(d);
+  const model = !d.factory && perf.valvetrain && perf.cruise ? perf : null;
+  const rule = ruleSchedule(d.camPhaser, ranges.intake, ranges.exhaust, d.rpmLimit);
+  const schedule = model
+    ? { wotRpm: model.valvetrain!.nodeRpm, wotIntake: model.valvetrain!.wotIntake, wotExhaust: model.valvetrain!.wotExhaust, partIntake: model.cruise!.intakeShift, partExhaust: model.cruise!.exhaustShift }
+    : rule;
+  const sets = deactivationSets(d);
+  const [rpmMin, rpmMax] = deactivationWindow(d, perf.idleRpm, perf.redlineRpm);
+  const round = (v: number): number => Math.round(v * 100) / 100;
+  return {
+    phaser: d.camPhaser,
+    intakeRange: ranges.intake,
+    exhaustRange: ranges.exhaust,
+    wotRpm: schedule.wotRpm.map(Math.round),
+    wotIntake: schedule.wotIntake.map(round),
+    wotExhaust: schedule.wotExhaust.map(round),
+    partIntake: round(schedule.partIntake),
+    partExhaust: round(schedule.partExhaust),
+    switching:
+      d.camSwitch === 'none'
+        ? null
+        : {
+            cams: d.camSwitch,
+            rpm: d.switchRpm,
+            kind: d.switchKind,
+            low: timingOf(camAt(d, { high: false }).events),
+            lowShare: Math.round((d.lowLift / d.lift) * 1000) / 1000,
+            highGain: (model ? model.valvetrain!.highGain : cheapHighGain(d, schedule.wotRpm)).map(round),
+          },
+    lift: d.liftControl === 'cam' ? null : { kind: d.liftControl, maxLift: d.lift },
+    deactivation:
+      d.deactivation === 'none'
+        ? null
+        : {
+            kind: d.deactivation,
+            sets,
+            rpmMin,
+            rpmMax,
+            documented: d.deactivateRpm !== null,
+            loadMax: 0.3,
+          },
   };
 }
 
@@ -126,6 +186,7 @@ export function designToSpec(d: Design, perf: SpecInputs): EngineSpec {
       ? undefined
       : { exhaustOpen: events.exhaustOpen, exhaustClose: events.exhaustClose, intakeOpen: events.intakeOpen, intakeClose: events.intakeClose },
     valves: rotary ? undefined : { intake: d.intakeValve, exhaust: d.exhaustValve, lift: d.lift },
+    vvt: variableValves(d, perf),
     tuning: {
       // Factory figures come with the catalogue's own behaviour. The model takes over after the first change.
       torqueTable: factory ? undefined : perf.torqueTable,
