@@ -97,7 +97,7 @@ const loads = [0.5, 1, 1.5, 2].map((k) => k * staticN);
 
 // Side force over slip angle on four loads, and the aligning moment.
 const lateral = [`alpha_deg,${loads.map((fz) => `fy_n_${fz.toFixed(0)},mz_nm_${fz.toFixed(0)}`).join(',')}`];
-for (let deg = -15; deg <= 15 + 1e-9; deg += 0.25) {
+for (let deg = -20; deg <= 20 + 1e-9; deg += 0.25) {
   const cells = [deg.toFixed(2)];
   for (const fz of loads) {
     mfEval(tyre.set, 0, deg * DEG_RAD, 0, fz, surface, mfo);
@@ -126,7 +126,7 @@ for (const fz of loads) {
   let peakAt = 0;
   let mzPeak = 0;
   let mzAt = 0;
-  for (let i = 1; i <= 3000; i++) {
+  for (let i = 1; i <= 6000; i++) {
     const a = i * 0.005 * DEG_RAD;
     for (const sign of [1, -1]) {
       mfEval(tyre.set, 0, sign * a, 0, fz, surface, mfo);
