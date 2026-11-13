@@ -26,6 +26,7 @@ import { SumpMode } from './sump-host.ts';
 
 export class EnginesSection implements Section {
   readonly id = 'engines' as const;
+  readonly solidLabel = t('Двигун');
   ctx!: SectionContext;
   engine!: Engine;
   drive!: Drive;

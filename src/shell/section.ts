@@ -104,7 +104,7 @@ export interface PanelControl {
 // View
 
 export interface ViewControl {
-  /** The view chosen now: the model whole, in X-ray, or only its mechanism. */
+  /** The view chosen now: the model whole (named by Section.solidLabel), in X-ray, or only its mechanism. */
   readonly mode: ViewMode;
   /** Chooses a view, as the control or a key would. Listeners hear it even when it was already chosen. */
   set(mode: ViewMode): void;
@@ -239,6 +239,8 @@ export interface SectionContext {
 
 export interface Section {
   readonly id: SectionId;
+  /** What the first view, the model whole, is called on this section's pages, through t(): engine, gearbox, car. */
+  readonly solidLabel: string;
   /** Once, before the section is first shown: builds its DOM into the slots, registers its parts and keys. */
   mount(ctx: SectionContext): void;
   /** Every route of this section, the first one included (from is null then). The same route twice changes nothing. */

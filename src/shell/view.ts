@@ -25,4 +25,10 @@ export class ShellView implements ViewControl {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
+
+  /** Names the first view as the section shown calls it (Section.solidLabel). */
+  name(solid: string): void {
+    const button = this.group.querySelector<HTMLElement>('button[data-v="solid"]');
+    if (button && button.textContent !== solid) button.textContent = solid;
+  }
 }

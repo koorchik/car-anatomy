@@ -13,7 +13,7 @@ import { router } from './router.ts';
 import type { Route } from './routes.ts';
 import { ShellRuns } from './run-store.ts';
 import { ScaleBar } from './scale-bar.ts';
-import type { PanelControl, PanelSide, Section, SectionContext, TimeCapabilities } from './section.ts';
+import type { KeyBinding, PanelControl, PanelSide, Section, SectionContext, TimeCapabilities } from './section.ts';
 import { skeletonHtml, skeletonOf, type SkeletonElements } from './skeleton.ts';
 import { ShellTime } from './time.ts';
 import { ShellView } from './view.ts';
@@ -33,6 +33,9 @@ export class Shell {
   private readonly audio = new ShellAudio();
   private readonly idle = new ShellIdle();
   private readonly time: ShellTime;
+  private readonly view: ShellView;
+  /** The key of the first view, whose name in the help of the keys follows the section shown. */
+  private readonly solidKey: KeyBinding;
   private readonly scaleBar: ScaleBar;
   private readonly mounted = new Set<Section>();
   private shown: Section | null = null;
@@ -65,6 +68,7 @@ export class Shell {
     const keys = new ShellKeys(window, () => slots.table.isOpen);
     this.time = new ShellTime(elements.speed, () => this.shown?.time() ?? NO_SECTION);
     const view = new ShellView(elements.view);
+    this.view = view;
     const panels: PanelControl = {
       isOpen: (side) => this.open[side],
       setOpen: (side, open) => {
@@ -74,9 +78,10 @@ export class Shell {
     };
     this.context = { stage: this.stage, audio: this.audio, slots, router, idle: this.idle, runs: new ShellRuns(), keys, time: this.time, view, panels };
 
+    this.solidKey = { codes: ['Digit1'], label: t('Двигун'), down: () => view.set('solid') };
     keys.bind(SHELL_KEYS, [
       { codes: ['Escape'], label: t('Закрити'), reach: 'always', down: () => slots.table.open(false) },
-      { codes: ['Digit1'], label: t('Двигун'), down: () => view.set('solid') },
+      this.solidKey,
       { codes: ['Digit2'], label: t('Рентген'), down: () => view.set('xray') },
       { codes: ['Digit3'], label: t('Механізм'), down: () => view.set('mechanism') },
     ]);
@@ -137,6 +142,8 @@ export class Shell {
       section.mount(this.context);
     }
     this.shown = section;
+    this.view.name(section.solidLabel);
+    this.solidKey.label = section.solidLabel;
     this.time.refresh();
   }
 
