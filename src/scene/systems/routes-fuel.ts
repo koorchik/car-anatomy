@@ -292,10 +292,10 @@ export function rotaryFuelPlan(engine: Engine, systems: SystemsSpec, a: RotaryAn
     for (const runner of a.runners) {
       const tip = pointAlong(runner.points, 0.3);
       const top = tip.clone().add(v(-0.25 * R, 0.25 * R, 0));
-      plan.parts.push({ part: 'injector-port', shape: 'cylinder', position: tip.clone().lerp(top, 0.5), axis: top.clone().sub(tip).normalize(), radius: 0.04 * b, length: tip.distanceTo(top), material: 'dark' });
+      plan.parts.push({ part: 'injector-port-rotary', shape: 'cylinder', position: tip.clone().lerp(top, 0.5), axis: top.clone().sub(tip).normalize(), radius: 0.04 * b, length: tip.distanceTo(top), material: 'dark' });
       // The rotor's three faces breathe through this port in turn: the injector fires for whichever face is filling.
       const faces = engine.cylinders.map((c, i) => ({ c, i })).filter(({ c }) => c.bank === runner.rotor);
-      for (const { i } of faces) plan.fixedSprays.push({ part: 'injector-port', channel: 'spray', from: tip.clone(), to: runner.points[0]!.clone().lerp(tip, 0.2), radius: runner.r * 0.6, slot: system === 'mechanical' ? slots.continuous : slots.inject(i) });
+      for (const { i } of faces) plan.fixedSprays.push({ part: 'injector-port-rotary', channel: 'spray', from: tip.clone(), to: runner.points[0]!.clone().lerp(tip, 0.2), radius: runner.r * 0.6, slot: system === 'mechanical' ? slots.continuous : slots.inject(i) });
       tops.push(top);
     }
     const rail = tops.map((t) => t.clone().add(v(0, 0.05 * R, 0))).sort((p, q) => q.z - p.z);

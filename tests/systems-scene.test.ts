@@ -29,6 +29,13 @@ const drawn = (roots: THREE.Object3D[]): THREE.Object3D[] => {
   return out;
 };
 
+/** Draw calls of those objects: three.js draws a transparent two-sided material twice, back faces first. */
+const drawCalls = (objects: THREE.Object3D[]): number =>
+  objects.reduce((sum, o) => {
+    const m = (o as THREE.Mesh).material as THREE.Material;
+    return sum + (m.transparent && m.side === THREE.DoubleSide && !m.forceSinglePass ? 2 : 1);
+  }, 0);
+
 const layerObjects = (_model: EngineModel, layers: SystemsLayers, id: LayerId): THREE.Object3D[] => layers.layer(id)?.roots ?? [];
 
 describe.each(ENGINES.map((e) => e.id))('layers of %s', (id) => {
@@ -39,7 +46,7 @@ describe.each(ENGINES.map((e) => e.id))('layers of %s', (id) => {
       layers.set(layer, true);
       if (!layers.layer(layer)) continue;
       const objects = drawn(layerObjects(model, layers, layer));
-      expect(objects.length, `${id} ${layer}`).toBeLessThanOrEqual(8);
+      expect(drawCalls(objects), `${id} ${layer}`).toBeLessThanOrEqual(8);
       for (const o of objects) {
         // Spark and glow points are light, not parts: clicks pass through them.
         if ((o as THREE.Points).isPoints) continue;
@@ -88,6 +95,35 @@ describe('picking a pipe', () => {
 });
 
 describe('the oil layer in the scene', () => {
+  it.each(['i4', 'b4', 'v8-cross', 'r2'])('keeps the tilted oil surface of %s inside its pan', (id) => {
+    const { model, engine } = modelOf(id);
+    const layers = new SystemsLayers(engine, model);
+    layers.set('oil', true);
+    const layer = layers.layer('oil')!;
+    const box = layerPlan('oil', engine, model.systemsAnchors!())!.level!;
+    const flat = layer.oilSurface;
+    expect(flat.length).toBe(4);
+    for (const p of flat) expect(p.y).toBeCloseTo(box.y, 5);
+    // Up to cornering and braking hard enough to tip the surface past the pan's floor and top.
+    const room = box.top - box.y;
+    for (const [lift, tiltX, tiltZ] of [[0, 0.3, 0], [0, 0, 0.7], [0.2, -0.5, 0.9], [-0.5, 0.8, -1.1], [0.6, 0, 0.2]] as const) {
+      layer.setOilSurface(box.y + lift * room, tiltX, tiltZ);
+      const corners = layer.oilSurface;
+      expect(corners.length, `${id} ${tiltX} ${tiltZ}`).toBeGreaterThanOrEqual(3);
+      for (const p of corners) {
+        expect(Math.abs(p.x)).toBeLessThanOrEqual(box.halfW + 1e-6);
+        expect(p.z).toBeGreaterThanOrEqual(box.zMin - 1e-6);
+        expect(p.z).toBeLessThanOrEqual(box.zMax + 1e-6);
+        expect(p.y).toBeGreaterThanOrEqual(box.bottom - 1e-6);
+        expect(p.y).toBeLessThanOrEqual(box.top + 1e-6);
+      }
+    }
+    // Tipped this far, the surface no longer covers the whole floor of the pan.
+    layer.setOilSurface(box.y, 0, 1.1);
+    expect(Math.min(...layer.oilSurface.map((p) => p.x))).toBeGreaterThan(-box.halfW + 1e-3);
+    layers.dispose();
+  });
+
   it('turns its crank drillings with the crank and draws them over everything', () => {
     const { model, engine } = modelOf('i4');
     const layers = new SystemsLayers(engine, model);

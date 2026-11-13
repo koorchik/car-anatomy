@@ -35,9 +35,12 @@ export function rotaryOilPlan(_engine: Engine, systems: SystemsSpec, a: RotaryAn
   plan.parts.push({ part: 'oil-pump', shape: 'box', position: pump, half: v(0.2 * R, 0.13 * R, 0.06), material: 'metal' });
   addRoute(plan, { part: 'oil-pump', channel: 'pump-drive', points: [v(0.12 * R, 0, zPump + 0.07), v(0.08 * R, pump.y, zPump + 0.07), v(-0.08 * R, pump.y, zPump + 0.07), v(-0.12 * R, 0, zPump + 0.07), v(0.12 * R, 0, zPump + 0.07)], radius: 0.012 * b });
 
-  const pick = sump.pressureInlet;
-  plan.parts.push({ part: 'oil-pickup', shape: 'disc', position: pick.clone(), axis: v(0, 1, 0), radius: 0.2 * b, length: 0.03 * b, material: 'mesh' });
-  addRoute(plan, { part: 'oil-pickup', channel: 'suction', points: [pick.clone(), v(0, pick.y + 0.1 * R, pick.z), v(0, inlet.y - 0.1 * R, zPump), inlet], radius: OIL_SIZES.suction * b });
+  // With a tank the pressure stage draws from it instead (addScavenge).
+  if (!sump.tank) {
+    const pick = sump.pressureInlet;
+    plan.parts.push({ part: 'oil-pickup', shape: 'disc', position: pick.clone(), axis: v(0, 1, 0), radius: 0.2 * b, length: 0.03 * b, material: 'mesh' });
+    addRoute(plan, { part: 'oil-pickup', channel: 'suction', points: [pick.clone(), v(0, pick.y + 0.1 * R, pick.z), v(0, inlet.y - 0.1 * R, zPump), inlet], radius: OIL_SIZES.suction * b });
+  }
   plan.parts.push({ part: 'oil-relief', shape: 'cylinder', position: outlet.clone().add(v(0.06 * R, -0.05 * R, 0)), axis: v(0, 1, 0), radius: 0.04 * b, length: 0.14 * b, material: 'metal' });
   addRoute(plan, { part: 'oil-relief', channel: 'relief', points: [outlet.clone(), outlet.clone().add(v(0.1 * R, -0.12 * R, 0)), inlet.clone().add(v(0.12 * R, 0, 0)), inlet.clone()], radius: lr });
 
@@ -92,7 +95,7 @@ export function rotaryOilPlan(_engine: Engine, systems: SystemsSpec, a: RotaryAn
   for (const z of [zFrontPlate - 0.05, zRearPlate + 0.05]) {
     addRoute(plan, { part: 'oil-drain', channel: 'drain', points: [v(-0.35 * R, -0.25 * R, z), v(-0.35 * R, sump.pan.top - 0.04, z), v(-0.35 * R, sump.levelY + 0.08 * R, z)], radius: OIL_SIZES.drain * b * 0.7 });
   }
-  plan.level = { y: sump.levelY, halfW: sump.pan.halfW - 0.02, zMin: sump.pan.zMin + 0.02, zMax: sump.pan.zMax - 0.02 };
+  plan.level = { y: sump.levelY, halfW: sump.pan.halfW - 0.02, zMin: sump.pan.zMin + 0.02, zMax: sump.pan.zMax - 0.02, bottom: sump.pan.bottom + 0.01, top: sump.pan.top };
   addScavenge(plan, sump, inlet, b);
   return plan;
 }

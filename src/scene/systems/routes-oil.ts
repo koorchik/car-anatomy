@@ -117,13 +117,16 @@ export function oilPlan(engine: Engine, systems: SystemsSpec, a: PistonAnchors, 
     }
   }
 
-  // Pickup under the oil, its screen, and the suction tube that keeps below the crank's sweep.
-  const pick = sump.pressureInlet;
-  plan.parts.push({ part: 'oil-pickup', shape: 'disc', position: pick.clone(), axis: v(0, 1, 0), radius: 0.2 * b, length: 0.03 * b, material: 'mesh' });
-  const suction = onCrank
-    ? [pick.clone(), v(0, Math.min(below, pick.y + 0.25 * b), pick.z), v(0, Math.min(below, pick.y + 0.25 * b), zPump), inlet]
-    : [pick.clone(), v(0, pick.y + 0.08 * b, pick.z), v(0, inlet.y - 0.06 * b, zPump), inlet];
-  addRoute(plan, { part: 'oil-pickup', channel: 'suction', points: suction, radius: OIL_SIZES.suction * b });
+  // Pickup under the oil, its screen, and the suction tube that keeps below the crank's sweep. With a tank the
+  // pressure stage draws from the tank instead (addScavenge), and the pan has only the scavenge pickups.
+  if (!sump.tank) {
+    const pick = sump.pressureInlet;
+    plan.parts.push({ part: 'oil-pickup', shape: 'disc', position: pick.clone(), axis: v(0, 1, 0), radius: 0.2 * b, length: 0.03 * b, material: 'mesh' });
+    const suction = onCrank
+      ? [pick.clone(), v(0, Math.min(below, pick.y + 0.25 * b), pick.z), v(0, Math.min(below, pick.y + 0.25 * b), zPump), inlet]
+      : [pick.clone(), v(0, pick.y + 0.08 * b, pick.z), v(0, inlet.y - 0.06 * b, zPump), inlet];
+    addRoute(plan, { part: 'oil-pickup', channel: 'suction', points: suction, radius: OIL_SIZES.suction * b });
+  }
 
   // Relief valve on the pump outlet, returning the surplus to the inlet.
   plan.parts.push({ part: 'oil-relief', shape: 'cylinder', position: outlet.clone().add(v(side * 0.08 * b, -0.04 * b, 0)), axis: v(0, 1, 0), radius: 0.05 * b, length: 0.16 * b, material: 'metal' });
@@ -295,13 +298,16 @@ export function oilPlan(engine: Engine, systems: SystemsSpec, a: PistonAnchors, 
     addRoute(plan, { part: 'oil-drain', channel: 'drain', points: [top, mid, into, out], radius: OIL_SIZES.drain * b * 0.8 });
   });
 
-  plan.level = { y: sump.levelY, halfW: pan.halfW - 0.015 * b, zMin: pan.zMin + 0.02 * b, zMax: pan.zMax - 0.02 * b };
+  plan.level = { y: sump.levelY, halfW: pan.halfW - 0.015 * b, zMin: pan.zMin + 0.02 * b, zMax: pan.zMax - 0.02 * b, bottom: pan.bottom + 0.015 * b, top: pan.top };
   // Dry sump: scavenge stages beside the pressure pump, each with its pickup, and the tank feeding the pressure stage.
   addScavenge(plan, sump, inlet, b);
   return plan;
 }
 
-/** Drawn only when feature/oil-sump gives the layout pickups and a tank; a wet sump has neither. */
+/**
+ * Drawn only when feature/oil-sump gives the layout pickups and a tank; a wet sump has neither. The scavenge stages
+ * return the oil to the tank, and the pressure stage draws from the tank's outlet (sump.pressureInlet).
+ */
 export function addScavenge(plan: LayerPlan, sump: SumpLayout, pumpInlet: THREE.Vector3, b: number): void {
   const stage = (i: number): THREE.Vector3 => pumpInlet.clone().add(new THREE.Vector3(0, -0.04 * b, -(i + 1) * 0.14 * b));
   sump.scavengePickups.forEach((p, i) => {
@@ -312,10 +318,11 @@ export function addScavenge(plan: LayerPlan, sump: SumpLayout, pumpInlet: THREE.
   const tank = sump.tank;
   plan.parts.push({ part: 'oil-tank', shape: 'cylinder', position: tank.position.clone(), axis: new THREE.Vector3(0, 1, 0), radius: tank.radius, length: tank.height, material: 'metal' });
   const top = tank.position.clone().add(new THREE.Vector3(0, tank.height / 2, 0));
-  const bottom = tank.position.clone().add(new THREE.Vector3(0, -tank.height / 2, 0));
   if (sump.scavengePickups.length) {
     const last = stage(sump.scavengePickups.length - 1);
     addRoute(plan, { part: 'oil-tank', channel: 'scavenge', points: [last, new THREE.Vector3(top.x, last.y, last.z), top], radius: OIL_SIZES.line * b });
   }
-  addRoute(plan, { part: 'oil-tank', channel: 'tank', points: [bottom, new THREE.Vector3(bottom.x, pumpInlet.y, bottom.z), pumpInlet.clone()], radius: OIL_SIZES.suction * b });
+  // From the tank's outlet, where the layout says the pressure stage draws, down and across to the pump.
+  const outlet = sump.pressureInlet.clone();
+  addRoute(plan, { part: 'oil-tank', channel: 'tank', points: [outlet, new THREE.Vector3(outlet.x, Math.min(pumpInlet.y, outlet.y - 0.05 * b), outlet.z), pumpInlet.clone()], radius: OIL_SIZES.suction * b });
 }

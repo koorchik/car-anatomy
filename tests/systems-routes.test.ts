@@ -225,21 +225,33 @@ describe.each(rotaryIds)('oil in rotary %s', (id) => {
   });
 });
 
-it('a dry sump layout draws its scavenge stages and tank', () => {
+it('a dry sump layout draws its scavenge stages and tank, and the pressure stage draws from the tank alone', () => {
   const { engine, anchors } = get('b6');
   const s = systemsOf(engine.spec);
   const sump = sumpLayout(engine, s);
+  const tank = { position: new THREE.Vector3(1.2, 0, sump.pan.zMax), radius: 0.15, height: 0.6 };
+  const outlet = tank.position.clone().add(new THREE.Vector3(0, -tank.height / 2, 0));
   const dry = {
     ...sump,
+    // On a dry sump the layout's pressure inlet is the tank's outlet.
+    pressureInlet: outlet,
     scavengePickups: [new THREE.Vector3(0, sump.pan.bottom + 0.05, sump.pan.zMin + 0.3), new THREE.Vector3(0, sump.pan.bottom + 0.05, 0), new THREE.Vector3(0, sump.pan.bottom + 0.05, sump.pan.zMax - 0.3)],
-    tank: { position: new THREE.Vector3(1.2, 0, sump.pan.zMax), radius: 0.15, height: 0.6 },
+    tank,
   };
   const plan = oilPlan(engine, s, anchors as PistonAnchors, dry);
   expect(plan.routes.filter((r) => r.channel === 'scavenge').length).toBe(4);
-  expect(plan.routes.filter((r) => r.channel === 'tank').length).toBe(1);
+  const tankLines = plan.routes.filter((r) => r.channel === 'tank');
+  expect(tankLines.length).toBe(1);
+  expect(tankLines[0]!.points[0]!.distanceTo(outlet)).toBeLessThan(1e-9);
   expect(plan.parts.some((p) => p.part === 'oil-tank')).toBe(true);
+  // No pan pickup or suction line for the pressure stage: only the three scavenge screens are in the pan.
+  expect(plan.routes.some((r) => r.channel === 'suction')).toBe(false);
+  const screens = plan.parts.filter((p) => p.part === 'oil-pickup');
+  expect(screens.length).toBe(3);
+  for (const p of screens) expect(dry.scavengePickups.some((q) => q.distanceTo(p.position) < 1e-9)).toBe(true);
   const wet = oilPlan(engine, s, anchors as PistonAnchors, sump);
   expect(wet.routes.some((r) => r.channel === 'scavenge' || r.channel === 'tank')).toBe(false);
+  expect(wet.routes.filter((r) => r.channel === 'suction').length).toBe(1);
   void addScavenge;
   void OIL_SIZES;
 });

@@ -12,6 +12,8 @@ import { flowMaterial, MAX_CHANNELS, type FlowMaterial } from './flow-material.t
 import { pathLength, tightPath, type LayerPlan, type PartMaterial, type PartPlacement, type Space } from './route.ts';
 
 const MM = 0.01;
+/** Most corners the oil surface can have once cut by the pan's floor and top. */
+const LEVEL_CORNERS = 8;
 
 const PART_COLORS: Record<Exclude<PartMaterial, 'mesh'>, THREE.Color> = {
   metal: new THREE.Color('#9aa1a6'),
@@ -127,6 +129,10 @@ export class SystemLayer {
   private readonly sprayTo: Float32Array;
   private readonly fixedSprays: Array<{ mesh: THREE.InstancedMesh; channels: Int32Array; slots: Int32Array }> = [];
   private level: THREE.Mesh | null = null;
+  private levelBox: NonNullable<LayerPlan['level']> | null = null;
+  /** Corners of the clipped surface, x and z in turn: two buffers the clipping passes between. */
+  private readonly clipA = new Float64Array(LEVEL_CORNERS * 2);
+  private readonly clipB = new Float64Array(LEVEL_CORNERS * 2);
   private movers: THREE.InstancedMesh | null = null;
   private readonly moverData: Array<{ position: THREE.Vector3; axis: THREE.Vector3; travel: number; channel: number; turn: boolean; radius: number }> = [];
   private levelCentre = new THREE.Vector3();
@@ -159,7 +165,8 @@ export class SystemLayer {
     this.root.userData.noFit = true;
     this.flow = flowMaterial(style.color, style.hotColor, style.period);
     this.overlayFlow = flowMaterial(style.color, style.hotColor, style.period, true);
-    this.sprayMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    // Additive light needs no back-to-front order, so it draws in one pass despite being two-sided.
+    this.sprayMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true });
     this.materials.push(this.flow.material, this.overlayFlow.material, this.sprayMaterial);
     const shaft = anchors.kind === 'piston' ? anchors.crank : anchors.shaft;
     this.frames = anchors.kind === 'piston' ? anchors.cylinders.map((c) => c.frame) : [];
@@ -226,7 +233,7 @@ export class SystemLayer {
       if (!merged) continue;
       for (const g of group.geos) g.dispose();
       const material = group.screen
-        ? new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.55, roughness: 0.6, metalness: 0.4, side: THREE.DoubleSide, depthWrite: false })
+        ? new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.55, roughness: 0.6, metalness: 0.4, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true })
         : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.7 });
       this.materials.push(material);
       const mesh = new THREE.Mesh(merged, material);
@@ -363,16 +370,26 @@ export class SystemLayer {
 
     if (plan.level) {
       const l = plan.level;
-      const geo = new THREE.PlaneGeometry(l.halfW * 2, l.zMax - l.zMin);
-      geo.rotateX(-Math.PI / 2);
-      const material = new THREE.MeshStandardMaterial({ color: '#c98a1c', emissive: '#6a3c05', transparent: true, opacity: 0.62, roughness: 0.25, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false });
+      // A flat polygon of up to eight corners, rebuilt in place whenever the surface tilts (setOilSurface).
+      const geo = new THREE.BufferGeometry();
+      const positions = new THREE.BufferAttribute(new Float32Array(LEVEL_CORNERS * 3), 3);
+      const normals = new THREE.BufferAttribute(new Float32Array(LEVEL_CORNERS * 3), 3);
+      positions.setUsage(THREE.DynamicDrawUsage);
+      normals.setUsage(THREE.DynamicDrawUsage);
+      geo.setAttribute('position', positions);
+      geo.setAttribute('normal', normals);
+      const fan: number[] = [];
+      for (let i = 1; i < LEVEL_CORNERS - 1; i++) fan.push(0, i, i + 1);
+      geo.setIndex(fan);
+      const material = new THREE.MeshStandardMaterial({ color: '#c98a1c', emissive: '#6a3c05', transparent: true, opacity: 0.62, roughness: 0.25, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true });
       this.materials.push(material);
       this.level = new THREE.Mesh(geo, material);
       this.level.userData.part = 'oil-level';
+      this.levelBox = { ...l };
       this.levelCentre.set(0, l.y, (l.zMin + l.zMax) / 2);
-      this.level.position.copy(this.levelCentre);
       this.level.renderOrder = 4;
       this.root.add(this.level);
+      this.setOilSurface(l.y, 0, 0);
     }
   }
 
@@ -407,13 +424,82 @@ export class SystemLayer {
   }
 
   /**
-   * Tilts and lifts the oil surface around the pan's centre: the hook feature/oil-sump drives with the slosh.
-   * Small tilts keep it inside the pan's rectangle.
+   * Lifts and tilts the oil surface about the pan's centre, as a rotation by tiltX about X and then tiltZ about Z
+   * would: the hook feature/oil-sump drives with the slosh. The surface is cut to the pan: inside its rectangle, above
+   * its floor and below its top, however far it tilts. Allocates nothing.
    */
   setOilSurface(level: number, tiltX: number, tiltZ: number): void {
-    if (!this.level) return;
-    this.level.position.set(this.levelCentre.x, level, this.levelCentre.z);
-    this.level.rotation.set(tiltX, 0, tiltZ);
+    const box = this.levelBox;
+    if (!this.level || !box) return;
+    const cx = this.levelCentre.x;
+    const cz = this.levelCentre.z;
+    // The plane y = y0 + sx x + sz z; its normal follows from the same rotation.
+    const sx = Math.tan(tiltZ) / Math.cos(tiltX);
+    const sz = -Math.tan(tiltX);
+    const y0 = level - sx * cx - sz * cz;
+    let a = this.clipA;
+    let b = this.clipB;
+    a[0] = -box.halfW; a[1] = box.zMin;
+    a[2] = box.halfW; a[3] = box.zMin;
+    a[4] = box.halfW; a[5] = box.zMax;
+    a[6] = -box.halfW; a[7] = box.zMax;
+    let n = 4;
+    // Sutherland-Hodgman: first keep what is above the floor, then what is below the top.
+    for (let pass = 0; pass < 2 && n > 0; pass++) {
+      const sign = pass === 0 ? 1 : -1;
+      const offset = pass === 0 ? y0 - box.bottom : box.top - y0;
+      let m = 0;
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        const px = a[i * 2]!;
+        const pz = a[i * 2 + 1]!;
+        const qx = a[j * 2]!;
+        const qz = a[j * 2 + 1]!;
+        const dp = offset + sign * (sx * px + sz * pz);
+        const dq = offset + sign * (sx * qx + sz * qz);
+        if (dp >= 0 && m < LEVEL_CORNERS) {
+          b[m * 2] = px;
+          b[m * 2 + 1] = pz;
+          m++;
+        }
+        if (dp >= 0 !== dq >= 0 && m < LEVEL_CORNERS) {
+          const t = dp / (dp - dq);
+          b[m * 2] = px + (qx - px) * t;
+          b[m * 2 + 1] = pz + (qz - pz) * t;
+          m++;
+        }
+      }
+      const swap = a;
+      a = b;
+      b = swap;
+      n = m;
+    }
+    const geo = this.level.geometry;
+    const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+    const nor = geo.getAttribute('normal') as THREE.BufferAttribute;
+    const len = Math.hypot(sx, 1, sz);
+    for (let i = 0; i < LEVEL_CORNERS; i++) {
+      // Unused corners repeat the last one; the draw range leaves them out.
+      const k = n ? Math.min(i, n - 1) : 0;
+      const x = n ? a[k * 2]! : cx;
+      const z = n ? a[k * 2 + 1]! : cz;
+      pos.setXYZ(i, x, y0 + sx * x + sz * z, z);
+      nor.setXYZ(i, -sx / len, 1 / len, -sz / len);
+    }
+    pos.needsUpdate = true;
+    nor.needsUpdate = true;
+    geo.setDrawRange(0, Math.max(0, n - 2) * 3);
+    geo.computeBoundingSphere();
+    this.level.visible = n >= 3;
+  }
+
+  /** Corners of the oil surface as drawn now, engine frame: for tests. */
+  get oilSurface(): THREE.Vector3[] {
+    if (!this.level?.visible) return [];
+    const geo = this.level.geometry;
+    const pos = geo.getAttribute('position');
+    const count = geo.drawRange.count / 3 + 2;
+    return Array.from({ length: count }, (_, i) => new THREE.Vector3().fromBufferAttribute(pos, i));
   }
 
   /**

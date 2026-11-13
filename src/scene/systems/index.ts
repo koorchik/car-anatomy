@@ -6,10 +6,14 @@ import type { Engine } from '../../engine/kinematics.ts';
 import { systemsOf } from '../../engine/systems-spec.ts';
 import type { SystemsState } from '../../systems/sim.ts';
 import { turboCountOf } from '../../systems/size.ts';
+import { airFlowShare } from '../../systems/thermal.ts';
 import { sumpLayout } from '../../systems/sump.ts';
 import type { EngineModel, ViewMode } from '../model-types.ts';
+import { PARTS } from '../parts-info.ts';
+import { SYSTEM_PARTS } from './parts.ts';
 import type { EngineAnchors, SystemsLook } from './anchors.ts';
-import { SystemLayer, type LayerStyle } from './layer.ts';
+import { SystemLayer } from './layer.ts';
+import { LAYER_IDS, LAYER_STYLES, type LayerId } from './styles.ts';
 import { mainBearingZ, oilPlan } from './routes-oil.ts';
 import { rotaryOilPlan } from './routes-rotary.ts';
 import { coolantPlan, rotaryCoolantPlan } from './routes-coolant.ts';
@@ -18,15 +22,10 @@ import { airPlan, rotaryAirPlan, runnerChannel } from './routes-air.ts';
 import { intakeLift, mod } from '../../engine/kinematics.ts';
 import type { LayerPlan } from './route.ts';
 
-export type LayerId = 'oil' | 'coolant' | 'fuel' | 'air';
-export const LAYER_IDS: LayerId[] = ['oil', 'coolant', 'fuel', 'air'];
+export { LAYER_IDS, LAYER_STYLES, type LayerId } from './styles.ts';
 
-export const LAYER_STYLES: Record<LayerId, LayerStyle> = {
-  oil: { color: '#e8a93a', hotColor: '#ffd27a', period: 0.3 },
-  coolant: { color: '#3fa9f5', hotColor: '#ff5a3c', period: 0.42 },
-  fuel: { color: '#e0559b', hotColor: '#ffd0e8', period: 0.3 },
-  air: { color: '#62c6ec', hotColor: '#f0a060', period: 0.6 },
-};
+// The layers' parts explain themselves on click once their code is loaded, as the model's own parts do.
+Object.assign(PARTS, SYSTEM_PARTS);
 
 /** Velocity in a passage, m/s, from a flow in L/min and a nominal bore in metres. */
 const speedOf = (litresPerMin: number, bore: number): number => litresPerMin / 60000 / ((Math.PI / 4) * bore * bore);
@@ -283,10 +282,10 @@ function coolantFeed(engine: Engine, anchors: EngineAnchors, layer: SystemLayer)
     set(idx.oilCooler, 0.03 * q, 0.01);
     if (idx.radiator >= 0) v.spray[idx.radiator] = t.thermostat;
     if (idx.air >= 0) {
-      // Air through the fins: a fan's flow follows the crank, ram air stands for riding along.
-      const n = state.rpm / engine.spec.redlineRpm;
+      // Air through the fins, as the warm-up model has it: a fan's flow follows the crank, ram air the riding.
       const kind = systemsOf(engine.spec).cooling;
-      const speed = !state.running ? 0 : kind === 'fan' ? 2 + 18 * n : 8;
+      const share = airFlowShare(kind, state.rpm, engine.spec.redlineRpm, engine.spec.idleRpm, state.running);
+      const speed = !state.running ? 0 : (kind === 'fan' ? 20 : 30) * share;
       v.speed[idx.air] = speed;
       v.level[idx.air] = speed > 0 ? 0.55 : 0.1;
     }
@@ -305,6 +304,7 @@ function coolantFeed(engine: Engine, anchors: EngineAnchors, layer: SystemLayer)
 /** Oil channels: velocity in each passage from the branch flows, at nominal passage sizes. */
 function oilFeed(engine: Engine, anchors: EngineAnchors, layer: SystemLayer): (state: SystemsState) => void {
   const banks = anchors.kind === 'piston' ? anchors.banks.length : 1;
+  const stages = Math.max(1, sumpLayout(engine, systemsOf(engine.spec)).scavengePickups.length);
   const mains = anchors.kind === 'piston' ? mainBearingZ(engine, anchors).length : 2 + anchors.rotorZ.length;
   const turbos = Math.max(1, turboCountOf(engine.spec));
   const ch = (id: string): number => layer.channel(id);
@@ -353,10 +353,12 @@ function oilFeed(engine: Engine, anchors: EngineAnchors, layer: SystemLayer): (s
     set(idx.jets, o.jets / banks, 0.008);
     // Oil falls back by gravity, three times slower than it was pumped.
     set(idx.drain, (o.head + o.chain) / banks, 0.016, 1 / 3);
-    set(idx.metering, state.running ? 0.05 + 0.2 * (state.rpm / engine.spec.redlineRpm) : 0, 0.002);
+    // The metering pump follows the shaft and, through its link to the throttle, the load (13B FC).
+    set(idx.metering, state.running ? 0.25 * (state.rpm / engine.spec.redlineRpm) * (0.2 + 0.8 * Math.min(1, Math.max(0, state.load))) : 0, 0.002);
     set(idx.rotorJets, o.mains / mains, 0.004);
-    set(idx.scavenge, 0, 0.012);
-    set(idx.tank, 0, 0.012);
+    // A dry sump: each stage returns its share to the tank, and the pressure stage draws all it pumps from the tank.
+    set(idx.scavenge, o.scavenge / stages, 0.012);
+    set(idx.tank, o.pumpFlow, 0.012);
     if (idx.drive >= 0) {
       // The pump's chain runs with the crank: sprocket of about 26 mm radius.
       v.speed[idx.drive] = (state.rpm / 60) * 2 * Math.PI * 0.026;

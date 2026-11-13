@@ -109,8 +109,8 @@ export interface LayerPlan {
   parts: PartPlacement[];
   pistonSprays: PistonSpray[];
   fixedSprays: FixedSpray[];
-  /** Oil surface: a level plane in the pan's rectangle. */
-  level?: { y: number; halfW: number; zMin: number; zMax: number };
+  /** Oil surface: a level plane in the pan's rectangle, kept between the pan's floor (bottom) and its top. */
+  level?: { y: number; halfW: number; zMin: number; zMax: number; bottom: number; top: number };
   movers?: Mover[];
   flashes?: Flash[];
   spinners?: Spinner[];
