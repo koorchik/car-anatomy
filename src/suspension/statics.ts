@@ -367,15 +367,18 @@ export function understeerGradient(chassis: Chassis, ay: number, options: { camb
 }
 
 /**
- * The smallest lateral acceleration at which an inner wheel leaves the road (its steady load reaches zero), m/s², and
- * which wheel; null if none does below `maxAy`. Bisection on settle().
+ * The smallest lateral acceleration toward `maxAy` (a left turn when positive, a right one when negative) at which an
+ * inner wheel leaves the road (its steady load reaches zero), m/s², and which wheel; null if none does before `maxAy`.
+ * Bisection on settle().
  */
 export function liftOff(chassis: Chassis, maxAy = 1.5 * G): { ay: number; corner: number } | null {
   const sim = new ChassisSim(chassis);
+  // The inner wheels: the left ones in a left turn, the right ones in a right turn.
+  const [front, rear] = maxAy >= 0 ? [0, 2] : [1, 3];
   const inner = (ay: number): { load: number; corner: number } => {
     const s = settle(chassis, ay, sim);
-    const corner = s.fz[0] < s.fz[2] ? 0 : 2;
-    return { load: Math.min(s.fz[0], s.fz[2]), corner };
+    const corner = s.fz[front] < s.fz[rear] ? front : rear;
+    return { load: Math.min(s.fz[front], s.fz[rear]), corner };
   };
   let top: { load: number; corner: number };
   try {

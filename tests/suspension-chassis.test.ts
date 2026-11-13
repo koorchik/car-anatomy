@@ -334,6 +334,10 @@ describe('steady cornering', () => {
     const s = settle(c, lift.ay);
     expect(s.fz[2]).toBeLessThan(1);
     near(s.transfer[1], c.corners[2].staticN, 0.01);
+    // A right turn lifts the right rear at the same acceleration.
+    const right = liftOff(c, -1.3 * G)!;
+    expect(right.corner).toBe(3);
+    near(-right.ay, lift.ay, 1e-6);
     // Raising the front roll stiffness loads the inner rear and unloads the inner front, monotonically.
     let innerRear = -Infinity;
     let innerFront = Infinity;
