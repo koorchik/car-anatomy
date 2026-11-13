@@ -334,6 +334,18 @@ describe('figures', () => {
     }
   });
 
+  it('a box geared short stops at the rev limiter: v_max, the speed at 400 m and the flag say so', () => {
+    expect(e30.vmaxAtLimiter).toBe(false);
+    const short = evaluateGearbox(resolveGearboxDesign({ ...DEFAULT_GEARBOX_DESIGN, firstRatio: 7, finalDrive: 5.5 }));
+    const top = short.gears[short.gears.length - 1]!;
+    expect(short.vmaxAtLimiter).toBe(true);
+    // At the limit the tyres pull only the road load: the slip of that force, a few per cent at most.
+    expect(short.vmaxKmh).toBeLessThan(top.kmhAtLimit);
+    expect(short.vmaxKmh).toBeGreaterThan(0.97 * top.kmhAtLimit);
+    expect(short.at400mKmh!).toBeLessThanOrEqual(short.vmaxKmh + 1e-9);
+    expect(short.at400mKmh!).toBeGreaterThan(0.99 * short.vmaxKmh);
+  });
+
   it('rev drop on an upshift at the limit is the ratio step', () => {
     for (const s of e30.shifts) expect(s.rpmAfter / s.rpmBefore).toBeCloseTo(e30.gears[s.to - 1]!.ratio / e30.gears[s.from - 1]!.ratio, 12);
   });

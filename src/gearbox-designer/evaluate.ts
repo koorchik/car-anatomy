@@ -271,6 +271,20 @@ function upshiftSync(d: GearboxDesign, box: Gearbox, to: number, nFrom: number, 
   });
 }
 
+/** Force per unit slip of the driven tyres at rest on the level, N: at road-load forces the slip is linear in the force. */
+function slipStiffness(m: Model): number {
+  mfEval(m.v.tyre.set, 0, 0, 0, drivenAxleN(m.v, 0) / 2, 1, mf);
+  return 2 * mf.dFxdKappa;
+}
+
+/** Road speed at which gear g brings the engine to its rev limit while the tyres pull only the road load, m/s. */
+function limiterSpeed(m: Model, g: GearModel, stiffness: number): number {
+  const plain = (m.v.map.limitRpm / RPM / g.overall) * m.v.radius;
+  let v = plain;
+  for (let k = 0; k < 6; k++) v = plain / (1 + roadLoadN(m.v.roadLoad, v, 0) / stiffness);
+  return v;
+}
+
 /** The standing start: times to 100 km/h and over 400 m. */
 function standingStart(m: Model): { zeroTo100S: number | null; zeroTo400mS: number | null; at400mKmh: number | null } {
   const { v, gears } = m;
@@ -279,11 +293,13 @@ function standingStart(m: Model): { zeroTo100S: number | null; zeroTo400mS: numb
   const set = v.tyre.set;
   const r = v.radius;
   const launchNm = Math.min(fullLoadTorque(map, m.omegaLaunch), clutchKineticNm(v.clutch));
+  const hold = limiterSpeed(m, gears[gears.length - 1]!, slipStiffness(m));
   const mark = 100 / KMH;
   let z100: number | null = null;
   let z400: number | null = null;
   let at400: number | null = null;
-  let phase: 'launch' | 'drive' | 'lift' | 'shift' = 'launch';
+  // 'limit': top gear at the rev limit, where the limiter holds the car (runs.ts never gets there on a catalogue car).
+  let phase: 'launch' | 'drive' | 'lift' | 'shift' | 'limit' = 'launch';
   let g = 0;
   let liftT = 0;
   let shiftT = 0;
@@ -311,6 +327,8 @@ function standingStart(m: Model): { zeroTo100S: number | null; zeroTo400mS: numb
       const ramp = phase === 'lift' ? Math.max(0, 1 - (tt - liftT) / RUN.torqueRampS) : Math.min(1, (tt - backT) / RUN.torqueRampS);
       const engine = forceFrom(m, gear, ramp * fullLoadTorque(map, omegaIn), omegaIn);
       a = Math.min((engine - resist) / gear.mLocked, (ramp * grip - resist) / m.mBody);
+      // The limiter cuts the fuel as often as it takes to hold the speed it allows; past the drag the car slows on its own.
+      if (phase === 'limit' && vv >= hold) a = Math.min(a, 0);
     }
     return { a, omegaIn };
   };
@@ -322,9 +340,11 @@ function standingStart(m: Model): { zeroTo100S: number | null; zeroTo400mS: numb
     const now = state(t, vel, aPrev);
     // Phase changes, checked at the start of each step as runs.ts does.
     if (phase === 'launch' && now.omegaIn >= m.omegaLaunch * (1 - 1e-9)) phase = 'drive';
-    if (phase === 'drive' && now.omegaIn >= m.omegaShift * (1 - 1e-9) && g < gears.length - 1) {
-      phase = 'lift';
-      liftT = t;
+    if (phase === 'drive' && now.omegaIn >= m.omegaShift * (1 - 1e-9)) {
+      if (g < gears.length - 1) {
+        phase = 'lift';
+        liftT = t;
+      } else phase = 'limit';
     }
     if (phase === 'lift' && t - liftT >= RUN.torqueRampS - 1e-12) {
       phase = 'shift';
@@ -345,13 +365,15 @@ function standingStart(m: Model): { zeroTo100S: number | null; zeroTo400mS: numb
       dt = Math.min(0.25, 0.3 / Math.max(Math.abs(k1.a), 0.1));
       if (phase === 'launch' && t < RUN.launchRampS) dt = Math.min(dt, 0.01, RUN.launchRampS - t);
       if (phase === 'drive' && t - backT < RUN.torqueRampS) dt = Math.min(dt, 0.015, backT + RUN.torqueRampS - t);
-      const target = phase === 'launch' ? m.omegaLaunch : g < gears.length - 1 ? m.omegaShift : Infinity;
+      const target = phase === 'launch' ? m.omegaLaunch : phase === 'drive' ? m.omegaShift : Infinity;
       const reach = speedAt(target, k1.omegaIn);
       if (k1.a > 0 && Number.isFinite(reach)) dt = Math.min(dt, Math.max(1e-4, ((reach - vel) / k1.a) * 1.0005));
+      if (phase === 'limit' && k1.a > 0 && vel < hold) dt = Math.min(dt, Math.max(1e-4, ((hold - vel) / k1.a) * 1.0005));
     }
     dt = Math.max(dt, 1e-5);
     const half = state(t + dt / 2, Math.max(0, vel + (k1.a * dt) / 2), k1.a);
-    const v1 = Math.max(0, vel + half.a * dt);
+    const free = Math.max(0, vel + half.a * dt);
+    const v1 = phase === 'limit' && vel <= hold ? Math.min(hold, free) : free;
     const x1 = x + ((vel + v1) / 2) * dt;
     if (z100 === null && v1 >= mark && v1 > vel) z100 = t + ((mark - vel) / (v1 - vel)) * dt;
     if (z400 === null && x1 >= 400 && x1 > x) {
@@ -368,40 +390,48 @@ function standingStart(m: Model): { zeroTo100S: number | null; zeroTo400mS: numb
   return { zeroTo100S: z100, zeroTo400mS: z400, at400mKmh: at400 };
 }
 
-/** Steady force at the driven tyres at full load in gear g at speed vel, N, with the tyre's small slip; null past the limit. */
-function wheelForce(m: Model, g: GearModel, vel: number, slipStiffness: number): number | null {
+/**
+ * Steady force at the driven tyres at full load in gear g at speed vel, N, with the tyre's small slip at that force; the
+ * engine's torque is the limit's where that slip would take it past the limit.
+ */
+function wheelForce(m: Model, g: GearModel, vel: number, slipStiffness: number): number {
+  const omegaMax = m.v.map.limitRpm / RPM;
   let kappa = 0;
   let force = 0;
   for (let i = 0; i < 4; i++) {
-    const omegaIn = ((vel * (1 + kappa)) / m.v.radius) * g.overall;
-    if (omegaIn * RPM > m.v.map.limitRpm) return null;
+    const omegaIn = Math.min(omegaMax, ((vel * (1 + kappa)) / m.v.radius) * g.overall);
     force = forceFrom(m, g, fullLoadTorque(m.v.map, omegaIn), omegaIn);
     kappa = force / slipStiffness;
   }
   return force;
 }
 
-/** Top speed on the level and its gear (runs.ts steadyTopSpeed, the slip linear in the force at these small forces). */
-function topSpeed(m: Model): { v: number; gear: number } {
-  const fz = drivenAxleN(m.v, 0) / 2;
-  mfEval(m.v.tyre.set, 0, 0, 0, fz, 1, mf);
-  const stiffness = 2 * mf.dFxdKappa;
-  const best = (vel: number): { force: number; gear: number } => {
-    let out = { force: 0, gear: 0 };
-    m.gears.forEach((g, i) => {
-      const f = wheelForce(m, g, vel, stiffness);
-      if (f !== null && f > out.force) out = { force: f, gear: i + 1 };
-    });
-    return out;
-  };
-  let lo = 5;
-  let hi = 150;
-  for (let i = 0; i < 40; i++) {
-    const mid = (lo + hi) / 2;
-    if (best(mid).force - roadLoadN(m.v.roadLoad, mid, 0) > 0) lo = mid;
-    else hi = mid;
-  }
-  return { v: lo, gear: best(lo).gear || m.gears.length };
+/**
+ * Top speed on the level, its gear and whether the rev limiter sets it (runs.ts steadyTopSpeed, the slip linear in
+ * the force at these small forces). Each gear tops out where its full-load force meets the road load, or at the speed
+ * where the engine reaches the limit while the tyres pull only the road load, whichever is lower; the best gear wins.
+ */
+function topSpeed(m: Model): { v: number; gear: number; atLimiter: boolean } {
+  const stiffness = slipStiffness(m);
+  const rl = m.v.roadLoad;
+  let best = { v: 0, gear: m.gears.length, atLimiter: false };
+  m.gears.forEach((g, i) => {
+    const limit = limiterSpeed(m, g, stiffness);
+    const surplus = (vel: number) => wheelForce(m, g, vel, stiffness) - roadLoadN(rl, vel, 0);
+    let top = { v: limit, atLimiter: true };
+    if (!(surplus(limit) > 0)) {
+      let lo = 0;
+      let hi = limit;
+      for (let k = 0; k < 40; k++) {
+        const mid = (lo + hi) / 2;
+        if (surplus(mid) > 0) lo = mid;
+        else hi = mid;
+      }
+      top = { v: lo, atLimiter: false };
+    }
+    if (top.v > best.v) best = { ...top, gear: i + 1 };
+  });
+  return best;
 }
 
 /** Steepest grade first gear pulls away on: the engine's peak torque through the slipping clutch, or the grip. */
@@ -485,7 +515,6 @@ export function evaluateGearbox(d: GearboxDesign): GearboxPerformance {
     const rpmAfter = (map.limitRpm * m.gears[k + 1]!.overall) / m.gears[k]!.overall;
     return { from: k + 1, to: k + 2, rpmBefore: map.limitRpm, rpmAfter, inBand: rpmAfter >= band[0], syncS, pauseS: m.pauses[k]! };
   });
-  const limitSpeed = (map.limitRpm / RPM / m.gears[top.gear - 1]!.overall) * v.radius;
   return {
     gears,
     reverse: { ratio: Math.abs(own(rev)), overall: Math.abs(rev.ratio! * v.axleRatio), teeth: teeth.reverse.teeth },
@@ -494,7 +523,7 @@ export function evaluateGearbox(d: GearboxDesign): GearboxPerformance {
     range: gears[0]!.ratio / gears[gears.length - 1]!.ratio,
     vmaxKmh: top.v * KMH,
     vmaxGear: top.gear,
-    vmaxAtLimiter: top.v >= 0.995 * limitSpeed,
+    vmaxAtLimiter: top.atLimiter,
     topRpmAt100: ((100 / KMH / v.radius) * topGear.overall) * RPM,
     topRpmAt120: ((120 / KMH / v.radius) * topGear.overall) * RPM,
     startGradePct: startGrade(m),
