@@ -165,11 +165,8 @@ export class CamberLaser {
     const dirz = side > 1e-9 ? uz / side : 0;
     const total = Math.atan2(side, up.y);
     for (let k = 0; k < ARC_SEGMENTS; k++) {
-      for (const [slot, step] of [
-        [0, k],
-        [1, k + 1],
-      ] as const) {
-        const a = (total * step) / ARC_SEGMENTS;
+      for (let slot = 0; slot < 2; slot++) {
+        const a = (total * (k + slot)) / ARC_SEGMENTS;
         p.set(contact.x + dirx * Math.sin(a) * ARC_AT, contact.y + Math.cos(a) * ARC_AT, contact.z + dirz * Math.sin(a) * ARC_AT);
         this.write(6 + 2 * k + slot, p);
       }

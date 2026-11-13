@@ -107,23 +107,23 @@ export class CornerSchematic {
   }
 
   update(p: SchematicPoints): void {
-    JOINTS.forEach(([key], i) => {
-      const at = p[key];
+    for (let i = 0; i < JOINTS.length; i++) {
+      const at = p[JOINTS[i]![0]];
       if (!at) this.joints.setMatrixAt(i, HIDDEN);
       else this.joints.setMatrixAt(i, this.m.makeTranslation(at.x, at.y, at.z));
-    });
-    BARS.forEach(([from, to], i) => {
-      const a = p[from];
-      const b = p[to];
+    }
+    for (let i = 0; i < BARS.length; i++) {
+      const a = p[BARS[i]![0]];
+      const b = p[BARS[i]![1]];
       if (!a || !b) {
         this.bars.setMatrixAt(i, HIDDEN);
-        return;
+        continue;
       }
       this.d.copy(b).sub(a);
       const len = this.d.length();
       this.q.setFromUnitVectors(UP, this.d.divideScalar(len));
       this.bars.setMatrixAt(i, this.m.compose(a, this.q, this.s.set(1, len, 1)));
-    });
+    }
     this.joints.instanceMatrix.needsUpdate = true;
     this.bars.instanceMatrix.needsUpdate = true;
     // Bush axis, a third longer than the bushes' span at each end.
@@ -141,11 +141,8 @@ export class CornerSchematic {
     this.e2.crossVectors(this.e1, p.axis).normalize();
     const base = 4 * DASHES;
     for (let k = 0; k < CIRCLE; k++) {
-      for (const [slot, step] of [
-        [0, k],
-        [1, k + 1],
-      ] as const) {
-        const ang = (step / CIRCLE) * Math.PI * 2;
+      for (let slot = 0; slot < 2; slot++) {
+        const ang = ((k + slot) / CIRCLE) * Math.PI * 2;
         this.s.copy(p.wheelCentre).addScaledVector(this.e1, Math.cos(ang) * p.freeRadius).addScaledVector(this.e2, Math.sin(ang) * p.freeRadius);
         this.write(base + 2 * k + slot, this.s);
       }

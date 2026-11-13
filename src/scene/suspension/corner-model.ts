@@ -20,7 +20,7 @@ import type { Axle } from '../../suspension/kinematics.ts';
 import type { QuarterOut } from '../../suspension/quarter.ts';
 import type { RoadProfile } from '../../suspension/road.ts';
 import type { ResolvedCorner } from '../../suspension/setup.ts';
-import { POSE_SIZE } from '../../suspension/solve.ts';
+import { POSE_SIZE, type SolveResult } from '../../suspension/solve.ts';
 import { tyreVertical } from '../../vehicle/tyre-data.ts';
 import type { PartInfo } from '../parts-info.ts';
 import { SUSPENSION_PARTS } from './parts.ts';
@@ -263,6 +263,7 @@ export class CornerModel {
   private readonly force = new THREE.Vector3();
   private readonly forceB = new THREE.Vector3();
   private readonly fa = [0, 0, 0];
+  private readonly solved: SolveResult = { ok: false, iterations: 0, residual: 0, detSign: 0, worst: '' };
 
   constructor(resolved: ResolvedCorner, profile: RoadProfile | null = null) {
     this.resolved = resolved;
@@ -747,8 +748,8 @@ export class CornerModel {
 
     // Knuckle pose: exact, warm from the last frame (the table's pose the first time or after a failure).
     const warm = this.pose[6] === 0 && this.pose[3] === 0 ? null : this.pose;
-    const res = axle.solvePose(f.travel, f.rack, warm, this.pose);
-    if (!res.ok) axle.solvePose(f.travel, f.rack, null, this.pose);
+    const res = axle.solvePose(f.travel, f.rack, warm, this.pose, this.solved);
+    if (!res.ok) axle.solvePose(f.travel, f.rack, null, this.pose, this.solved);
     this.body.position.set(0, f.bodyZ * 10, 0);
     // ISO quaternion (x, y, z) → scene (y, z, x), as points are.
     const P = this.pose;
@@ -924,17 +925,16 @@ export class CornerModel {
     const weight = this.resolved.unsprungKg * G;
     arrows.set('weight', this.wheelCentre, v.set(0, -weight, 0));
 
-    // Links: statics of the knuckle under those forces (in the ISO body frame, metres).
+    // Links: statics of the knuckle under those forces (in the ISO body frame, metres: ISO (x, y, z) = scene (z, x, y)/10).
     const s = this.statics;
     s.begin(this.pose, f.travel, f.rack);
-    const iso = (p: THREE.Vector3): [number, number, number] => [p.z / 10, p.x / 10, p.y / 10];
-    const [cx, cy, cz] = iso(this.contact);
-    s.force(cx, cy, cz, 0, 0, f.tyreN);
+    const c = this.contact;
+    s.force(c.z / 10, c.x / 10, c.y / 10, 0, 0, f.tyreN);
     const strutN = f.springN + f.damperN + f.stopN;
-    const [lx, ly, lz] = iso(this.lower);
-    s.force(lx, ly, lz, down.z * strutN, down.x * strutN, down.y * strutN);
-    const [wx, wy, wz] = iso(this.wheelCentre);
-    s.force(wx, wy, wz, 0, 0, -weight);
+    const l = this.lower;
+    s.force(l.z / 10, l.x / 10, l.y / 10, down.z * strutN, down.x * strutN, down.y * strutN);
+    const w = this.wheelCentre;
+    s.force(w.z / 10, w.x / 10, w.y / 10, 0, 0, -weight);
     if (!s.solve()) {
       arrows.hide('arm');
       arrows.hide('tieRod');
@@ -942,22 +942,25 @@ export class CornerModel {
       arrows.commit();
       return;
     }
-    const fa = this.fa;
-    const sum = (rows: number[], out: THREE.Vector3): THREE.Vector3 => {
-      out.set(0, 0, 0);
-      for (const r of rows) {
-        s.rowForce(r, fa);
-        out.x += fa[1]!;
-        out.y += fa[2]!;
-        out.z += fa[0]!;
-      }
-      return out;
-    };
+    // Rows: the arm's two legs, the tie rod, then the strut's two (CornerSolver; the constructor demands this shape).
     const n = s.solver.distanceRows;
-    arrows.set('arm', this.ball, sum([0, 1], this.forceB));
-    arrows.set('tieRod', this.tieOuter, sum([2], this.forceB));
-    arrows.set('strutTop', this.top, sum([n, n + 1], this.forceB));
+    arrows.set('arm', this.ball, this.rowSum(0, 2, this.forceB));
+    arrows.set('tieRod', this.tieOuter, this.rowSum(n - 1, n, this.forceB));
+    arrows.set('strutTop', this.top, this.rowSum(n, n + 2, this.forceB));
     arrows.commit();
+  }
+
+  /** Sum of the forces rows [from, to) put on the knuckle, scene axes, N. */
+  private rowSum(from: number, to: number, out: THREE.Vector3): THREE.Vector3 {
+    const fa = this.fa;
+    out.set(0, 0, 0);
+    for (let r = from; r < to; r++) {
+      this.statics.rowForce(r, fa);
+      out.x += fa[1]!;
+      out.y += fa[2]!;
+      out.z += fa[0]!;
+    }
+    return out;
   }
 
   /** How far the bump stop is squeezed, 0..1 of its length (for tests and pages). */

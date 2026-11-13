@@ -250,7 +250,8 @@ export class CoilSpring {
       let tx = -R * s;
       let ty = -dz;
       let tz = R * c;
-      const tl = Math.hypot(tx, ty, tz);
+      // Math.sqrt, not Math.hypot: V8 does not inline hypot, so each call boxes its arguments, and this runs per vertex.
+      const tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
       tx /= tl;
       ty /= tl;
       tz /= tl;
@@ -295,10 +296,9 @@ export class Bellows {
   private readonly normals: Float32Array;
   private readonly rings: number;
   private readonly radial: number;
-  private readonly r0: number;
-  private readonly r1: number;
-  private readonly folds: number;
-  private readonly depth: number;
+  /** Radius of each ring and its rate along the boot (per unit of u): the profile does not change with the pose. */
+  private readonly ringR: Float64Array;
+  private readonly ringDr: Float64Array;
   // Scratch
   private readonly c = new THREE.Vector3();
   private readonly t = new THREE.Vector3();
@@ -311,12 +311,23 @@ export class Bellows {
   private readonly d2 = new THREE.Vector3();
 
   constructor(r0: number, r1: number, folds: number, depth: number, rings = 40, radial = 18) {
-    this.r0 = r0;
-    this.r1 = r1;
-    this.folds = folds;
-    this.depth = depth;
     this.rings = rings;
     this.radial = radial;
+    const radius = (u: number): number => {
+      const base = r0 + (r1 - r0) * u;
+      // Folds fade out at the clamped ends.
+      const fold = 0.5 - 0.5 * Math.cos(2 * Math.PI * folds * u);
+      const fade = Math.min(1, u * 8, (1 - u) * 8);
+      return base + depth * fold * fade;
+    };
+    this.ringR = new Float64Array(rings + 1);
+    this.ringDr = new Float64Array(rings + 1);
+    const du = 1 / rings;
+    for (let i = 0; i <= rings; i++) {
+      const u = i / rings;
+      this.ringR[i] = radius(u);
+      this.ringDr[i] = (radius(Math.min(1, u + du)) - radius(Math.max(0, u - du))) / (2 * du);
+    }
     const count = (rings + 1) * radial;
     this.positions = new Float32Array(count * 3);
     this.normals = new Float32Array(count * 3);
@@ -333,14 +344,6 @@ export class Bellows {
     this.geometry.setIndex(index);
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
     this.geometry.setAttribute('normal', new THREE.BufferAttribute(this.normals, 3).setUsage(THREE.DynamicDrawUsage));
-  }
-
-  private radius(u: number): number {
-    const base = this.r0 + (this.r1 - this.r0) * u;
-    // Folds fade out at the clamped ends.
-    const fold = 0.5 - 0.5 * Math.cos(2 * Math.PI * this.folds * u);
-    const fade = Math.min(1, u * 8, (1 - u) * 8);
-    return base + this.depth * fold * fade;
   }
 
   /** Boot from a (leaving along da) to b (arriving along db), both directions unit, all in the parent's frame. */
@@ -372,10 +375,9 @@ export class Bellows {
       }
       n.addScaledVector(t, -n.dot(t)).normalize();
       bi.crossVectors(t, n);
-      const r = this.radius(u);
+      const r = this.ringR[i]!;
       // Slope of the radius along the boot tilts the normal, so the folds shade as folds.
-      const du = 1 / rings;
-      const slope = (this.radius(Math.min(1, u + du)) - this.radius(Math.max(0, u - du))) / (2 * du * Math.max(len, 1e-6));
+      const slope = this.ringDr[i]! / Math.max(len, 1e-6);
       for (let j = 0; j < radial; j++) {
         const phi = (j / radial) * 2 * Math.PI;
         const cp = Math.cos(phi);
@@ -390,7 +392,7 @@ export class Bellows {
         const nx = rx - slope * t.x;
         const ny = ry - slope * t.y;
         const nz = rz - slope * t.z;
-        const nl = Math.hypot(nx, ny, nz);
+        const nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
         N[k] = nx / nl;
         N[k + 1] = ny / nl;
         N[k + 2] = nz / nl;

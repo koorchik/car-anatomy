@@ -378,10 +378,10 @@ export class Axle {
    * Exact pose for the 3D at `travel` and `rack`, warm-started from `warm` (or the table when null). The pose is of
    * the left corner; mirrorPose gives the right one.
    */
-  solvePose(travel: number, rack: number, warm: Float64Array | null, out: Float64Array): SolveResult {
+  solvePose(travel: number, rack: number, warm: Float64Array | null, out: Float64Array, result?: SolveResult): SolveResult {
     if (warm) out.set(warm);
     else this.tablePose(travel, out);
-    return this.solver.solve(out, travel, rack, 20);
+    return this.solver.solve(out, travel, rack, 20, result);
   }
 
   /** Pose interpolated from the table: translation linear, rotation normalised-linear. */
