@@ -2135,7 +2135,7 @@ input[type='range']::-moz-range-thumb {
   margin-top: 10px;
   pointer-events: auto;
   max-width: min(320px, 34vw);
-  /* main.ts (fitVariants) limits the height where the compact force card would cover the end of the list. */
+  /* The catalogue page (fitVariants) limits the height where the compact force card would cover the end of the list. */
   overflow-y: auto;
   scrollbar-color: var(--petrol-lit) transparent;
   scrollbar-width: thin;

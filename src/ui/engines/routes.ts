@@ -5,6 +5,9 @@ import type { Route } from '../../shell/routes.ts';
 
 export type EnginesPage = 'catalogue' | 'designer' | 'sump';
 
+/** The engine the catalogue opens without an id, and where the menu's engines item leads. */
+export const DEFAULT_ENGINE = 'v8-cross';
+
 /** The engines page a route opens. Other sections and unknown addresses still show the catalogue, as they always did. */
 export function enginesPage(route: Route): EnginesPage {
   if (route.section !== 'engines') return 'catalogue';
