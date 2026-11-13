@@ -22,6 +22,16 @@ import {
   type PivotIntent,
 } from '../src/suspension/templates/pivot.ts';
 import { pivotAsLinks, pivotFrontViewCentre, PivotSolver } from '../src/suspension/solve-pivot.ts';
+import {
+  shearCentreOf,
+  twistBeamAxle,
+  TWIST_BEAM_BUMP_STOP_TRAVEL_M,
+  TWIST_BEAM_TYPICAL,
+  type TwistBeamIntent,
+} from '../src/suspension/templates/twist-beam.ts';
+import { buildTwistBeam, newBeamSample, type BeamSample, type TwistBeamAxle } from '../src/suspension/beam-kinematics.ts';
+import { TwistBeamSolver } from '../src/suspension/solve-twist-beam.ts';
+import { mirrorY } from '../src/suspension/vec.ts';
 import { solidAxle, SOLID_BUMP_STOP_TRAVEL_M, SOLID_TYPICAL, type SolidAxleIntent } from '../src/suspension/templates/solid-axle.ts';
 import { newSolidSample, SolidAxle, type SolidSample } from '../src/suspension/solid-kinematics.ts';
 import { LEAF_LINK_SHARE } from '../src/suspension/solve-axle.ts';
@@ -1044,6 +1054,322 @@ describe('buildAxleLite', () => {
     for (let i = 0; i < 20; i++) buildAxle(front.ml);
     const full = (performance.now() - t1) / 20;
     expect(lite).toBeLessThan(full / 3);
+  });
+});
+
+// Twist beam (templates/twist-beam.ts, solve-twist-beam.ts, beam-kinematics.ts). Expected values come from the
+// research's kinematic analogy (docs/suspension-research/kinematics_geometry.md §2): in heave both arms swing about the
+// bushes' line, in roll each turns about the line from its bush to the shear centre, so the roll centre follows from
+// where that line pierces the wheel's transverse plane, and the analogy's table of roll centre against beam position is
+// the oracle. The limits are the layouts on either side: trailing arms with the beam at the bushes, a solid axle
+// rolling about the beam with it at the wheels.
+describe('twist beam: heave about the bushes, roll about the shear centre', () => {
+  const beam = (intent: Partial<TwistBeamIntent> = {}): TwistBeamAxle =>
+    buildTwistBeam(twistBeamAxle({ ...TWIST_BEAM_TYPICAL, ...intent }));
+  const at = (a: TwistBeamAxle, zL: number, zR: number, side: 'left' | 'right' = 'left'): BeamSample => {
+    const s = newBeamSample();
+    a.measureAt(zL, zR, side, s);
+    return s;
+  };
+  /** Road-relative roll camber factor at design: 1 − (t/2)·|dγ/dq| in roll (this wheel up, the other down). */
+  const rcf = (a: TwistBeamAxle): number => {
+    const s = at(a, 0, 0);
+    return 1 - (a.spec.track / 2) * Math.abs(s.camberGain - s.camberGainCross);
+  };
+  /** Roll centre by the instant centre: where the line from the bush to the shear centre meets the patch's plane. */
+  const rollCentreByAxis = (a: TwistBeamAxle): number => {
+    const link = a.spec.linkage;
+    const ic = pivotFrontViewCentre({ kind: 'pivot', axisA: link.bush, axisB: link.shearCentre, armPart: '' }, 0);
+    if (!ic) return 0;
+    const yC = a.spec.track / 2;
+    return (ic.z * yC) / (yC - ic.y);
+  };
+
+  it('reproduces the research analogy: roll centre 34, 130, 219, 274 and 300 mm as the beam moves to the wheels', () => {
+    // The analogy's layout: bushes 0.5 m ahead of the wheels, half track 0.75 m, everything 0.3 m high. The research
+    // does not give the bushes' spacing; 0.1 m inboard of the wheels reproduces every row of its table.
+    const research: Partial<TwistBeamIntent> = { armM: 0.5, pivotYM: 0.65, trackM: 1.5, pivotZM: 0.3, wheelCentreZM: 0.3 };
+    const table: Array<[number, number]> = [
+      [0.1, 0.034],
+      [0.4, 0.13],
+      [0.7, 0.219],
+      [0.9, 0.274],
+      [1, 0.3],
+    ];
+    for (const [beamPos, rc] of table) {
+      const a = beam({ ...research, beamPos });
+      const s = at(a, 0, 0);
+      expect(Math.abs(s.rcHeight - rc)).toBeLessThan(0.0007);
+      expect(Math.abs(s.rcHeight - rollCentreByAxis(a))).toBeLessThan(1e-9);
+    }
+  });
+
+  it('the roll centre rises from the trailing arm’s zero to the shear centre’s height as beamPos goes from 0 to 1', () => {
+    let last = -Infinity;
+    let lastRcf = Infinity;
+    for (let i = 0; i <= 50; i++) {
+      const beamPos = i / 50;
+      const a = beam({ beamPos });
+      const rc = at(a, 0, 0).rcHeight;
+      if (i > 0) expect(rc).toBeGreaterThan(last);
+      // Smoothly: no step of 0.02 moves it more than 25 mm.
+      if (i > 1) expect(rc - last).toBeLessThan(0.025);
+      expect(Math.abs(rc - rollCentreByAxis(a))).toBeLessThan(1e-9);
+      // The camber kept against the road falls as the roll centre rises: RCF = 1 − h_RC/z_IC, z_IC at wheel height.
+      const f = rcf(a);
+      expect(f).toBeLessThan(lastRcf + 1e-12);
+      expect(Math.abs(f - (1 - rc / TWIST_BEAM_TYPICAL.wheelCentreZM))).toBeLessThan(1e-9);
+      last = rc;
+      lastRcf = f;
+    }
+    const ends = [beam({ beamPos: 0 }), beam({ beamPos: 1 })];
+    expect(Math.abs(at(ends[0], 0, 0).rcHeight)).toBeLessThan(1e-12);
+    expect(Math.abs(rcf(ends[0]) - 1)).toBeLessThan(1e-12);
+    // At the wheels the beam rolls like a solid axle: about the shear centre, keeping its wheels' camber to the road.
+    expect(Math.abs(last - TWIST_BEAM_TYPICAL.wheelCentreZM)).toBeLessThan(1e-9);
+    expect(Math.abs(rcf(ends[1]))).toBeLessThan(1e-9);
+    const raised = beam({ beamPos: 1, shearCentreDzM: 0.05 });
+    expect(Math.abs(at(raised, 0, 0).rcHeight - raised.spec.linkage.shearCentre[2])).toBeLessThan(1e-9);
+    expect(raised.spec.linkage.shearCentre[2]).toBeCloseTo(0.35, 12);
+    // At the bushes an offset shear centre no longer gives the trailing arm's zero: the line from B to S then lies in
+    // the bushes' transverse plane, never meets the wheel's, and its front-view slope dz/pivotYM sets the roll centre.
+    for (const dz of [-0.03, 0.03]) {
+      const offset = beam({ beamPos: 0, shearCentreDzM: dz });
+      const rc = (TWIST_BEAM_TYPICAL.trackM / 2) * (dz / TWIST_BEAM_TYPICAL.pivotYM);
+      expect(Math.abs(at(offset, 0, 0).rcHeight - rc)).toBeLessThan(1e-9);
+    }
+  });
+
+  it('with the beam at the bushes each arm is a trailing arm: the other wheel changes nothing', () => {
+    const a = beam({ beamPos: 0 });
+    const { armM, pivotYM, pivotZM, trackM, wheelCentreZM } = TWIST_BEAM_TYPICAL;
+    const trailing = buildAxle(
+      pivotAxle({ ...PIVOT_TYPICAL['trailing-arm'], armM, pivotYM, pivotZM, trackM, wheelCentreZM }),
+    );
+    const c = newCornerSample();
+    for (const zL of [-0.1, -0.04, 0, 0.05, 0.12]) {
+      trailing.measureAt(zL, c);
+      for (const zR of [-0.1, 0, 0.08, 0.12]) {
+        const s = at(a, zL, zR);
+        expect(Math.abs(s.wheelX - c.wheelX) + Math.abs(s.wheelY - c.wheelY) + Math.abs(s.wheelZ - c.wheelZ)).toBeLessThan(1e-12);
+        expect(Math.abs(s.camber) + Math.abs(s.toe)).toBeLessThan(1e-12);
+        expect(Math.abs(s.tanBeta - c.tanBeta)).toBeLessThan(1e-12);
+        for (const k of ['tanBetaCross', 'tanThetaCPCross', 'tanThetaWCCross', 'camberGainCross', 'bumpSteerCross', 'mrSpringCross'] as const) {
+          expect(Math.abs(s[k])).toBeLessThan(1e-12);
+        }
+      }
+    }
+  });
+
+  it('heave turns both arms about the bushes: no camber, toe, patch drift or twist; a static alignment only turns with them', () => {
+    const a = beam();
+    // The typical arm is level at design, so heave h lifts the wheel by armM·sin h.
+    expect(TWIST_BEAM_TYPICAL.pivotZM).toBe(TWIST_BEAM_TYPICAL.wheelCentreZM);
+    for (let z = -0.1; z <= 0.12 + 1e-9; z += 0.01) {
+      const state = TwistBeamSolver.rest();
+      a.solve(state, z, z);
+      expect(Math.abs(state[0] - Math.asin(z / TWIST_BEAM_TYPICAL.armM))).toBeLessThan(1e-12);
+      expect(Math.abs(state[1])).toBeLessThan(1e-12);
+      const s = newBeamSample();
+      a.measure(state, 'left', s);
+      expect(Math.abs(s.camber) + Math.abs(s.toe) + Math.abs(s.beamTwist)).toBeLessThan(1e-12);
+      // The patch moves square to the road in heave: the two slopes cancel.
+      expect(Math.abs(s.tanBeta + s.tanBetaCross)).toBeLessThan(1e-12);
+    }
+    // Golf Mk3's torsion-beam alignment (−1°30′ camber, +10′ toe per wheel; real_car_data.md, recheck pending): the stub
+    // is fixed to the arm, so in heave the spin axis turns about y by exactly the arm's angle. That is the only change.
+    const golf = beam({ camberDeg: -1.5, toeDeg: 10 / 60 });
+    const s0 = golf.spec.spinAxis;
+    for (const z of [-0.1, -0.03, 0, 0.06, 0.12]) {
+      const state = TwistBeamSolver.rest();
+      golf.solve(state, z, z);
+      const h = Math.asin(z / TWIST_BEAM_TYPICAL.armM);
+      const sx = s0[0] * Math.cos(h) + s0[2] * Math.sin(h);
+      const sz = -s0[0] * Math.sin(h) + s0[2] * Math.cos(h);
+      const s = newBeamSample();
+      golf.measure(state, 'left', s);
+      expect(Math.abs(s.camber + Math.atan2(sz, Math.hypot(sx, s0[1])))).toBeLessThan(1e-12);
+      expect(Math.abs(s.toe - Math.atan2(sx, s0[1]))).toBeLessThan(1e-12);
+    }
+  });
+
+  it('one wheel over a bump twists the beam and leans both wheels, more the closer the beam sits to the wheels', () => {
+    // «The closer the cross beam to the axle stubs, the more the camber and toe change under deflection» (Wikipedia,
+    // Twist-beam rear suspension; suspension_types.md).
+    let lastCamber = -1;
+    let lastToe = -1;
+    for (const beamPos of [0, 0.2, 0.35, 0.6, 0.8, 1]) {
+      const a = beam({ beamPos });
+      const state = TwistBeamSolver.rest();
+      a.solve(state, 0.04, 0);
+      const left = newBeamSample();
+      const right = newBeamSample();
+      a.measure(state, 'left', left);
+      a.measure(state, 'right', right);
+      expect(Math.abs(right.travel)).toBeLessThan(1e-12);
+      expect(left.otherTravel).toBeCloseTo(0, 12);
+      expect(right.otherTravel).toBeCloseTo(0.04, 12);
+      // The left arm turned up relative to the right one: at the bushes by exactly its own angle, as a lone trailing
+      // arm; nearer the wheels part of the turn is about the arms' roll axis instead, and the beam twists less.
+      expect(left.beamTwist).toBe(right.beamTwist);
+      const armAngle = Math.asin(0.04 / TWIST_BEAM_TYPICAL.armM);
+      if (beamPos === 0) expect(Math.abs(left.beamTwist - armAngle)).toBeLessThan(1e-12);
+      expect(left.beamTwist).toBeLessThanOrEqual(armAngle + 1e-12);
+      expect(left.beamTwist).toBeGreaterThan(0.8 * armAngle);
+      if (beamPos === 0) {
+        expect(Math.abs(left.camber) + Math.abs(right.camber)).toBeLessThan(1e-12);
+      } else {
+        // The bumped wheel leans its top in, the held one out, as a rolled axle would tilt them.
+        expect(left.camber).toBeLessThan(0);
+        expect(right.camber).toBeGreaterThan(0);
+      }
+      expect(Math.abs(left.camber)).toBeGreaterThan(lastCamber);
+      expect(Math.abs(left.toe)).toBeGreaterThan(lastToe - 1e-15);
+      lastCamber = Math.abs(left.camber);
+      lastToe = Math.abs(left.toe);
+    }
+    expect(lastToe).toBeGreaterThan(0);
+  });
+
+  it('raising the shear centre turns the roll steer toward understeer; on a level arm there is none', () => {
+    // Patent application US 2010/0301579: the shear centre's height drives the roll steer of a twist beam, and raising it
+    // moves the axle toward roll understeer: here the rear wheel going up in roll (the outer one) toes in.
+    const rollSteer = (shearCentreDzM: number): number => {
+      const s = at(beam({ shearCentreDzM }), 0, 0);
+      return s.bumpSteer - s.bumpSteerCross;
+    };
+    expect(Math.abs(rollSteer(0))).toBeLessThan(1e-12);
+    let last = -Infinity;
+    for (const dz of [-0.06, -0.03, -0.01, 0, 0.01, 0.03, 0.06]) {
+      const steer = rollSteer(dz);
+      expect(steer).toBeGreaterThan(last);
+      if (dz !== 0) expect(Math.sign(steer)).toBe(Math.sign(dz));
+      last = steer;
+    }
+  });
+
+  it('keeps the arms rigid and joined at the shear centre, mirrors left and right, and its slopes match differences', () => {
+    const a = beam({ shearCentreDzM: 0.02, camberDeg: -1, toeDeg: 0.2 });
+    const solver = a.solver;
+    const link = a.spec.linkage;
+    const states: Array<[number, number]> = [
+      [0.03, -0.02],
+      [0.1, 0.05],
+      [-0.08, 0.11],
+      [0.12, -0.1],
+    ];
+    const pose = CornerSolver.identity();
+    const p = [0, 0, 0];
+    const q = [0, 0, 0];
+    for (const [zL, zR] of states) {
+      const state = TwistBeamSolver.rest();
+      a.solve(state, zL, zR);
+      // Each arm turns about its bush: distances from the bush stay; the arms' copies of the shear centre coincide.
+      solver.pose(state, 'left', pose);
+      for (const k of [a.spec.wheelCentre, a.spec.spring.wheel as Vec3, link.shearCentre]) {
+        solver.point(pose, k, p);
+        expect(Math.abs(dist(link.bush, [p[0], p[1], p[2]]) - dist(link.bush, k))).toBeLessThan(1e-12);
+      }
+      solver.point(pose, link.shearCentre, p);
+      // The right arm, as the left corner sees it, mirrored back.
+      solver.pose(state, 'right', pose);
+      solver.point(pose, mirrorY(link.shearCentre), q);
+      expect(Math.hypot(p[0] - q[0], p[1] + q[1], p[2] - q[2])).toBeLessThan(1e-12);
+
+      // Swapping the travels mirrors the axle.
+      const l = at(a, zL, zR, 'left');
+      const r = at(a, zR, zL, 'right');
+      for (const f of ['camber', 'toe', 'contactX', 'contactZ', 'springLen', 'mrSpring', 'bumpSteerCross'] as const) {
+        expect(Math.abs(l[f] - r[f])).toBeLessThan(1e-12);
+      }
+      for (const f of ['contactY', 'wheelY', 'tanBeta', 'tanBetaCross', 'beamTwist', 'twistRate'] as const) {
+        expect(Math.abs(l[f] + r[f])).toBeLessThan(1e-12);
+      }
+
+      // Exact slopes against central differences, per own and per other travel, for both wheels.
+      const h = 1e-6;
+      for (const side of ['left', 'right'] as const) {
+        const s = at(a, zL, zR, side);
+        const sign = side === 'left' ? 1 : -1;
+        const diff = (dOwn: number, dOther: number, f: (b: BeamSample) => number): number => {
+          const [uL, uR] = side === 'left' ? [dOwn, dOther] : [dOther, dOwn];
+          return (f(at(a, zL + uL * h, zR + uR * h, side)) - f(at(a, zL - uL * h, zR - uR * h, side))) / (2 * h);
+        };
+        const checks: Array<[number, number, (b: BeamSample) => number, number]> = [
+          [1, 0, (b) => b.contactY, s.tanBeta],
+          [0, 1, (b) => b.contactY, s.tanBetaCross],
+          [1, 0, (b) => b.contactX, s.tanThetaCP],
+          [0, 1, (b) => b.contactX, s.tanThetaCPCross],
+          [1, 0, (b) => b.wheelX, s.tanThetaWC],
+          [0, 1, (b) => b.wheelX, s.tanThetaWCCross],
+          [1, 0, (b) => b.camber, s.camberGain],
+          [0, 1, (b) => b.camber, s.camberGainCross],
+          [1, 0, (b) => b.toe, s.bumpSteer],
+          [0, 1, (b) => b.toe, s.bumpSteerCross],
+          [1, 0, (b) => -b.springLen, s.mrSpring],
+          [0, 1, (b) => -b.springLen, s.mrSpringCross],
+          [1, 0, (b) => -b.damperLen, s.mrDamper],
+          [0, 1, (b) => -b.damperLen, s.mrDamperCross],
+          [1, 0, (b) => b.beamTwist, s.twistRate],
+          [1, 0, (b) => b.travel, 1],
+          [0, 1, (b) => b.travel, 0],
+        ];
+        for (const [dOwn, dOther, f, exact] of checks) expect(Math.abs(diff(dOwn, dOther, f) - exact)).toBeLessThan(1e-6);
+        expect(Math.sign(s.contactY)).toBe(sign);
+      }
+    }
+  });
+
+  it('meets both travels to 1e-13 m in at most four Newton steps from rest, three from a 2 mm neighbour', () => {
+    for (const beamPos of [0, 0.35, 1]) {
+      const solver = beam({ beamPos }).solver;
+      for (let i = -100; i <= 120; i += 4) {
+        for (let j = -100; j <= 120; j += 4) {
+          const state = TwistBeamSolver.rest();
+          const res = solver.solve(state, i / 1000, j / 1000);
+          expect(res.ok && res.iterations <= 4 && res.residual < 1e-13).toBe(true);
+          const warm = solver.solve(state, (i + 2) / 1000, (j - 2) / 1000);
+          expect(warm.ok && warm.iterations <= 3).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('typical beam: roll centre in the rear range, springs beside the stubs, the stop 80 mm into bump', () => {
+    const a = beam();
+    const s = at(a, 0, 0);
+    // The research's target for a rear roll centre; the RCF is tied to it (≈0.61, the research's weak ≈0.55).
+    expect(s.rcHeight).toBeGreaterThan(0.09);
+    expect(s.rcHeight).toBeLessThan(0.12);
+    expect(rcf(a)).toBeCloseTo(1 - s.rcHeight / TWIST_BEAM_TYPICAL.wheelCentreZM, 9);
+    // A spring at the stub's x moves with the wheel in heave and less in roll, being nearer the roll axis.
+    expect(s.mrSpring + s.mrSpringCross).toBeCloseTo(1, 12);
+    expect(s.mrSpring - s.mrSpringCross).toBeLessThan(1);
+    const d = a.spec.damper;
+    if (d.wheel === 'strut') throw new Error('a twist beam has no strut');
+    const z = TWIST_BEAM_BUMP_STOP_TRAVEL_M;
+    expect(at(a, z, z).damperLen).toBeCloseTo(dist(d.body, d.wheel) - a.spec.bumpStop.gapM, 12);
+    // The typical torsional stiffness note: the beam twists 2.94 rad per radian of axle roll.
+    const right = at(a, 0, 0, 'right');
+    expect(((a.spec.track / 2) * (s.twistRate - right.twistRate)) / 2.94).toBeCloseTo(1, 2);
+    expect(a.spec.linkage.shearCentre).toEqual(shearCentreOf(TWIST_BEAM_TYPICAL));
+  });
+
+  it('refuses intents it cannot build, and travels it cannot reach', () => {
+    for (const beamPos of [-0.1, 1.1]) expect(() => twistBeamAxle({ ...TWIST_BEAM_TYPICAL, beamPos })).toThrow(/between/);
+    const keys = [
+      'beamPos', 'shearCentreDzM', 'armM', 'pivotYM', 'pivotZM', 'trackM', 'wheelCentreZM', 'camberDeg', 'toeDeg',
+      'torsionNmPerRad',
+    ] as const;
+    for (const key of keys) expect(() => twistBeamAxle({ ...TWIST_BEAM_TYPICAL, [key]: NaN })).toThrow(/not a number/);
+    for (const armM of [0, -0.4]) expect(() => twistBeamAxle({ ...TWIST_BEAM_TYPICAL, armM })).toThrow(/ahead/);
+    expect(() => twistBeamAxle({ ...TWIST_BEAM_TYPICAL, pivotYM: 0 })).toThrow(/centre line/);
+    expect(() => twistBeamAxle({ ...TWIST_BEAM_TYPICAL, torsionNmPerRad: -1 })).toThrow();
+    expect(() => twistBeamAxle({ ...TWIST_BEAM_TYPICAL, camberDeg: 15 })).toThrow();
+    // A level arm reaches 120 mm of bump only if longer; shorter ones fail in the template, not in a sweep.
+    for (const armM of [0.05, 0.11]) expect(() => twistBeamAxle({ ...TWIST_BEAM_TYPICAL, armM })).toThrow(/too short/);
+    expect(() => twistBeamAxle({ ...TWIST_BEAM_TYPICAL, armM: 0.15 })).not.toThrow();
+    expect(() => beam().measureAt(0.5, 0, 'left', newBeamSample())).toThrow(/does not solve/);
   });
 });
 

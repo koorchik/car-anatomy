@@ -85,6 +85,23 @@ export interface PivotLinkage { kind: 'pivot'; axisA: Vec3; axisB: Vec3; armPart
 export type AnyCornerLinkage = CornerLinkage | PivotLinkage;
 
 /**
+ * Twist beam: two trailing arms on body bushes, welded to a cross member that is stiff in bending and soft in torsion.
+ * Both wheels hang on one part, so the axle has two degrees of freedom and is solved as a whole (solve-twist-beam.ts):
+ * in heave both arms swing about the line through the two bushes, in roll each arm turns about the line from its bush
+ * to the beam's shear centre. Points are the left ones; the right bush is the mirror.
+ */
+export interface TwistBeamLinkage {
+  kind: 'twist-beam';
+  bush: Vec3;
+  /** Shear centre of the beam's section on the car's centre line at design. */
+  shearCentre: Vec3;
+  /** Torque per radian of twist of one arm relative to the other, N·m/rad. */
+  torsionNmPerRad: number;
+  armPart: string;
+  beamPart: string;
+}
+
+/**
  * Watt's linkage on a solid axle: a rocker on the axle turning about the axle's x axis at `pivotOnAxle`, `centreLinkM`
  * long and upright at design, and two rods from its ends to the body, the upper one to `upperBody` and the lower one to
  * `lowerBody`, on opposite sides of the car. The pivot then runs nearly straight up and down.
@@ -120,8 +137,8 @@ export interface SolidAxleLinkage {
   axlePart: string;
 }
 
-/** Both wheels on one part. */
-export type BeamLinkage = SolidAxleLinkage;
+/** Both wheels on one part: a twist beam or a solid axle. */
+export type BeamLinkage = TwistBeamLinkage | SolidAxleLinkage;
 
 export type SpringKind = 'coil' | 'torsion' | 'leaf' | 'air' | 'hydro';
 
