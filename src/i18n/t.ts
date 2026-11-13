@@ -9,7 +9,7 @@ import { SYSTEMS_EN } from './en/systems.ts';
 import { UI_EN } from './en/ui.ts';
 import { locale } from './locale.ts';
 
-const ENGLISH: Record<string, string> = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN, ...SUSPENSION_EN, ...GEARBOX_PARTS_EN };
+const ENGLISH: Record<string, string> = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN, ...GEARBOX_PARTS_EN, ...SUSPENSION_EN };
 
 /** Translates a source string. `{name}` in the text is filled from `values`. */
 export function t(source: string, values?: Record<string, string | number>): string {

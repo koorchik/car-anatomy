@@ -26,7 +26,7 @@ const SOURCE_DATA_DIRS = ['src/data/gearboxes/'];
 const files = walk('src').filter((f) => !f.startsWith('src/i18n/') && !SOURCE_DATA.includes(f) && !SOURCE_DATA_DIRS.some((d) => f.startsWith(d)));
 const CALL = /\bt\(\s*(['"])((?:\\.|(?!\1).)*)\1/gs;
 const unescape = (text: string): string => text.replace(/\\(['"\\])/g, '$1').replace(/\\n/g, '\n');
-const ENGLISH = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN, ...SUSPENSION_EN, ...GEARBOX_PARTS_EN };
+const ENGLISH = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN, ...GEARBOX_PARTS_EN, ...SUSPENSION_EN };
 const placeholders = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).sort();
 
 describe.each(files)('%s', (file) => {

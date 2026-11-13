@@ -172,6 +172,8 @@ export class CornerSolver {
    * read as a force is the direction its constraint pushes the knuckle with (knuckle-statics.ts).
    */
   jacobian(pose: Float64Array, travel: number, rack: number, out: Float64Array): void {
+    // A split knuckle has seven unknowns and a 7×7 J; the statics are written for the plain knuckle only.
+    if (this.split) throw new Error('jacobian: split knuckles have no 6×6 Jacobian');
     this.assemble(pose, travel, rack);
     // Only the first 36 numbers: the 6×6 matrix of a corner with six unknowns, whatever room J has.
     out.set(this.J.subarray(0, 36));
