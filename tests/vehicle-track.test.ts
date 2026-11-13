@@ -43,7 +43,7 @@ describe('test circuit', () => {
     for (let i = 0; i < track.n; i++) if (track.kappaV[i]! < 0) crest += track.ds;
     expect(crest).toBeGreaterThan(58);
     expect(crest).toBeLessThan(62);
-    const back = track.sectors.find((s) => s.name === TEST_CIRCUIT.pieces.find((p) => p.kind === 'straight' && p.crest)!.name)!;
+    const back = track.sectors.find((s) => s.id === TEST_CIRCUIT.pieces.find((p) => p.kind === 'straight' && p.crest)!.name)!;
     for (let i = 0; i < track.n; i++) if (track.kappaV[i]! < 0) expect(i * track.ds).toBeGreaterThan(back.s0);
   });
 

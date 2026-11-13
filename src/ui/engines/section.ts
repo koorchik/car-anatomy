@@ -1,6 +1,7 @@
 // The engines section: the catalogue, the designer and the oil on track, with the dyno, the systems layers, the force
 // arrows and the valve gear's labels on top. A thin dispatcher over those pages: what they share (the engine on stage,
-// its sound, the dash and the frame) lives here.
+// its sound, the dash and the frame) lives here. This module and what it imports make the catalogue's chunk; the
+// designer, the oil page and the features load on first use (chunks.ts, features.ts).
 
 import type { Drive } from '../../audio/drive.ts';
 import type { Engine } from '../../engine/kinematics.ts';
@@ -13,16 +14,17 @@ import type { FreezeOptions } from '../../shell/freeze.ts';
 import type { KeyBinding, PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
 import { readableDegreesPerSecond } from '../../shell/time.ts';
 import { shownAdvance, type SystemsFrame } from '../../systems/sim.ts';
-import { DesignerPage } from '../designer/designer-page.ts';
 import { tableHtml } from '../table.ts';
 import { CataloguePage } from './catalogue-page.ts';
+import { DESIGNER } from './chunks.ts';
 import { EngineDash } from './dash.ts';
-import { DesignerHost } from './designer-host.ts';
+import type { DesignerHost } from './designer-host.ts';
 import { $ } from './dom.ts';
 import { EngineFeatures } from './features.ts';
 import { actionsHtml, afterDashHtml, badgeHtml, dashHtml, panelHtml, resultsHtml, SLOW_RPM_DEFAULT, statusHtml, tableHeadHtml, titleHtml, toolsHtml } from './markup.ts';
 import { enginesPage, type EnginesPage } from './routes.ts';
 import { SumpMode } from './sump-host.ts';
+import './engines.css';
 
 /** No cylinder resting, shared so that the frame does not make a new list each time. */
 const NONE_RESTING: number[] = [];
@@ -37,7 +39,8 @@ export class EnginesSection implements Section {
   dash!: EngineDash;
   features!: EngineFeatures;
   catalogue!: CataloguePage;
-  designer!: DesignerHost;
+  /** Null until the designer's code has loaded. */
+  designer: DesignerHost | null = null;
   sump!: SumpMode;
   explode = 0;
   slowRpm = SLOW_RPM_DEFAULT;
@@ -85,11 +88,7 @@ export class EnginesSection implements Section {
     this.drive = ctx.audio.drive(this.engine);
     this.dash = new EngineDash(this);
     this.features = new EngineFeatures(this);
-    this.designer = new DesignerHost(this);
     this.sump = new SumpMode(this);
-    // The force card turns compact, grows or hides on its own schedule.
-    const card = slots.root.querySelector<HTMLElement>('.forces-card');
-    if (card) new ResizeObserver(() => this.catalogue.fitVariants()).observe(card);
     this.listen();
     this.bindKeys();
     this.catalogue.load(this.engine, false);
@@ -113,8 +112,8 @@ export class EnginesSection implements Section {
     this.away = true;
     // The pages' timers stop, and the next section gets the one Drive with the engine off, the throttle closed and the
     // crank free: a latched pedal or slow motion left on it would rev or hold the engine there.
-    this.features.dyno.setActive(false);
-    if (this.onDesigner) this.designer.page.leave();
+    this.features.dyno?.setActive(false);
+    if (this.onDesigner) this.designer?.page.leave();
     if (this.sump.on) this.sump.page?.leave();
     this.dash.pedal.reset();
     this.drive.lock(null);
@@ -141,7 +140,7 @@ export class EnginesSection implements Section {
   private applyView(mode: ViewMode): void {
     this.model?.setView(mode);
     this.features.systems.setView(mode);
-    this.features.dyno.setView(mode);
+    this.features.dyno?.setView(mode);
   }
 
   layout({ width }: Viewport): PanelSizes {
@@ -166,7 +165,7 @@ export class EnginesSection implements Section {
   time(): TimeCapabilities {
     const modes = ['slow', 'readable', 'real'] as const;
     // Slow motion locks the crank at walking pace, where no absorber can work.
-    if (this.features.dyno.isActive) return { modes, unavailable: { slow: t('Стенд не працює на {rpm} об/хв', { rpm: this.slowRpm }) } };
+    if (this.features.dyno?.isActive) return { modes, unavailable: { slow: t('Стенд не працює на {rpm} об/хв', { rpm: this.slowRpm }) } };
     return { modes };
   }
 
@@ -175,7 +174,8 @@ export class EnginesSection implements Section {
     this.engine = next;
     const spec = next.spec;
     const { stage, view, slots } = this.ctx;
-    const { balance, systems, dyno, valves } = this.features;
+    const features = this.features;
+    const { balance, systems, dyno, valves } = features;
     const newModel: EngineModel = next.isRotary ? new RotaryEngineModel(next) : new PistonEngineModel(next);
     // A rotary explains itself from the front, a piston engine from a three-quarter view.
     // The same scale for a whole page, or for a design as its sliders move, so that size can be seen.
@@ -184,14 +184,16 @@ export class EnginesSection implements Section {
     this.model = newModel;
     newModel.setView(view.mode);
     newModel.setExplode(this.explode);
-    balance.setEngine(next, newModel, this.onDesigner);
+    balance?.setEngine(next, newModel, this.onDesigner);
     systems.attach(next, newModel);
-    dyno.attachModel(newModel);
+    dyno?.attachModel(newModel);
     this.dash.configure(spec.redlineRpm);
-    this.designer.applyZones();
+    this.designer?.applyZones();
     this.dash.firing.setEngine(next);
     this.dash.firing.setInactive([]);
-    valves.setEngine(spec);
+    // Only an engine with variable valve gear has labels to show; they take this engine when they arrive.
+    if (valves) valves.setEngine(spec);
+    else if (spec.vvt) void features.loadValves();
     $('badge').textContent = spec.badge;
     $('badge').style.setProperty('--badge-fit', String(spec.badge.length > 2 ? 0.46 : 0.62));
     slots.partCard.hidden = true;
@@ -206,7 +208,7 @@ export class EnginesSection implements Section {
     const state = this.drive.snapshot().state;
     const ignition = this.dash.ignition;
     if (state === 'running' || state === 'cranking') {
-      this.features.dyno.abort('stopped');
+      this.features.dyno?.abort('stopped');
       this.drive.stop();
       ignition.show(false);
       return;
@@ -214,7 +216,7 @@ export class EnginesSection implements Section {
     this.demoMode = false;
     this.starting = true;
     $('wreck').hidden = true;
-    if (this.onDesigner && this.designer.page.isBroken) this.designer.page.repair();
+    if (this.onDesigner && this.designer?.page.isBroken) this.designer.page.repair();
     ignition.show(true);
     await this.drive.ensureAudio();
     this.drive.start();
@@ -230,9 +232,32 @@ export class EnginesSection implements Section {
     if (state === 'off' || state === 'stopping') await this.toggleIgnition();
   }
 
+  /** The designer, made the first time its code is here. */
+  private designerHost(): DesignerHost | null {
+    if (!this.designer && DESIGNER.value) this.designer = new DESIGNER.value.DesignerHost(this);
+    return this.designer;
+  }
+
+  /** Every lazy chunk of the section loaded and made, as the pages had them before they were lazy (the snapshots). */
+  async loadAll(): Promise<void> {
+    await Promise.all([this.features.loadAll(), DESIGNER.load()]);
+    this.designerHost();
+  }
+
   /** Switches the panels and the engine between the catalogue, the designer and the oil page. */
   private applyRoute(): void {
     const { stage, panels, slots, router } = this.ctx;
+    // The page shown stays until the designer's code is here.
+    if (this.page() === 'designer' && !this.designerHost()) {
+      DESIGNER.load().then(
+        () => {
+          if (!this.away && this.page() === 'designer') this.applyRoute();
+        },
+        (error: unknown) => console.error(error),
+      );
+      return;
+    }
+    const designer = this.designer;
     const wantsSump = this.page() === 'sump';
     if (wantsSump !== this.sump.on) {
       this.sump.set(wantsSump);
@@ -270,15 +295,15 @@ export class EnginesSection implements Section {
         slots.panelTitle.textContent = t('Конструкція');
         slots.table.body.innerHTML = tableHtml('');
       } else {
-        this.designer.page.leave();
+        designer?.page.leave();
         panels.setOpen('right', !small);
         this.catalogue.load(this.catalogue.resolveEngine(), true);
       }
       panels.relayout();
     }
-    if (this.onDesigner) {
-      this.designer.page.enter(DesignerPage.designFromRoute(router.current));
-      this.designer.syncHeading();
+    if (this.onDesigner && designer) {
+      designer.page.enter(DESIGNER.value!.DesignerPage.designFromRoute(router.current));
+      designer.syncHeading();
       slots.table.open(false);
     }
   }
@@ -304,7 +329,7 @@ export class EnginesSection implements Section {
       this.explode = Number((event.target as HTMLInputElement).value);
       this.model?.setExplode(this.explode);
       this.features.systems.setExplode(this.explode);
-      this.features.dyno.setExplode(this.explode);
+      this.features.dyno?.setExplode(this.explode);
     });
     $<HTMLInputElement>('shake').addEventListener('change', (event) => {
       this.shake = (event.target as HTMLInputElement).checked ? 2.6 : 0.45;
@@ -312,7 +337,7 @@ export class EnginesSection implements Section {
     // The article can switch the force arrows on; a phone then needs the sheet out of the way.
     $('article').addEventListener('click', (event) => {
       if (!(event.target as HTMLElement).closest('[data-show-forces]')) return;
-      this.features.balance.show(true);
+      void this.features.loadForces().then((balance) => balance.show(true));
       if (window.innerWidth <= 860) this.setPanel(false);
     });
     $('open-table').addEventListener('click', () => slots.table.open(true));
@@ -349,7 +374,7 @@ export class EnginesSection implements Section {
         label: null,
         reach: 'always',
         down: () => {
-          this.features.dyno.closeHelp();
+          this.features.dyno?.closeHelp();
           return false;
         },
       },
@@ -462,7 +487,7 @@ export class EnginesSection implements Section {
       shake: demo ? 0 : this.shake,
       valves: demo ? undefined : snap.valves,
     });
-    balance.frame(theta, demo ? spec.idleRpm : snap.rpm);
+    balance?.frame(theta, demo ? spec.idleRpm : snap.rpm);
     // The systems are worked out at idle in the demo and in slow motion: at 40 rpm oil would barely flow at all.
     const slowed = !lap && (demo || time.mode === 'slow');
     const systemsRpm = lap ? lap.rpm : slowed && shownRunning ? spec.idleRpm : snap.rpm;
@@ -484,7 +509,7 @@ export class EnginesSection implements Section {
     sf.timeScale = Math.min(1, shownSpeed / Math.max(systemsRpm * 6, 1));
     this.systemsValves(sf, demo ? undefined : snap.valves);
     systems.frame(sf);
-    dyno.frame(snap, theta, dt);
+    dyno?.frame(snap, theta, dt);
     if (!frozen) {
       this.homedFor = null;
     } else if (frozen !== this.homedFor) {
@@ -497,9 +522,9 @@ export class EnginesSection implements Section {
 
     const { tacho, firing, spectrum, ignition } = this.dash;
     tacho.update(snap.rpm, running && snap.fuelCut && snap.rpm > spec.redlineRpm - 200);
-    if (this.onDesigner) this.designer.page.frame(snap.rpm, running, snap.load, dt, snap.valves);
-    valves.withhold(sump.on && !running);
-    valves.update(snap.valves, running && !demo);
+    if (this.onDesigner) this.designer?.page.frame(snap.rpm, running, snap.load, dt, snap.valves);
+    valves?.withhold(sump.on && !running);
+    valves?.update(snap.valves, running && !demo);
     firing.setInactive(running ? (snap.valves?.off ?? NONE_RESTING) : NONE_RESTING);
     firing.draw(theta);
 

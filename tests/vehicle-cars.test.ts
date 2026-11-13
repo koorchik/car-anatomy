@@ -9,7 +9,7 @@ import { steadyTopSpeed } from '../src/drivetrain/runs.ts';
 import { engineById, engineFacts } from '../src/data/engines.ts';
 import { gearboxById } from '../src/data/gearboxes.ts';
 import { genericCar, SUMP_CARS } from '../src/data/sump-cars.ts';
-import { SECTOR_NAMES, TYRE_NAMES } from '../src/data/vehicle-names.ts';
+import { SECTOR_NAMES, sectorName, TYRE_NAMES } from '../src/data/vehicle-names.ts';
 import { evaluate } from '../src/designer/physics.ts';
 import { designFromSpec } from '../src/designer/presets.ts';
 import { DRIVELINE, testTrack } from '../src/lubrication/scenario.ts';
@@ -580,18 +580,18 @@ describe('names of the vehicle core', () => {
     expect(Object.keys(SECTOR_NAMES).sort()).toEqual([...TEST_SECTORS].sort());
   });
 
-  it('reach the oil page as before: sectors by name on its track, ids on a bare one', () => {
-    expect(testTrack().sectors.map((s) => s.name)).toEqual(TEST_SECTORS.map((id) => SECTOR_NAMES[id]));
-    expect(buildTrack(TEST_CIRCUIT).sectors.map((s) => s.name)).toEqual([...TEST_SECTORS]);
-    expect(TYRES.street.name).toBe(TYRE_NAMES.street);
+  it('reach the oil page as ids: the track of its lap carries sector ids, which the page names', () => {
+    expect(testTrack().sectors.map((s) => s.id)).toEqual([...TEST_SECTORS]);
+    expect(buildTrack(TEST_CIRCUIT).sectors.map((s) => s.id)).toEqual([...TEST_SECTORS]);
+    expect(TEST_SECTORS.map(sectorName)).toEqual(TEST_SECTORS.map((id) => SECTOR_NAMES[id]));
   });
 
-  it('keep text out of src/vehicle: only the compatibility import in vehicle.ts reaches src/data, nothing reaches src/i18n', () => {
+  it('keep text out of src/vehicle: nothing there reaches src/data or src/i18n', () => {
     const dir = 'src/vehicle';
     for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
       const imports = [...readFileSync(join(dir, file), 'utf8').matchAll(/from '([^']+)'/g)].map((m) => m[1]!);
       expect(imports.filter((i) => i.includes('/i18n/')), file).toEqual([]);
-      expect(imports.filter((i) => i.includes('/data/')), file).toEqual(file === 'vehicle.ts' ? ['../data/vehicle-names.ts'] : []);
+      expect(imports.filter((i) => i.includes('/data/')), file).toEqual([]);
     }
   });
 });

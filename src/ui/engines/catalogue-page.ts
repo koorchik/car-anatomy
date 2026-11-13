@@ -2,7 +2,7 @@
 
 import { ENGINES, engineById, pageChoices } from '../../data/engines.ts';
 import { buildEngine, type Engine } from '../../engine/kinematics.ts';
-import { ASPIRATION_NAMES } from '../../engine/spec.ts';
+import { ASPIRATION_NAMES } from '../../data/engine-names.ts';
 import { t } from '../../i18n/t.ts';
 import { articleHtml } from '../article.ts';
 import { tableHtml } from '../table.ts';
@@ -42,7 +42,7 @@ export class CataloguePage {
     s.showEngine(next, keepCamera);
     // Each catalogue engine starts warm: the usual picture. A cold start is the visitor's own choice.
     s.features.systems.reset('warm');
-    s.features.dyno.setEngine(next, { kind: 'catalogue' });
+    s.features.setDynoEngine(next, { kind: 'catalogue' });
     const spec = s.engine.spec;
     this.renderVariants(spec.id);
     $('engine-title').textContent = spec.title;

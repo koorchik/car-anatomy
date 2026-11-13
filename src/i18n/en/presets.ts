@@ -1,0 +1,30 @@
+// English for the designer's starting designs (src/designer/presets.ts): their names and notes. The designer, the dyno
+// and the oil on track all load presets.ts, for designFromSpec, so each registers this before its code; the rest of the
+// designer's text (designer.ts) comes with the designer alone.
+export const PRESETS_EN: Record<string, string> = {
+  'Трилітровий сингл': 'Three-liter single',
+  'Один циліндр на три літри: вагон моменту, а маховик ледве встигає.': 'One cylinder, three liters. Loads of torque, and the flywheel can barely keep up.',
+  'Крихітний V12': 'Tiny V12',
+  'Літр робочого об’єму на дванадцять циліндрів і дуже високі оберти.': 'One liter of displacement across twelve cylinders, and very high rpm.',
+  'Крихітний V12 на літр': 'Tiny one-liter V12',
+  'V4 «великий удар»': 'Big-bang V4',
+  'Усі спалахи скупчені разом, а потім тиша. Рівний за балансом, рваний за звуком.': 'All firing events bunched together, then silence. Smooth in balance, ragged in sound.',
+  'V4 великий удар': 'Big-bang V4',
+  'I6 із плоским колінвалом': 'I6 with a flat-plane crankshaft',
+  'Зрівноважену від природи шістку зіпсовано плоским валом: подивись на вібрації.': 'A naturally balanced six, spoiled by a flat-plane crankshaft. Check the vibration.',
+  'I6 із плоским валом': 'Flat-plane I6',
+  'Турбодизельна двійка': 'Turbodiesel twin',
+  'Високий ступінь стиснення, велика турбіна і дуже мало циліндрів.': 'High compression ratio, a big turbo and very few cylinders.',
+  'Гіпернаддувний I3': 'Hyper-boosted I3',
+  'Літр, три циліндри і 3 бари наддуву на метанолі. Подивись, чим це закінчується.': 'One liter, three cylinders and 3 bar of boost on methanol. See how that ends.',
+  'Гоночний кулачок у місті': 'Race cam in city traffic',
+  'Дуже широкі фази на високому стисненні: холостий хід гуляє, а клапани можуть зустрітись із поршнем.': 'Very long cam duration with high compression. The idle hunts and the valves can meet the piston.',
+  'Гібридний Аткінсон': 'Hybrid Atkinson',
+  'Стиснення 13 на звичайному бензині: впуск закривається так пізно, що поршень виштовхує частину заряду назад. Мало моменту, зате високий ККД, як у гібридів Toyota.': 'A 13 : 1 compression ratio on regular gasoline: the intake closes so late that the piston pushes part of the charge back out. Little torque, but high efficiency, as in Toyota\'s hybrids.',
+  'Міллер із турбіною': 'Turbo Miller',
+  'Високе для наддуву стиснення й короткий впускний кулачок. Фазообертач може закрити впуск ще до нижньої мертвої точки, тож стискається менше, ніж розширюється. Volkswagen 1.5 TSI evo іде цим шляхом аж до 12,5 : 1.': 'A high compression ratio for a boosted engine and a short intake cam. The phaser can close the intake before bottom dead center, so the engine compresses less than it expands. The Volkswagen 1.5 TSI evo takes this all the way to 12.5 : 1.',
+  'Чотирироторний наддув': 'Boosted four-rotor',
+  'Чотири секції та дві турбіни: компактно, гучно і дуже спрагло.': 'Four rotors and two turbos. Compact, loud and very thirsty.',
+  'Чотирироторний із наддувом': 'Boosted four-rotor',
+  'Випадковий двигун': 'Random engine',
+};
