@@ -6,7 +6,8 @@ import { isDieselSystem } from '../engine/systems-spec.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import type { EngineModel, ViewMode } from '../scene/model-types.ts';
-import { LAYER_STYLES, SystemsLayers, type LayerId } from '../scene/systems/index.ts';
+import type { SystemsLayers } from '../scene/systems/index.ts';
+import { LAYER_STYLES, type LayerId } from '../scene/systems/styles.ts';
 import { RELIEF_BAR, RELIEF_BAR_HEAVY } from '../systems/oil.ts';
 import { SystemsSim, type SystemsFrame, type SystemsState } from '../systems/sim.ts';
 import { WARMUP_SPEED } from '../systems/thermal.ts';
@@ -29,7 +30,17 @@ const LAYERS: Array<{ id: LayerId; label: string; title: string }> = [
   { id: 'air', label: t('Повітря'), title: t('Повітря: фільтр, дросель, ресивер, патрубки, наддув') },
 ];
 
+/** Small pictures for the switches: a drop, a thermometer, a flame and gusts. Their text shows on wide stages only. */
+const ICONS: Record<LayerId, string> = {
+  oil: '<path d="M8 1.6C6.4 4.2 3.8 7 3.8 10a4.2 4.2 0 0 0 8.4 0C12.2 7 9.6 4.2 8 1.6z"/>',
+  coolant: '<path d="M6.4 2.6a1.6 1.6 0 0 1 3.2 0v6.6a3.2 3.2 0 1 1-3.2 0z"/>',
+  fuel: '<path d="M8.4 1.4c.4 2.6 3.8 4.4 3.8 8.2a4.2 4.2 0 0 1-8.4 0c0-2.2 1.4-3.4 2-5 .9 1 1.2 2 1.2 3 1.4-1.6 1.8-3.6 1.4-6.2z"/>',
+  air: '<path d="M2 5.5h7.5a2 2 0 1 0-2-2M2 8.5h11a2 2 0 1 1-2 2M2 11.5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+};
+
 const STORAGE_KEY = 'systems-layers';
+/** How long a flag must hold before the screen reader hears about it, ms: the relief valve flickers at its opening. */
+const ANNOUNCE_HOLD = 1200;
 /** Top of the oil gauge, bar. */
 const GAUGE_BAR = 7;
 
@@ -57,6 +68,10 @@ interface Section {
 export class SystemsView {
   readonly sim = new SystemsSim();
   private layers: SystemsLayers | null = null;
+  /** The layers' code, loaded the first time a layer is wanted: most visits never switch one on. */
+  private static layersCode: Promise<typeof import('../scene/systems/index.ts')> | null = null;
+  /** The engine and model on stage, which the layers are built for. */
+  private target: { engine: Engine; model: EngineModel } | null = null;
   private readonly on = new Set<LayerId>();
   private readonly tool: HTMLElement;
   private readonly readout: HTMLElement;
@@ -68,6 +83,8 @@ export class SystemsView {
   private explode = 0;
   private lastText = 0;
   private lastAnnounce = '';
+  private pendingAnnounce = '';
+  private pendingSince = 0;
   private readonly reducedMotion: boolean;
 
   constructor(tool: HTMLElement, readout: HTMLElement, host: SystemsHost) {
@@ -77,7 +94,7 @@ export class SystemsView {
     this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
     tool.innerHTML = `<span class="tool-label">${t('Системи')}</span>
       <div class="segmented systems-toggles" role="group" aria-label="${t('Шари систем у рентгені')}">
-        ${LAYERS.map((l, i) => `<button type="button" data-layer="${l.id}" aria-pressed="false" title="${l.title} (${i + 4})"><i class="systems-swatch" style="--swatch:${LAYER_STYLES[l.id].color}"></i>${l.label}</button>`).join('')}
+        ${LAYERS.map((l, i) => `<button type="button" data-layer="${l.id}" aria-pressed="false" aria-label="${l.label}" title="${l.title} (${i + 4})"><svg class="systems-icon" viewBox="0 0 16 16" aria-hidden="true" style="color:${LAYER_STYLES[l.id].color}" fill="currentColor">${ICONS[l.id]}</svg><span class="systems-name">${l.label}</span></button>`).join('')}
       </div>`;
     tool.addEventListener('click', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-layer]');
@@ -105,9 +122,28 @@ export class SystemsView {
     this.live = el('div', 'visually-hidden');
     this.live.setAttribute('aria-live', 'polite');
     readout.after(this.live);
-    // On a narrow stage the row of view options wraps upwards; the card stays above it.
+    // Where the row of view options has no room for the switches, they move to the top right of the stage with the
+    // card under them, so the row keeps to one line. Whatever the row takes, the card, the first-visit hint and the
+    // scale bar stay above it.
     const row = tool.parentElement;
-    if (row && typeof ResizeObserver !== 'undefined') new ResizeObserver(() => readout.style.setProperty('--tools-h', `${row.offsetHeight}px`)).observe(row);
+    if (row && typeof ResizeObserver !== 'undefined') {
+      const root = document.documentElement;
+      const phone = window.matchMedia?.('(max-width: 860px)');
+      const place = (): void => {
+        const style = getComputedStyle(row);
+        const others = [...row.children].filter((c): c is HTMLElement => c !== tool && c instanceof HTMLElement && c.offsetParent !== null);
+        const gap = parseFloat(style.columnGap) || 0;
+        const needed = others.reduce((sum, c) => sum + c.offsetWidth + gap, tool.offsetWidth);
+        const aside = !phone?.matches && needed > parseFloat(style.maxWidth);
+        tool.classList.toggle('aside', aside);
+        readout.classList.toggle('aside', aside);
+        const above = parseFloat(style.bottom) - parseFloat(getComputedStyle(root).getPropertyValue('--dash-h'));
+        root.style.setProperty('--tools-h', `${Math.round(row.offsetHeight + (Number.isFinite(above) ? above : 12))}px`);
+      };
+      const observer = new ResizeObserver(place);
+      observer.observe(row);
+      observer.observe(root);
+    }
 
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as unknown;
@@ -149,12 +185,27 @@ export class SystemsView {
   /** A new model on stage. Temperatures carry over, so a designer slider doesn't restart the warm-up. */
   attach(engine: Engine, model: EngineModel): void {
     this.layers?.dispose();
+    this.layers = null;
     this.sim.configure(engine);
-    this.layers = new SystemsLayers(engine, model, this.reducedMotion);
-    this.layers.setView(this.view);
-    this.layers.setExplode(this.explode);
-    for (const id of this.on) this.layers.set(id, true);
+    this.target = { engine, model };
+    if (this.on.size) this.buildLayers();
     this.lastText = 0;
+  }
+
+  /** Loads the layers' code if need be and builds the layers of the model on stage. */
+  private buildLayers(): void {
+    const target = this.target;
+    if (!target || this.layers) return;
+    SystemsView.layersCode ??= import('../scene/systems/index.ts');
+    void SystemsView.layersCode.then(({ SystemsLayers }) => {
+      // Another engine may have come on stage meanwhile; its own attach builds its layers.
+      if (this.target !== target || this.layers) return;
+      const layers = new SystemsLayers(target.engine, target.model, this.reducedMotion);
+      layers.setView(this.view);
+      layers.setExplode(this.explode);
+      for (const id of this.on) layers.set(id, true);
+      this.layers = layers;
+    });
   }
 
   /** Same model on stage, new figures: the designer's mixture, ignition or boost moved. */
@@ -190,7 +241,8 @@ export class SystemsView {
     } else {
       this.on.delete(id);
     }
-    this.layers?.set(id, next);
+    if (this.layers) this.layers.set(id, next);
+    else if (next) this.buildLayers();
     if (id === 'fuel' && !next) this.host.markers?.(null);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([...this.on]));
@@ -229,10 +281,14 @@ export class SystemsView {
       const main = t('основне упорскування {a}', { a: beforeTdc(btdc > engine.cycle / 2 ? btdc - engine.cycle : btdc) });
       first = f.railBar !== null ? `${t('Тиск у рампі {p} бар', { p: Math.round(f.railBar) })} · ${main}` : main.charAt(0).toLocaleUpperCase() + main.slice(1);
       if (f.pilotEnd > f.pilotStart) first += ` · ${t('пілотне перед ним')}`;
-    } else if (system === 'port') first = t('Упорскування {ms} мс, закінчується за {deg}° до відкриття впускного клапана', { ms, deg: 20 });
-    else if (system === 'direct') first = `${t('Тиск {p} бар', { p: Math.round(f.railBar ?? 0) })} · ${t('упорскування на такті впуску, {ms} мс', { ms })}`;
+    } else if (system === 'port') {
+      first = engine.isRotary
+        ? t('Упорскування {ms} мс, закінчується за {deg}° до відкриття впускного вікна', { ms, deg: 20 })
+        : t('Упорскування {ms} мс, закінчується за {deg}° до відкриття впускного клапана', { ms, deg: 20 });
+    } else if (system === 'direct') first = `${t('Тиск {p} бар', { p: Math.round(f.railBar ?? 0) })} · ${t('упорскування на такті впуску, {ms} мс', { ms })}`;
     else first = `${t('У канали {share} %, решта в циліндри', { share: Math.round(f.portShare * 100) })} · ${t('Тиск {p} бар', { p: Math.round(f.railBar ?? 0) })}`;
-    section.lines[0]!.textContent = s.running ? first : t('Двигун стоїть: палива немає');
+    const turning = s.running || s.cranking;
+    section.lines[0]!.textContent = turning ? first : t('Двигун стоїть: палива немає');
     const second = diesel
       ? f.glow
         ? t('Свічки розжарювання ввімкнено')
@@ -246,7 +302,7 @@ export class SystemsView {
     const cycle = engine.cycle;
     const window = (a: number, b: number): [number, number] | null => (((b - a) % cycle) + cycle) % cycle > 0 ? [a, b] : null;
     const sparks = diesel ? [] : engine.isRotary ? [cycle - f.advance, cycle - f.trailingAdvance] : systems.ignition === 'wasted-spark' ? [cycle - f.advance, 360 - f.advance] : [cycle - f.advance];
-    this.host.markers?.(s.running ? { inject: window(f.injectStart, f.injectEnd), pilot: window(f.pilotStart, f.pilotEnd), sparks } : { inject: null, pilot: null, sparks: [] });
+    this.host.markers?.(turning ? { inject: window(f.injectStart, f.injectEnd), pilot: window(f.pilotStart, f.pilotEnd), second: window(f.secondStart, f.secondEnd), sparks } : { inject: null, pilot: null, second: null, sparks: [] });
   }
 
   frame(frame: SystemsFrame): void {
@@ -315,10 +371,23 @@ export class SystemsView {
     }
     const fuel = this.sections.get('fuel');
     if (fuel && this.on.has('fuel')) this.renderFuel(s, fuel);
+    // A compact card cuts each layer to one line; the whole of it shows on hover.
+    for (const [id, section] of this.sections) {
+      if (!this.on.has(id)) continue;
+      const text = [section.lines[0]!.textContent, section.flags.hidden ? '' : section.flags.textContent].filter(Boolean).join(' · ');
+      if (section.root.title !== text) section.root.title = text;
+    }
     const announce = s.oil.warning ? t('Тиск оливи майже нуль') : s.oil.reliefOpen && this.on.has('oil') ? t('Редукційний клапан відкрився') : '';
-    if (announce !== this.lastAnnounce) {
+    // The warning is said at once; the valve only once it has held for a moment, so that a valve hovering at its
+    // opening isn't announced over and over.
+    const now = performance.now();
+    if (announce !== this.pendingAnnounce) {
+      this.pendingAnnounce = announce;
+      this.pendingSince = now;
+    }
+    if (announce !== this.lastAnnounce && (s.oil.warning || now - this.pendingSince >= ANNOUNCE_HOLD)) {
       this.lastAnnounce = announce;
-      this.live.textContent = announce;
+      if (announce) this.live.textContent = announce;
     }
   }
 }

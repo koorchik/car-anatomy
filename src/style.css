@@ -2154,7 +2154,7 @@ input[type='range']::-moz-range-thumb {
   position: absolute;
   z-index: 4;
   right: calc(var(--panel-w) + 18px);
-  bottom: calc(var(--dash-h) + 78px);
+  bottom: calc(var(--dash-h) + var(--tools-h, 74px) + 4px);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -2212,7 +2212,7 @@ input[type='range']::-moz-range-thumb {
   position: absolute;
   z-index: 5;
   left: calc((100vw - var(--panel-w)) / 2);
-  bottom: calc(var(--dash-h) + 86px);
+  bottom: calc(var(--dash-h) + var(--tools-h, 74px) + 12px);
   transform: translateX(-50%);
   max-width: min(440px, calc(100vw - 32px));
   padding: 8px 14px;
@@ -2229,7 +2229,7 @@ input[type='range']::-moz-range-thumb {
 
 @media (max-width: 860px) {
   .parts-callout {
-    bottom: calc(var(--dash-h) + 92px);
+    bottom: calc(var(--dash-h) + var(--tools-h, 80px) + 12px);
     width: max-content;
     font-size: 14px;
   }
@@ -2347,20 +2347,48 @@ input[type='range']::-moz-range-thumb {
   opacity: 0.5;
 }
 
-.systems-swatch {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: var(--swatch);
-  vertical-align: 0;
+.systems-toggles button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.systems-icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+/* Where the row of view options has no room for them (SystemsView), the switches and the card sit top right. */
+.tool-systems.aside {
+  position: fixed;
+  z-index: 4;
+  right: calc(var(--panel-w) + 18px);
+  top: calc(var(--top-h) + 78px);
+  align-items: flex-end;
+}
+
+.systems-readout.aside {
+  bottom: auto;
+  top: calc(var(--top-h) + 140px);
+}
+
+/* Below this width the switches keep only their pictures, so the view options stay on one row. */
+@media (max-width: 1599px) {
+  .systems-name {
+    display: none;
+  }
+
+  .systems-toggles button {
+    padding: 5px 9px;
+  }
 }
 
 .systems-readout {
   position: absolute;
   right: calc(var(--panel-w) + 18px);
-  bottom: calc(var(--dash-h) + max(118px, var(--tools-h, 0px) + 18px));
+  /* Above the view options and the scale bar, however many rows the options take. */
+  bottom: calc(var(--dash-h) + var(--tools-h, 74px) + 42px);
   z-index: 5;
   width: min(330px, calc(100vw - var(--panel-w) - var(--left-w) - 36px));
   max-height: calc(100vh - var(--top-h) - var(--dash-h) - 300px);
@@ -2452,14 +2480,42 @@ input[type='range']::-moz-range-thumb {
   font-size: 11.5px;
 }
 
-.systems-readout.compact .systems-flags,
-.systems-readout.compact .systems-note,
-.systems-readout.compact .systems-mode {
+/* Three or four layers, and always on a phone: one line per layer, cut short; the whole text shows on hover. */
+.systems-readout.compact .systems-section {
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.systems-readout.compact .systems-line,
+.systems-readout.compact .systems-flags {
+  display: inline;
+}
+
+.systems-readout.compact .systems-flags::before {
+  content: ' · ';
+}
+
+.systems-readout.compact .systems-gauge,
+.systems-readout.compact .systems-note {
   display: none;
 }
 
-.systems-readout.compact .systems-section {
+.systems-readout.compact .systems-warning {
+  white-space: normal;
+}
+
+.systems-readout.compact .systems-mode {
   margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.legend-item .legend-spark {
+  width: 2px;
+  background: #ffffff;
 }
 
 .visually-hidden {
@@ -2472,22 +2528,51 @@ input[type='range']::-moz-range-thumb {
 }
 
 @media (max-width: 860px) {
+  /* Under the list of engines, left of the scale bar. */
   .systems-readout {
-    right: 10px;
+    left: 10px;
+    right: auto;
     bottom: auto;
-    top: calc(var(--top-h) + 108px);
-    width: min(250px, 62vw);
-    max-height: 34vh;
-    padding: 6px 8px;
+    top: calc(var(--top-h) + 122px);
+    width: calc(100vw - 160px);
+    max-height: 30vh;
+    padding: 5px 8px;
     font-size: 12.5px;
   }
 
-  .systems-note,
-  .systems-flags {
+  .systems-readout .systems-section {
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .systems-readout .systems-line,
+  .systems-readout .systems-flags {
+    display: inline;
+  }
+
+  .systems-readout .systems-flags::before {
+    content: ' · ';
+  }
+
+  .systems-readout .systems-gauge,
+  .systems-note {
     display: none;
   }
 
-  .systems-swatch {
-    margin-right: 4px;
+  .systems-readout .systems-mode {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .systems-warm .btn {
+    padding: 1px 6px;
+    font-size: 12px;
+  }
+
+  .systems-toggles button {
+    padding: 4px 8px;
   }
 }

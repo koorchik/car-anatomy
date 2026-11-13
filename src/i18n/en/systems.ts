@@ -247,7 +247,10 @@ export const SYSTEMS_EN: Record<string, string> = {
   'основне упорскування {a}': 'main injection {a}',
   'Тиск у рампі {p} бар': 'Rail pressure {p} bar',
   'пілотне перед ним': 'a pilot before it',
+  'Упорскування': 'Injection',
+  'Іскра': 'Spark',
   'Упорскування {ms} мс, закінчується за {deg}° до відкриття впускного клапана': 'Injection {ms} ms, ending {deg}° before the intake valve opens',
+  'Упорскування {ms} мс, закінчується за {deg}° до відкриття впускного вікна': 'Injection {ms} ms, ending {deg}° before the intake port opens',
   'Електромагнітний клапан, що бризкає паливо в канал перед впускним вікном. Клапанів у роторного двигуна немає: вікно відкриває і закриває сама грань ротора, яка проходить повз нього. Блок керування рахує, скільки мілісекунд тримати форсунку відкритою.':
     'A solenoid valve that sprays fuel into the runner ahead of the intake port. A rotary has no valves: the rotor face sweeping past opens and closes the port itself. The control unit works out how many milliseconds to hold it open.',
   'Тиск {p} бар': 'Pressure {p} bar',

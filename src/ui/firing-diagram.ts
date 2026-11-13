@@ -30,8 +30,10 @@ const label = (engine: Engine, c: Cylinder): string => {
 /** Fuel and spark events of each chamber, in degrees of its own cycle from firing TDC, drawn over its row. */
 export interface CycleMarkers {
   inject: [number, number] | null;
-  /** A diesel's pilot, or a second direct-injection shot. */
+  /** A diesel's pilot, or the direct shot of a dual system. */
   pilot: [number, number] | null;
+  /** The cold catalyst-heating shot of direct injection. */
+  second?: [number, number] | null;
   sparks: number[];
 }
 
@@ -164,6 +166,12 @@ export class FiringDiagram {
   /** Shows the fuel layer's injection windows and sparks on every row; null takes them off. */
   setMarkers(markers: CycleMarkers | null): void {
     this.markers = markers;
+    // The legend under the diagram names the marks while they show.
+    const legend = this.element.closest('.chart-col')?.querySelector('.legend');
+    const fuel = !!markers && !!(markers.inject || markers.pilot || markers.second);
+    const sparks = !!markers && markers.sparks.length > 0;
+    legend?.querySelector<HTMLElement>('[data-marker="inject"]')?.toggleAttribute('hidden', !fuel);
+    legend?.querySelector<HTMLElement>('[data-marker="spark"]')?.toggleAttribute('hidden', !sparks);
   }
 
   /** Plot x of a crank angle. */
@@ -199,6 +207,7 @@ export class FiringDiagram {
       if (m.inject) this.bar(engine, y + rowH * 0.62 - h / 2, h, c.fire + m.inject[0], c.fire + m.inject[1]);
       ctx.fillStyle = '#ffb3d6';
       if (m.pilot) this.bar(engine, y + rowH * 0.62 - h / 2, h, c.fire + m.pilot[0], c.fire + m.pilot[1]);
+      if (m.second) this.bar(engine, y + rowH * 0.62 - h / 2, h, c.fire + m.second[0], c.fire + m.second[1]);
       ctx.fillStyle = '#ffffff';
       for (let k = 0; k < m.sparks.length; k++) ctx.fillRect(this.xAt(engine, c.fire + m.sparks[k]!) - 1, y, 2, rowH - 2);
     }
@@ -229,4 +238,7 @@ export class FiringDiagram {
 }
 
 export const legendHtml = (): string =>
-  ORDER.map((s) => `<span class="legend-item"><i style="background:${STROKE_COLORS[s]}"></i>${STROKE_NAMES[s]}</span>`).join('');
+  ORDER.map((s) => `<span class="legend-item"><i style="background:${STROKE_COLORS[s]}"></i>${STROKE_NAMES[s]}</span>`).join('') +
+  // Shown only while the fuel layer marks the cycle (setMarkers).
+  `<span class="legend-item" data-marker="inject" hidden><i style="background:#ff5fae"></i>${t('Упорскування')}</span>` +
+  `<span class="legend-item" data-marker="spark" hidden><i class="legend-spark"></i>${t('Іскра')}</span>`;

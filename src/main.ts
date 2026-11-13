@@ -23,7 +23,7 @@ import { LANGUAGE_GROUP_LABEL, LANGUAGE_LABELS, locale, switchLocale, type Local
 import { t } from './i18n/t.ts';
 import { Tacho } from './ui/tacho.ts';
 import { SystemsView } from './ui/systems-view.ts';
-import type { SystemsFrame } from './systems/sim.ts';
+import { shownAdvance, type SystemsFrame } from './systems/sim.ts';
 
 type SpeedMode = 'slow' | 'readable' | 'real';
 
@@ -473,9 +473,10 @@ function layoutPanels(): void {
   document.documentElement.style.setProperty('--stage-left', `${leftW}px`);
   document.documentElement.style.setProperty('--panel-w', `${panelW}px`);
   document.documentElement.style.setProperty('--stage-x', `${((leftW + (width - leftW - panelW) / 2) / width) * 100}%`);
-  const toolsH = 70;
+  // The view options wrap into more rows on a narrower stage; the engine is framed above them as before.
+  const toolsH = (document.querySelector<HTMLElement>('.view-tools')?.offsetHeight ?? 62) + 8;
   const topH = small ? 90 : 60;
-  stage.resize(width, height, { left: leftW, right: panelW, top: topH, bottom: dashH + (small ? 30 : toolsH * 0.4) });
+  stage.resize(width, height, { left: leftW, right: panelW, top: topH, bottom: dashH + (small ? Math.max(30, toolsH - 48) : Math.max(28, toolsH * 0.4)) });
   const fb = $('firing-body');
   firing.resize(fb.clientWidth, fb.clientHeight);
   const sb = $('spectrum-body');
@@ -955,8 +956,9 @@ function frame(now: number): void {
   const slowed = demoMode || speed === 'slow';
   const systemsRpm = slowed && shownRunning ? spec.idleRpm : snap.rpm;
   const sf = systemsFrame;
+  // How far the shown angle really moved: in real mode Drive keeps nudging it toward the audio thread's angle.
+  sf.advance = shownAdvance(sf.theta, theta, shownSpeed * dt, engine.cycle);
   sf.theta = theta;
-  sf.advance = Math.max(0, shownSpeed * dt);
   sf.rpm = systemsRpm;
   sf.load = shownLoad;
   sf.throttle = snap.throttle;
