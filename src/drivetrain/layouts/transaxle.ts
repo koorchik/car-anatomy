@@ -80,7 +80,7 @@ export interface TransaxleDesc {
   outputDeg: number;
   /** Normal pressure angle of every cylindrical pair, degrees. */
   pressureAngle: number;
-  /** Hand of the input shaft's gears; their mates have the opposite one. */
+  /** Hand of the input shaft's gears; their mates and the final drive's pinion have the opposite one. */
   inputHand: 'left' | 'right';
   /** First, second, … in order. */
   speeds: TransaxlePairDesc[];
@@ -188,8 +188,10 @@ export function transaxleSpec(desc: TransaxleDesc): GearboxSpec {
     axes.push({ id: 'diff', x: out.x + f.centreMm * Math.sin(fd), y: out.y + f.centreMm * Math.cos(fd) });
     const gz = place(f.faceWidth);
     gears.push(
-      { id: PINION, member: 'output', teeth: f.teeth[0], module: f.module, helix: hand(beta), pressureAngle: alpha, shift: 0, faceWidth: f.faceWidth, z: gz },
-      { id: RING, member: 'diff', teeth: f.teeth[1], module: f.module, helix: hand(-beta), pressureAngle: alpha, shift: 0, faceWidth: f.faceWidth, z: gz },
+      // The pinion has the hand of the output shaft's speed gears: it drives where they are driven, so their axial
+      // forces oppose, as on a countershaft (layshaft.ts).
+      { id: PINION, member: 'output', teeth: f.teeth[0], module: f.module, helix: hand(-beta), pressureAngle: alpha, shift: 0, faceWidth: f.faceWidth, z: gz },
+      { id: RING, member: 'diff', teeth: f.teeth[1], module: f.module, helix: hand(beta), pressureAngle: alpha, shift: 0, faceWidth: f.faceWidth, z: gz },
     );
   } else {
     const cones = bevelCones(f.teeth[0], f.teeth[1]);

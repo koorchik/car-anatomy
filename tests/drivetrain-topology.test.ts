@@ -238,6 +238,24 @@ describe('power path', () => {
   });
 });
 
+describe('axial forces', () => {
+  it.each(ALL_GEARBOXES.map((r) => [r.id, buildGearbox(gearboxSpec(r))] as const))(
+    '%s: helical gears turning together on one axis, one driven and one driving, have one hand so their thrusts oppose',
+    (_id, box) => {
+      for (const s of box.states.filter((x) => x.kind === 'gear')) {
+        const groups = new Map<string, number[]>();
+        for (const id of s.loaded.flatMap((j) => [box.meshes[j]!.a, box.meshes[j]!.b])) {
+          const g = box.spec.gears.find((x) => x.id === id)!;
+          if (g.helix === 0) continue;
+          const key = `${box.spec.members.find((m) => m.id === g.member)!.axis} ${s.speeds![box.members.indexOf(g.member)]!.toFixed(9)}`;
+          groups.set(key, [...(groups.get(key) ?? []), Math.sign(g.helix)]);
+        }
+        for (const [key, hands] of groups) if (hands.length > 1) expect(new Set(hands).size, `${s.name}: ${key}`).toBe(1);
+      }
+    },
+  );
+});
+
 describe('transaxle descriptions that cannot be built are refused', () => {
   const desc = civicRecord.layout.desc as TransaxleDesc;
   it('a reverse idler too short to reach both gears', () => {
