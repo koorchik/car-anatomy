@@ -128,6 +128,8 @@ node scripts/suspension-sweep.ts [damper=worn ride=-40 …]  # кінемати�
 
 Опір руху має одне правило (`roadLoadCoeffs`): рядок EPA, інакше `C_dA` з необмеженої звіреної `v_max`, інакше брошурні `Cd·A` на `k_EPA`. Після зміни запису авто (маса, `aero`, `published`, `unverified`), опублікованої потужності його двигуна чи `DRIVELINE` запускай `node scripts/calibrate-road-load.ts`: він переписує `src/vehicle/road-load-trim.ts`, вручну цей файл не редагуємо, а тест перевіряє, що він актуальний. Моделі несуть масу з водієм (`drivingMassKg`), а канонічне коло сайту — рівень `CANONICAL_LAP_LEVEL` з `lap.ts`.
 
+Розміри й компоновку авто огляду (`dimensions`, `packaging`) перевіряє `src/vehicle/packaging.ts`: двигун займає габарит із `kinematics.ts` (`engineCoreBox`), доки C4 не дасть `engineEnvelope`, а `fitsBay` і капот огляду читають той самий `bay`. Пара однакових деталей (два радіатори 911) — це `side: 'both'`. Звиси, профіль і точки компоновки виробники здебільшого не публікують, тож вони стоять в `unverified`.
+
 Точки запису лежать у системі передньої осі, підвіски працюють у системі центру мас, і переходять між ними лише через `carFrameToCg`. `src/vehicle/` не імпортує `t()` і `src/data/`: ядро тримає id, а назви лежать у `src/data/vehicle-names.ts`. Виняток тимчасовий: `TYRES[id].name` і `Sector.name` для сторінки оливи до етапу O2a. Формули й статус чисел: `docs/vehicle-model.md`.
 
 ### Конструктор

@@ -26,12 +26,27 @@ import {
 } from '../src/vehicle/car.ts';
 import { carLinks, carsWithEngine, pageIndex } from '../src/vehicle/links.ts';
 import { AIR_DENSITY } from '../src/vehicle/constants.ts';
+import { carToEngine } from '../src/vehicle/mount.ts';
+import {
+  bodyBox,
+  bonnetZ,
+  containsBox,
+  containsPoint,
+  engineBoxInCar,
+  engineCoreBox,
+  engineToCar,
+  fitsBay,
+  placedPoints,
+  wheelCentre,
+  type Box3,
+} from '../src/vehicle/packaging.ts';
 import { topSpeed } from '../src/vehicle/powertrain.ts';
 import { aeroDragN, nonEpaRule, roadLoadCoeffs, roadLoadN, roadLoadRule } from '../src/vehicle/road-load.ts';
 import { ROAD_LOAD_TRIM } from '../src/vehicle/road-load-trim.ts';
 import { buildTrack, TEST_CIRCUIT, TEST_SECTORS } from '../src/vehicle/track.ts';
 import { outerDiameterM, parseTyreSize, rollingRadiusM } from '../src/vehicle/tyre-size.ts';
-import { dragForce, G, TYRES, type VehicleSpec } from '../src/vehicle/vehicle.ts';
+import { dragForce, G, TYRES, type EngineMount, type VehicleSpec } from '../src/vehicle/vehicle.ts';
+import { buildEngine } from '../src/engine/kinematics.ts';
 
 /** Reads a dotted path like 'body.trackFrontM'; undefined when the record has no such field. */
 const at = (car: CarRecord, path: string): unknown =>
@@ -277,6 +292,163 @@ describe('car frame', () => {
       const q = back(toCg(p));
       for (let k = 0; k < 3; k++) expect(q[k]).toBeCloseTo(p[k]!, 12);
     }
+  });
+});
+
+describe('dimensions and packaging', () => {
+  const packed = CAR_LIST.filter((c) => c.packaging);
+  const cases = packed.map((c) => [c.id, c] as const);
+  const engineOf = (car: CarRecord) => buildEngine(engineById(car.engine)!);
+  /** Every point the packaging stores, both of a mirrored pair. */
+  const pointsOf = (car: CarRecord): Vec3[] => {
+    const p = car.packaging!;
+    return [
+      p.crankFront,
+      p.bay.min,
+      p.bay.max,
+      ...placedPoints(p.exhaustExit),
+      ...(p.fuelTank ? [p.fuelTank] : []),
+      ...(p.radiator ? placedPoints(p.radiator) : []),
+      ...(p.intercooler ? placedPoints(p.intercooler) : []),
+    ];
+  };
+  const middleX = (box: Box3): number => (box.min[0] + box.max[0]) / 2;
+
+  it('are given for the cars of the overview, both or neither', () => {
+    expect(packed.map((c) => c.id)).toEqual(expect.arrayContaining(['bmw-m3-e30', 'civic-type-r-fk8', 'porsche-911-carrera-t-992']));
+    for (const car of CAR_LIST) expect(!!car.dimensions, car.id).toBe(!!car.packaging);
+  });
+
+  it('give the 911 its staggered tyres, a larger radius at the rear', () => {
+    const car = CARS['porsche-911-carrera-t-992']!;
+    expect(car.tyre).toMatchObject({ size: '245/35 ZR20', sizeRear: '305/30 ZR21' });
+    expect(tyreRadiiM(car).rear).toBeGreaterThan(tyreRadiiM(car).front);
+    expect(vehicleSpec(car).tyreRadiusM).toBe(tyreRadiiM(car).rear);
+  });
+
+  describe.each(cases)('%s', (_id, car) => {
+    const d = car.dimensions!;
+    const p = car.packaging!;
+
+    it('adds the overhangs and the wheelbase up to the length', () => {
+      expect(d.frontOverhangM + car.body.wheelbaseM + d.rearOverhangM).toBeCloseTo(d.lengthM, 3);
+      expect(d.groundClearanceM).toBeGreaterThan(0.08);
+      expect(d.groundClearanceM).toBeLessThan(0.25);
+      expect(d.widthM).toBeGreaterThan(Math.max(car.body.trackFrontM, car.body.trackRearM));
+    });
+
+    it('draws its side profile front to back inside the body', () => {
+      const [bx, bz] = d.profile.bonnetFront;
+      const [cx, cz] = d.profile.cowl;
+      const [r0, r1] = d.profile.roofX;
+      expect(bx).toBeLessThanOrEqual(d.frontOverhangM);
+      expect(cx).toBeLessThan(bx);
+      expect(r0).toBeLessThan(cx);
+      expect(r1).toBeLessThan(r0);
+      expect(r1).toBeGreaterThan(-(car.body.wheelbaseM + d.rearOverhangM));
+      expect(bz).toBeGreaterThan(d.groundClearanceM);
+      expect(cz).toBeGreaterThan(bz);
+      expect(cz).toBeLessThan(d.heightM);
+    });
+
+    it('takes its packaging points to the CG frame and back, and the CG to (0, 0, h)', () => {
+      const toCg = carFrameToCg(car);
+      const back = cgToCarFrame(car);
+      const cg = toCg(cgPoint(car));
+      expect(cg[0]).toBeCloseTo(0, 12);
+      expect(cg[1]).toBe(0);
+      expect(cg[2]).toBe(cgPoint(car)[2]);
+      for (const q of pointsOf(car)) {
+        const r = back(toCg(q));
+        for (let k = 0; k < 3; k++) expect(r[k]).toBeCloseTo(q[k]!, 12);
+      }
+    });
+
+    it('keeps every part inside the body and the bay above the ground clearance', () => {
+      const body = bodyBox(car);
+      expect(containsBox(body, p.bay)).toBe(true);
+      expect(p.bay.min[2]).toBeGreaterThanOrEqual(d.groundClearanceM);
+      for (const q of pointsOf(car)) expect(containsPoint(body, q), q.join(', ')).toBe(true);
+      expect(containsPoint(p.bay, p.crankFront)).toBe(true);
+    });
+
+    it('fits its engine in the bay by the kinematics envelope, the pan above the ground clearance', () => {
+      const engine = engineOf(car);
+      expect(fitsBay(car, engine)).toBe(true);
+      expect(engineBoxInCar(car, engine).min[2]).toBeGreaterThanOrEqual(d.groundClearanceM);
+    });
+
+    it('puts the engine where its mount says: ahead of mid-wheelbase, or behind the rear axle', () => {
+      const x = middleX(engineBoxInCar(car, engineOf(car)));
+      const L = car.body.wheelbaseM;
+      if (car.mount.position === 'front') expect(x).toBeGreaterThan(-L / 2);
+      if (car.mount.position === 'mid') expect(x).toBeGreaterThan(-L);
+      if (car.mount.position === 'mid') expect(x).toBeLessThan(-L / 2);
+      if (car.mount.position === 'rear') expect(x).toBeLessThan(-L);
+    });
+
+    it('keeps a front bay under the bonnet', () => {
+      if (car.mount.position !== 'front') return;
+      for (const x of [p.bay.min[0], p.bay.max[0]]) {
+        expect(x).toBeGreaterThanOrEqual(d.profile.cowl[0]);
+        expect(x).toBeLessThanOrEqual(d.profile.bonnetFront[0]);
+        expect(p.bay.max[2]).toBeLessThanOrEqual(bonnetZ(car, x));
+      }
+    });
+
+    it('says which side a part is on as its y does', () => {
+      for (const part of [p.exhaustExit, p.radiator, p.intercooler]) {
+        if (!part) continue;
+        const y = part.at[1];
+        if (part.side === 'centre') expect(y).toBe(0);
+        if (part.side === 'left') expect(y).toBeGreaterThan(0);
+        if (part.side === 'right') expect(y).toBeLessThan(0);
+        if (part.side === 'both') expect(y).not.toBe(0);
+      }
+    });
+
+    it('leaves the exhaust at the tail and cools the charge air of a charged engine only', () => {
+      const tail = -(car.body.wheelbaseM + d.rearOverhangM);
+      expect(p.exhaustExit.at[0] - tail).toBeLessThan(0.15);
+      expect(p.intercooler !== null).toBe(engineById(car.engine)!.aspiration !== 'na');
+    });
+  });
+
+  it('turns an engine-frame vector into the car frame and carToEngine turns it back, for every mount', () => {
+    const fronts: EngineMount['front'][] = ['forward', 'rearward', 'left', 'right'];
+    const out = { x: 0, y: 0, z: 0 };
+    for (const front of fronts) {
+      const mount: EngineMount = { axis: front === 'forward' || front === 'rearward' ? 'longitudinal' : 'transverse', front, position: 'front' };
+      for (const v of [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0.3, -0.7, 0.2]] as Vec3[]) {
+        const c = engineToCar(mount, v);
+        carToEngine(mount, c[0], c[1], c[2], out);
+        expect([out.x, out.y, out.z].map((n) => n + 0), front).toEqual(v.map((n) => n + 0));
+      }
+      // The engine's front points where the mount says.
+      const [x, y] = engineToCar(mount, [0, 0, 1]);
+      expect([x, y].map((n) => n + 0)).toEqual({ forward: [1, 0], rearward: [-1, 0], left: [0, 1], right: [0, -1] }[front]);
+    }
+  });
+
+  it('builds the core box from the crank, block, heads and pan, with the crank\'s front end at the origin', () => {
+    const civic = buildEngine(engineById('i4/civic-type-r-k20c1')!);
+    const box = engineCoreBox(civic);
+    expect(box.max[2]).toBe(0);
+    // The crank as the 3D model draws it: the cylinders' span plus 0.3 bore at each end.
+    expect(-box.min[2]).toBeCloseTo((civic.zMax - civic.zMin + 0.6 * civic.spec.bore) / 1000, 9);
+    // An upright inline engine: symmetrical across, the head on top, the pan below.
+    expect(box.min[0]).toBeCloseTo(-box.max[0], 12);
+    expect(box.max[1]).toBeGreaterThan(civic.deck / 1000);
+    expect(box.min[1]).toBeLessThan(-civic.r / 1000);
+    // A flat six lies its heads out to the sides: far wider than tall.
+    const flat = engineCoreBox(buildEngine(engineById('b6/porsche-992-carrera-3-0')!));
+    expect(flat.max[0] - flat.min[0]).toBeGreaterThan(1.5 * (flat.max[1] - flat.min[1]));
+  });
+
+  it('sets each wheel on its axle, half a track out, at its rolling radius', () => {
+    const car = CARS['porsche-911-carrera-t-992']!;
+    expect(wheelCentre(car, 'front', 'left')).toEqual([0, car.body.trackFrontM / 2, tyreRadiiM(car).front]);
+    expect(wheelCentre(car, 'rear', 'right')).toEqual([-car.body.wheelbaseM, -car.body.trackRearM / 2, tyreRadiiM(car).rear]);
   });
 });
 

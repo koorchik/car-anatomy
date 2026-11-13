@@ -32,6 +32,7 @@ export interface VehicleBody {
 
 /** For the body shell, the overview and the engine-bay check (stage A1c). Profile points are in the front-axle frame. */
 export interface CarDimensions {
+  /** Overall length, width without mirrors and height; frontOverhangM + wheelbaseM + rearOverhangM = lengthM. */
   lengthM: number;
   widthM: number;
   heightM: number;
@@ -39,8 +40,17 @@ export interface CarDimensions {
   rearOverhangM: number;
   groundClearanceM: number;
   shape: 'sedan' | 'hatch' | 'coupe' | 'wagon' | 'roadster';
-  /** Side profile (x, z): bonnet front edge, base of the windscreen; roof from x0 to x1 at heightM. */
+  /** Side profile (x, z): bonnet front edge, base of the windscreen; roof at heightM from roofX[0] back to roofX[1]. */
   profile: { bonnetFront: readonly [number, number]; cowl: readonly [number, number]; roofX: readonly [number, number] };
+}
+
+/** Which side of the car a part sits on; 'both' is a mirrored pair, the second at (x, −y, z). */
+export type CarSide = 'left' | 'right' | 'centre' | 'both';
+
+/** A part's centre, front-axle frame: y > 0 on the left, y < 0 on the right, 0 in the centre, and either for a pair. */
+export interface PlacedPart {
+  at: Vec3;
+  side: CarSide;
 }
 
 /** Where things sit, front-axle frame (stage A1c). Estimates go to unverified. */
@@ -50,11 +60,12 @@ export interface CarPackaging {
   /** Engine bay as a box. The shell's bonnet region is built from it, so the fit check and the picture agree. */
   bay: { min: Vec3; max: Vec3 };
   /** Tailpipe point; side is for the label and the second pipe of a 'both' layout. */
-  exhaustExit: { at: Vec3; side: 'left' | 'right' | 'centre' | 'both' };
+  exhaustExit: PlacedPart;
   fuelTank: Vec3 | null;
-  radiator: Vec3 | null;
-  /** Turbo and supercharged cars: intercooler centre (front-mounted on the Civic). */
-  intercooler: Vec3 | null;
+  /** One radiator in the nose, or a pair behind the front corners as on the 911 ('both'). */
+  radiator: PlacedPart | null;
+  /** Turbo and supercharged cars: front-mounted on the Civic, a pair over the engine on the 992. */
+  intercooler: PlacedPart | null;
 }
 
 export interface CarRecord {
@@ -81,7 +92,7 @@ export interface CarRecord {
   roadLoad: RoadLoad | null;
   /** Maker's Cd and frontal area, for cars without an EPA row whose top speed says nothing about drag. */
   aero: { cd: number; areaM2: number } | null;
-  /** Filled by stage A1c for the cars of the overview. */
+  /** Filled for the cars of the overview (stage A1c: Civic, 911 Carrera T, M3 E30); checks in packaging.ts. */
   dimensions?: CarDimensions;
   packaging?: CarPackaging;
   published: { vmaxKmh: number; vmaxLimited: boolean; vmaxGear: number | null; zeroTo100S: number | null };
