@@ -379,7 +379,30 @@ function renderVariants(id: string): void {
   // On a phone the list is a row: the chosen engine may be out of sight.
   const active = list.querySelector<HTMLElement>('.active');
   if (active) list.scrollLeft = active.offsetLeft - list.offsetLeft - 8;
+  fitVariants();
 }
+
+/** On a short stage the compact force card, at the bottom left, would cover the end of the list: the list scrolls instead. */
+function fitVariants(): void {
+  const list = $('variants');
+  if (list.style.maxHeight) list.style.maxHeight = '';
+  list.classList.remove('clipped');
+  const card = app.querySelector<HTMLElement>('.forces-card');
+  if (window.innerWidth <= 860 || list.hidden || list.offsetParent === null || !card || card.hidden || !card.classList.contains('compact') || card.offsetParent === null) return;
+  const room = Math.floor(card.getBoundingClientRect().top - list.getBoundingClientRect().top - 10);
+  if (room >= list.scrollHeight) return;
+  list.style.maxHeight = `${Math.max(56, room)}px`;
+  list.classList.add('clipped');
+  const active = list.querySelector<HTMLElement>('.active');
+  if (active) list.scrollTop = Math.max(0, active.offsetTop - list.offsetTop - (room - active.offsetHeight) / 2);
+  markListEnd();
+}
+
+function markListEnd(): void {
+  const list = $('variants');
+  list.classList.toggle('at-end', list.scrollTop + list.clientHeight >= list.scrollHeight - 2);
+}
+$('variants').addEventListener('scroll', markListEnd, { passive: true });
 
 function loadEngine(next: Engine, keepRunning: boolean, keepCamera = false): void {
   drive.setEngine(next);
@@ -695,9 +718,15 @@ function layoutPanels(): void {
   const sb = $('spectrum-body');
   spectrum.resize(sb.clientWidth, sb.clientHeight);
   if (onSump) sump?.resize();
+  fitVariants();
 }
 
 new ResizeObserver(layoutPanels).observe(app);
+// The force card turns compact, grows or hides on its own schedule.
+{
+  const card = app.querySelector<HTMLElement>('.forces-card');
+  if (card) new ResizeObserver(fitVariants).observe(card);
+}
 
 function setSegment(groupId: string, value: string): void {
   $(groupId)

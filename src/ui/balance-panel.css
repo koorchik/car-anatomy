@@ -9,6 +9,7 @@
   left: var(--stage-left, 0px);
   right: var(--stage-right, 0px);
   pointer-events: none;
+  container: forces-stage / inline-size;
 }
 
 /* Width and gap are CARD_W and CARD_GAP in balance-panel.ts, which decides when the card is too wide to fit. */
@@ -209,6 +210,15 @@
 .compact .forces-verdict {
   margin-top: 4px;
   font-size: 12.5px;
+}
+
+/* On a stage this wide the card cannot reach the scale bar at the bottom right, so it keeps right above the view options. */
+@media (min-width: 861px) {
+  @container forces-stage (min-width: 700px) {
+    .forces-card.compact {
+      bottom: calc(var(--dash-h) + var(--tools-h, 66px) + 20px);
+    }
+  }
 }
 
 @media (max-width: 860px) {

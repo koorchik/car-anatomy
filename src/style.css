@@ -2135,6 +2135,15 @@ input[type='range']::-moz-range-thumb {
   margin-top: 10px;
   pointer-events: auto;
   max-width: min(320px, 34vw);
+  /* main.ts (fitVariants) limits the height where the compact force card would cover the end of the list. */
+  overflow-y: auto;
+  scrollbar-color: var(--petrol-lit) transparent;
+  scrollbar-width: thin;
+}
+
+/* Cut short: the fade says more engines follow, where the system hides scroll bars until used. */
+.variant-list.clipped:not(.at-end) {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
 }
 
 .variant {
