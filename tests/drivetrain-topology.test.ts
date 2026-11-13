@@ -229,6 +229,10 @@ describe('10. the audio thread never derives', () => {
   // exists. None of it may pull in the derivation or the gear geometry: a few milliseconds there is an audible gap.
   const entries = ['src/drivetrain/solver.ts', 'src/drivetrain/core.ts', 'src/drivetrain/driveline-load.ts', 'src/vehicle/vehicle-load.ts'].filter((f) => existsSync(f));
 
+  it('checks at least the solver and the core it steps (paths from the repository root)', () => {
+    expect(entries).toEqual(expect.arrayContaining(['src/drivetrain/solver.ts', 'src/drivetrain/core.ts']));
+  });
+
   it.each(entries)('%s does not load topology.ts or gear-geometry.ts', (entry) => {
     const files = [...runtimeGraph(entry)].map((f) => f.replace(/\\/g, '/'));
     expect(files.some((f) => f.endsWith('/drivetrain/topology.ts'))).toBe(false);
