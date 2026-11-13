@@ -89,7 +89,9 @@ export class Tacho {
     this.needle = this.add(svg, 'g', { class: 'tacho-needle' });
     this.add(this.needle, 'path', { d: `M ${cx - 2.6} ${cy + 16} L ${cx - 0.8} ${cy - 84} L ${cx + 0.8} ${cy - 84} L ${cx + 2.6} ${cy + 16} Z`, class: 'needle-blade' });
     this.add(svg, 'circle', { cx, cy, r: 8.5, class: 'needle-hub' });
+    // The readout is new, so its text is too: an engine already at rest would otherwise leave it blank.
     this.shown = -100;
+    this.shownText = '';
     this.update(0, false);
   }
 
@@ -106,7 +108,8 @@ export class Tacho {
   }
 
   update(rpm: number, limiter: boolean): void {
-    if (Math.abs(rpm - this.shown) > 1) {
+    // Small steps are skipped, but an engine at rest has its needle exactly at zero.
+    if (Math.abs(rpm - this.shown) > 1 || (rpm === 0 && this.shown !== 0)) {
       const deg = SWEEP_START + (Math.min(rpm, this.maxRpm) / this.maxRpm) * SWEEP;
       this.needle.setAttribute('transform', `rotate(${deg.toFixed(2)} 100 100)`);
       this.shown = rpm;
