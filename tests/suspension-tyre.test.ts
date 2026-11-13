@@ -533,6 +533,42 @@ describe('relaxation and low speed', () => {
     expect(creep.v).toBeCloseTo(0.5, 3);
   });
 
+  it('keeps no more deflection after a braked stop than the carcass spring holds at the friction limit', () => {
+    // Four braked wheels held by static friction below 0.1 m/s, from 5 m/s. With the wheels locked the tyres slide to
+    // the stop; once the car stands, the deflection springs it back. A carcass of K/σ holds the friction force D at
+    // σ·D/K, so that is as far back as the car may come to rest, however hard it braked.
+    const m = 1500;
+    const r = 0.33;
+    const fz = (m * G) / 4;
+    const tyre = tyreAt('street', fz);
+    const long = longitudinalOf(tyre);
+    mfEval(tyre.set, 0, 0, 0, fz, 1, o);
+    const limit = (sigmaKappa(tyre.set, fz) * longitudinalPeakN(tyre.set, fz)) / o.kx;
+    for (const brakeNm of [800, 3000]) {
+      const states = [{ u: 0 }, { u: 0 }, { u: 0 }, { u: 0 }];
+      const omega = [5 / r, 5 / r, 5 / r, 5 / r];
+      const out: TyreLongForce = { fx: 0, dFxdOmega: 0, dFxdV: 0 };
+      let v = 5;
+      let x = 0;
+      let stop = NaN;
+      for (let i = 0; i < Math.round(5 / dt); i++) {
+        let sum = 0;
+        for (let w = 0; w < 4; w++) {
+          long.step(states[w]!, omega[w]!, r, v, fz, 1, dt, out);
+          sum += out.fx;
+          const next = omega[w]! - (dt * r * out.fx) / (1 + dt * r * out.dFxdOmega);
+          omega[w] = Math.abs(next / dt) <= brakeNm ? 0 : next - Math.sign(next) * brakeNm * dt;
+        }
+        v += (dt * sum) / m;
+        x += v * dt;
+        if (Number.isNaN(stop) && v <= 0) stop = x;
+      }
+      expect(Math.abs(v), `${brakeNm} N·m`).toBeLessThan(1e-6);
+      expect(stop - x, `${brakeNm} N·m`).toBeGreaterThan(0);
+      expect(stop - x, `${brakeNm} N·m`).toBeLessThanOrEqual(limit * 1.001);
+    }
+  });
+
   it('drops all force and deflection when the wheel leaves the road', () => {
     const tyre = tyreAt('street', 4000);
     const s = newTyreState();

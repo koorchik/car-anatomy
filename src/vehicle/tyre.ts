@@ -255,8 +255,9 @@ export const tyreFor = (car: CarRecord, id: TyreId = car.tyre.id): Tyre => tyreA
 // ---------------------------------------------------------------------------------------------------------------------
 // Relaxation and low speed. The state is the carcass deflection u along and across, m, so the transient slips are
 // κ' = u_x/σ_κ and tan α' = u_y/σ_α, and σ·dκ'/dt + |vx|·κ' = ω·r − vx (the same across with vy). The update is linear
-// implicit, so it is stable at any speed and finite at standstill, where the tyre becomes a spring of K/σ. Below 3 m/s
-// a damper of the deflection fades in; while the tyre slides, the deflection cannot grow past what friction holds.
+// implicit, so it is stable at any speed and finite at standstill. Below 3 m/s the force fades from the Magic Formula
+// into the carcass spring K/σ inside the friction ellipse, a damper of the deflection fades in, and while the tyre
+// slides the deflection cannot grow past what friction holds.
 
 export interface TyreState {
   ux: number;
@@ -326,8 +327,17 @@ export function stepTyre(t: Tyre, side: TyreSide, s: TyreState, omega: number, r
   let ux = (s.ux + dt * vsx) / ax;
   let uy = (s.uy + dt * vy) / ay;
 
-  // A sliding tyre: the deflection stops at the full-slide slip of the brush form, 3·D/K, or at the slip the speeds
-  // give, whichever is larger; at speed the latter is the steady state, so the cap never bites there.
+  // Below LOW_SPEED_MS the force fades from the Magic Formula into the carcass spring K·u/σ inside the friction
+  // ellipse, and a damper of the deflection fades in. A rolling patch slides in part at any slip, which bends the MF
+  // curve; a standing one holds until friction gives way. Chrono blends its bristle model into the MF the same way
+  // between 1 and 3 m/s. w is 1 at standstill and 0 from LOW_SPEED_MS.
+  const w = avx < LOW_SPEED_MS ? 0.5 * (1 + Math.cos((Math.PI * avx) / LOW_SPEED_MS)) : 0;
+
+  // A sliding tyre: the deflection stops at the slip the speeds give or at the full-slide slip, whichever is larger;
+  // at speed the former is the steady state, so the cap never bites there. The full-slide slip is the brush form's
+  // 3·D/K when rolling and D/K at standstill, where the spring alone holds the friction force: a tyre that has just
+  // stopped sliding keeps no more deflection than friction holds, so a car braked to a stop does not spring back by
+  // the deflection of the whole slide.
   const mu = Math.max(MU_MIN, surfaceMu);
   const dxPeak = longitudinalPeakN(p, fz, gamma, mu);
   const dyPeak = lateralPeakN(p, fz, gamma, mu);
@@ -336,8 +346,9 @@ export function stepTyre(t: Tyre, side: TyreSide, s: TyreState, omega: number, r
   const kxk = fz * (p.PKX1 + p.PKX2 * dfz) * Math.exp(p.PKX3 * dfz);
   const kyk = Math.abs(p.PKY1 * fz0 * Math.sin(2 * Math.atan(fz / (p.PKY2 * fz0))) * (1 - p.PKY3 * Math.abs(gamma)));
   const vRef = Math.max(avx, VXLOW_MS);
-  const capX = sx * Math.min(KAPPA_MAX, Math.max((3 * dxPeak) / kxk, Math.abs(vsx) / vRef));
-  const capY = sy * Math.min(TAN_ALPHA_MAX, Math.max((3 * dyPeak) / kyk, Math.abs(vy) / vRef));
+  const slide = 3 - 2 * w;
+  const capX = sx * Math.min(KAPPA_MAX, Math.max((slide * dxPeak) / kxk, Math.abs(vsx) / vRef));
+  const capY = sy * Math.min(TAN_ALPHA_MAX, Math.max((slide * dyPeak) / kyk, Math.abs(vy) / vRef));
   const cappedX = Math.abs(ux) > capX;
   if (cappedX) ux = capX * sgn(ux);
   if (Math.abs(uy) > capY) uy = capY * sgn(uy);
@@ -346,21 +357,31 @@ export function stepTyre(t: Tyre, side: TyreSide, s: TyreState, omega: number, r
   const alpha = Math.atan(uy / sy);
   mfForces(p, side, kappa, alpha, gamma, fz, mu, scratch, lowSpeedShare(vx));
 
-  // The damper of the deflection, fading out by LOW_SPEED_MS. It cannot push the force past the friction peak (the MF
-  // force itself may: one direction peaks at D + S_V).
-  const w = avx < LOW_SPEED_MS ? 0.5 * (1 + Math.cos((Math.PI * avx) / LOW_SPEED_MS)) : 0;
+  // The carcass spring at standstill, inside the friction ellipse. Across it pushes against u_y on either side.
+  let sxF = (kxk * ux) / sx;
+  let syF = (-kyk * uy) / sy;
+  const ellipse = Math.hypot(sxF / dxPeak, syF / dyPeak);
+  if (ellipse > 1) {
+    sxF /= ellipse;
+    syF /= ellipse;
+  }
+  const blendX = (1 - w) * scratch.fx + w * sxF;
+  const blendY = (1 - w) * scratch.fy + w * syF;
+
+  // The damper. It cannot push the force past the friction peak (the MF force itself may: one direction peaks at
+  // D + S_V).
   const cx = (w * LOW_SPEED_DAMPING_S * kxk) / sx;
   const cy = (w * LOW_SPEED_DAMPING_S * kyk) / sy;
-  let fx = scratch.fx + (cx * (ux - s.ux)) / dt;
-  let fy = scratch.fy - (cy * (uy - s.uy)) / dt;
-  const limitX = Math.max(dxPeak, Math.abs(scratch.fx));
-  const limitY = Math.max(dyPeak, Math.abs(scratch.fy));
+  let fx = blendX + (cx * (ux - s.ux)) / dt;
+  let fy = blendY - (cy * (uy - s.uy)) / dt;
+  const limitX = Math.max(dxPeak, Math.abs(blendX));
+  const limitY = Math.max(dyPeak, Math.abs(blendY));
   const clampedX = Math.abs(fx) > limitX;
   if (clampedX) fx = limitX * sgn(fx);
   if (Math.abs(fy) > limitY) fy = limitY * sgn(fy);
 
   // ∂fx/∂u_x, then through the implicit update to ω and to vx.
-  const dFdu = cappedX || clampedX ? 0 : scratch.dFxdKappa / sx + cx / dt;
+  const dFdu = cappedX || clampedX ? 0 : ((1 - w) * scratch.dFxdKappa + (ellipse > 1 ? 0 : w * kxk)) / sx + cx / dt;
   o.dFxdOmega = (dFdu * dt * radiusM) / ax;
   o.dFxdV = (dFdu * (-dt - (ux * dt * sgn(vx)) / sx)) / ax;
   s.ux = ux;
