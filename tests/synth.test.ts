@@ -353,7 +353,12 @@ describe('on the dyno', () => {
     const on = prominence(spec.turboWhine);
     expect(on.boost).toBeGreaterThan(0.9 * turboShaft(map, mapValue(map, map.pressureRatio, rpm)));
     expect(on.db).toBeGreaterThan(10);
-    expect(prominence(0).db).toBeLessThan(6);
+    // Without the whine the window holds only noise, and the loudest of its 41 bins over the median of the bins
+    // around is about 7 dB for Rayleigh-distributed magnitudes (√(2 ln 41) / √(2 ln 2)). It stays under 12 dB with
+    // a chance of about 0.1 %, so 12 dB says "no tone"; the whine itself must stand well clear of that.
+    const off = prominence(0);
+    expect(off.db).toBeLessThan(12);
+    expect(on.db - off.db).toBeGreaterThan(15);
   });
 
   it.each([
