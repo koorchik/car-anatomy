@@ -72,11 +72,10 @@ export default defineModel({
     const box = buildGearbox(layshaftSpec(describe(values)));
     const model = new GearboxModel(box, { quality: values.quality === 'low' ? 'low' : 'high' });
     const drive = new TableDrive(box, box.states.some((s) => s.name === values.gear) ? (values.gear as string) : 'N');
-    const dark = box.meshes.map(() => 0);
-    const draw = () => {
-      const pose = drive.frame();
-      model.update(values.glow ? pose : { ...pose, meshPower: dark });
-    };
+    // The drive updates one pose in place; the unlit frame shares its angles and sleeves.
+    const pose = drive.frame();
+    const unlit = { angles: pose.angles, sleeves: pose.sleeves, meshPower: box.meshes.map(() => 0) };
+    const draw = () => model.update(values.glow ? pose : unlit);
     draw();
     return {
       group: model.group,

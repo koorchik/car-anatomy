@@ -43,9 +43,10 @@ function sleeveSides(box: Gearbox): Map<string, { sleeve: SleevePlace; side: -1 
 export function memberAngles(box: Gearbox, input: number, output: number, out: number[] = new Array<number>(box.members.length).fill(0)): number[] {
   const inputIndex = box.basis.indexOf(box.spec.input);
   const outputIndex = box.basis.indexOf(box.spec.output);
-  box.P.forEach((row, i) => {
+  for (let i = 0; i < box.P.length; i++) {
+    const row = box.P[i]!;
     out[i] = (inputIndex >= 0 ? row[inputIndex]! * input : 0) + (outputIndex >= 0 ? row[outputIndex]! * output : 0);
-  });
+  }
   return out;
 }
 
@@ -75,6 +76,8 @@ export class TableDrive {
   private outputAngle = 0;
   private outputSpeed = 0;
   private wanted: StateInfo;
+  /** Where each sleeve ends up for the wanted state, set on select() so that step() allocates nothing. */
+  private target: Record<string, number> = {};
   private readonly pose: TablePose;
 
   constructor(box: Gearbox, start = 'N') {
@@ -83,6 +86,7 @@ export class TableDrive {
     this.sleeveIds = (box.spec.sleeves ?? []).map((s) => s.id);
     for (const id of this.sleeveIds) this.position[id] = 0;
     this.wanted = this.stateOf(start);
+    this.target = this.targetsFor(this.wanted);
     this.pose = { angles: new Array<number>(box.members.length).fill(0), sleeves: { ...this.position }, meshPower: box.meshes.map(() => 0) };
     // Start already in the gear asked for, as a box that was left in it.
     for (const id of this.wanted.closed) {
@@ -99,19 +103,20 @@ export class TableDrive {
 
   /** The gear whose sleeve is fully home, or 'N' while none is. */
   get engaged(): string {
-    return this.box.states.find((s) => s.kind === 'gear' && this.engagement(s) >= 1)?.name ?? 'N';
+    return this.home()?.name ?? 'N';
   }
 
   /** Asks for a state of the shift matrix ('N', '1'…, 'R'). An unknown name means neutral. */
   select(name: string): void {
     this.wanted = this.box.states.find((s) => s.name === name) ?? this.stateOf('N');
+    this.target = this.targetsFor(this.wanted);
   }
 
   /** Advances by `dt` seconds with the input turning at `inputRpm`. */
   step(dt: number, inputRpm: number): void {
     const omega = (inputRpm * Math.PI) / 30;
     this.moveSleeves(dt);
-    const home = this.box.states.find((s) => s.kind === 'gear' && this.engagement(s) >= 1);
+    const home = this.home();
     const closing = this.wanted.kind === 'gear' ? this.engagement(this.wanted) : 0;
     if (home) {
       this.outputSpeed = omega / home.ratio!;
@@ -139,27 +144,34 @@ export class TableDrive {
     return s;
   }
 
-  /** Where each sleeve should end up for the wanted state: the side of its closed element, else neutral. */
-  private targets(): Record<string, number> {
+  /** Where each sleeve should end up for a state: the side of its closed element, else neutral. */
+  private targetsFor(state: StateInfo): Record<string, number> {
     const target: Record<string, number> = Object.fromEntries(this.sleeveIds.map((id) => [id, 0]));
-    for (const id of this.wanted.closed) {
+    for (const id of state.closed) {
       const at = this.sides.get(id);
       if (at) target[at.sleeve.id] = at.side;
     }
     return target;
   }
 
+  /** The gear state whose sleeves are fully home, if any. */
+  private home(): StateInfo | undefined {
+    for (const s of this.box.states) if (s.kind === 'gear' && this.engagement(s) >= 1) return s;
+    return undefined;
+  }
+
   /** Out of the old gear first, then into the new one: two sleeves never stand engaged at once (the interlock). */
   private moveSleeves(dt: number): void {
-    const target = this.targets();
     const reach = dt / SLEEVE_TRAVEL_S;
-    const wrongSide = (id: string) => this.position[id]! !== 0 && Math.sign(this.position[id]!) !== Math.sign(target[id]!);
-    const leaving = this.sleeveIds.filter(wrongSide);
-    if (leaving.length) {
-      for (const id of leaving) this.position[id] = towards(this.position[id]!, 0, reach);
-      return;
+    let leaving = false;
+    for (const id of this.sleeveIds) {
+      const p = this.position[id]!;
+      if (p === 0 || Math.sign(p) === Math.sign(this.target[id]!)) continue;
+      this.position[id] = towards(p, 0, reach);
+      leaving = true;
     }
-    for (const id of this.sleeveIds) this.position[id] = towards(this.position[id]!, target[id]!, reach);
+    if (leaving) return;
+    for (const id of this.sleeveIds) this.position[id] = towards(this.position[id]!, this.target[id]!, reach);
   }
 
   /** How far a state's sleeves are home, 0–1: the least of its closed elements. */
@@ -175,15 +187,17 @@ export class TableDrive {
 
   private refresh(): void {
     memberAngles(this.box, this.inputAngle, this.outputAngle, this.pose.angles);
-    Object.assign(this.pose.sleeves, this.position);
-    this.pose.meshPower.fill(0);
+    for (const id of this.sleeveIds) this.pose.sleeves[id] = this.position[id]!;
+    const power = this.pose.meshPower;
+    power.fill(0);
     for (const state of this.box.states) {
-      if (state.kind !== 'gear' || !state.meshLoads) continue;
+      const loads = state.meshLoads;
+      if (state.kind !== 'gear' || !loads) continue;
       const e = this.engagement(state);
       // The glow comes up as the dog teeth engage, past the blocker point.
       const glow = smooth((e - BLOCK_POINT) / (1 - BLOCK_POINT));
       if (glow <= 0) continue;
-      state.meshLoads.forEach((load, j) => (this.pose.meshPower[j]! += glow * load.power));
+      for (let j = 0; j < loads.length; j++) power[j]! += glow * loads[j]!.power;
     }
   }
 }
