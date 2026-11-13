@@ -1,7 +1,7 @@
 // A transaxle of the manual-transaxle page on the table (stage K6a-3d), shared by its two model files: the input
 // shaft is turned, the differential turns free, the buttons pick N, the speeds or R. Sleeves travel in 0.2 s and the
 // power path glows in proportion to the power each mesh rolls: the speed's pair and the final drive in every gear.
-// "До авто" reaches the stubs to the car's inner joints (DriveCar.diffOutputs and its mirror), as the overview will.
+// The car toggle reaches the stubs to the car's inner joints (DriveCar.diffOutputs and its mirror), as the overview will.
 
 import { CARS } from '../src/data/cars.ts';
 import { DRIVE_CARS } from '../src/data/drive-cars.ts';
@@ -32,7 +32,7 @@ export function transaxleViewer(recordId: string, title: string): ModelDef {
       { key: 'gear', label: 'Передача', kind: 'choice', buttons: true, value: 'N', options: gears.map((v) => ({ value: v, label: v })) },
       { key: 'rpm', label: 'Первинний вал, об/хв', kind: 'range', min: 0, max: 1200, step: 10, value: 60 },
       { key: 'glow', label: 'Шлях потужності', kind: 'toggle', value: true },
-      { key: 'car', label: 'Піввісі до ШРУСів авто', kind: 'toggle', value: true, rebuild: true },
+      { key: 'car', label: 'Піввісі до ШРУСів авто', kind: 'toggle', value: false, rebuild: true },
       {
         key: 'quality',
         label: 'Деталізація',
@@ -54,6 +54,9 @@ export function transaxleViewer(recordId: string, title: string): ModelDef {
       draw();
       return {
         group: model.group,
+        // More from the engine's side than the viewer's default: the boxes are long, and on a phone the bellhousing
+        // would leave the frame.
+        home: [0.35, 0.5, 1],
         groundY: 0,
         frame(_time, dt) {
           table.step(dt, values.rpm as number);

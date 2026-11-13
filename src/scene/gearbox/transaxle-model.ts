@@ -536,9 +536,10 @@ export class TransaxleModel extends GearboxSceneBase {
     const housingMesh = shell(housing, 'gbx-case', 5);
     this.explode(housingMesh, new THREE.Vector3(0, 2.2, 0), a);
 
-    // Bellhousing: from the case's front out to the flywheel, open toward the engine.
-    const rBack = reach + 4;
-    const rFront = Math.max(flywheelRadius + 14, rBack + 10);
+    // Bellhousing: from the case's front out to the flywheel, open toward the engine. Sized by the flywheel alone: in
+    // front of a transaxle sits the differential's housing, not the gear case.
+    const rFront = flywheelRadius + 14;
+    const rBack = Math.min(reach + 4, rFront - 10);
     const y1 = -frame.bellhousing;
     let bell: THREE.BufferGeometry;
     if (d.axis === 'z') {
