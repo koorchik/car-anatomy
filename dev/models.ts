@@ -73,6 +73,8 @@ interface Loaded {
 }
 
 let current: Loaded | null = null;
+/** The model's frame() threw: it is not called again until the model is rebuilt. */
+let frameBroken = false;
 let time = 0;
 let still = flag('still');
 let keepCamera = false;
@@ -601,10 +603,13 @@ function rebuild(): void {
   scene.remove(before.group);
   before.dispose();
   showCard(null);
+  let built: ViewerModel | null = null;
   try {
     const model = create(current);
+    built = model;
     current.model = model;
     scene.add(model.group);
+    frameBroken = false;
     for (const c of current.controls) if (isBuiltin(c.key)) applyBuiltin(model, c.key, current.values[c.key]!, true);
     model.frame?.(time, 0);
     if (keepCamera) {
@@ -619,6 +624,10 @@ function rebuild(): void {
   } catch (error) {
     console.error(error);
     showMessage(`Модель не збудувалася: ${(error as Error).message}`);
+    // The old model is disposed already, and one that broke after it was built is taken off the scene: nothing may
+    // draw, animate, pick or dispose either of them again.
+    if (built) scene.remove(built.group);
+    current.model = { group: new THREE.Group(), dispose: () => {} };
   }
   auditParts();
 }
@@ -673,7 +682,16 @@ function loop(now: number): void {
   last = now;
   const step = still ? 0 : dt;
   time += step;
-  current?.model.frame?.(time, step);
+  if (current && !frameBroken) {
+    // A model in the making may throw here. The viewer says so and keeps drawing instead of stopping its loop.
+    try {
+      current.model.frame?.(time, step);
+    } catch (error) {
+      frameBroken = true;
+      console.error(error);
+      showMessage(`Модель впала в frame(): ${(error as Error).message}`);
+    }
+  }
   controls.update();
   renderer.render(scene, camera);
   updateScaleBar();
