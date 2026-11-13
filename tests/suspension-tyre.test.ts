@@ -613,6 +613,19 @@ describe('relaxation and low speed', () => {
     }
   });
 
+  it('keeps a wheel spinning on ice at standstill pulling the way it slides while its load rocks', () => {
+    // The sliding bound follows σ(F_z); a damper on its moves flipped the force to −D (found by stage K2b).
+    const tyre = tyreAt('classic', 3000);
+    const s = newTyreState();
+    const f = newTyreForces();
+    for (let i = 0; i < 3000; i++) {
+      const fz = 3000 * (1 + 0.1 * Math.sin(2 * Math.PI * 10 * i * dt));
+      stepTyre(tyre, 'left', s, 30, 0.3, 0.05, 0, fz, 0, 0.1, dt, f);
+      expect(f.fx, `step ${i}`).toBeGreaterThan(0);
+      expect(f.fx).toBeLessThanOrEqual(longitudinalPeakN(tyre.set, fz, 0, 0.1) * 1.000001);
+    }
+  });
+
   it('drops all force and deflection when the wheel leaves the road', () => {
     const tyre = tyreAt('street', 4000);
     const s = newTyreState();
