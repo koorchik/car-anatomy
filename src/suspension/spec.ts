@@ -48,6 +48,26 @@ export interface PivotLinkage { kind: 'pivot'; axisA: Vec3; axisB: Vec3; armPart
  *  on `kind`; plain AxleSpec is a corner of links, which is what most code handles. */
 export type AnyCornerLinkage = CornerLinkage | PivotLinkage;
 
+/**
+ * Twist beam: two trailing arms on body bushes, welded to a cross member that is stiff in bending and soft in torsion.
+ * Both wheels hang on one part, so the axle has two degrees of freedom and is solved as a whole (solve-twist-beam.ts):
+ * in heave both arms swing about the line through the two bushes, in roll each arm turns about the line from its bush
+ * to the beam's shear centre. Points are the left ones; the right bush is the mirror.
+ */
+export interface TwistBeamLinkage {
+  kind: 'twist-beam';
+  bush: Vec3;
+  /** Shear centre of the beam's section on the car's centre line at design. */
+  shearCentre: Vec3;
+  /** Torque per radian of twist of one arm relative to the other, N·m/rad. */
+  torsionNmPerRad: number;
+  armPart: string;
+  beamPart: string;
+}
+
+/** Both wheels on one part. Solid axles join this with stage P6b. */
+export type BeamLinkage = TwistBeamLinkage;
+
 export type SpringKind = 'coil' | 'torsion' | 'leaf' | 'air' | 'hydro';
 
 export interface SpringSpec {
@@ -100,8 +120,9 @@ export interface HalfshaftSpec {
   diameterM: number;
 }
 
-/** One axle of the car: an independent corner, given for the left side; the right one is its mirror. */
-export interface AxleSpec<L extends AnyCornerLinkage = CornerLinkage> {
+/** One axle of the car: an independent corner, given for the left side; the right one is its mirror. A beam axle
+ *  (BeamLinkage) is given the same way: its left wheel, spring and damper, mirrored for the right. */
+export interface AxleSpec<L extends AnyCornerLinkage | BeamLinkage = CornerLinkage> {
   layout: LayoutId;
   /** Track at design ride height, m. */
   track: number;
