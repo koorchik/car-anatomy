@@ -1,5 +1,6 @@
 // Offline render of the engine synth for analysis: `npm run render-audio [ids...]`.
-// Writes WAV files and a loudness table to .tmp/audio.
+// Writes WAV files and a loudness table to .tmp/audio. `--dyno <ids>` puts the engines on the dyno; `--drive <car ids>`
+// drives a car with its engine on its drivetrain (src/drivetrain/drive-story.ts) and prints each shift's drop.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { ENGINES, engineById } from '../src/data/engines.ts';
@@ -9,6 +10,11 @@ import { DynoLoad, freePedalFor, sizeAbsorber, sweepEndRpm, sweepStartRpm, type 
 import { LoadedCrank } from '../src/engine/loaded-crank.ts';
 import { PEDAL_TOP_SPEED } from '../src/engine/sim.ts';
 import { catalogueTorqueMap } from '../src/designer/torque-map.ts';
+import { carById } from '../src/data/cars.ts';
+import { buildCarDrive } from '../src/drivetrain/car-model.ts';
+import { vehicleLoadSpec } from '../src/drivetrain/car-load.ts';
+import { DriveStory, type StoryOptions } from '../src/drivetrain/drive-story.ts';
+import { VehicleLoad } from '../src/vehicle/vehicle-load.ts';
 
 const FS = 48000;
 const OUT = '.tmp/audio';
@@ -127,6 +133,47 @@ export function dynoStory(id: string, rate = 300): Step[] {
   ];
 }
 
+export interface DriveRender {
+  l: Float32Array;
+  r: Float32Array;
+  /** Engine speed and road speed, m/s, every 128 samples. */
+  rpm: Float32Array;
+  speed: Float32Array;
+  story: DriveStory;
+}
+
+/**
+ * A car with its catalogue engine on its drivetrain through the scripted drive: idle, the auto clutch's pull-away,
+ * an upshift into every gear, braking to a stop and idle in neutral. The worklet's way: the synth steps the engine
+ * every 16 samples and the driver acts between blocks of 128.
+ */
+export function renderDrive(carId: string, story?: Partial<StoryOptions>): DriveRender {
+  const car = carById(carId);
+  const spec = car && engineById(car.engine);
+  if (!car || !spec) throw new Error(`Unknown car ${carId} or its engine`);
+  const cd = buildCarDrive(carId);
+  const synth = new EngineSynth(synthConfig(buildEngine(spec)), FS);
+  const load = new VehicleLoad(vehicleLoadSpec(cd));
+  synth.sim.attach(new LoadedCrank(cd.map, load));
+  const drive = new DriveStory(cd, load, synth.sim);
+  Object.assign(drive.o, story);
+  const block = 128;
+  const most = 120 * FS;
+  const l = new Float32Array(most);
+  const r = new Float32Array(most);
+  const rpm = new Float32Array(most / block);
+  const speed = new Float32Array(most / block);
+  let offset = 0;
+  while (!drive.done && offset + block <= most) {
+    drive.drive(block / FS);
+    synth.process(l.subarray(offset, offset + block), r.subarray(offset, offset + block));
+    rpm[offset / block] = synth.sim.rpm;
+    speed[offset / block] = load.chassis.v;
+    offset += block;
+  }
+  return { l: l.slice(0, offset), r: r.slice(0, offset), rpm: rpm.slice(0, offset / block), speed: speed.slice(0, offset / block), story: drive };
+}
+
 export const rmsDb = (x: Float32Array, from = 0, to = x.length): number => {
   let sum = 0;
   for (let i = from; i < to; i++) sum += x[i]! * x[i]!;
@@ -148,7 +195,25 @@ const STORY: Step[] = [
   { seconds: 2.5, pedal: 0 }, // back to idle
 ];
 
-if (process.argv[1]?.endsWith('render-audio.ts') && process.argv.includes('--dyno')) {
+if (process.argv[1]?.endsWith('render-audio.ts') && process.argv.includes('--drive')) {
+  // A car driven with its engine on its drivetrain: `npm run render-audio -- --drive bmw-m3-e30`.
+  mkdirSync(OUT, { recursive: true });
+  for (const id of process.argv.slice(2).filter((a) => a !== '--drive')) {
+    const { l, r, story } = renderDrive(id);
+    const file = `${OUT}/${id}-drive.wav`;
+    writeFileSync(file, floatToWav(l, r, FS));
+    console.log(file, (l.length / FS).toFixed(1), 's, peak', Math.max(peak(l), peak(r)).toFixed(2), ', top', (story.topSpeed * 3.6).toFixed(0), 'km/h');
+    console.log('shift   lever s  rpm   km/h   drop  lock s  rpm  km/h  at lock  wheels   (rpm: before, i_new/i_old drop, at the lock,');
+    console.log('                                                             the drop with the speed change, the wheels through the gear)');
+    for (const x of story.shifts) {
+      const f = (v: number | null, d = 0) => (v === null ? '—' : v.toFixed(d));
+      console.log(
+        `${x.from}→${x.to}`.padEnd(6), x.t.toFixed(2).padStart(7), f(x.rpmBefore).padStart(5), f(x.speedBefore * 3.6, 1).padStart(6), f(x.rpmDrop).padStart(6),
+        f(x.tLocked, 2).padStart(7), f(x.rpmLocked).padStart(5), f(x.speedLocked === null ? null : x.speedLocked * 3.6, 1).padStart(5), f(x.rpmAtLock).padStart(8), f(x.rpmWheels).padStart(8),
+      );
+    }
+  }
+} else if (process.argv[1]?.endsWith('render-audio.ts') && process.argv.includes('--dyno')) {
   // The same engines under load: `npm run render-audio -- --dyno i3 v8-cross`.
   mkdirSync(OUT, { recursive: true });
   for (const id of process.argv.slice(2).filter((a) => a !== '--dyno')) {
