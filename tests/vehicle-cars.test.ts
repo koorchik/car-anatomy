@@ -45,7 +45,9 @@ describe('car records', () => {
   });
 
   it('has no Russian cars', () => {
-    for (const car of CAR_LIST) expect(car.name + car.id, car.id).not.toMatch(/vaz|lada|ваз|лада|gaz|uaz|moskvich|niva/i);
+    // Whole words only: the Ukrainian ЛуАЗ ('luaz-969m') contains 'uaz' and Toyota's 'Gazoo Racing' contains 'gaz'.
+    const russian = /(?<!\p{L})(vaz|lada|zhiguli|niva|gaz|volga|uaz|moskvich|azlk|izh|zil|kamaz|aurus|ваз|лада|жигулі?|нива|газ|волга|уаз|москвич|азлк|зіл|зил|камаз|аурус)(?!\p{L})/iu;
+    for (const car of CAR_LIST) for (const text of [car.id, car.name]) expect(text, car.id).not.toMatch(russian);
   });
 
   describe.each(CAR_LIST.map((c) => [c.id, c] as const))('%s', (_id, car) => {
