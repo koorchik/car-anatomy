@@ -243,6 +243,11 @@ describe('10. the audio thread never derives', () => {
     expect(files.some((f) => f.endsWith('/drivetrain/gear-geometry.ts'))).toBe(false);
   });
 
+  it('nothing the worklet loads carries text: no t() and no dictionary on the audio thread', () => {
+    const files = [...runtimeGraph('src/audio/worklet.ts')].map((f) => f.replace(/\\/g, '/'));
+    expect(files.filter((f) => f.includes('/i18n/'))).toEqual([]);
+  });
+
   it('the graph walker does see them where they are loaded', () => {
     const files = [...runtimeGraph('src/drivetrain/catalogue.ts')];
     expect(files.some((f) => f.endsWith('/drivetrain/gear-geometry.ts'))).toBe(true);
