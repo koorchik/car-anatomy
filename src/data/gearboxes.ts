@@ -3,10 +3,12 @@
 
 import type { GearboxPage, GearboxRecord } from '../drivetrain/catalogue.ts';
 import { MANUAL_RWD } from './gearboxes/manual-rwd.ts';
+import { MANUAL_TRANSAXLE } from './gearboxes/manual-transaxle.ts';
 import { TR6060_MZ6 } from './gearboxes/tr6060-mz6.ts';
 
 export const GEARBOX_PAGES: GearboxPage[] = [
   MANUAL_RWD,
+  MANUAL_TRANSAXLE,
 ];
 
 /** Records without a page: real tooth counts the derivation and the designer are calibrated on. */

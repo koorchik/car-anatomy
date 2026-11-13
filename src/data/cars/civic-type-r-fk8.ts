@@ -15,7 +15,7 @@ export const CAR: CarRecord = {
   name: 'Honda Civic Type R (FK8)',
   years: '2017-2021',
   engine: 'i4/civic-type-r-k20c1',
-  gearbox: null,
+  gearbox: 'manual-transaxle',
   suspension: null,
   mount: { axis: 'transverse', front: 'right', position: 'front' },
   massKg: 1380,
