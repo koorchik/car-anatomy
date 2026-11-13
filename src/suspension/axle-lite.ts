@@ -79,7 +79,7 @@ export function rolledRollCentre(outer: CornerSample, inner: CornerSample): Roll
   return { heightM: (ry * mz - rz * my) / len, lateralM: (ry * my + rz * mz) / len };
 }
 
-/** Static kinematics of an axle from about ten exact solves (see the header). */
+/** Static kinematics of an axle from five exact solves (see the header). */
 export function buildAxleLite(spec: AxleSpec): AxleLite {
   const axle = new Axle(spec, { table: false });
   const solver = axle.solver;
