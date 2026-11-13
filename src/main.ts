@@ -8,6 +8,7 @@ import '@fontsource/fira-sans/600.css';
 import '@fontsource/fira-sans-extra-condensed/600.css';
 import '@fontsource/fira-sans-extra-condensed/700.css';
 import '@fontsource/fira-sans-extra-condensed/800.css';
+import './shell/base.css';
 import type { Drive } from './audio/drive.ts';
 import type { Stage } from './scene/stage.ts';
 import type { FreezeOptions } from './shell/freeze.ts';

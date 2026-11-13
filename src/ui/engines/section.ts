@@ -24,6 +24,7 @@ import { EngineFeatures } from './features.ts';
 import { actionsHtml, afterDashHtml, badgeHtml, dashHtml, panelHtml, resultsHtml, SLOW_RPM_DEFAULT, statusHtml, tableHeadHtml, titleHtml, toolsHtml } from './markup.ts';
 import { enginesPage, type EnginesPage } from './routes.ts';
 import { SumpMode } from './sump-host.ts';
+import './engines.css';
 
 /** No cylinder resting, shared so that the frame does not make a new list each time. */
 const NONE_RESTING: number[] = [];

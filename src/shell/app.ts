@@ -1,7 +1,7 @@
 // The shell: the page's skeleton and its layout, the stage, the frame loop, the address, the keys, the time and the
 // parts' cards. Sections (section.ts) fill the skeleton and draw their pages; the shell hands them the context.
 
-import '../style.css';
+import './shell.css';
 import { locale, switchLocale, type Locale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import { Stage } from '../scene/stage.ts';
