@@ -20,7 +20,7 @@ import type { Axle } from '../../suspension/kinematics.ts';
 import type { QuarterOut } from '../../suspension/quarter.ts';
 import type { RoadProfile } from '../../suspension/road.ts';
 import type { ResolvedCorner } from '../../suspension/setup.ts';
-import { POSE_SIZE, type SolveResult } from '../../suspension/solve.ts';
+import { POSE_SIZE } from '../../suspension/solve.ts';
 import { tyreVertical } from '../../vehicle/tyre-data.ts';
 import type { PartInfo } from '../parts-info.ts';
 import { SUSPENSION_PARTS } from './parts.ts';
@@ -263,7 +263,6 @@ export class CornerModel {
   private readonly force = new THREE.Vector3();
   private readonly forceB = new THREE.Vector3();
   private readonly fa = [0, 0, 0];
-  private readonly solved: SolveResult = { ok: false, iterations: 0, residual: 0, detSign: 0, worst: '' };
 
   constructor(resolved: ResolvedCorner, profile: RoadProfile | null = null) {
     this.resolved = resolved;
@@ -761,8 +760,8 @@ export class CornerModel {
 
     // Knuckle pose: exact, warm from the last frame (the table's pose the first time or after a failure).
     const warm = this.pose[6] === 0 && this.pose[3] === 0 ? null : this.pose;
-    const res = axle.solvePose(f.travel, f.rack, warm, this.pose, this.solved);
-    if (!res.ok) axle.solvePose(f.travel, f.rack, null, this.pose, this.solved);
+    const res = axle.solvePose(f.travel, f.rack, warm, this.pose);
+    if (!res.ok) axle.solvePose(f.travel, f.rack, null, this.pose);
     this.body.position.set(0, f.bodyZ * 10, 0);
     // ISO quaternion (x, y, z) → scene (y, z, x), as points are.
     const P = this.pose;

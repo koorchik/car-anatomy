@@ -31,16 +31,6 @@ export interface SolveResult {
 /** Residual below which a pose counts as solved, m. */
 export const SOLVE_TOLERANCE_M = 1e-11;
 
-const fillResult = (out: SolveResult | undefined, ok: boolean, iterations: number, residual: number, detSign: number, worst: string): SolveResult => {
-  if (!out) return { ok, iterations, residual, detSign, worst };
-  out.ok = ok;
-  out.iterations = iterations;
-  out.residual = residual;
-  out.detSign = detSign;
-  out.worst = worst;
-  return out;
-};
-
 export class CornerSolver {
   /** Wheel centre at design. */
   readonly c0: Vec3;
@@ -135,7 +125,8 @@ export class CornerSolver {
    */
   jacobian(pose: Float64Array, travel: number, rack: number, out: Float64Array): void {
     this.assemble(pose, travel, rack);
-    out.set(this.J);
+    // Only the first 36 numbers: the 6×6 matrix of a corner with six unknowns, whatever room J has.
+    out.set(this.J.subarray(0, 36));
   }
 
   /** Index of the first steered rod among the distance rows, or −1. */
@@ -261,10 +252,9 @@ export class CornerSolver {
 
   /**
    * Solves the pose for `travel` (wheel centre height above design, m, bump positive) and `rack` (inner ends of
-   * steered rods moved along +y, m). `pose` is the warm start and receives the solution. `result`, when given, is
-   * filled and returned instead of a new object, so a caller that solves every frame allocates nothing.
+   * steered rods moved along +y, m). `pose` is the warm start and receives the solution.
    */
-  solve(pose: Float64Array, travel: number, rack: number, maxIterations = 8, result?: SolveResult): SolveResult {
+  solve(pose: Float64Array, travel: number, rack: number, maxIterations = 8): SolveResult {
     let iterations = 0;
     let detSign = 0;
     for (;;) {
@@ -285,12 +275,12 @@ export class CornerSolver {
           detSign = solveLinear(this.A, this.b, 6);
         }
         const ok = worst < SOLVE_TOLERANCE_M;
-        return fillResult(result, ok, iterations, worst, detSign, this.rows[worstRow]);
+        return { ok, iterations, residual: worst, detSign, worst: this.rows[worstRow] };
       }
       this.A.set(this.J);
       for (let i = 0; i < 6; i++) this.b[i] = -this.r[i];
       detSign = solveLinear(this.A, this.b, 6);
-      if (detSign === 0) return fillResult(result, false, iterations, worst, detSign, this.rows[worstRow]);
+      if (detSign === 0) return { ok: false, iterations, residual: worst, detSign, worst: this.rows[worstRow] };
       // Damped step: never move more than 20 mm or 0.2 rad at once, so a bad start cannot fling the knuckle away.
       const b = this.b;
       const big = Math.max(Math.hypot(b[0], b[1], b[2]) / 0.02, Math.hypot(b[3], b[4], b[5]) / 0.2, 1);
