@@ -153,3 +153,13 @@ function jacobi(input: Matrix): { values: number[]; vectors: Matrix } {
   }
   return { values: a.map((row, i) => row[i]!), vectors: v };
 }
+
+/**
+ * Longest explicit step that keeps every spring well inside symplectic Euler's limit hω < 2, s: h = 1/ω_max, with
+ * ω_max the highest mode of the drivetrain with every element open. Locks only interlace the frequencies below it,
+ * so no state is faster. The main thread takes the smaller of this and 1 ms.
+ */
+export function stableStep(core: DrivetrainCore): number {
+  const top = naturalModes(core, { locked: [] }).at(-1);
+  return top ? 1 / (2 * Math.PI * top.hz) : Number.POSITIVE_INFINITY;
+}

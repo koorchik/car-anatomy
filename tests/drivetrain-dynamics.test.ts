@@ -11,7 +11,7 @@ import {
   mergeDrafts,
 } from '../src/drivetrain/core.ts';
 import { DISC_DAMPER, DMF_DAMPER, ESTIMATED_SYNCHRO, STIFF_DISC_HZ, dryClutch, pedalClamp, plateHeatCapacity, stiffDisc } from '../src/drivetrain/elements.ts';
-import { naturalModes } from '../src/drivetrain/modes.ts';
+import { naturalModes, stableStep } from '../src/drivetrain/modes.ts';
 import { DrivetrainSolver, LOCKED, OPEN, SLIP } from '../src/drivetrain/solver.ts';
 import type { DamperDef, FrictionDef } from '../src/drivetrain/spec.ts';
 import { coneTorque, syncTime } from '../src/drivetrain/synchro-math.ts';
@@ -215,6 +215,18 @@ describe('5. damper modes', () => {
     }
     expect(Number.isFinite(late)).toBe(true);
     expect(late).toBeLessThan(0.01);
+  });
+
+  it('the stable step is 1/ω of the fastest mode, and no lock makes the drivetrain faster', () => {
+    for (const damper of [DISC_DAMPER, DMF_DAMPER, stiffDisc(ENGINE)]) {
+      const core = e30(damper);
+      const h = stableStep(core);
+      expect(h).toBeCloseTo(1 / Math.sqrt(damper.stiffness * (1 / ENGINE + 1 / damper.inertia)), 9);
+      for (const locked of [[CLUTCH], [CLUTCH, 'sync-1'], [CLUTCH, 'sync-5', BRAKE]]) {
+        for (const m of naturalModes(core, { locked })) expect(2 * Math.PI * m.hz * h).toBeLessThanOrEqual(1 + 1e-9);
+      }
+    }
+    expect(stableStep(e30(stiffDisc(ENGINE))) * 1000).toBeCloseTo(1.06, 2);
   });
 
   it.each([1, 2, 3, 4, 5])('calibration of the dampers: the E30 box mode in gear %i is 40–80 Hz with a disc, 7.5–15 Hz with a DMF (LuK)', (gear) => {
