@@ -219,20 +219,26 @@ function homeDir(): THREE.Vector3 {
   return new THREE.Vector3(...(current?.model.home ?? HOME)).normalize();
 }
 
-/** Frames the model. `fromAddress` takes cam, dist and at from the address when they are there. */
-function frameModel(direction: THREE.Vector3 | null, fromAddress: boolean): void {
+/** Measures the model for fitting, and puts the floor under it and the shadow camera over it. The camera stays. */
+function measure(): void {
   if (!current) return;
   const box = fitBox(current.model.group);
   const sphere = box.isEmpty() ? new THREE.Sphere(new THREE.Vector3(), 1) : box.getBoundingSphere(new THREE.Sphere());
-  const distance = fitDistance(sphere.radius);
-  fitted = { center: sphere.center.clone(), radius: sphere.radius, distance };
+  fitted = { center: sphere.center.clone(), radius: sphere.radius, distance: fitDistance(sphere.radius) };
   fittedTarget.copy(sphere.center);
   const groundY = current.model.groundY ?? (box.isEmpty() ? 0 : box.min.y);
   studio.place(groundY, sphere.center, sphere.radius);
+  controls.minDistance = sphere.radius * 0.05;
+  controls.maxDistance = Math.max(fitted.distance * 4, camera.position.distanceTo(controls.target));
+}
 
+/** Frames the model. `fromAddress` takes cam, dist and at from the address when they are there. */
+function frameModel(direction: THREE.Vector3 | null, fromAddress: boolean): void {
+  if (!current) return;
+  measure();
   let dir = direction ?? homeDir();
-  let dist = distance;
-  let target = sphere.center.clone();
+  let dist = fitted.distance;
+  let target = fitted.center.clone();
   if (fromAddress) {
     const cam = params.get('cam');
     const preset = PRESETS.find((p) => p.name === cam);
@@ -243,8 +249,7 @@ function frameModel(direction: THREE.Vector3 | null, fromAddress: boolean): void
   }
   controls.target.copy(target);
   camera.position.copy(target).addScaledVector(dir, dist);
-  controls.minDistance = sphere.radius * 0.05;
-  controls.maxDistance = Math.max(distance * 4, dist);
+  controls.maxDistance = Math.max(fitted.distance * 4, dist);
   controls.update();
 }
 
@@ -269,16 +274,22 @@ controls.addEventListener('change', () => {
 
 // ---- Size and scale ----
 
-let width = 1;
-let height = 1;
-new ResizeObserver(() => {
+let width = 0;
+let height = 0;
+function resize(): void {
   const box = $('view').getBoundingClientRect();
-  width = Math.max(1, Math.round(box.width));
-  height = Math.max(1, Math.round(box.height));
+  const w = Math.max(1, Math.round(box.width));
+  const h = Math.max(1, Math.round(box.height));
+  if (w === width && h === height) return;
+  width = w;
+  height = h;
   renderer.setSize(width, height, false);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
-}).observe($('view'));
+  // As Stage.resize does: a camera nobody placed frames the model anew, so a narrower window still shows all of it.
+  if (!cameraSet) frameModel(null, false);
+}
+new ResizeObserver(resize).observe($('view'));
 
 let shownScale = 0;
 /** The site's ruler: the length of a round number of centimetres at the depth of the target. */
@@ -596,7 +607,14 @@ function rebuild(): void {
     scene.add(model.group);
     for (const c of current.controls) if (isBuiltin(c.key)) applyBuiltin(model, c.key, current.values[c.key]!, true);
     model.frame?.(time, 0);
-    if (!keepCamera) frameModel(direction, false);
+    if (keepCamera) {
+      // The floor and the shadow follow the new model. The camera stays, and the address keeps it for the next load.
+      measure();
+      cameraSet = true;
+    } else {
+      // A camera nobody placed goes where a fresh load of this address puts it: the new model's home.
+      frameModel(cameraSet ? direction : null, false);
+    }
     showMessage(null);
   } catch (error) {
     console.error(error);
@@ -676,6 +694,8 @@ function loop(now: number): void {
 }
 
 const wanted = params.get('m') ?? MODEL_IDS[0] ?? '';
+// The size is known before the model is fitted, whichever comes first: the observer's first call or the model.
+resize();
 void load(wanted).then(() => {
   if (!current) viewerApi.ready = true;
 });
