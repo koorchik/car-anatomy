@@ -5,7 +5,8 @@ import { DEG } from '../engine/kinematics.ts';
 import { t } from '../i18n/t.ts';
 import { crankForPreset } from './crank.ts';
 import { DEFAULT_DESIGN, valveSplit, type Design, type DesignLayout } from './design.ts';
-import { COOLINGS, FUEL_SYSTEMS, IGNITIONS, OIL_COOLERS, OIL_PUMP_DRIVES } from '../engine/systems-spec.ts';
+import { COOLINGS, FUEL_SYSTEMS, IGNITIONS, OIL_COOLERS, OIL_PUMP_DRIVES, SUMP_KINDS } from '../engine/systems-spec.ts';
+import { derivedDesignOilL } from './lubrication.ts';
 import { resolveSystems } from './systems.ts';
 
 export interface Range {
@@ -79,7 +80,7 @@ export type NumericKey =
   | 'intakeValve' | 'exhaustValve' | 'lift' | 'intakeDuration' | 'exhaustDuration' | 'lobeSeparation' | 'springForce'
   | 'runnerLength' | 'runnerDia' | 'boostBar' | 'turboSizeHp' | 'intercooler' | 'lambda' | 'ignitionOffset'
   | 'headerLength' | 'headerDia' | 'headerSpread' | 'pipeDia' | 'pipeLength' | 'rpmLimit' | 'rotorR' | 'rotorE' | 'rotorWidth'
-  | 'mufflerOpen' | 'rasp' | 'pops' | 'turboWhine';
+  | 'mufflerOpen' | 'rasp' | 'pops' | 'turboWhine' | 'oilL';
 
 export function paramRange(d: Design, key: NumericKey): Range {
   switch (key) {
@@ -170,6 +171,16 @@ export function paramRange(d: Design, key: NumericKey): Range {
     case 'pops':
     case 'turboWhine':
       return fixed(0, 1);
+    case 'oilL': {
+      // Depends on the size and the sump, which are settled before it.
+      const derived = derivedDesignOilL(d);
+      return {
+        min: Math.max(1, Math.round(derived * 5) / 10),
+        max: Math.round(derived * 30) / 10,
+        minWhy: t('З меншою кількістю оливи забірник не буде під нею навіть на стоянці.'),
+        maxWhy: t('Більше оливи вже не вміститься в розумний піддон чи бак.'),
+      };
+    }
   }
 }
 
@@ -195,6 +206,7 @@ const ALLOWED = {
   ignition: [null, ...IGNITIONS],
   oilPump: [null, ...OIL_PUMP_DRIVES],
   sparkPlugs: [null, 1, 2],
+  sump: [null, ...SUMP_KINDS],
 };
 
 const ORDERED_KEYS: NumericKey[] = [
@@ -202,7 +214,7 @@ const ORDERED_KEYS: NumericKey[] = [
   'exhaustValve', 'intakeValve', 'exhaustValve', 'lift', 'intakeDuration', 'exhaustDuration', 'lobeSeparation', 'springForce',
   'runnerLength', 'runnerDia', 'boostBar', 'turboSizeHp', 'intercooler', 'lambda', 'ignitionOffset',
   'headerLength', 'headerDia', 'headerSpread', 'pipeDia', 'pipeLength', 'rpmLimit', 'rotorR', 'rotorE', 'rotorWidth',
-  'mufflerOpen', 'rasp', 'pops', 'turboWhine',
+  'mufflerOpen', 'rasp', 'pops', 'turboWhine', 'oilL',
 ];
 
 /** Brings any design, however it arose, to a state that can be built. Pure and idempotent. */
@@ -227,6 +239,7 @@ export function resolveDesign(input: Design): Design {
   if (d.mufflerOpen !== null && !Number.isFinite(d.mufflerOpen)) d.mufflerOpen = null;
   if (d.rasp !== null && !Number.isFinite(d.rasp)) d.rasp = null;
   if (d.pops !== null && !Number.isFinite(d.pops)) d.pops = null;
+  if (d.oilL !== null && !Number.isFinite(d.oilL)) d.oilL = null;
   for (const key of ORDERED_KEYS) {
     if (d[key] === null) continue;
     const range = paramRange(d, key);

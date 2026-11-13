@@ -13,6 +13,7 @@ import {
 import { t } from '../i18n/t.ts';
 import { isBoosted, isRotary, type Design } from './design.ts';
 import { FUELS } from './fuels.ts';
+import { effectiveOilL, effectiveSump } from './lubrication.ts';
 
 /** The design fields this module owns. Editing them never changes the engine's figures. */
 export const SYSTEM_KEYS = ['fuelSystem', 'cooling', 'oilCooler', 'pistonJets', 'sparkPlugs', 'ignition', 'glowPlugs', 'oilPump', 'oilFilter'] as const;
@@ -94,7 +95,8 @@ export function systemsOfDesign(d: Design): SystemsSpec {
     glowPlugs: fuel.diesel ? s.glowPlugs : false,
     oilPump: rotary ? 'chain' : s.oilPump,
     oilFilter: s.oilFilter,
-    sump: 'wet',
+    sump: effectiveSump(d),
+    oilL: effectiveOilL(d),
     boostBar: boosted ? d.boostBar : 0,
     intercooler: boosted ? d.intercooler : 0,
     supercharger: d.charger === 'roots' || d.charger === 'centrifugal' ? d.charger : null,

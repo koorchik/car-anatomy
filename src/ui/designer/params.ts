@@ -5,6 +5,8 @@ import { effectiveOpen, effectivePops, effectiveRasp, isBoosted, isRotary, isTur
 import { FUELS, type FuelId } from '../../designer/fuels.ts';
 import type { Performance } from '../../designer/physics.ts';
 import { FUEL_SYSTEM_NAMES, fuelSystemsFor, shownSystems } from '../../designer/systems.ts';
+import { derivedDesignOilL, effectiveSump } from '../../designer/lubrication.ts';
+import { lubricationFigures } from '../../designer/lubrication-figures.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
 
@@ -31,7 +33,7 @@ export interface NumberParam {
 export interface ChoiceParam {
   kind: 'choice';
   key: 'layout' | 'cylinders' | 'pistonMaterial' | 'rodMaterial' | 'blockMaterial' | 'crankPreset' | 'balanceShafts' | 'valvetrain' | 'valvesPerCyl' | 'charger' | 'fuel' | 'collector' | 'muffler' | 'blowoff'
-    | 'fuelSystem' | 'cooling' | 'oilCooler' | 'ignition' | 'oilPump' | 'sparkPlugs';
+    | 'fuelSystem' | 'cooling' | 'oilCooler' | 'ignition' | 'oilPump' | 'sparkPlugs' | 'sump';
   label: string;
   /** Options, or a function when they depend on the rest of the design. */
   options: Array<[string | number, string]> | ((d: Design) => Array<[string | number, string]>);
@@ -327,14 +329,33 @@ export const PARAM_GROUPS: ParamGroup[] = [
   {
     id: 'cooling',
     title: t('Охолодження і мащення'),
-    intro: t('Як двигун позбувається тепла і як олива доходить до підшипників. Усе це видно в шарах оливи й охолодження в рентгені, а на потужність у моделі не впливає.'),
+    intro: t('Як двигун позбувається тепла і як олива доходить до підшипників. Усе це видно в шарах оливи й охолодження в рентгені. На цифри двигуна впливають лише картер і кількість оливи.'),
     params: [
       { kind: 'choice', key: 'cooling', label: t('Охолодження'), only: 'looks', applies: notRotary, options: [['liquid', t('Рідина')], ['fan', t('Вентилятор')], ['ram', t('Набігаючий потік')]], shown: (d) => shownSystems(d).cooling, help: t('Рідина відводить тепло від сорочки в радіатор. Повітряний двигун має ребра на циліндрах і головках, і їх обдуває вентилятор або, як на мотоциклі, зустрічний потік. Видно в шарі охолодження.') },
       { kind: 'choice', key: 'oilCooler', label: t('Оливний радіатор'), only: 'looks', options: [['none', t('Немає')], ['coolant', t('У рідину')], ['air', t('У повітря')]], shown: (d) => shownSystems(d).oilCooler, help: t('Теплообмінник віддає тепло оливи охолоджувальній рідині, а радіатор у потоці повітря віддає його прямо повітрю. Двигунам з турбіною, дизелям і повітряним він потрібен найбільше. Видно в шарі оливи.') },
       { kind: 'toggle', key: 'pistonJets', label: t('Охолодження поршнів оливою'), only: 'looks', applies: notRotary, shown: (d) => shownSystems(d).pistonJets, help: t('Форсунки знизу циліндрів бризкають оливою на днище поршня і забирають тепло. Потрібні двигунам з наддувом і дизелям. Видно в шарі оливи: тиск після їх відкриття росте повільніше. У моделі потужності не враховано.') },
       { kind: 'choice', key: 'oilPump', label: t('Привід оливного насоса'), only: 'looks', applies: notRotary, options: [['crank', t('Від колінвала')], ['chain', t('Ланцюгом')], ['shaft', t('Валиком')]], shown: (d) => shownSystems(d).oilPump, help: t('Насос на носку колінвала крутиться з ним разом. Насос у піддоні приводить окремий ланцюг або валик від розподільчого чи допоміжного вала. Видно в шарі оливи.') },
       { kind: 'toggle', key: 'oilFilter', label: t('Повнопотоковий оливний фільтр'), only: 'looks', shown: (d) => shownSystems(d).oilFilter, help: t('Уся олива від насоса проходить крізь паперовий фільтр. Старі двигуни, як Beetle, мали лише сітку на забірнику. Видно в шарі оливи.') },
+      {
+        kind: 'choice',
+        key: 'sump',
+        label: t('Картер'),
+        applies: notRotary,
+        options: [['wet', t('Мокрий')], ['baffled', t('З перегородками')], ['integrated-dry', t('Інтегрований сухий')], ['dry', t('Сухий')]],
+        shown: effectiveSump,
+        help: t('Як олива повертається до насоса. Сухий картер дає мілкий піддон і нижчий колінвал, менше втрат на розбризкування оливи, але важчий. Мокрий найпростіший, але на треку забірник може опинитися над оливою. Перегородки й відкачування головок тримають оливу біля забірника.'),
+      },
+      { kind: 'number', key: 'oilL', label: t('Олива'), unit: t('л'), step: 0.1, digits: 1, shown: derivedDesignOilL, applies: notRotary, help: t('Більше оливи дає глибший піддон: колінвал стоїть вище, зате на виражах забірнику є з чого брати. У сухого картера олива живе в баку, тому висота від неї не залежить.') },
     ],
+    readouts: (d) => {
+      if (isRotary(d)) return [];
+      const lube = lubricationFigures(d);
+      const rows: Array<[string, string]> = [[t('Колінвал над дном піддона'), t('{mm} мм', { mm: Math.round(lube.crankHeightMm) })]];
+      if (lube.tankL !== null) rows.push([t('Бак оливи'), t('{litres} л', { litres: lube.tankL.toLocaleString(numberLocale, { maximumFractionDigits: 1 }) })]);
+      else rows.push([t('Оливи в піддоні'), t('{litres} л', { litres: lube.panOilL.toLocaleString(numberLocale, { maximumFractionDigits: 1 }) })]);
+      if (lube.massKg > 0) rows.push([t('Маса мащення'), t('+{kg} кг', { kg: lube.massKg.toLocaleString(numberLocale, { maximumFractionDigits: 1 }) })]);
+      return rows;
+    },
   },
   {
     id: 'exhaust',

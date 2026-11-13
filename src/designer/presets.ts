@@ -58,6 +58,8 @@ export function withLayout(d: Design, layout: DesignLayout): Design {
     collectorOf: null,
     pans: null,
     coverColor: null,
+    // The oil a layout's pan holds follows its size.
+    oilL: null,
     factory: null,
   });
   return resolveDesign({ ...moved, ...layoutExhaust(layout, moved.cylinders) });
@@ -97,6 +99,8 @@ export function editDesign(d: Design, patch: Partial<Design>): Design {
     next.glowPlugs = null;
   }
   if ('fuelSystem' in patch && !('ignition' in patch)) next.ignition = null;
+  // The derived capacity depends on the sump: a dry sump's tank holds more.
+  if ('sump' in patch && !('oilL' in patch)) next.oilL = null;
   if (('charger' in patch || 'cooling' in patch || FUELS[next.fuel]?.diesel !== dieselBefore) && !('pistonJets' in patch || 'oilCooler' in patch)) {
     next.pistonJets = null;
     next.oilCooler = null;

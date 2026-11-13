@@ -17,6 +17,7 @@ import {
 } from './design.ts';
 import { firingFromCrank } from './crank.ts';
 import { FUELS, heatReleaseFactor } from './fuels.ts';
+import { sumpFrictionBar, sumpMassKg } from './lubrication.ts';
 
 const P_ATM = 101.3e3; // Pa
 export const T_ATM = 298; // K, also the outside air of the systems layers
@@ -388,7 +389,7 @@ class Model {
     const train = { dohc: 0.06, sohc: 0.04, ohv: 0.02 }[d.valvetrain] + 0.012 * d.valvesPerCyl + 0.1 * Math.max(0, d.springForce / 700 - 1);
     const smallBore = (86 / d.bore) ** 0.5;
     const shafts = 0.05 * d.balanceShafts + (d.directInjection ? 0.03 : 0);
-    return (0.34 * smallBore + train + shafts) + 0.0055 * peakBar + sideLoad * (0.012 * sp + 0.00105 * sp * sp);
+    return (0.34 * smallBore + train + shafts) + 0.0055 * peakBar + sideLoad * (0.012 * sp + 0.00105 * sp * sp) + sumpFrictionBar(d, sp);
   }
 
   /** Spark-ignition knock: Douaud-Eyzat ignition delay against the time the end gas spends compressed. */
@@ -604,7 +605,7 @@ function estimateMass(d: Design): number {
   const heads = isRotary(d) ? 0 : banks * (d.valvetrain === 'dohc' ? 11 : 7) * (d.bore / 86) ** 1.3 * (d.cylinders / banks / 4) ** 0.7;
   const diesel = FUELS[d.fuel].diesel ? 1.25 : 1;
   const charger = turboCount(d) * 14 + (d.charger === 'roots' ? 22 : d.charger === 'centrifugal' ? 14 : 0) + (d.charger !== 'none' && d.intercooler > 0 ? 6 + d.intercooler * 8 : 0);
-  return (base + heads) * diesel + charger + d.flywheelKg + d.balanceShafts * 5;
+  return (base + heads) * diesel + charger + d.flywheelKg + d.balanceShafts * 5 + sumpMassKg(d);
 }
 
 function rotatingInertia(d: Design, reciprocating: number): number {

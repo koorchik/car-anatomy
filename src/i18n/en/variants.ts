@@ -4,6 +4,7 @@ export interface FactsTextEn {
   note: string;
   cars: string[];
   years: string;
+  sumpNote?: string;
 }
 
 export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
@@ -321,6 +322,7 @@ export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
     note: 'The only naturally aspirated engine on this page. With no turbines, nothing muffles the exhaust, and the power peak at 7900 rpm gives 395 firing events per second. This is the highest and loudest tone of these inline-sixes.',
     cars: ['BMW M3 E46', 'BMW Z4 M', 'BMW M Coupe/Roadster'],
     years: '2000-2006',
+    sumpNote: 'A wet pan with several compartments: a separate pump returns oil from the front compartment when the car brakes. The heads are not scavenged, so it is not a dry sump.',
   },
   'i6/skyline-gtr-rb26dett': {
     name: 'Nissan Skyline GT-R (RB26DETT)',
@@ -401,6 +403,7 @@ export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
     note: 'The same 95.5 mm bore and the same 60° layout, but with two turbochargers, twice the power, and a lower 9:1 compression ratio. The turbines muffle the exhaust pulses, so you hear less V6 character and more boost whistle.',
     cars: ['Nissan GT-R R35'],
     years: '2017-2025',
+    sumpNote: 'Nissan calls it a hybrid wet and dry sump: a scavenge pump returns oil to the pan, but there is no separate tank.',
   },
   'v6-60/nissan-370z-vq37vhr': {
     name: 'Nissan 370Z VQ37VHR',
@@ -630,6 +633,7 @@ export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
     note: 'The shortest stroke of the 90° V10s here (75.2 mm) and an individual throttle for each cylinder. The firing intervals are just as uneven, 90° and 54°, and the individual throttles shorten the air path to the cylinder. Throttle response is sharp, and at 8250 rpm you hear not just the exhaust but the intake too.',
     cars: ['BMW M5 E60', 'BMW M5 E61', 'BMW M6 E63'],
     years: '2005-2010',
+    sumpNote: 'Two pans: electric pumps move oil from the smaller to the larger in corners. The heads are not scavenged, so it is not a dry sump.',
   },
   'v10/dodge-viper-84': {
     name: 'Dodge Viper 8.4 V10',

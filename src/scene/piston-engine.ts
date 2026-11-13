@@ -37,7 +37,8 @@ import {
 import { createMaterials, glowTexture, hotPipeMaterial, type EngineMaterials, type HotPipeUniforms } from './materials.ts';
 import { GAS, disposeTree, markDamaged, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
 import type { PistonAnchors, SystemsLook, TurboAnchor } from './systems/anchors.ts';
-import { panDims } from '../systems/sump.ts';
+import { panDims, panShape, type PanShape } from '../systems/sump.ts';
+import { systemsOf } from '../engine/systems-spec.ts';
 
 interface CylinderParts {
   def: Cylinder;
@@ -283,24 +284,11 @@ export class PistonEngineModel implements EngineModel {
     this.shellMeshes.push({ mesh: block, solid: m.block, glass: m.blockGlass });
     this.explodables.push({ object: block, direction: new THREE.Vector3(0, 0.55, 0) });
 
-    // Sump below the crankcase; boxer engines get a shallow one between the banks. Its size lives in panDims,
-    // which the oil layer reads too and feature/oil-sump changes.
-    const pan = panDims(e);
-    const { flat, depth, halfW, top } = pan;
-    const sumpShape = roundedRect(-halfW, pan.bottom, halfW, top + pan.lip, pan.round);
-    const sumpGeo = extrude(sumpShape, pan.zMax - pan.zMin, { thickness: 0.02, segments: 2 });
-    sumpGeo.translate(0, 0, (pan.zMax + pan.zMin) / 2);
-    const finCount = Math.max(3, Math.round(length / (b * 0.32)));
-    const fins: THREE.BufferGeometry[] = [sumpGeo];
-    if (!flat) {
-      for (let i = 0; i < finCount; i++) {
-        const z = (e.zMax + e.zMin) * 0.5 * MM + (i - (finCount - 1) / 2) * ((length * 0.86) / finCount);
-        const fin = new THREE.BoxGeometry(halfW * 2 + b * 0.05, depth * 0.5, b * 0.035);
-        fin.translate(0, top - depth * 0.68, z);
-        fins.push(fin);
-      }
-    }
-    const sump = tag(new THREE.Mesh(merge(fins), m.sump), 'sump');
+    // Sump below the crankcase: a shallow tray with a deeper well that holds the oil, or a shallow dry-sump pan.
+    // Its shape lives in panShape, which the oil layer and the oil-on-track physics read too.
+    const pan = panShape(e, systemsOf(e.spec));
+    this.pan = pan;
+    const sump = tag(new THREE.Mesh(merge(panGeometries(pan, b)), m.sump), 'sump');
     sump.castShadow = true;
     sump.renderOrder = 5;
     this.mounted.add(sump);
@@ -1005,6 +993,9 @@ export class PistonEngineModel implements EngineModel {
     };
   }
 
+  /** The pan as built, for the oil-on-track page. */
+  pan: PanShape | null = null;
+
   private viewMode: ViewMode = 'xray';
   private explodeAmount = 0;
 
@@ -1235,4 +1226,28 @@ export class PistonEngineModel implements EngineModel {
     disposeTree(this.group);
     for (const tex of this.chainMaterials) tex.dispose();
   }
+}
+
+/** The pan's body: a tray over the whole flange and, on a wet pan, the well under it, with ribs on the well. */
+function panGeometries(pan: PanShape, b: number): THREE.BufferGeometry[] {
+  const L = pan.zMax - pan.zMin;
+  const trayBottom = pan.yShelf - 0.02;
+  const tray = extrude(roundedRect(-pan.halfW, trayBottom, pan.halfW, pan.top + pan.lip, pan.round), L, { thickness: 0.02, segments: 2 });
+  tray.translate(0, 0, (pan.zMax + pan.zMin) / 2);
+  const parts: THREE.BufferGeometry[] = [tray];
+  const w = pan.well;
+  const wellDepth = pan.yShelf - pan.yFloor;
+  if (wellDepth > 0.02) {
+    const wellGeo = extrude(roundedRect(w.x0, pan.yFloor, w.x1, pan.yShelf, pan.round), w.z1 - w.z0, { thickness: 0.02, segments: 2 });
+    wellGeo.translate(0, 0, (w.z0 + w.z1) / 2);
+    parts.push(wellGeo);
+    const count = Math.max(2, Math.round((w.z1 - w.z0) / (b * 0.32)));
+    for (let i = 0; i < count; i++) {
+      const z = (w.z0 + w.z1) / 2 + (i - (count - 1) / 2) * (((w.z1 - w.z0) * 0.86) / count);
+      const fin = new THREE.BoxGeometry(w.x1 - w.x0 + b * 0.05, wellDepth * 0.5, b * 0.035);
+      fin.translate((w.x0 + w.x1) / 2, pan.yFloor + wellDepth * 0.42, z);
+      parts.push(fin);
+    }
+  }
+  return parts;
 }
