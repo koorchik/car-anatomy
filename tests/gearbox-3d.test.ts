@@ -116,6 +116,83 @@ describe('drawn gears mesh without overlapping (gear-geometry 1 on the 3D)', () 
   });
 });
 
+/**
+ * Every turning part as a solid of revolution round its member's axis: radial and axial extent in mm, in the frame
+ * of the member. Merged meshes (all hubs, all blocker rings) are split where their vertices leave a gap along z.
+ */
+function solids(model: GearboxModel, box: Gearbox) {
+  const out: Array<{ member: string; x: number; y: number; part: string; gear?: string; rMin: number; rMax: number; zMin: number; zMax: number }> = [];
+  model.group.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  for (const def of box.spec.members) {
+    const frame = model.memberFrame(def.id)!;
+    const axis = box.spec.axes.find((a) => a.id === def.axis)!;
+    const toFrame = new THREE.Matrix4();
+    frame.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      const part = o.userData.part as string | undefined;
+      // Forks and rails stand above the shafts; the case is checked by the hull it is built from.
+      if (!mesh.isMesh || !part || part === 'gbx-fork' || part === 'gbx-rail') return;
+      toFrame.copy(frame.matrixWorld).invert().multiply(mesh.matrixWorld);
+      const pos = mesh.geometry.getAttribute('position');
+      const points: Array<[number, number]> = [];
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(toFrame);
+        points.push([-v.z / 0.01, Math.hypot(v.x, v.y) / 0.01]);
+      }
+      points.sort((p, q) => p[0] - q[0]);
+      const merged = part === 'gbx-synchro-hub' || part === 'gbx-blocker-ring';
+      let current: (typeof out)[number] | null = null;
+      for (const [z, r] of points) {
+        if (!current || (merged && z - current.zMax > 1)) {
+          current = { member: def.id, x: axis.x, y: axis.y, part, gear: o.userData.gear as string | undefined, rMin: r, rMax: r, zMin: z, zMax: z };
+          out.push(current);
+        }
+        current.zMax = z;
+        current.rMin = Math.min(current.rMin, r);
+        current.rMax = Math.max(current.rMax, r);
+      }
+    });
+  }
+  return out;
+}
+
+describe('no part runs into a part of another member', () => {
+  // Teeth in mesh are checked tooth by tooth above. The input shaft's end runs in a pilot bearing inside the output
+  // shaft's front, drawn as two overlapping cylinders hidden in the input gear.
+  it.each([4, 5, 6, 7])('%i speeds, in every state', (count) => {
+    const box = buildGearbox(layshaftSpec(withSpeedCount(e30Desc, count)));
+    const model = new GearboxModel(box);
+    const meshing = new Set(box.meshes.map((m) => [m.a, m.b].sort().join('|')));
+    const pilot = new Set([box.spec.input, box.spec.output]);
+    for (const state of box.states) {
+      model.update(poseAt(box, state.name, 0));
+      const parts = solids(model, box);
+      const clashes: string[] = [];
+      for (let i = 0; i < parts.length; i++) {
+        for (let j = i + 1; j < parts.length; j++) {
+          const p = parts[i]!;
+          const q = parts[j]!;
+          if (p.member === q.member) continue;
+          if (Math.min(p.zMax, q.zMax) - Math.max(p.zMin, q.zMin) <= 0.05) continue;
+          const d = Math.hypot(p.x - q.x, p.y - q.y);
+          let depth: number;
+          if (d < 1e-6) {
+            if (pilot.has(p.member) && pilot.has(q.member) && [p.part, q.part].sort().join() === 'gbx-input,gbx-mainshaft') continue;
+            depth = Math.min(p.rMax, q.rMax) - Math.max(p.rMin, q.rMin);
+          } else {
+            if (p.gear && q.gear && meshing.has([p.gear, q.gear].sort().join('|'))) continue;
+            depth = p.rMax + q.rMax - d;
+          }
+          if (depth > 0.05) clashes.push(`${p.part} ${p.gear ?? p.member} × ${q.part} ${q.gear ?? q.member}: ${depth.toFixed(1)} mm`);
+        }
+      }
+      expect(clashes, `${count} speeds, ${state.name}`).toEqual([]);
+    }
+    model.dispose();
+  });
+});
+
 describe('gear mesh', () => {
   const shape = { teeth: 20, module: 2.25, helix: 30.85, pressureAngle: 20, shift: 0, faceWidth: 24, boreRadius: 0 };
 

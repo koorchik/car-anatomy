@@ -56,6 +56,9 @@ const INPUT_SHAFT = 0.17;
 const MAIN_SHAFT = 0.2;
 const COUNTER_SHAFT = 0.19;
 const IDLER_SHAFT = 0.12;
+/** mm: how far the reverse idler's standing shaft reaches past its gear, and the least it keeps from another gear. */
+const IDLER_STUB = 8;
+const STUB_CLEAR = 1;
 /** Needle bearing under a loose gear. */
 const NEEDLE = 0.07;
 /** Synchroniser hub (the sleeve's inner splines) and sleeve outer radius. */
@@ -272,10 +275,21 @@ export class GearboxModel {
         from = -WALL * 0.5;
         to = this.length + WALL * 0.5;
       } else if (Math.hypot(m.x, m.y) > 1e-6) {
-        // A standing shaft for a lone gear, held by bosses of the case.
+        // A standing shaft for a lone gear, held by bosses of the case. Its ends stop short of a gear on another axis
+        // whose tips sweep past it (a speed pair right behind reverse on the countershaft).
         const gears = gearsOf(m.id);
-        from = Math.min(...gears.map((g) => g.z - g.faceWidth / 2)) - 8;
-        to = back(gears) + 8;
+        const front = Math.min(...gears.map((g) => g.z - g.faceWidth / 2));
+        const rear = back(gears);
+        from = front - IDLER_STUB;
+        to = rear + IDLER_STUB;
+        for (const g of this.gears) {
+          const other = this.member(g.def.member);
+          if (other === m || Math.hypot(other.x - m.x, other.y - m.y) >= g.tip + r + STUB_CLEAR) continue;
+          const gFront = g.def.z - g.def.faceWidth / 2;
+          const gBack = g.def.z + g.def.faceWidth / 2;
+          if (gBack <= front) from = Math.max(from, gBack + STUB_CLEAR);
+          else if (gFront >= rear) to = Math.min(to, gFront - STUB_CLEAR);
+        }
       } else {
         continue;
       }
@@ -669,6 +683,11 @@ export class GearboxModel {
   }
 
   // ---- For tests, demonstrations and the budget ----
+
+  /** The group of a member (its axis, moved when pulled apart), holding everything that turns or slides with it. */
+  memberFrame(id: string): THREE.Group | undefined {
+    return this.members.find((m) => m.id === id)?.frame;
+  }
 
   /** The drawn mesh of a gear by its id. */
   gearMesh(id: string): THREE.Mesh | undefined {
