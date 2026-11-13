@@ -225,14 +225,16 @@ function runtimeGraph(entry: string): Set<string> {
 }
 
 describe('10. the audio thread never derives', () => {
-  // What the worklet runs: the solver and the core it steps, and the load that will drive them (stage K2c), once it
-  // exists. None of it may pull in the derivation or the gear geometry: a few milliseconds there is an audible gap.
+  // What the worklet runs: the solver and the core it steps, the car as a load on the crank (stage K2c) with its
+  // controls, the load factory and the worklet itself. None of it may pull in the derivation or the gear geometry: a
+  // few milliseconds there is an audible gap.
   const entries = [
     'src/drivetrain/solver.ts', 'src/drivetrain/core.ts', 'src/drivetrain/driveline-load.ts', 'src/vehicle/vehicle-load.ts', 'src/vehicle/vehicle-step.ts', 'src/vehicle/longitudinal.ts',
+    'src/drivetrain/control/manual.ts', 'src/engine/loads.ts', 'src/audio/worklet.ts',
   ].filter((f) => existsSync(f));
 
-  it('checks at least the solver and the core it steps (paths from the repository root)', () => {
-    expect(entries).toEqual(expect.arrayContaining(['src/drivetrain/solver.ts', 'src/drivetrain/core.ts']));
+  it('checks at least the solver, the core it steps and the car\'s load (paths from the repository root)', () => {
+    expect(entries).toEqual(expect.arrayContaining(['src/drivetrain/solver.ts', 'src/drivetrain/core.ts', 'src/vehicle/vehicle-load.ts', 'src/audio/worklet.ts']));
   });
 
   it.each(entries)('%s does not load topology.ts or gear-geometry.ts', (entry) => {
