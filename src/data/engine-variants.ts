@@ -2208,7 +2208,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueRpm: 1600,
       voiceEvidence: 'default',
       unverified: ['firingOrder', 'redline', 'fuel'],
-      sources: ['https://en.wikipedia.org/wiki/Mercedes-Benz_M256_engine', 'https://en.avtotachki.com/dvigatel-mercedes-m256/', 'https://www.carlist.my/news/review-mercedes-benz-cls-450--an-affair-that-bmw-fans-will-want-to-risk-64677/64677/amp/'],
+      sources: ['https://en.wikipedia.org/wiki/Mercedes-Benz_M256_engine', 'https://www.carlist.my/news/review-mercedes-benz-cls-450--an-affair-that-bmw-fans-will-want-to-risk-64677/64677/amp/'],
       factory: {
         idleRpm: 790,
         revTimeS: 0.72,
