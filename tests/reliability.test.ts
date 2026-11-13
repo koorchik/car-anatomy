@@ -164,7 +164,7 @@ describe('no control is dead', () => {
   const soundOf = (d: Design): string => JSON.stringify(synthConfig(buildEngine(designToSpec(d, evaluate(d))), 1));
   const lookOf = (d: Design): string => {
     const s = designToSpec(d, evaluate(d));
-    return JSON.stringify([s.coverColor, s.layout, buildEngine(s).cylinders]);
+    return JSON.stringify([s.coverColor, s.layout, buildEngine(s).cylinders, s.systems]);
   };
   const figures = (d: Design): string => JSON.stringify(snapshot(d).map((m) => [m.id, Math.round(m.value * 1e4)]));
 
@@ -185,7 +185,7 @@ describe('no control is dead', () => {
             const options = typeof param.options === 'function' ? param.options(d) : param.options;
             others = options.map(([v]) => v).filter((v) => v !== d[param.key]);
           } else if (param.kind === 'toggle') {
-            others = [!d[param.key]];
+            others = [!(d[param.key] ?? param.shown?.(d))];
           } else {
             others = ['#123456'];
           }

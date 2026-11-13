@@ -7,7 +7,8 @@ import { t } from '../i18n/t.ts';
 import { resolveDesign } from './constraints.ts';
 import { catalogueDesign } from './catalogue.ts';
 import { DEFAULT_DESIGN, type ChargerKind, type Design, type DesignLayout, type Muffler } from './design.ts';
-import type { FuelId } from './fuels.ts';
+import { FUELS, type FuelId } from './fuels.ts';
+import { SYSTEM_KEYS } from './systems.ts';
 
 /** A catalogue engine as a design: its own configuration, ready to be changed. */
 export function designFromSpec(spec: EngineSpec): Design {
@@ -63,6 +64,8 @@ export function withLayout(d: Design, layout: DesignLayout): Design {
 }
 
 const COSMETIC = new Set<keyof Design>(['name', 'coverColor']);
+/** Hardware only the systems layers draw. The power model never reads it, so the factory figures stay. */
+const SYSTEM_FACTS = new Set<keyof Design>(SYSTEM_KEYS);
 
 /** One edit from the panel, with what that edit implies for the fields that depended on the old value. */
 export function editDesign(d: Design, patch: Partial<Design>): Design {
@@ -86,8 +89,20 @@ export function editDesign(d: Design, patch: Partial<Design>): Design {
     next.rasp = null;
     next.pops = null;
   }
+  // Derived systems follow what they were derived from: a diesel has no spark, a turbo brings piston jets.
+  const dieselBefore = FUELS[d.fuel]?.diesel;
+  if ((FUELS[next.fuel]?.diesel !== dieselBefore || next.directInjection !== d.directInjection) && !('fuelSystem' in patch)) {
+    next.fuelSystem = null;
+    next.ignition = null;
+    next.glowPlugs = null;
+  }
+  if ('fuelSystem' in patch && !('ignition' in patch)) next.ignition = null;
+  if (('charger' in patch || 'cooling' in patch || FUELS[next.fuel]?.diesel !== dieselBefore) && !('pistonJets' in patch || 'oilCooler' in patch)) {
+    next.pistonJets = null;
+    next.oilCooler = null;
+  }
   // The first engineering change hands over from the factory figures to the model's own.
-  if (Object.keys(patch).some((key) => !COSMETIC.has(key as keyof Design))) next.factory = null;
+  if (Object.keys(patch).some((key) => !COSMETIC.has(key as keyof Design) && !SYSTEM_FACTS.has(key as keyof Design))) next.factory = null;
   return resolveDesign(next);
 }
 

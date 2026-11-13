@@ -36,6 +36,8 @@ import {
 } from './geometry.ts';
 import { createMaterials, glowTexture, hotPipeMaterial, type EngineMaterials, type HotPipeUniforms } from './materials.ts';
 import { GAS, disposeTree, markDamaged, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
+import type { PistonAnchors, SystemsLook, TurboAnchor } from './systems/anchors.ts';
+import { panDims } from '../systems/sump.ts';
 
 interface CylinderParts {
   def: Cylinder;
@@ -127,6 +129,24 @@ export class PistonEngineModel implements EngineModel {
 
   private readonly deck: number;
   private readonly bore: number;
+  /** Recorded while building, for the systems layers (systemsAnchors). */
+  private readonly record = {
+    heads: [] as THREE.Group[],
+    linerBottom: 0,
+    crankcaseR: 0,
+    section: [] as THREE.Vector2[],
+    cams: [] as Array<{ bank: number; x: number; y: number; zMin: number; zMax: number; side: number }>,
+    blockCam: null as { x: number; y: number } | null,
+    ends: { front: 0, rear: 0, pulleyZ: 0, pulleyR: 0, alternator: new THREE.Vector3() },
+    plenum: { x: 0, y: 0, r: 0, zMin: 0, zMax: 0 },
+    runners: [] as Array<{ n: number; points: THREE.Vector3[]; r: number }>,
+    supercharger: null as PistonAnchors['supercharger'],
+    turbos: [] as TurboAnchor[],
+    filter: null as PistonAnchors['filter'],
+    /** Intake manifold and charge pipes: glass while the air or fuel layer shows. */
+    intake: [] as THREE.Mesh[],
+  };
+  private systemsLook: SystemsLook = { intakeGlass: false, ownSparks: true };
 
   constructor(engine: Engine) {
     this.engine = engine;
@@ -142,6 +162,7 @@ export class PistonEngineModel implements EngineModel {
     this.crank = this.buildCrank();
     this.buildCylinders();
     const heads = this.buildHeads();
+    this.record.heads = heads;
     this.buildBlock();
     this.buildValvetrain(heads);
     this.buildEnds();
@@ -194,6 +215,7 @@ export class PistonEngineModel implements EngineModel {
     const gasGeo = new THREE.CylinderGeometry(b / 2 - 0.006, b / 2 - 0.006, 1, 32);
     gasGeo.translate(0, 0.5, 0);
     const sparkTex = glowTexture();
+    this.record.linerBottom = this.deck - (r * 2 + crown + skirt + b * 0.1);
 
     for (const def of e.cylinders) {
       const frame = new THREE.Group();
@@ -248,6 +270,8 @@ export class PistonEngineModel implements EngineModel {
     const banks = e.banks.map((bank) => ({ alpha: bank.alpha, halfWidth: this.bankHalfWidth(bank.alpha, bank.cylinders) }));
     const crankcaseR = e.r * MM + b * 0.55;
     const section = blockSection(banks, this.deck, crankcaseR);
+    this.record.crankcaseR = crankcaseR;
+    this.record.section = section.getPoints();
     const length = (e.zMax - e.zMin) * MM + b * 0.2;
     const geo = extrude(section, length, { thickness: 0.018, segments: 1 });
     geo.translate(0, 0, ((e.zMax + e.zMin) / 2) * MM);
@@ -259,14 +283,13 @@ export class PistonEngineModel implements EngineModel {
     this.shellMeshes.push({ mesh: block, solid: m.block, glass: m.blockGlass });
     this.explodables.push({ object: block, direction: new THREE.Vector3(0, 0.55, 0) });
 
-    // Sump below the crankcase; boxer engines get a shallow one between the banks.
-    const flat = e.banks.length === 2 && Math.abs(e.banks[0]!.alpha - e.banks[1]!.alpha) > 150;
-    const depth = flat ? b * 0.42 : e.r * MM + b * 1.05;
-    const halfW = flat ? crankcaseR * 0.6 : crankcaseR * 0.93;
-    const top = flat ? -crankcaseR * 0.86 : -crankcaseR * 0.42;
-    const sumpShape = roundedRect(-halfW, top - depth, halfW, top + b * 0.08, b * 0.12);
-    const sumpGeo = extrude(sumpShape, length * 0.96, { thickness: 0.02, segments: 2 });
-    sumpGeo.translate(0, 0, ((e.zMax + e.zMin) / 2) * MM);
+    // Sump below the crankcase; boxer engines get a shallow one between the banks. Its size lives in panDims,
+    // which the oil layer reads too and feature/oil-sump changes.
+    const pan = panDims(e);
+    const { flat, depth, halfW, top } = pan;
+    const sumpShape = roundedRect(-halfW, pan.bottom, halfW, top + pan.lip, pan.round);
+    const sumpGeo = extrude(sumpShape, pan.zMax - pan.zMin, { thickness: 0.02, segments: 2 });
+    sumpGeo.translate(0, 0, (pan.zMax + pan.zMin) / 2);
     const finCount = Math.max(3, Math.round(length / (b * 0.32)));
     const fins: THREE.BufferGeometry[] = [sumpGeo];
     if (!flat) {
@@ -336,8 +359,8 @@ export class PistonEngineModel implements EngineModel {
       frame.add(cover);
       this.shellMeshes.push({ mesh: cover, solid: m.cover, glass: m.coverGlass });
 
-      // Coil packs, only on the assembled look.
-      if (e.spec.fuel !== 'diesel') {
+      // Coil packs, only on the assembled look, and only where each plug has its own coil.
+      if (e.spec.fuel !== 'diesel' && (e.spec.systems?.ignition ?? 'coil-on-plug') === 'coil-on-plug') {
         const coilGeo = merge(
           zs.map((z) => {
             const c = extrude(roundedRect(-b * 0.2, 0, b * 0.2, b * 0.07, b * 0.03), b * 0.18, { thickness: 0.008, segments: 1 });
@@ -415,6 +438,7 @@ export class PistonEngineModel implements EngineModel {
     // Lifter camshaft for pushrod engines: one in the block.
     const blockLobes: LobeDef[] = [];
     const blockCam = ohv ? this.blockCamPosition() : null;
+    this.record.blockCam = blockCam;
 
     const pushrodValves: ValveDef[] = [];
 
@@ -503,6 +527,7 @@ export class PistonEngineModel implements EngineModel {
         mesh.castShadow = true;
         heads[Number(bankIndex)]!.add(mesh);
         this.cams.push(mesh);
+        this.record.cams.push({ bank: Number(bankIndex), x: cam.x, y: cam.y, zMin, zMax, side: Number(key.split('/')[1]) });
       }
     } else if (blockCam) {
       const zs = blockLobes.map((l) => l.z);
@@ -639,6 +664,7 @@ export class PistonEngineModel implements EngineModel {
     );
     const belt = tag(new THREE.Mesh(beltGeo, m.rubber), 'belt');
     this.mounted.add(altBody, altPulley, belt);
+    this.record.ends = { front, rear, pulleyZ, pulleyR, alternator: new THREE.Vector3(altX, altY, pulleyZ - b * 0.5) };
     this.peripheral.push(altBody, altPulley, belt, pulley);
   }
 
@@ -684,6 +710,7 @@ export class PistonEngineModel implements EngineModel {
       plenumPos = new THREE.Vector3(-this.bore * 1.5, this.deck + b * 0.25, 0);
     }
     this.plenumEnd = new THREE.Vector3(plenumPos.x, plenumPos.y, zMin);
+    this.record.plenum = { x: plenumPos.x, y: plenumPos.y, r: plenumR, zMin, zMax };
     const plenumGeo = zCylinder(plenumR, zMax - zMin, 24, plenumPos.x, plenumPos.y, (zMin + zMax) / 2);
     const plenumCaps = [new THREE.SphereGeometry(plenumR, 20, 12), new THREE.SphereGeometry(plenumR, 20, 12)];
     plenumCaps.forEach((cap) => cap.scale(1, 1, 0.42));
@@ -700,6 +727,7 @@ export class PistonEngineModel implements EngineModel {
       const outward = new THREE.Vector3(sign * b * 0.6, b * 0.1, 0).applyMatrix4(new THREE.Matrix4().makeRotationZ(-e.banks[cyl.bank]!.alpha * DEG));
       const pts = [port, port.clone().add(outward.clone().multiplyScalar(0.5)), port.clone().add(outward).lerp(start, 0.25), start];
       runnerParts.push(tubeAlong(pts, runnerR, 18, 10));
+      this.record.runners.push({ n: cyl.n, points: pts, r: runnerR });
     }
     if (spec.aspiration === 'supercharged') {
       // A Roots blower on top of the plenum, belt-driven from the crank.
@@ -707,12 +735,14 @@ export class PistonEngineModel implements EngineModel {
       const body = extrude(roundedRect(-blowerW, 0, blowerW, b * 0.72, b * 0.2), (zMax - zMin) * 0.75, { thickness: 0.012, segments: 1 });
       body.translate(plenumPos.x, plenumPos.y + plenumR * 0.8, (zMin + zMax) / 2);
       runnerParts.push(body);
+      this.record.supercharger = { x: plenumPos.x, y: plenumPos.y + plenumR * 0.8, halfW: blowerW, height: b * 0.72, zMin: (zMin + zMax) / 2 - (zMax - zMin) * 0.375, zMax: (zMin + zMax) / 2 + (zMax - zMin) * 0.375 };
       const pulley = zCylinder(b * 0.2, b * 0.14, 24, plenumPos.x, plenumPos.y + plenumR * 0.8 + b * 0.36, (zMin + zMax) / 2 + (zMax - zMin) * 0.375 + b * 0.09);
       runnerParts.push(pulley);
     }
     const intake = tag(new THREE.Mesh(merge(runnerParts), m.intake), 'intake');
     intake.castShadow = true;
     this.mounted.add(intake);
+    this.record.intake.push(intake);
     this.peripheral.push(intake);
     this.explodables.push({ object: intake, direction: new THREE.Vector3(vee || flat ? 0 : -1, vee || flat ? 3 : 1, 0).multiplyScalar(1.1) });
 
@@ -788,6 +818,8 @@ export class PistonEngineModel implements EngineModel {
       this.spinners.push({ object: rotor, ratio: 18 });
       this.explodables.push({ object: unit, direction: new THREE.Vector3(sign * 1.5, -0.5, 0) });
       unit.updateMatrix();
+      const turbo: TurboAnchor = { unit, size, sign, stack, oilIn: parts.oilIn, oilOut: parts.oilOut, coolantIn: parts.coolantIn, coolantOut: parts.coolantOut, airIn: parts.airIn, charge: null };
+      this.record.turbos.push(turbo);
 
       // Exhaust leaves along the shaft and turns towards the rear of the car.
       const out = parts.outlet.clone().applyMatrix4(unit.matrix);
@@ -816,6 +848,8 @@ export class PistonEngineModel implements EngineModel {
       const charge = tag(new THREE.Mesh(tubeAlong(chargePoints, Math.min(size * 0.09, b * 0.11), 44, 12), m.intake), 'charge-pipe');
       charge.castShadow = true;
       this.mounted.add(charge);
+      turbo.charge = chargePoints;
+      this.record.intake.push(charge);
       this.peripheral.push(charge);
       this.explodables.push({ object: charge, direction: new THREE.Vector3(sign * 0.6, 1.2, -0.4) });
     }
@@ -889,6 +923,7 @@ export class PistonEngineModel implements EngineModel {
       can.position.set(-crankcaseR - b * 0.36, -crankcaseR * 0.15, (e.zMax + e.zMin) * 0.5 * MM - b * 0.3);
       can.traverse((o) => (o.castShadow = true));
       this.mounted.add(can);
+      this.record.filter = { position: can.position.clone(), rotationZ: can.rotation.z };
       this.solidOnly.push(can);
     }
   }
@@ -907,6 +942,67 @@ export class PistonEngineModel implements EngineModel {
     for (const m of this.solidOnly) m.visible = view === 'solid';
     this.viewMode = view;
     for (const light of this.flash) light.intensity = 0;
+    this.setSystemsLook(this.systemsLook);
+  }
+
+  setSystemsLook(look: SystemsLook): void {
+    this.systemsLook = look;
+    const glass = look.intakeGlass && this.viewMode === 'xray';
+    for (const mesh of this.record.intake) {
+      mesh.material = glass ? this.materials.intakeGlass : this.materials.intake;
+      mesh.castShadow = !glass;
+    }
+    // A diesel has no spark: its fire starts from the heat of compression.
+    const sparks = this.viewMode !== 'solid' && look.ownSparks && this.engine.spec.fuel !== 'diesel';
+    for (const c of this.cylinders) c.spark.visible = sparks;
+  }
+
+  systemsAnchors(): PistonAnchors {
+    const e = this.engine;
+    const b = this.bore;
+    const r = this.record;
+    const dohc = e.spec.valvetrain === 'dohc';
+    const stemLength = b * (dohc ? 0.72 : 0.62);
+    const counterweight = e.spec.tuning?.counterweightMm ? e.spec.tuning.counterweightMm * MM : e.r * MM + b * 0.3;
+    return {
+      kind: 'piston',
+      crank: this.crank,
+      bore: b,
+      deck: this.deck,
+      headHeight: this.headHeight(),
+      crankcaseR: r.crankcaseR,
+      crankR: e.r * MM,
+      mainR: b * 0.27,
+      pinR: b * 0.22,
+      crankSweep: Math.max(counterweight, e.r * MM + b * 0.22),
+      linerBottom: r.linerBottom,
+      linerR: b / 2 + 0.008,
+      section: r.section,
+      front: r.ends.front,
+      rear: r.ends.rear,
+      banks: e.banks.map((bank, i) => {
+        const zs = bank.cylinders.map((n) => e.cylinders.find((c) => c.n === n)!.z * MM);
+        return { alpha: bank.alpha, halfWidth: this.bankHalfWidth(bank.alpha, bank.cylinders), zMin: Math.min(...zs) - b * 0.6, zMax: Math.max(...zs) + b * 0.6, exhaustSide: this.exhaustSide(i), frame: r.heads[i]! };
+      }),
+      cylinders: this.cylinders.map((c) => ({ n: c.def.n, bank: c.def.bank, alpha: c.def.alpha, z: c.def.z * MM, frame: c.frame })),
+      cams: r.cams.map((c) => ({ bank: c.bank, x: c.x, y: c.y, zMin: c.zMin, zMax: c.zMax, exhaust: c.side === 0 ? null : c.side === this.exhaustSide(c.bank) })),
+      camBase: b * 0.115,
+      valveLift: this.valveLift,
+      valves: this.valves.map((v) => ({ n: v.cyl.n, exhaust: v.exhaust, base: v.base })),
+      stemLength,
+      springR: b * 0.062,
+      blockCam: r.blockCam,
+      pushrods: this.valves.flatMap((v) => (v.ohv ? [{ n: v.cyl.n, bank: v.cyl.bank, exhaust: v.exhaust, lifter: v.ohv.camCenter.clone().addScaledVector(v.ohv.camDir, v.ohv.camBase), rodEnd: v.ohv.rodEnd, pivot: v.ohv.pivot }] : [])),
+      plenum: r.plenum,
+      runners: r.runners,
+      collectors: this.collectors.map((c) => ({ point: c.point, sign: c.sign })),
+      turbos: r.turbos,
+      supercharger: r.supercharger,
+      pulley: { z: r.ends.pulleyZ, r: r.ends.pulleyR },
+      alternator: r.ends.alternator,
+      filter: r.filter,
+      pan: panDims(e),
+    };
   }
 
   private viewMode: ViewMode = 'xray';

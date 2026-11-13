@@ -27,6 +27,16 @@ const label = (engine: Engine, c: Cylinder): string => {
   return `${c.bank + 1}${'abc'[face]}`;
 };
 
+/** Fuel and spark events of each chamber, in degrees of its own cycle from firing TDC, drawn over its row. */
+export interface CycleMarkers {
+  inject: [number, number] | null;
+  /** A diesel's pilot, or the direct shot of a dual system. */
+  pilot: [number, number] | null;
+  /** The cold catalyst-heating shot of direct injection. */
+  second?: [number, number] | null;
+  sparks: number[];
+}
+
 export class FiringDiagram {
   readonly element: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -38,6 +48,7 @@ export class FiringDiagram {
   private dpr = 1;
   private hover: { x: number; y: number } | null = null;
   private readonly tooltip: HTMLElement;
+  private markers: CycleMarkers | null = null;
 
   constructor(tooltip: HTMLElement) {
     this.tooltip = tooltip;
@@ -152,6 +163,56 @@ export class FiringDiagram {
     this.tooltip.style.top = `${clientY - 12}px`;
   }
 
+  /** Shows the fuel layer's injection windows and sparks on every row; null takes them off. */
+  setMarkers(markers: CycleMarkers | null): void {
+    this.markers = markers;
+    // The legend under the diagram names the marks while they show.
+    const legend = this.element.closest('.chart-col')?.querySelector('.legend');
+    const fuel = !!markers && !!(markers.inject || markers.pilot || markers.second);
+    const sparks = !!markers && markers.sparks.length > 0;
+    legend?.querySelector<HTMLElement>('[data-marker="inject"]')?.toggleAttribute('hidden', !fuel);
+    legend?.querySelector<HTMLElement>('[data-marker="spark"]')?.toggleAttribute('hidden', !sparks);
+  }
+
+  /** Plot x of a crank angle. */
+  private xAt(engine: Engine, deg: number): number {
+    const { l, r } = this.pad;
+    return l + ((((deg % engine.cycle) + engine.cycle) % engine.cycle) / engine.cycle) * (this.width - l - r);
+  }
+
+  /** A bar from one angle to another, split where it runs past the end of the cycle. */
+  private bar(engine: Engine, y: number, h: number, from: number, to: number): void {
+    const span = (((to - from) % engine.cycle) + engine.cycle) % engine.cycle;
+    if (span <= 0) return;
+    const { l, r } = this.pad;
+    const plotW = this.width - l - r;
+    const x0 = this.xAt(engine, from);
+    const x1 = x0 + (span / engine.cycle) * plotW;
+    const end = l + plotW;
+    this.ctx.fillRect(x0, y, Math.max(1.5, Math.min(x1, end) - x0), h);
+    if (x1 > end) this.ctx.fillRect(l, y, x1 - end, h);
+  }
+
+  private drawMarkers(engine: Engine): void {
+    const m = this.markers;
+    if (!m) return;
+    const ctx = this.ctx;
+    const { t, b } = this.pad;
+    const rowH = (this.height - t - b) / this.rows.length;
+    const h = Math.max(2, rowH * 0.34);
+    for (let i = 0; i < this.rows.length; i++) {
+      const c = this.rows[i]!;
+      const y = t + i * rowH;
+      ctx.fillStyle = '#ff5fae';
+      if (m.inject) this.bar(engine, y + rowH * 0.62 - h / 2, h, c.fire + m.inject[0], c.fire + m.inject[1]);
+      ctx.fillStyle = '#ffb3d6';
+      if (m.pilot) this.bar(engine, y + rowH * 0.62 - h / 2, h, c.fire + m.pilot[0], c.fire + m.pilot[1]);
+      if (m.second) this.bar(engine, y + rowH * 0.62 - h / 2, h, c.fire + m.second[0], c.fire + m.second[1]);
+      ctx.fillStyle = '#ffffff';
+      for (let k = 0; k < m.sparks.length; k++) ctx.fillRect(this.xAt(engine, c.fire + m.sparks[k]!) - 1, y, 2, rowH - 2);
+    }
+  }
+
   draw(theta: number): void {
     const engine = this.engine;
     if (!engine || this.width <= 0) return;
@@ -161,6 +222,7 @@ export class FiringDiagram {
     ctx.clearRect(0, 0, this.element.width, this.element.height);
     if (this.background) ctx.drawImage(this.background, 0, 0);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.drawMarkers(engine);
     const { l, r, t, b } = this.pad;
     const plotW = this.width - l - r;
     const x = l + ((((theta % engine.cycle) + engine.cycle) % engine.cycle) / engine.cycle) * plotW;
@@ -176,4 +238,7 @@ export class FiringDiagram {
 }
 
 export const legendHtml = (): string =>
-  ORDER.map((s) => `<span class="legend-item"><i style="background:${STROKE_COLORS[s]}"></i>${STROKE_NAMES[s]}</span>`).join('');
+  ORDER.map((s) => `<span class="legend-item"><i style="background:${STROKE_COLORS[s]}"></i>${STROKE_NAMES[s]}</span>`).join('') +
+  // Shown only while the fuel layer marks the cycle (setMarkers).
+  `<span class="legend-item" data-marker="inject" hidden><i style="background:#ff5fae"></i>${t('Упорскування')}</span>` +
+  `<span class="legend-item" data-marker="spark" hidden><i class="legend-spark"></i>${t('Іскра')}</span>`;

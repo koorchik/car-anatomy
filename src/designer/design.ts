@@ -1,6 +1,7 @@
 // The engine a visitor builds. Everything here is a choice they can make. Anything derived lives elsewhere.
 
 import { t } from '../i18n/t.ts';
+import type { Cooling, FuelSystem, Ignition, OilCooler, OilPumpDrive } from '../engine/systems-spec.ts';
 import type { FuelId } from './fuels.ts';
 
 export type DesignLayout = 'inline' | 'vee' | 'boxer' | 'flatvee' | 'vr' | 'w' | 'rotary';
@@ -93,6 +94,19 @@ export interface Design {
   /** Ignition relative to best timing, crank degrees. Positive is earlier. */
   ignitionOffset: number;
 
+  // The systems layers' hardware. Null: what the rest of the design implies (src/designer/systems.ts).
+  // None of these changes the power model, so a catalogue engine keeps its factory figures.
+  fuelSystem: FuelSystem | null;
+  cooling: Cooling | null;
+  oilCooler: OilCooler | null;
+  pistonJets: boolean | null;
+  /** Spark plugs per cylinder. */
+  sparkPlugs: 1 | 2 | null;
+  ignition: Ignition | null;
+  glowPlugs: boolean | null;
+  oilPump: OilPumpDrive | null;
+  oilFilter: boolean | null;
+
   headerLength: number;
   headerDia: number;
   /** Difference between the longest and shortest primary, 0..1. */
@@ -171,6 +185,15 @@ export const DEFAULT_DESIGN: Design = {
   fuel: 'ai95',
   lambda: 0.92,
   ignitionOffset: 0,
+  fuelSystem: null,
+  cooling: null,
+  oilCooler: null,
+  pistonJets: null,
+  sparkPlugs: null,
+  ignition: null,
+  glowPlugs: null,
+  oilPump: null,
+  oilFilter: null,
   headerLength: 650,
   headerDia: 40,
   headerSpread: 0,

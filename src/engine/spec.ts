@@ -2,6 +2,7 @@
 // the charts need is derived from these fields (see kinematics.ts).
 
 import { t } from '../i18n/t.ts';
+import type { SystemsSpec } from './systems-spec.ts';
 
 export type Fuel = 'petrol' | 'diesel';
 export type Aspiration = 'na' | 'turbo' | 'twin-turbo' | 'quad-turbo' | 'supercharged';
@@ -142,6 +143,8 @@ export interface EngineSpec {
   timing?: ValveTiming;
   valves?: ValveSizes;
   tuning?: EngineTuning;
+  /** Oil, coolant, fuel, ignition and air hardware, for the systems layers. Built by hand in tests without it. */
+  systems?: SystemsSpec;
 }
 
 export const FAMILY_NAMES: Record<Family, string> = {

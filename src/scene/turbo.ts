@@ -113,6 +113,13 @@ export interface TurboParts {
   chargeOut: THREE.Vector3;
   /** Local top of the bearing housing, where the oil feed arrives. */
   oilIn: THREE.Vector3;
+  /** Bottom of the bearing housing, where the oil drains out. */
+  oilOut: THREE.Vector3;
+  /** Coolant fittings on the side of the bearing housing. */
+  coolantIn: THREE.Vector3;
+  coolantOut: THREE.Vector3;
+  /** Centre of the compressor's intake mouth. */
+  airIn: THREE.Vector3;
 }
 
 export function turboParts(size: number): TurboParts {
@@ -172,6 +179,10 @@ export function turboParts(size: number): TurboParts {
     outlet: new THREE.Vector3(0, 0, -0.27 * s),
     chargeOut: new THREE.Vector3(0.45 * s, neck * 0.9 + 0.05 * s, coldZ),
     oilIn: new THREE.Vector3(0, 0.13 * s, 0.33 * s),
+    oilOut: new THREE.Vector3(0, -0.13 * s, 0.33 * s),
+    coolantIn: new THREE.Vector3(0.13 * s, 0, 0.22 * s),
+    coolantOut: new THREE.Vector3(0.13 * s, 0, 0.44 * s),
+    airIn: new THREE.Vector3(0, 0, coldZ + 0.47 * s),
   };
 }
 

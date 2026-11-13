@@ -60,6 +60,7 @@ const describeEngine = (spec: EngineSpec): unknown => {
     counterweight: spec.tuning?.counterweightMm,
     masses: { reciprocating: spec.tuning?.reciprocatingKg, rotating: spec.tuning?.rotatingKg, rotor: spec.tuning?.rotorKg, shafts: spec.tuning?.balanceShafts },
     article: fingerprint(JSON.stringify(spec.article)),
+    systems: spec.systems,
     engine: { r: e.r, l: e.l, deck: e.deck, cycle: e.cycle, zMin: e.zMin, zMax: e.zMax, cc: e.displacementCc, intervals: e.intervals, cylinders: e.cylinders, banks: e.banks, throws: e.throws, rotary: e.isRotary },
     sound: synthConfig(e),
   });

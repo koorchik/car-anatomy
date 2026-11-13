@@ -23,6 +23,8 @@ import { tableHtml } from './ui/table.ts';
 import { LANGUAGE_GROUP_LABEL, LANGUAGE_LABELS, locale, switchLocale, type Locale } from './i18n/locale.ts';
 import { t } from './i18n/t.ts';
 import { Tacho } from './ui/tacho.ts';
+import { SystemsView } from './ui/systems-view.ts';
+import { shownAdvance, type SystemsFrame } from './systems/sim.ts';
 
 type SpeedMode = 'slow' | 'readable' | 'real';
 
@@ -89,6 +91,7 @@ app.innerHTML = `
         <button type="button" data-v="real" aria-pressed="false">${t('Реально')}</button>
       </div>
     </div>
+    <div class="tool tool-systems" id="systems-tool"></div>
     <label class="tool tool-slow" id="slow-tool" hidden>
       <span class="tool-label">${t('Оберти: {value} об/хв', { value: `<span id="slow-value">${SLOW_RPM_DEFAULT}</span>` })}</span>
       <input type="range" id="slow-rpm" min="10" max="300" step="5" value="${SLOW_RPM_DEFAULT}" />
@@ -114,6 +117,7 @@ app.innerHTML = `
   </div>
   <div class="wreck" id="wreck" role="status" hidden></div>
   <div class="strain" id="strain" role="status" hidden></div>
+  <div class="systems-readout" id="systems-readout" hidden></div>
   <div class="part-card" id="part-card" hidden></div>
   <div class="part-tip" id="part-tip" hidden></div>
   <div class="parts-callout" id="parts-callout" hidden></div>
@@ -215,6 +219,16 @@ $('firing-body').append(firing.element);
 const spectrum = new Spectrum();
 $('spectrum-body').append(spectrum.element);
 const balancePanel = new BalancePanel(app.querySelector<HTMLElement>('.view-tools')!, app);
+const systems = new SystemsView($('systems-tool'), $('systems-readout'), {
+  wantXray: () => setView('xray'),
+  wantAssembled: () => {
+    explode = 0;
+    $<HTMLInputElement>('explode').value = '0';
+    model?.setExplode(0);
+    systems.setExplode(0);
+  },
+  markers: (markers) => firing.setMarkers(markers),
+});
 
 let model: EngineModel | null = null;
 let view: ViewMode = 'xray';
@@ -268,6 +282,7 @@ function showEngine(next: Engine, keepCamera: boolean): void {
   model.setView(view);
   model.setExplode(explode);
   balancePanel.setEngine(engine, newModel, onDesigner);
+  systems.attach(engine, newModel);
   tacho.configure(spec.redlineRpm);
   tachoScale = spec.redlineRpm;
   applyZones();
@@ -301,6 +316,8 @@ function renderVariants(id: string): void {
 function loadEngine(next: Engine, keepRunning: boolean, keepCamera = false): void {
   drive.setEngine(next);
   showEngine(next, keepCamera);
+  // Each catalogue engine starts warm: the usual picture. A cold start is the visitor's own choice.
+  systems.reset('warm');
   const spec = engine.spec;
   renderVariants(spec.id);
   $('engine-title').textContent = spec.title;
@@ -345,6 +362,8 @@ const designer = new DesignerPage({
   soundEngine(next, perf) {
     const running = drive.snapshot().state === 'running';
     drive.setEngine(next);
+    // Mixture, ignition and boost change the systems' numbers without changing the model.
+    systems.retune(next);
     if (running && !perf.catches) drive.stop();
   },
   setTrim(trim) {
@@ -460,9 +479,10 @@ function layoutPanels(): void {
   document.documentElement.style.setProperty('--stage-left', `${leftW}px`);
   document.documentElement.style.setProperty('--panel-w', `${panelW}px`);
   document.documentElement.style.setProperty('--stage-x', `${((leftW + (width - leftW - panelW) / 2) / width) * 100}%`);
-  const toolsH = 70;
+  // The view options wrap into more rows on a narrower stage; the engine is framed above them as before.
+  const toolsH = (document.querySelector<HTMLElement>('.view-tools')?.offsetHeight ?? 62) + 8;
   const topH = small ? 90 : 60;
-  stage.resize(width, height, { left: leftW, right: panelW, top: topH, bottom: dashH + (small ? 30 : toolsH * 0.4) });
+  stage.resize(width, height, { left: leftW, right: panelW, top: topH, bottom: dashH + (small ? Math.max(30, toolsH - 48) : Math.max(28, toolsH * 0.4)) });
   const fb = $('firing-body');
   firing.resize(fb.clientWidth, fb.clientHeight);
   const sb = $('spectrum-body');
@@ -481,6 +501,7 @@ function setView(next: ViewMode): void {
   view = next;
   setSegment('view', next);
   model?.setView(next);
+  systems.setView(next);
 }
 
 function setSpeed(next: SpeedMode): void {
@@ -607,6 +628,7 @@ $<HTMLInputElement>('slow-rpm').addEventListener('input', (event) => {
 $<HTMLInputElement>('explode').addEventListener('input', (event) => {
   explode = Number((event.target as HTMLInputElement).value);
   model?.setExplode(explode);
+  systems.setExplode(explode);
 });
 
 $<HTMLInputElement>('shake').addEventListener('change', (event) => {
@@ -846,6 +868,18 @@ window.addEventListener('keydown', (event) => {
     case 'Digit3':
       setView('mechanism');
       break;
+    case 'Digit4':
+      systems.toggle('oil');
+      break;
+    case 'Digit5':
+      systems.toggle('coolant');
+      break;
+    case 'Digit6':
+      systems.toggle('fuel');
+      break;
+    case 'Digit7':
+      systems.toggle('air');
+      break;
   }
 });
 
@@ -874,6 +908,8 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 if (reducedMotion) stage.setOrbit(false);
 
 let lastFrame = performance.now();
+/** Reused every frame: the systems step allocates nothing. */
+const systemsFrame: SystemsFrame = { theta: 0, advance: 0, rpm: 0, load: 0, throttle: 0, boost: 0, running: false, cranking: false, fuelCut: true, live: false, dt: 0, timeScale: 1 };
 let firingTextShown = '';
 let spectrumTextShown = '';
 
@@ -929,6 +965,25 @@ function frame(now: number): void {
     shake: demoMode ? 0 : shake,
   });
   balancePanel.frame(theta, demoMode ? spec.idleRpm : snap.rpm);
+  // The systems are worked out at idle in the demo and in slow motion: at 40 rpm oil would barely flow at all.
+  const slowed = demoMode || speed === 'slow';
+  const systemsRpm = slowed && shownRunning ? spec.idleRpm : snap.rpm;
+  const sf = systemsFrame;
+  // How far the shown angle really moved: in real mode Drive keeps nudging it toward the audio thread's angle.
+  sf.advance = shownAdvance(sf.theta, theta, shownSpeed * dt, engine.cycle);
+  sf.theta = theta;
+  sf.rpm = systemsRpm;
+  sf.load = shownLoad;
+  sf.throttle = snap.throttle;
+  sf.boost = snap.boost;
+  sf.running = shownRunning;
+  sf.cranking = snap.state === 'cranking';
+  sf.fuelCut = shownCut;
+  sf.live = !slowed;
+  sf.demo = demoMode;
+  sf.dt = dt;
+  sf.timeScale = Math.min(1, shownSpeed / Math.max(systemsRpm * 6, 1));
+  systems.frame(sf);
   stage.render(dt);
   updateScaleBar();
 
@@ -967,7 +1022,7 @@ requestAnimationFrame(frame);
 // Handy for manual checks in the browser console.
 declare global {
   interface Window {
-    __engine: { drive: Drive; stage: Stage; designer: DesignerPage };
+    __engine: { drive: Drive; stage: Stage; designer: DesignerPage; systems: SystemsView };
   }
 }
-window.__engine = { drive, stage, designer };
+window.__engine = { drive, stage, designer, systems };

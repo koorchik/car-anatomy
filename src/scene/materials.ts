@@ -147,6 +147,8 @@ export interface EngineMaterials {
   turboHotGlass: THREE.MeshStandardMaterial;
   turboColdGlass: THREE.MeshStandardMaterial;
   housing: THREE.MeshStandardMaterial;
+  /** The intake in the X-ray while the air or fuel layer shows through it. */
+  intakeGlass: THREE.MeshStandardMaterial;
 }
 
 export function createMaterials(coverColor: string, blockMaterial: 'aluminium' | 'iron'): EngineMaterials {
@@ -197,6 +199,7 @@ export function createMaterials(coverColor: string, blockMaterial: 'aluminium' |
     turboCold: new THREE.MeshStandardMaterial({ color: '#b2b4b4', metalness: 0.92, roughness: 0.42 }),
     turboWheel: new THREE.MeshStandardMaterial({ color: '#e0e3e4', metalness: 1, roughness: 0.25, side: THREE.DoubleSide }),
     housing: new THREE.MeshStandardMaterial({ color: '#8e9193', metalness: 0.85, roughness: 0.55, bumpMap: cast, bumpScale: 0.4 }),
+    intakeGlass: glassMaterial('#c9d4d8', 0.04, 0.42),
   };
 }
 

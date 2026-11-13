@@ -19,7 +19,7 @@ import { firingFromCrank } from './crank.ts';
 import { FUELS, heatReleaseFactor } from './fuels.ts';
 
 const P_ATM = 101.3e3; // Pa
-const T_ATM = 298; // K
+export const T_ATM = 298; // K, also the outside air of the systems layers
 const R_AIR = 287;
 const CP_AIR = 1005;
 const CP_EXH = 1150;
@@ -152,6 +152,18 @@ export interface Performance {
 }
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
+/** Air temperature after a compressor at 72 % isentropic efficiency, K. The systems layers show the same figure. */
+export const compressorOutletK = (pressureRatio: number): number => T_ATM * (1 + (pressureRatio ** COMPRESSOR_EXP - 1) / 0.72);
+
+/**
+ * Pressure ratio of a belt-driven supercharger at full throttle. The drive ratio is fixed by the pulleys, not by the
+ * rev limit: sized for a mean piston speed of 17 m/s. A Roots blower is full early, a centrifugal one goes with speed squared.
+ */
+export const superchargerRatio = (kind: 'roots' | 'centrifugal', boostBar: number, rpm: number, strokeM: number): number => {
+  const speedShare = (rpm * 2 * strokeM) / 60 / 17;
+  return 1 + boostBar * (kind === 'roots' ? clamp(speedShare / 0.28, 0, 1) : clamp(speedShare, 0, 1) ** 2);
+};
 
 /** Gaussian bump around a speed, on a ratio scale. */
 const tuneBump = (n: number, centre: number, width: number): number => {
@@ -455,7 +467,7 @@ class Model {
     for (let pass = 0; pass < passes; pass++) {
       // Back pressure feeds back on the flow that causes it, so a small turbine chatters unless the steps shrink.
       const relax = Math.max(0.06, 0.55 / (1 + pass * 0.18));
-      const t2 = T_ATM * (1 + (pressureRatio ** COMPRESSOR_EXP - 1) / 0.72);
+      const t2 = compressorOutletK(pressureRatio);
       const cooled = charger === 'none' ? T_ATM : t2 - d.intercooler * (t2 - T_ATM);
       const icDrop = charger !== 'none' && d.intercooler > 0 ? 3000 * clamp(pressureRatio - 1, 0, 2) : 0;
       const pIm = Math.max(5e3, (P_ATM * pressureRatio - icDrop) * op.throttle);
@@ -518,9 +530,7 @@ class Model {
         lastRatio = pressureRatio;
         pressureRatio += (nextRatio - pressureRatio) * relax;
       } else if ((charger === 'roots' || charger === 'centrifugal') && !op.noBoost) {
-        // The drive ratio is fixed by the pulleys, not by the rev limit: sized for a piston speed of 17 m/s.
-        const speedShare = (rpm * 2 * this.strokeM()) / 60 / 17;
-        pressureRatio = 1 + d.boostBar * (charger === 'roots' ? clamp(speedShare / 0.28, 0, 1) : clamp(speedShare, 0, 1) ** 2);
+        pressureRatio = superchargerRatio(charger, d.boostBar, rpm, this.strokeM());
         const eff = charger === 'roots' ? 0.55 : 0.72;
         compressorKw = (airKgs * CP_AIR * T_ATM * (pressureRatio ** COMPRESSOR_EXP - 1)) / eff / 0.95 / 1000;
         turbineDriven = p4;

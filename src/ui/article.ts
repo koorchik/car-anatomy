@@ -3,6 +3,7 @@
 import { ENGINES, engineFacts } from '../data/engines.ts';
 import type { EngineFacts } from '../designer/catalogue.ts';
 import { ALL_LAYERS, BalanceForces, atRpm, massesOf, roughly } from '../engine/balance-forces.ts';
+import { COOLING_NAMES, FUEL_SYSTEM_NAMES } from '../designer/systems.ts';
 import { balance, groupIntervals, torqueCurve, type Engine } from '../engine/kinematics.ts';
 import { ASPIRATION_NAMES, VALVETRAIN_NAMES, type EngineSpec } from '../engine/spec.ts';
 import { numberLocale } from '../i18n/locale.ts';
@@ -42,6 +43,7 @@ const figures = (engine: Engine): Array<[string, string]> => {
   }
   rows.push([t('Ступінь стиснення'), `${num(s.compression, s.compression % 1 ? 1 : 0)} : 1`]);
   rows.push([t('Живлення'), s.fuel === 'diesel' ? t('дизель, {aspiration}', { aspiration: ASPIRATION_NAMES[s.aspiration] }) : t('бензин, {aspiration}', { aspiration: ASPIRATION_NAMES[s.aspiration] })]);
+  if (s.systems) rows.push([t('Подача палива'), FUEL_SYSTEM_NAMES[s.systems.fuelSystem]], [t('Охолодження'), COOLING_NAMES[s.systems.cooling]]);
   rows.push([t('Межа обертів'), t('{rpm} об/хв', { rpm: num(s.redlineRpm) })]);
   return rows;
 };
@@ -136,12 +138,13 @@ const list = (items: string[]): string => items.map((t) => `<li>${escapeHtml(t)}
 
 export const siblingsOf = (spec: EngineSpec): EngineSpec[] => ENGINES.filter((e) => e.cylinders === spec.cylinders && e.id !== spec.id.split('/')[0]);
 
-const FIELD_NAMES: Record<string, string> = {
+export const FIELD_NAMES: Record<string, string> = {
   bore: t('діаметр'), stroke: t('хід'), compression: t('ступінь стиснення'), rodLength: t('довжину шатуна'), valvesPerCyl: t('кількість клапанів'),
   valvetrain: t('привод клапанів'), charger: t('тип наддуву'), boostBar: t('тиск наддуву'), directInjection: t('тип упорскування'), blockMaterial: t('матеріал блока'),
   fuel: t('паливо'), years: t('роки випуску'), redline: t('межу обертів'), idle: t('холостий хід'), powerHp: t('потужність'), powerRpm: t('оберти потужності'), torqueNm: t('момент'), torqueRpm: t('оберти моменту'),
   firingOrder: t('порядок запалювання'), numbering: t('нумерацію циліндрів'), veeAngle: t('кут розвалу'), firingIntervals: t('інтервали спалахів'), exhaust: t('характер вихлопу'),
   rotorR: t('радіус ротора'), rotorE: t('ексцентриситет'), rotorWidth: t('ширину ротора'),
+  fuelSystem: t('систему живлення'), cooling: t('тип охолодження'), oilCooler: t('оливний радіатор'), pistonJets: t('охолодження поршнів оливою'), sparkPlugs: t('кількість свічок'), ignition: t('систему запалювання'), glowPlugs: t('свічки розжарювання'), oilPump: t('привід оливного насоса'), oilFilter: t('оливний фільтр'),
 };
 
 /** What this engine's exhaust is set to, in words, so the difference between engines of a page can be read as well as heard. */

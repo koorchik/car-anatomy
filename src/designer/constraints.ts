@@ -5,6 +5,8 @@ import { DEG } from '../engine/kinematics.ts';
 import { t } from '../i18n/t.ts';
 import { crankForPreset } from './crank.ts';
 import { DEFAULT_DESIGN, valveSplit, type Design, type DesignLayout } from './design.ts';
+import { COOLINGS, FUEL_SYSTEMS, IGNITIONS, OIL_COOLERS, OIL_PUMP_DRIVES } from '../engine/systems-spec.ts';
+import { resolveSystems } from './systems.ts';
 
 export interface Range {
   min: number;
@@ -187,6 +189,12 @@ const ALLOWED = {
   collector: ['single', 'bybank'],
   muffler: ['open', 'sport', 'road'],
   blowoff: ['recirculated', 'soft', 'vented'],
+  fuelSystem: [null, ...FUEL_SYSTEMS],
+  cooling: [null, ...COOLINGS],
+  oilCooler: [null, ...OIL_COOLERS],
+  ignition: [null, ...IGNITIONS],
+  oilPump: [null, ...OIL_PUMP_DRIVES],
+  sparkPlugs: [null, 1, 2],
 };
 
 const ORDERED_KEYS: NumericKey[] = [
@@ -226,6 +234,8 @@ export function resolveDesign(input: Design): Design {
   }
   resolveExhaustTables(d);
   resolveIdentity(d);
+  for (const key of ['pistonJets', 'glowPlugs', 'oilFilter'] as const) if (d[key] !== true && d[key] !== false) d[key] = null;
+  resolveSystems(d);
   if (d.collector === 'bybank' && !['vee', 'flatvee', 'boxer', 'w'].includes(d.layout)) d.collector = 'single';
   if (d.throws.length !== d.cylinders && d.crankPreset === 'custom') d.crankPreset = 'even';
   d.throws = crankForPreset(d, d.crankPreset).map((t) => {

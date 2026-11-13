@@ -327,7 +327,9 @@ export class DesignerPage {
   private rebuildNow(): void {
     if (!this.active) return;
     this.lastRebuild = performance.now();
-    const key = geometryKey(this.engine);
+    // The systems layers draw the spec's hardware too, so a new fuel system or cooling rebuilds the model.
+    const hw = this.engine.spec.systems;
+    const key = geometryKey(this.engine) + JSON.stringify(hw ? [hw.fuelSystem, hw.cooling, hw.oilCooler, hw.pistonJets, hw.sparkPlugs, hw.ignition, hw.glowPlugs, hw.oilPump, hw.oilFilter] : null);
     if (key === this.lastGeometry) {
       this.host.sameShape(this.engine);
       return;
