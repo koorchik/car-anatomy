@@ -115,6 +115,7 @@ input {
   padding: 0 18px;
   z-index: 5;
   pointer-events: none;
+  container: topbar / inline-size;
 }
 
 .topbar > * {
@@ -151,6 +152,36 @@ input {
 .sections small {
   font-size: 12px;
   opacity: 0.75;
+}
+
+/*
+ * The bar spans the stage only, so beside the side panel a desktop runs out of room before a phone does. Then the bar
+ * gives up, in turn, the sections still to come (without their note they would pass for links), the engine count, the
+ * brand and at last the section links, as the phone does; the language switch and the engine list stay in sight.
+ * Widths are for English, the longer of the two.
+ */
+@container topbar (max-width: 1080px) {
+  .sections > span {
+    display: none;
+  }
+}
+
+@container topbar (max-width: 750px) {
+  .btn-count {
+    display: none;
+  }
+}
+
+@container topbar (min-width: 546px) and (max-width: 715px) {
+  .brand {
+    display: none;
+  }
+}
+
+@container topbar (max-width: 545px) {
+  .sections {
+    display: none;
+  }
 }
 
 .grow {
