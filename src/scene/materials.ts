@@ -28,6 +28,9 @@ const castTexture = (): THREE.Texture => {
   return castBump;
 };
 
+/** The sand-cast relief of the engine blocks, for other sections' cast parts (the same shared texture). */
+export const castBumpTexture = (): THREE.Texture => castTexture();
+
 /** Wrinkle paint on cam covers. */
 const crinkleTexture = (): THREE.Texture => {
   crinkleBump ??= noiseTexture(256, (ctx, size) => {
