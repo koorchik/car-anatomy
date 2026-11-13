@@ -5,6 +5,7 @@ import { CATALOGUE } from '../src/data/engines.ts';
 import { ENGINE_VARIANTS } from '../src/data/engine-variants.ts';
 import { DESIGNER_EN } from '../src/i18n/en/designer.ts';
 import { DYNO_EN } from '../src/i18n/en/dyno.ts';
+import { GEARBOX_DESIGNER_EN } from '../src/i18n/en/gearbox-designer.ts';
 import { GEARBOX_PARTS_EN } from '../src/i18n/en/gearbox-parts.ts';
 import { LUBRICATION_EN } from '../src/i18n/en/lubrication.ts';
 import { SUSPENSION_EN } from '../src/i18n/en/suspension.ts';
@@ -26,7 +27,7 @@ const SOURCE_DATA_DIRS = ['src/data/gearboxes/'];
 const files = walk('src').filter((f) => !f.startsWith('src/i18n/') && !SOURCE_DATA.includes(f) && !SOURCE_DATA_DIRS.some((d) => f.startsWith(d)));
 const CALL = /\bt\(\s*(['"])((?:\\.|(?!\1).)*)\1/gs;
 const unescape = (text: string): string => text.replace(/\\(['"\\])/g, '$1').replace(/\\n/g, '\n');
-const ENGLISH = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN, ...GEARBOX_PARTS_EN, ...SUSPENSION_EN };
+const ENGLISH = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN, ...GEARBOX_PARTS_EN, ...GEARBOX_DESIGNER_EN, ...SUSPENSION_EN };
 const placeholders = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).sort();
 
 describe.each(files)('%s', (file) => {

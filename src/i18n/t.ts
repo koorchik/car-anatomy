@@ -2,6 +2,7 @@
 
 import { DESIGNER_EN } from './en/designer.ts';
 import { DYNO_EN } from './en/dyno.ts';
+import { GEARBOX_DESIGNER_EN } from './en/gearbox-designer.ts';
 import { GEARBOX_PARTS_EN } from './en/gearbox-parts.ts';
 import { LUBRICATION_EN } from './en/lubrication.ts';
 import { SUSPENSION_EN } from './en/suspension.ts';
@@ -9,7 +10,7 @@ import { SYSTEMS_EN } from './en/systems.ts';
 import { UI_EN } from './en/ui.ts';
 import { locale } from './locale.ts';
 
-const ENGLISH: Record<string, string> = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN, ...GEARBOX_PARTS_EN, ...SUSPENSION_EN };
+const ENGLISH: Record<string, string> = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN, ...GEARBOX_PARTS_EN, ...GEARBOX_DESIGNER_EN, ...SUSPENSION_EN };
 
 /** Translates a source string. `{name}` in the text is filled from `values`. */
 export function t(source: string, values?: Record<string, string | number>): string {

@@ -1,13 +1,17 @@
 // The car on its drivetrain (gearbox plan, tests/drivetrain-vehicle 1–8, stage K2b): every car of DRIVE_CARS whose
 // record has dynamics, the engine on the stub (the dyno's torque map), the longitudinal chassis, the site's tyre and
-// road load. Tests named "calibration" check the calibration script, not the model.
+// road load. Tests named "calibration" check the calibration script, not the model. Test 7 also holds the gearbox
+// designer's quasi-static model (stage K9a) to the whole model.
 import { describe, expect, it } from 'vitest';
 import { CARS } from '../src/data/cars.ts';
 import { DRIVE_CARS } from '../src/data/drive-cars.ts';
+import { gearboxById } from '../src/data/gearboxes.ts';
 import { buildCarDrive, carVehicle, CLUTCH, CRANK, type CarDrive } from '../src/drivetrain/car-model.ts';
 import { buildCore, elementIndex, memberIndex } from '../src/drivetrain/core.ts';
 import { nullSpace } from '../src/drivetrain/linalg.ts';
 import { dynamicRun, dynamicTopSpeed, inputForForce, quasiStaticRun, setRolling, steadyTopSpeed } from '../src/drivetrain/runs.ts';
+import { evaluateGearbox } from '../src/gearbox-designer/evaluate.ts';
+import { designFromRecord } from '../src/gearbox-designer/presets.ts';
 import { vehicleSpec, type CarRecord } from '../src/vehicle/car.ts';
 import type { ChassisPort } from '../src/vehicle/chassis-port.ts';
 import { G } from '../src/vehicle/constants.ts';
@@ -149,9 +153,19 @@ describe('6. weight transfer', () => {
 });
 
 describe('7. quasi-static against the whole model', () => {
+  const whole = new Map<string, ReturnType<typeof dynamicRun>>();
+  const dynamic = (id: string) => whole.get(id) ?? whole.set(id, dynamicRun(models[id]!)).get(id)!;
+
   it.each(ids)('%s: 0–100 km/h and 0–400 m agree to 3 per cent', (id) => {
     const q = quasiStaticRun(models[id]!);
-    const d = dynamicRun(models[id]!);
+    const d = dynamic(id);
+    expect(Math.abs(d.zeroTo100S! / q.zeroTo100S! - 1)).toBeLessThan(0.03);
+    expect(Math.abs(d.zeroTo400mS! / q.zeroTo400mS! - 1)).toBeLessThan(0.03);
+  });
+
+  it.each(ids)('%s: the gearbox designer\'s copy of the car, with its synchronisers, agrees with the whole model to 3 per cent', (id) => {
+    const q = evaluateGearbox(designFromRecord(gearboxById(DRIVE_CARS[id]!.gearbox)!));
+    const d = dynamic(id);
     expect(Math.abs(d.zeroTo100S! / q.zeroTo100S! - 1)).toBeLessThan(0.03);
     expect(Math.abs(d.zeroTo400mS! / q.zeroTo400mS! - 1)).toBeLessThan(0.03);
   });
