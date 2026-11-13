@@ -15,6 +15,8 @@ export interface FrameState {
   /** Turbo shaft speed 0..1. */
   boost: number;
   dt: number;
+  /** A still picture for a snapshot: what eases in over time, such as header heat or torque roll, stands where it heads. */
+  held?: boolean;
   /** Multiplier for visible shaking; 0 turns it off. */
   shake: number;
   /** Variable valve gear as the engine computer has it now. */

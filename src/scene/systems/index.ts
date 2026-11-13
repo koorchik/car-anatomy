@@ -125,13 +125,13 @@ export class SystemsLayers {
   }
 
   /** Every frame, after the model has moved. */
-  update(state: SystemsState, theta: number, dt: number): void {
+  update(state: SystemsState, theta: number, dt: number, hold?: number): void {
     if (!this.showing) return;
     for (let i = 0; i < this.builtList.length; i++) {
       const { id, layer, feed } = this.builtList[i]!;
       if (!this.wanted.has(id)) continue;
       feed(state);
-      layer.update(dt, state.timeScale, this.reducedMotion, theta);
+      layer.update(dt, state.timeScale, this.reducedMotion, theta, hold);
       layer.updatePistonSprays(theta);
     }
   }

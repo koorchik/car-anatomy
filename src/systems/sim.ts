@@ -28,6 +28,8 @@ export interface SystemsFrame {
   demo?: boolean;
   /** Seconds on screen. */
   dt: number;
+  /** A still page for a snapshot: the dashes stand where this many seconds of flow carry them, events don't linger. */
+  hold?: number;
   /** Shown crank speed over true crank speed: 1 in real mode, below 1 in the slowed modes. */
   timeScale: number;
   /** Valve events now, when feature/vvt moves them. Defaults to engine.timing. */

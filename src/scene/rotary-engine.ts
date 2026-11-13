@@ -564,7 +564,7 @@ export class RotaryEngineModel implements EngineModel {
 
     const nRpm = state.rpm / e.spec.redlineRpm;
     const targetHeat = state.running ? Math.pow(state.load * 0.6 + nRpm * 0.5, 1.4) : 0;
-    this.heat += (targetHeat - this.heat) * Math.min(1, state.dt * (targetHeat > this.heat ? 0.35 : 0.14));
+    this.heat = state.held ? targetHeat : this.heat + (targetHeat - this.heat) * Math.min(1, state.dt * (targetHeat > this.heat ? 0.35 : 0.14));
     this.pipes.forEach((u, i) => {
       u.uHeat.value = this.heat;
       const rotorFire = this.rotors[i]!.phase;
@@ -581,8 +581,8 @@ export class RotaryEngineModel implements EngineModel {
     // A rotary hardly shakes. Only torque roll remains.
     const target = firing ? state.load * 0.018 : 0;
     const acc = (target - this.roll) * 60 - this.rollVel * 7;
-    this.rollVel += acc * state.dt;
-    this.roll += this.rollVel * state.dt;
+    this.rollVel = state.held ? 0 : this.rollVel + acc * state.dt;
+    this.roll = state.held ? target : this.roll + this.rollVel * state.dt;
     this.group.rotation.z = this.roll * Math.max(state.shake, 0.2);
   }
 

@@ -318,7 +318,7 @@ export class SystemsView {
 
   frame(frame: SystemsFrame): void {
     const state = this.sim.step(frame);
-    this.layers?.update(state, frame.theta, frame.dt);
+    this.layers?.update(state, frame.theta, frame.dt, frame.hold);
     if (this.readout.hidden) return;
     const now = performance.now();
     if (now - this.lastText < 200) return;
