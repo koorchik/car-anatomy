@@ -3331,6 +3331,10 @@ body.dyno-mode {
 
   /* The force card of the balance layer would cover what is left of the stage. */
   .dyno-mode .forces-card {
+    display: none;
+  }
+}
+
 /* Variable valve gear: live labels over the dashboard and the cam diagram in the designer */
 .valve-state {
   position: absolute;
