@@ -5,7 +5,8 @@
 import { t } from '../i18n/t.ts';
 import type { WellPlace } from '../systems/sump.ts';
 import { vehicleSpec } from '../vehicle/car.ts';
-import { LAP_STAND_IN } from '../vehicle/constants.ts';
+import { GENERIC_CAR } from '../vehicle/constants.ts';
+import { coeffsFromDrag } from '../vehicle/road-load.ts';
 import type { VehicleSpec } from '../vehicle/vehicle.ts';
 import { CARS } from './cars.ts';
 
@@ -75,7 +76,20 @@ export const DEFAULT_SUMP_CAR = SUMP_CARS[0]!;
 
 export const sumpCarFor = (engineId: string): SumpCar | undefined => SUMP_CARS.find((c) => c.engineId === engineId);
 
-/** A visitor's engine goes into a generic front-engined, rear-driven car whose mass follows its power (estimate). */
+/**
+ * A visitor's engine goes into a generic front-engined, rear-driven car whose mass follows its power, with the drag,
+ * rolling resistance and tyres of GENERIC_CAR (estimates).
+ */
 export function genericCar(name: string, powerHp: number): VehicleSpec {
-  return { name, massKg: Math.min(2200, Math.max(700, 1150 + 0.75 * powerHp)), ...LAP_STAND_IN, drive: 'rwd', drivenShare: 0.5, mount: { axis: 'longitudinal', front: 'forward', position: 'front' } };
+  const massKg = Math.min(2200, Math.max(700, 1150 + 0.75 * powerHp));
+  return {
+    name,
+    massKg,
+    roadLoad: coeffsFromDrag(massKg, GENERIC_CAR.cdA, GENERIC_CAR.crr),
+    clA: GENERIC_CAR.clA,
+    tyreRadiusM: GENERIC_CAR.tyreRadiusM,
+    drive: 'rwd',
+    drivenShare: 0.5,
+    mount: { axis: 'longitudinal', front: 'forward', position: 'front' },
+  };
 }

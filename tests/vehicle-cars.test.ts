@@ -1,28 +1,59 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { calibrateRoadLoad, drives, epaForceN, K_EPA_LIST, type EpaRow } from '../scripts/calibrate-road-load.ts';
 import { CAR_LIST, carById, CARS } from '../src/data/cars.ts';
-import { engineById } from '../src/data/engines.ts';
-import { SUMP_CARS } from '../src/data/sump-cars.ts';
-import { SECTOR_NAMES, TYRE_NAMES } from '../src/data/vehicle-names.ts';
-import { testTrack } from '../src/lubrication/scenario.ts';
+import { DRIVE_CARS, driveCarById } from '../src/data/drive-cars.ts';
+import { buildCarDrive } from '../src/data/car-drive.ts';
+import { steadyTopSpeed } from '../src/drivetrain/runs.ts';
+import { engineById, engineFacts } from '../src/data/engines.ts';
+import { gearboxById } from '../src/data/gearboxes.ts';
+import { genericCar, SUMP_CARS } from '../src/data/sump-cars.ts';
+import { SECTOR_NAMES, sectorName, TYRE_NAMES } from '../src/data/vehicle-names.ts';
+import { evaluate } from '../src/designer/physics.ts';
+import { designFromSpec } from '../src/designer/presets.ts';
+import { DRIVELINE, testTrack } from '../src/lubrication/scenario.ts';
+import { lapTorqueCurve } from '../src/lubrication/torque.ts';
 import {
   bodyOf,
   carFrameToCg,
   cgPoint,
   cgToCarFrame,
   drivenShare,
+  drivenTyreRadiusM,
   drivingMassKg,
   DRIVER_KG,
+  tyreRadiiM,
   vehicleSpec,
   type CarRecord,
   type Vec3,
 } from '../src/vehicle/car.ts';
 import { carLinks, carsWithEngine, pageIndex } from '../src/vehicle/links.ts';
-import { aeroDragN, roadLoadCoeffs, roadLoadN } from '../src/vehicle/road-load.ts';
+import { AIR_DENSITY } from '../src/vehicle/constants.ts';
+import { carToEngine } from '../src/vehicle/mount.ts';
+import {
+  bodyBox,
+  bonnetZ,
+  containsBox,
+  containsPoint,
+  engineBoxInCar,
+  engineCoreBox,
+  engineToCar,
+  fitsBay,
+  placedPoints,
+  wheelCentre,
+  type Box3,
+} from '../src/vehicle/packaging.ts';
+import { topSpeed } from '../src/vehicle/powertrain.ts';
+import { aeroDragN, nonEpaRule, roadLoadCoeffs, roadLoadN, roadLoadRule } from '../src/vehicle/road-load.ts';
+import { ROAD_LOAD_TRIM } from '../src/vehicle/road-load-trim.ts';
 import { buildTrack, TEST_CIRCUIT, TEST_SECTORS } from '../src/vehicle/track.ts';
 import { outerDiameterM, parseTyreSize, rollingRadiusM } from '../src/vehicle/tyre-size.ts';
-import { dragForce, G, TYRES, type VehicleSpec } from '../src/vehicle/vehicle.ts';
+import { dragForce, G, TYRES, type EngineMount, type VehicleSpec } from '../src/vehicle/vehicle.ts';
+import { buildEngine } from '../src/engine/kinematics.ts';
+import { gearboxSpec } from '../src/drivetrain/catalogue.ts';
+import { finalRatio } from '../src/drivetrain/layouts/transaxle.ts';
+import { transaxleDiffOutput } from '../src/vehicle/gearbox-place.ts';
 
 /** Reads a dotted path like 'body.trackFrontM'; undefined when the record has no such field. */
 const at = (car: CarRecord, path: string): unknown =>
@@ -57,6 +88,10 @@ describe('car records', () => {
 
     it('links to a gearbox and suspensions by name only once those sections have them', () => {
       if (car.gearbox !== null) expect(car.gearbox).toMatch(/^[a-z0-9-]+(\/[a-z0-9-]+)?$/);
+      // A gearbox link names a record of the catalogue, the same one the car's drivetrain uses.
+      if (car.gearbox !== null) expect(gearboxById(car.gearbox), car.gearbox).toBeDefined();
+      const drive = driveCarById(car.id);
+      if (drive) expect(car.gearbox).toBe(drive.gearbox);
       if (car.suspension !== null) for (const type of [car.suspension.front, car.suspension.rear]) expect(type).toMatch(/^[a-z0-9-]+$/);
     });
 
@@ -106,23 +141,39 @@ describe('car records', () => {
 });
 
 describe('derived models', () => {
-  /** The oil page's cars as its lap saw them before the records existed: stage A1a must not change them. */
-  const BEFORE: Record<string, Pick<VehicleSpec, 'name' | 'massKg' | 'drive' | 'drivenShare' | 'mount'>> = {
-    'v8-cross/camaro-ss-lt1': { name: 'Chevrolet Camaro SS', massKg: 1670, drive: 'rwd', drivenShare: 0.48, mount: { axis: 'longitudinal', front: 'forward', position: 'front' } },
-    b4: { name: 'Subaru WRX STI', massKg: 1540, drive: 'awd', drivenShare: 1, mount: { axis: 'longitudinal', front: 'forward', position: 'front' } },
-    'i4/civic-type-r-k20c1': { name: 'Honda Civic Type R (FK8)', massKg: 1415, drive: 'fwd', drivenShare: 0.62, mount: { axis: 'transverse', front: 'right', position: 'front' } },
-    'b6/porsche-cayman-981-3-4': { name: 'Porsche Cayman S (981)', massKg: 1320, drive: 'rwd', drivenShare: 0.55, mount: { axis: 'longitudinal', front: 'forward', position: 'mid' } },
-    b6: { name: 'Porsche 911 GT3 (991.2)', massKg: 1413, drive: 'rwd', drivenShare: 0.61, mount: { axis: 'longitudinal', front: 'rearward', position: 'rear' } },
-    'v8-flat/corvette-z06-c8-lt6': { name: 'Chevrolet Corvette Z06 (C8)', massKg: 1560, drive: 'rwd', drivenShare: 0.6, mount: { axis: 'longitudinal', front: 'forward', position: 'mid' } },
+  /** The oil page's cars as its lap saw them before the records existed; stage A1b changed only mass, drag and tyres. */
+  const BEFORE: Record<string, Pick<VehicleSpec, 'name' | 'drive' | 'drivenShare' | 'mount'>> = {
+    'v8-cross/camaro-ss-lt1': { name: 'Chevrolet Camaro SS', drive: 'rwd', drivenShare: 0.48, mount: { axis: 'longitudinal', front: 'forward', position: 'front' } },
+    b4: { name: 'Subaru WRX STI', drive: 'awd', drivenShare: 1, mount: { axis: 'longitudinal', front: 'forward', position: 'front' } },
+    'i4/civic-type-r-k20c1': { name: 'Honda Civic Type R (FK8)', drive: 'fwd', drivenShare: 0.62, mount: { axis: 'transverse', front: 'right', position: 'front' } },
+    'b6/porsche-cayman-981-3-4': { name: 'Porsche Cayman S (981)', drive: 'rwd', drivenShare: 0.55, mount: { axis: 'longitudinal', front: 'forward', position: 'mid' } },
+    b6: { name: 'Porsche 911 GT3 (991.2)', drive: 'rwd', drivenShare: 0.61, mount: { axis: 'longitudinal', front: 'rearward', position: 'rear' } },
+    'v8-flat/corvette-z06-c8-lt6': { name: 'Chevrolet Corvette Z06 (C8)', drive: 'rwd', drivenShare: 0.6, mount: { axis: 'longitudinal', front: 'forward', position: 'mid' } },
   };
 
-  it('give the oil page exactly the cars it had', () => {
+  it('give the oil page its cars from their records: the same six, now with driver, road load and tyre radius', () => {
     expect(SUMP_CARS.map((c) => c.engineId)).toEqual(Object.keys(BEFORE));
     for (const sump of SUMP_CARS) {
       const car = CARS[sump.car!]!;
       expect(sump.engineId).toBe(car.engine);
       expect(sump.vehicle).toEqual(vehicleSpec(car));
-      expect(sump.vehicle).toEqual({ ...BEFORE[sump.engineId], cdA: 0.7, clA: 0, crr: 0.015, tyreRadiusM: 0.33 });
+      expect(sump.vehicle).toEqual({
+        ...BEFORE[sump.engineId],
+        massKg: drivingMassKg(car),
+        roadLoad: roadLoadCoeffs(car),
+        clA: 0,
+        tyreRadiusM: drivenTyreRadiusM(car),
+      });
+    }
+  });
+
+  it('gives a visitor\'s engine the generic car it had', () => {
+    const car = genericCar('x', 400);
+    expect(car.massKg).toBe(1450);
+    expect(car.tyreRadiusM).toBe(0.33);
+    for (const kmh of [50, 100, 200]) {
+      const v = kmh / 3.6;
+      expect(roadLoadN(car.roadLoad, v, 0)).toBeCloseTo(0.5 * AIR_DENSITY * 0.7 * v * v + 0.015 * 1450 * G, 9);
     }
   });
 
@@ -142,18 +193,101 @@ describe('derived models', () => {
     expect(drivingMassKg({ ...car, massBasis: 'eu' })).toBe(car.massKg);
   });
 
-  it.each(CAR_LIST.map((c) => [c.id, c] as const))('%s: road load reproduces the lap drag and splits into body and wheels', (_id, car) => {
+  it.each(CAR_LIST.map((c) => [c.id, c] as const))('%s: vehicleSpec and roadLoadCoeffs give the same forces, split into body and wheels', (_id, car) => {
     const rl = roadLoadCoeffs(car);
     const spec = vehicleSpec(car);
     expect(rl.massKg).toBe(spec.massKg);
+    expect(spec.massKg).toBe(drivingMassKg(car));
+    expect(rl.aeroC).toBeGreaterThan(0);
+    expect(rl.aeroC).toBeLessThanOrEqual(rl.c);
     for (const kmh of [50, 100, 200]) {
       const v = kmh / 3.6;
       expect(roadLoadN(rl, v, 0)).toBeCloseTo(dragForce(spec, v), 9);
+      expect(roadLoadN(spec.roadLoad, v, 0)).toBe(roadLoadN(rl, v, 0));
       expect(roadLoadN(rl, -v, 0)).toBeCloseTo(roadLoadN(rl, v, 0), 9);
       const wheels = rl.a + rl.b * v + (rl.c - rl.aeroC) * v * v;
       expect(aeroDragN(rl, v) + wheels).toBeCloseTo(roadLoadN(rl, v, 0), 9);
       expect(roadLoadN(rl, v, 0.05) - roadLoadN(rl, v, 0)).toBeCloseTo(rl.massKg * G * Math.sin(0.05), 9);
     }
+  });
+});
+
+describe('road load', () => {
+  /** The EPA rows as the test car lists print them, copied a second time so a slip in a record's SI shows. */
+  const EPA: Record<string, EpaRow> = {
+    'chevrolet-camaro-ss-gen6': { list: '16tstcar.csv', vehicle: '621GFE2116', etwLb: 4000, A: 36.88, B: 0.5551, C: 0.01826 },
+    'chevrolet-corvette-z06-c8': { list: '23-testcar-2024-05-17_0.xlsx', vehicle: '551PYE2173', etwLb: 4000, A: 36.81, B: 0.728, C: 0.01761 },
+    'civic-type-r-fk8': { list: '17tstcar-2018-05-30.xlsx', vehicle: 'EHBF1M', etwLb: 3375, A: 34.74, B: 0.2581, C: 0.02216 },
+    'porsche-911-carrera-t-992': { list: '23-testcar-2024-05-17_0.xlsx', vehicle: 'FE-992-MT-23', etwLb: 3750, A: 41.927, B: 0.58973, C: 0.015162 },
+    'porsche-911-gt3-991-2': { list: '18tstcar-2018-10-24.xlsx', vehicle: 'FE-991IIGT3-MT-18', etwLb: 3625, A: 34.396, B: 0.43415, C: 0.016303 },
+    'subaru-wrx-sti-va': { list: '15tstcar.csv', vehicle: 'FBE-UG74', etwLb: 3750, A: 41, B: 0.5674, C: 0.01874 },
+  };
+
+  it('has an EPA row for exactly the cars listed here, and names it', () => {
+    expect(CAR_LIST.filter((c) => c.roadLoad).map((c) => c.id).sort()).toEqual(Object.keys(EPA).sort());
+    for (const [id, row] of Object.entries(EPA)) {
+      expect(CARS[id]!.roadLoad!.source).toContain(row.vehicle);
+      expect(CARS[id]!.roadLoad!.source).toContain(row.list);
+    }
+  });
+
+  it.each(Object.entries(EPA))('%s: reproduces its EPA row within 1 N', (id, row) => {
+    const rl = roadLoadCoeffs(CARS[id]!);
+    expect(roadLoadRule(CARS[id]!)).toBe('epa');
+    for (const kmh of [30, 100, 150]) expect(Math.abs(roadLoadN(rl, kmh / 3.6, 0) - epaForceN(row, kmh / 3.6)), `${kmh} km/h`).toBeLessThan(1);
+  });
+
+  it('keeps road-load-trim.ts what scripts/calibrate-road-load.ts writes', () => {
+    expect(readFileSync('src/vehicle/road-load-trim.ts', 'utf8')).toBe(calibrateRoadLoad().source);
+  });
+
+  it('fits k_EPA on at least four cars, the 911 among them, and lands within 1.0-1.4', () => {
+    const { list, trim } = calibrateRoadLoad();
+    const used = list.filter((r) => r.k !== null);
+    expect(used.length).toBeGreaterThanOrEqual(4);
+    expect(used.some((r) => r.name.includes('911'))).toBe(true);
+    expect(K_EPA_LIST.some((c) => c.name.includes('MX-5'))).toBe(true);
+    expect(trim.kEpa).toBeGreaterThanOrEqual(1);
+    expect(trim.kEpa).toBeLessThanOrEqual(1.4);
+    expect(trim.kEpa).toBeCloseTo(used.reduce((s, r) => s + r.k!, 0) / used.length, 3);
+  });
+
+  it.each(CAR_LIST.filter((c) => !c.roadLoad).map((c) => [c.id, c] as const))('%s: has no EPA row and follows the rule its record allows', (_id, car) => {
+    const rule = nonEpaRule(car);
+    expect(rule).not.toBeNull();
+    expect(ROAD_LOAD_TRIM.cars[car.id]?.rule).toBe(rule);
+    const rl = roadLoadCoeffs(car);
+    const m = drivingMassKg(car);
+    expect(rl.a).toBeCloseTo(ROAD_LOAD_TRIM.rolling.aPerKg * m, 9);
+    expect(rl.b).toBeCloseTo(ROAD_LOAD_TRIM.rolling.bPerKg * m, 9);
+    if (rule === 'brochure') {
+      // An unchecked or limited top speed says nothing about drag: the maker's Cd·A times k_EPA, marked unverified.
+      expect(rl.c).toBeCloseTo(0.5 * AIR_DENSITY * car.aero!.cd * car.aero!.areaM2 * ROAD_LOAD_TRIM.kEpa, 3);
+      expect(car.unverified.some((p) => p.startsWith('published.vmax')) || car.published.vmaxLimited).toBe(true);
+    } else if (drives(car)) {
+      // A car the gearbox model drives is calibrated on its force at the wheels: the model's steady top speed is the
+      // published one (the lap's ideal gearbox takes its real one at stage K7).
+      expect(steadyTopSpeed(buildCarDrive(car.id), rl).v * 3.6).toBeCloseTo(car.published.vmaxKmh, 0);
+    } else {
+      // The lap's own top speed with this road load is the published one.
+      const design = designFromSpec(engineById(car.engine)!);
+      const peak = lapTorqueCurve(evaluate({ ...design, factory: null }).points, engineFacts(car.engine)?.powerHp ?? null).peakPowerW;
+      expect(topSpeed(vehicleSpec(car), peak, DRIVELINE.efficiency) * 3.6).toBeCloseTo(car.published.vmaxKmh, 0);
+    }
+  });
+
+  it('refuses a car nobody calibrated instead of guessing its drag', () => {
+    const e30 = CARS['bmw-m3-e30']!;
+    expect(() => roadLoadCoeffs({ ...e30, id: 'uncalibrated' })).toThrow(/calibrate-road-load/);
+    // The record's rule changed (its top speed no longer checked) but the trim was not rerun.
+    expect(() => roadLoadCoeffs({ ...e30, unverified: [...e30.unverified, 'published.vmaxKmh'] })).toThrow(/calibrate-road-load/);
+  });
+
+  it.each(CAR_LIST.map((c) => [c.id, c] as const))('%s: rolls the lap on the driven tyres\' radius, from their size', (_id, car) => {
+    const radii = tyreRadiiM(car);
+    expect(radii.front).toBe(rollingRadiusM(parseTyreSize(car.tyre.size)));
+    expect(radii.rear).toBe(rollingRadiusM(parseTyreSize(car.tyre.sizeRear ?? car.tyre.size)));
+    expect(vehicleSpec(car).tyreRadiusM).toBe(car.drive === 'fwd' ? radii.front : radii.rear);
   });
 });
 
@@ -173,6 +307,164 @@ describe('car frame', () => {
       const q = back(toCg(p));
       for (let k = 0; k < 3; k++) expect(q[k]).toBeCloseTo(p[k]!, 12);
     }
+  });
+});
+
+describe('dimensions and packaging', () => {
+  const packed = CAR_LIST.filter((c) => c.packaging);
+  const cases = packed.map((c) => [c.id, c] as const);
+  const engineOf = (car: CarRecord) => buildEngine(engineById(car.engine)!);
+  /** Every point the packaging stores, both of a mirrored pair. */
+  const pointsOf = (car: CarRecord): Vec3[] => {
+    const p = car.packaging!;
+    return [
+      p.crankFront,
+      p.bay.min,
+      p.bay.max,
+      ...placedPoints(p.exhaustExit),
+      ...(p.fuelTank ? [p.fuelTank] : []),
+      ...(p.radiator ? placedPoints(p.radiator) : []),
+      ...(p.intercooler ? placedPoints(p.intercooler) : []),
+    ];
+  };
+  const middleX = (box: Box3): number => (box.min[0] + box.max[0]) / 2;
+
+  it('are given for the cars of the overview, both or neither', () => {
+    expect(packed.map((c) => c.id)).toEqual(expect.arrayContaining(['bmw-m3-e30', 'civic-type-r-fk8', 'porsche-911-carrera-t-992']));
+    for (const car of CAR_LIST) expect(!!car.dimensions, car.id).toBe(!!car.packaging);
+  });
+
+  it('give the 911 its staggered tyres, a larger radius at the rear', () => {
+    const car = CARS['porsche-911-carrera-t-992']!;
+    expect(car.tyre).toMatchObject({ size: '245/35 ZR20', sizeRear: '305/30 ZR21' });
+    expect(tyreRadiiM(car).rear).toBeGreaterThan(tyreRadiiM(car).front);
+    expect(vehicleSpec(car).tyreRadiusM).toBe(tyreRadiiM(car).rear);
+  });
+
+  describe.each(cases)('%s', (_id, car) => {
+    const d = car.dimensions!;
+    const p = car.packaging!;
+
+    it('adds the overhangs and the wheelbase up to the length', () => {
+      expect(d.frontOverhangM + car.body.wheelbaseM + d.rearOverhangM).toBeCloseTo(d.lengthM, 3);
+      expect(d.groundClearanceM).toBeGreaterThan(0.08);
+      expect(d.groundClearanceM).toBeLessThan(0.25);
+      expect(d.widthM).toBeGreaterThan(Math.max(car.body.trackFrontM, car.body.trackRearM));
+    });
+
+    it('draws its side profile front to back inside the body', () => {
+      const [bx, bz] = d.profile.bonnetFront;
+      const [cx, cz] = d.profile.cowl;
+      const [r0, r1] = d.profile.roofX;
+      expect(bx).toBeLessThanOrEqual(d.frontOverhangM);
+      expect(cx).toBeLessThan(bx);
+      expect(r0).toBeLessThan(cx);
+      expect(r1).toBeLessThan(r0);
+      expect(r1).toBeGreaterThan(-(car.body.wheelbaseM + d.rearOverhangM));
+      expect(bz).toBeGreaterThan(d.groundClearanceM);
+      expect(cz).toBeGreaterThan(bz);
+      expect(cz).toBeLessThan(d.heightM);
+    });
+
+    it('takes its packaging points to the CG frame and back, and the CG to (0, 0, h)', () => {
+      const toCg = carFrameToCg(car);
+      const back = cgToCarFrame(car);
+      const cg = toCg(cgPoint(car));
+      expect(cg[0]).toBeCloseTo(0, 12);
+      expect(cg[1]).toBe(0);
+      expect(cg[2]).toBe(cgPoint(car)[2]);
+      for (const q of pointsOf(car)) {
+        const r = back(toCg(q));
+        for (let k = 0; k < 3; k++) expect(r[k]).toBeCloseTo(q[k]!, 12);
+      }
+    });
+
+    it('keeps every part inside the body and the bay above the ground clearance', () => {
+      const body = bodyBox(car);
+      expect(containsBox(body, p.bay)).toBe(true);
+      expect(p.bay.min[2]).toBeGreaterThanOrEqual(d.groundClearanceM);
+      for (const q of pointsOf(car)) expect(containsPoint(body, q), q.join(', ')).toBe(true);
+      expect(containsPoint(p.bay, p.crankFront)).toBe(true);
+    });
+
+    it('fits its engine in the bay by the kinematics envelope, the pan above the ground clearance', () => {
+      const engine = engineOf(car);
+      expect(fitsBay(car, engine)).toBe(true);
+      expect(engineBoxInCar(car, engine).min[2]).toBeGreaterThanOrEqual(d.groundClearanceM);
+    });
+
+    it('puts the engine where its mount says: ahead of mid-wheelbase, or behind the rear axle', () => {
+      const x = middleX(engineBoxInCar(car, engineOf(car)));
+      const L = car.body.wheelbaseM;
+      if (car.mount.position === 'front') expect(x).toBeGreaterThan(-L / 2);
+      if (car.mount.position === 'mid') expect(x).toBeGreaterThan(-L);
+      if (car.mount.position === 'mid') expect(x).toBeLessThan(-L / 2);
+      if (car.mount.position === 'rear') expect(x).toBeLessThan(-L);
+    });
+
+    it('keeps a front bay under the bonnet', () => {
+      if (car.mount.position !== 'front') return;
+      for (const x of [p.bay.min[0], p.bay.max[0]]) {
+        expect(x).toBeGreaterThanOrEqual(d.profile.cowl[0]);
+        expect(x).toBeLessThanOrEqual(d.profile.bonnetFront[0]);
+        expect(p.bay.max[2]).toBeLessThanOrEqual(bonnetZ(car, x));
+      }
+    });
+
+    it('says which side a part is on as its y does', () => {
+      for (const part of [p.exhaustExit, p.radiator, p.intercooler]) {
+        if (!part) continue;
+        const y = part.at[1];
+        if (part.side === 'centre') expect(y).toBe(0);
+        if (part.side === 'left') expect(y).toBeGreaterThan(0);
+        if (part.side === 'right') expect(y).toBeLessThan(0);
+        if (part.side === 'both') expect(y).not.toBe(0);
+      }
+    });
+
+    it('leaves the exhaust at the tail and cools the charge air of a charged engine only', () => {
+      const tail = -(car.body.wheelbaseM + d.rearOverhangM);
+      expect(p.exhaustExit.at[0] - tail).toBeLessThan(0.15);
+      expect(p.intercooler !== null).toBe(engineById(car.engine)!.aspiration !== 'na');
+    });
+  });
+
+  it('turns an engine-frame vector into the car frame and carToEngine turns it back, for every mount', () => {
+    const fronts: EngineMount['front'][] = ['forward', 'rearward', 'left', 'right'];
+    const out = { x: 0, y: 0, z: 0 };
+    for (const front of fronts) {
+      const mount: EngineMount = { axis: front === 'forward' || front === 'rearward' ? 'longitudinal' : 'transverse', front, position: 'front' };
+      for (const v of [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0.3, -0.7, 0.2]] as Vec3[]) {
+        const c = engineToCar(mount, v);
+        carToEngine(mount, c[0], c[1], c[2], out);
+        expect([out.x, out.y, out.z].map((n) => n + 0), front).toEqual(v.map((n) => n + 0));
+      }
+      // The engine's front points where the mount says.
+      const [x, y] = engineToCar(mount, [0, 0, 1]);
+      expect([x, y].map((n) => n + 0)).toEqual({ forward: [1, 0], rearward: [-1, 0], left: [0, 1], right: [0, -1] }[front]);
+    }
+  });
+
+  it('builds the core box back from the crank\'s front end, which is its origin', () => {
+    // Whether the box holds what the 3D model draws is tests/packaging-model.test.ts's question.
+    const civic = buildEngine(engineById('i4/civic-type-r-k20c1')!);
+    const box = engineCoreBox(civic);
+    expect(box.max[2]).toBe(0);
+    // Pulley in front of the row of cylinders, flywheel behind it.
+    expect(-box.min[2]).toBeGreaterThan((civic.zMax - civic.zMin + civic.spec.bore) / 1000);
+    // An upright inline engine: symmetrical across, the head on top, the pan below.
+    expect(box.min[0]).toBeCloseTo(-box.max[0], 12);
+    expect(box.max[1]).toBeGreaterThan(civic.deck / 1000);
+    expect(box.min[1]).toBeLessThan(-civic.r / 1000);
+    // A flat six lies its heads out to the sides: far wider than tall.
+    const flat = engineCoreBox(buildEngine(engineById('b6/porsche-992-carrera-3-0')!));
+    expect(flat.max[0] - flat.min[0]).toBeGreaterThan(1.5 * (flat.max[1] - flat.min[1]));
+  });
+
+  it('sets each wheel on its axle, half a track out, at its rolling radius', () => {
+    const car = CARS['porsche-911-carrera-t-992']!;
+    expect(wheelCentre(car, 'front', 'left')).toEqual([0, car.body.trackFrontM / 2, tyreRadiiM(car).front]);
+    expect(wheelCentre(car, 'rear', 'right')).toEqual([-car.body.wheelbaseM, -car.body.trackRearM / 2, tyreRadiiM(car).rear]);
   });
 });
 
@@ -211,8 +503,9 @@ describe('links between sections', () => {
   it('links only to pages that exist', () => {
     const engines = pageIndex({ engines: (id) => !!engineById(id) });
     expect(carLinks(e30, engines)).toEqual([{ section: 'engines', target: 'i4/bmw-m3-e30-s14', href: '#/engines/i4/bmw-m3-e30-s14' }]);
-    // No gearbox link while the record has none, even if the page exists.
-    expect(carLinks(e30, pageIndex({ gearboxes: () => true }))).toEqual([]);
+    // No gearbox link while the record has none, even if the page exists; the E30 has one since stage K2b.
+    expect(carLinks({ ...e30, gearbox: null }, pageIndex({ gearboxes: () => true }))).toEqual([]);
+    expect(carLinks(e30, pageIndex({ gearboxes: () => true })).map((l) => l.href)).toEqual(['#/gearboxes/manual-rwd']);
     const linked: CarRecord = { ...e30, gearbox: 'manual-rwd', suspension: { front: 'macpherson', rear: 'semi-trailing' } };
     expect(carLinks(linked, pageIndex({ gearboxes: () => true, suspensions: (type) => type === 'semi-trailing' })).map((l) => l.href)).toEqual([
       '#/gearboxes/manual-rwd',
@@ -226,6 +519,59 @@ describe('links between sections', () => {
   });
 });
 
+describe('gearbox links', () => {
+  it('the Civic and the 911 drive the two gearboxes of the manual-transaxle page', () => {
+    expect(CARS['civic-type-r-fk8']!.gearbox).toBe('manual-transaxle');
+    expect(CARS['porsche-911-carrera-t-992']!.gearbox).toBe('manual-transaxle/porsche-911-carrera-t-992');
+  });
+
+  it.each(CAR_LIST.filter((c) => c.gearbox !== null).map((c) => [c.id, c] as const))(
+    '%s names a gearbox of its own, and its drive car names the same one',
+    (_id, car) => {
+      expect(gearboxById(car.gearbox!)?.car).toBe(car.id);
+      expect(DRIVE_CARS[car.id]?.gearbox).toBe(car.gearbox);
+    },
+  );
+
+  it("the drive car of every linked car has its driven axle's inner joints, a transaxle its final drive", () => {
+    for (const car of CAR_LIST.filter((c) => c.gearbox !== null)) {
+      const drive = DRIVE_CARS[car.id]!;
+      const axle = car.drive === 'fwd' ? 'front' : 'rear';
+      expect(drive.driveline.diffOutputs[axle], car.id).toBeDefined();
+      // The left joint, inside the left wheel.
+      const joint = drive.driveline.diffOutputs[axle]!;
+      expect(joint[1], car.id).toBeGreaterThan(0);
+      expect(joint[1], car.id).toBeLessThan(wheelCentre(car, axle, 'left')[1] - 0.25);
+      // A transaxle's teeth give the published final drive; a layshaft box leaves it to the car's axle.
+      if (gearboxSpec(gearboxById(car.gearbox!)!).finalDrive) {
+        expect(Math.abs(Math.abs(stateRatioFinal(car.gearbox!)) - drive.finalDrive.ratio), car.id).toBeLessThanOrEqual(0.005);
+      }
+    }
+  });
+
+  it('a transaxle car keeps the inner joint its gearbox gives, bolted to the engine at crankFront (to 1 mm)', () => {
+    for (const id of ['civic-type-r-fk8', 'porsche-911-carrera-t-992']) {
+      const car = CARS[id]!;
+      const axle = car.drive === 'fwd' ? 'front' : 'rear';
+      const joint = transaxleDiffOutput(car, buildEngine(engineById(car.engine)!), gearboxSpec(gearboxById(car.gearbox!)!));
+      const stored = DRIVE_CARS[id]!.driveline.diffOutputs[axle]!;
+      for (let k = 0; k < 3; k++) expect(Math.abs(stored[k]! - joint[k]!), `${id} ${k}`).toBeLessThanOrEqual(0.001);
+      // The differential sits on the driven axle's line, a little below the wheel centres, and the halfshaft reaches
+      // the wheel at less than 10° in plan and in elevation.
+      const wheel = wheelCentre(car, axle, 'left');
+      const span = wheel[1] - joint[1];
+      expect(Math.abs(Math.atan2(wheel[0] - joint[0], span)), id).toBeLessThan((10 * Math.PI) / 180);
+      expect(Math.abs(Math.atan2(wheel[2] - joint[2], span)), id).toBeLessThan((10 * Math.PI) / 180);
+    }
+  });
+});
+
+/** The final drive inside a transaxle's case, from its teeth. */
+function stateRatioFinal(gearbox: string): number {
+  const spec = gearboxSpec(gearboxById(gearbox)!);
+  return finalRatio(spec) ?? NaN;
+}
+
 describe('names of the vehicle core', () => {
   it('name every tyre and every sector of the test circuit', () => {
     expect(Object.keys(TYRE_NAMES).sort()).toEqual(Object.keys(TYRES).sort());
@@ -234,18 +580,18 @@ describe('names of the vehicle core', () => {
     expect(Object.keys(SECTOR_NAMES).sort()).toEqual([...TEST_SECTORS].sort());
   });
 
-  it('reach the oil page as before: sectors by name on its track, ids on a bare one', () => {
-    expect(testTrack().sectors.map((s) => s.name)).toEqual(TEST_SECTORS.map((id) => SECTOR_NAMES[id]));
-    expect(buildTrack(TEST_CIRCUIT).sectors.map((s) => s.name)).toEqual([...TEST_SECTORS]);
-    expect(TYRES.street.name).toBe(TYRE_NAMES.street);
+  it('reach the oil page as ids: the track of its lap carries sector ids, which the page names', () => {
+    expect(testTrack().sectors.map((s) => s.id)).toEqual([...TEST_SECTORS]);
+    expect(buildTrack(TEST_CIRCUIT).sectors.map((s) => s.id)).toEqual([...TEST_SECTORS]);
+    expect(TEST_SECTORS.map(sectorName)).toEqual(TEST_SECTORS.map((id) => SECTOR_NAMES[id]));
   });
 
-  it('keep text out of src/vehicle: only the compatibility import in vehicle.ts reaches src/data, nothing reaches src/i18n', () => {
+  it('keep text out of src/vehicle: nothing there reaches src/data or src/i18n', () => {
     const dir = 'src/vehicle';
     for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
       const imports = [...readFileSync(join(dir, file), 'utf8').matchAll(/from '([^']+)'/g)].map((m) => m[1]!);
       expect(imports.filter((i) => i.includes('/i18n/')), file).toEqual([]);
-      expect(imports.filter((i) => i.includes('/data/')), file).toEqual(file === 'vehicle.ts' ? ['../data/vehicle-names.ts'] : []);
+      expect(imports.filter((i) => i.includes('/data/')), file).toEqual([]);
     }
   });
 });

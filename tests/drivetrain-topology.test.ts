@@ -1,15 +1,22 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ALL_GEARBOXES, gearboxById } from '../src/data/gearboxes.ts';
 import { DRIVE_CARS } from '../src/data/drive-cars.ts';
 import { gearboxSpec } from '../src/drivetrain/catalogue.ts';
 import { centreDistance, shiftSumForCentre } from '../src/drivetrain/gear-geometry.ts';
 import { layshaftSpec, type LayshaftDesc } from '../src/drivetrain/layouts/layshaft.ts';
+import { finalRatio, speedRatio, transaxleSpec, type TransaxleDesc } from '../src/drivetrain/layouts/transaxle.ts';
 import { analyseState, buildGearbox, stateByName } from '../src/drivetrain/topology.ts';
 import type { GearboxSpec } from '../src/drivetrain/spec.ts';
 
 const e30Record = gearboxById('manual-rwd')!;
 const e30 = buildGearbox(gearboxSpec(e30Record));
 const mz6 = buildGearbox(gearboxSpec(gearboxById('tr6060-mz6')!));
+const civicRecord = gearboxById('manual-transaxle')!;
+const civic = buildGearbox(gearboxSpec(civicRecord));
+const p992Record = gearboxById('manual-transaxle/porsche-911-carrera-t-992')!;
+const p992 = buildGearbox(gearboxSpec(p992Record));
 const meshName = (box: typeof e30, j: number) => `${box.meshes[j]!.a}/${box.meshes[j]!.b}`;
 const forward = ['1', '2', '3', '4', '5'];
 
@@ -60,6 +67,37 @@ describe('ratios from teeth', () => {
     });
     expect(stateByName(e30, '5').ratio).toBeCloseTo(1, 12);
     expect(Math.abs(Math.abs(stateByName(e30, 'R').ratio!) - e30Record.published.reverse!)).toBeLessThanOrEqual(0.005);
+  });
+
+  it("Honda Civic Type R FK8: every figure Honda publishes, cut after three places as we read Honda's figures", () => {
+    // Honda Europe: 3.625 / 2.115 / 1.529 / 1.125 / 0.911 / 0.734, reverse 3.757, final drive 4.111. Sixth, 36/49 =
+    // 0.73469, is 0.734 for Honda and 0.735 for DSPORT, so we take it that Honda cuts rather than rounds (an assumption).
+    const cut = (r: number) => Math.floor(Math.abs(r) * 1000 + 1e-9);
+    const published = civicRecord.published;
+    published.ratios.forEach((p, k) => expect(cut(speedRatio(civic, stateByName(civic, String(k + 1)))!), `gear ${k + 1}`).toBe(Math.round(p * 1000)));
+    expect(cut(speedRatio(civic, stateByName(civic, 'R'))!)).toBe(Math.round(published.reverse! * 1000));
+    expect(cut(finalRatio(civic.spec)!)).toBe(Math.round(published.finalDrive! * 1000));
+    expect(finalRatio(civic.spec)).toBeCloseTo(74 / 18, 12);
+  });
+
+  it('Porsche 911 Carrera T (992): every figure Porsche publishes, to its two places', () => {
+    const published = p992Record.published;
+    expect(p992.states.filter((s) => s.kind === 'gear' && s.ratio! > 0)).toHaveLength(7);
+    published.ratios.forEach((p, k) => expect(Math.abs(Math.abs(speedRatio(p992, stateByName(p992, String(k + 1)))!) - p), `gear ${k + 1}`).toBeLessThanOrEqual(0.005));
+    expect(Math.abs(Math.abs(speedRatio(p992, stateByName(p992, 'R'))!) - published.reverse!)).toBeLessThanOrEqual(0.005);
+    expect(Math.abs(finalRatio(p992.spec)! - published.finalDrive!)).toBeLessThanOrEqual(0.005);
+  });
+
+  it("a transaxle's overall ratio is its speed times its final drive, and the drive car states the same final drive", () => {
+    for (const box of [civic, p992]) {
+      const final = finalRatio(box.spec)!;
+      for (const s of box.states.filter((x) => x.kind === 'gear')) {
+        // A two-shaft box turns its output shaft against the input in every forward speed; the final drive turns it back.
+        expect(s.ratio!, `${box.spec.id} ${s.name}`).toBeCloseTo(-speedRatio(box, s)! * final, 9);
+      }
+      const car = Object.values(DRIVE_CARS).find((c) => c.gearbox === box.spec.id)!;
+      expect(Math.abs(car.finalDrive.ratio - final), box.spec.id).toBeLessThanOrEqual(0.005);
+    }
   });
 
   it('TR-6060 MZ6: first gear 2.9655 from the real teeth 29/38 and 19/43', () => {
@@ -174,11 +212,69 @@ describe('power path', () => {
     }
   });
 
+  it("a transaxle loads its speed's pair and the final drive in every gear, reverse its idler too", () => {
+    for (const box of [civic, p992]) {
+      for (const k of box.states.filter((s) => s.kind === 'gear' && s.name !== 'R').map((s) => s.name)) {
+        expect(stateByName(box, k).loaded.map((j) => meshName(box, j)), `${box.spec.id} ${k}`).toEqual(['final-pinion/final-ring', `in-${k}/out-${k}`]);
+        expect(stateByName(box, k).efficiency!).toBeCloseTo(1 - 2 * (1 - box.spec.meshEfficiency), 9);
+      }
+    }
+    expect(stateByName(civic, 'R').loaded.map((j) => meshName(civic, j))).toEqual(['final-pinion/final-ring', 'in-R/idler-R', 'idler-R2/out-R']);
+    expect(stateByName(p992, 'R').loaded.map((j) => meshName(p992, j))).toEqual(['final-pinion/final-ring', 'in-R/idler-R', 'idler-R2/out-R']);
+    // The final drive carries the output shaft's torque: the speed's ratio times the input torque.
+    for (const box of [civic, p992]) {
+      const s = stateByName(box, '1');
+      const j = box.meshes.findIndex((m) => m.a === 'final-pinion');
+      const pinion = box.spec.gears.find((g) => g.id === 'final-pinion')!;
+      expect(Math.abs(s.meshLoads![j]!.lambda * pinion.teeth)).toBeCloseTo(Math.abs(speedRatio(box, s)!), 9);
+    }
+  });
+
   it('every loaded mesh rolls the whole input power, so an indirect gear keeps η_mesh²', () => {
     const eta = e30.spec.meshEfficiency;
     expect(stateByName(e30, '5').efficiency).toBeCloseTo(1, 12);
     for (const name of ['1', '2', '3', '4']) expect(stateByName(e30, name).efficiency!).toBeCloseTo(1 - 2 * (1 - eta), 9);
     expect(stateByName(e30, 'R').efficiency!).toBeCloseTo(1 - 3 * (1 - eta), 9);
+  });
+});
+
+describe('axial forces', () => {
+  it.each(ALL_GEARBOXES.map((r) => [r.id, buildGearbox(gearboxSpec(r))] as const))(
+    '%s: helical gears turning together on one axis, one driven and one driving, have one hand so their thrusts oppose',
+    (_id, box) => {
+      for (const s of box.states.filter((x) => x.kind === 'gear')) {
+        const groups = new Map<string, number[]>();
+        for (const id of s.loaded.flatMap((j) => [box.meshes[j]!.a, box.meshes[j]!.b])) {
+          const g = box.spec.gears.find((x) => x.id === id)!;
+          if (g.helix === 0) continue;
+          const key = `${box.spec.members.find((m) => m.id === g.member)!.axis} ${s.speeds![box.members.indexOf(g.member)]!.toFixed(9)}`;
+          groups.set(key, [...(groups.get(key) ?? []), Math.sign(g.helix)]);
+        }
+        for (const [key, hands] of groups) if (hands.length > 1) expect(new Set(hands).size, `${s.name}: ${key}`).toBe(1);
+      }
+    },
+  );
+});
+
+describe('transaxle descriptions that cannot be built are refused', () => {
+  const desc = civicRecord.layout.desc as TransaxleDesc;
+  it('a reverse idler too short to reach both gears', () => {
+    // 17 teeth at 2 mm: 34 mm to the idler from either shaft, 68 mm in all for shafts 80 mm apart.
+    expect(() => transaxleSpec({ ...desc, reverse: { ...desc.reverse, teeth: [17, 17, 17], module: 2 } })).toThrow(/idler/);
+  });
+
+  it('a crown wheel and pinion with a face wider than a third of their cone distance', () => {
+    const d992 = p992Record.layout.desc as TransaxleDesc;
+    if (d992.final.kind !== 'bevel') throw new Error('the 911 has a crown wheel and pinion');
+    // 9/32 at 6.5 mm: cone distance hypot(29.25, 104) = 108.0 mm, so 36 mm is past a third.
+    expect(() => transaxleSpec({ ...d992, final: { ...d992.final, faceWidth: 37 } })).toThrow(/third/);
+    expect(() => transaxleSpec({ ...d992, final: { ...d992.final, faceWidth: 36 } })).not.toThrow();
+  });
+
+  it('a bevel gear on parallel axes', () => {
+    const spec = gearboxSpec(civicRecord);
+    const broken: GearboxSpec = { ...spec, gears: spec.gears.map((g) => (g.id === 'final-ring' ? { ...g, cone: 70 } : g)) };
+    expect(() => buildGearbox(broken)).toThrow(/bevel/);
   });
 });
 
@@ -203,5 +299,53 @@ describe('shared gear', () => {
     const base = gearboxSpec(e30Record);
     const spec: GearboxSpec = { ...base, axes: base.axes.map((a) => (a.id === 'idler' ? { ...a, x: a.x + 0.5 } : a)) };
     expect(() => buildGearbox(spec)).toThrow(/axes are/);
+  });
+});
+
+/** Files a module loads at run time, following value imports and re-exports; `import type` is erased and skipped. */
+function runtimeGraph(entry: string): Set<string> {
+  const seen = new Set<string>();
+  const visit = (file: string) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const source = readFileSync(file, 'utf8');
+    for (const m of source.matchAll(/^\s*(?:import|export)\s+(type\s+)?(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/gm)) {
+      if (m[1] || !m[2]!.startsWith('.')) continue;
+      visit(resolve(dirname(file), m[2]!));
+    }
+  };
+  visit(resolve(entry));
+  return seen;
+}
+
+describe('10. the audio thread never derives', () => {
+  // What the worklet runs: the solver and the core it steps, the car as a load on the crank (stage K2c) with its
+  // controls, the load factory and the worklet itself. None of it may pull in the derivation or the gear geometry: a
+  // few milliseconds there is an audible gap.
+  const entries = [
+    'src/drivetrain/solver.ts', 'src/drivetrain/core.ts', 'src/drivetrain/driveline-load.ts', 'src/vehicle/vehicle-load.ts', 'src/vehicle/vehicle-step.ts', 'src/vehicle/longitudinal.ts',
+    'src/drivetrain/control/manual.ts', 'src/engine/loads.ts', 'src/audio/worklet.ts',
+  ].filter((f) => existsSync(f));
+
+  it('checks at least the solver, the core it steps and the car\'s load (paths from the repository root)', () => {
+    expect(entries).toEqual(expect.arrayContaining(['src/drivetrain/solver.ts', 'src/drivetrain/core.ts', 'src/vehicle/vehicle-load.ts', 'src/audio/worklet.ts']));
+  });
+
+  it.each(entries)('%s does not load topology.ts or gear-geometry.ts', (entry) => {
+    const files = [...runtimeGraph(entry)].map((f) => f.replace(/\\/g, '/'));
+    expect(files.some((f) => f.endsWith('/drivetrain/topology.ts'))).toBe(false);
+    expect(files.some((f) => f.endsWith('/drivetrain/gear-geometry.ts'))).toBe(false);
+  });
+
+  it('nothing the worklet loads carries text: no t(), no dictionary and no data records on the audio thread', () => {
+    // The whole-car plan's rule: the load arrives as plain data, so the worklet never needs src/data (names, records).
+    const files = [...runtimeGraph('src/audio/worklet.ts')].map((f) => f.replace(/\\/g, '/'));
+    expect(files.filter((f) => f.includes('/src/i18n/') || f.includes('/src/data/'))).toEqual([]);
+  });
+
+  it('the graph walker does see them where they are loaded', () => {
+    const files = [...runtimeGraph('src/drivetrain/catalogue.ts')];
+    expect(files.some((f) => f.endsWith('/drivetrain/gear-geometry.ts'))).toBe(true);
+    expect(files.some((f) => f.endsWith('/drivetrain/topology.ts'))).toBe(false);
   });
 });

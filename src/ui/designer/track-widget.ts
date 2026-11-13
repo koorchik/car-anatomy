@@ -7,7 +7,8 @@ import { isRotary, type Design } from '../../designer/design.ts';
 import { effectiveSump } from '../../designer/lubrication.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
-import { TYRE_IDS, TYRES } from '../../vehicle/vehicle.ts';
+import { TYRE_NAMES } from '../../data/vehicle-names.ts';
+import { TYRE_IDS } from '../../vehicle/vehicle.ts';
 import { nextTask } from '../next-task.ts';
 
 const DELAY_MS = 800;
@@ -83,7 +84,7 @@ export class TrackWidget {
         if (generation !== this.generation) return;
       }
       const s = runner.run.summary;
-      const name = TYRES[tyre].name;
+      const name = TYRE_NAMES[tyre];
       const dip = s.longestDipS.toLocaleString(numberLocale, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
       if (s.belowNeedS === 0) lines.push(`<div class="track-row ok"><b>${name}</b><span>${t('тиск тримається')}</span></div>`);
       else if (s.band === 'none') lines.push(`<div class="track-row warn"><b>${name}</b><span>${t('короткі провали до {s} с', { s: dip })}</span></div>`);

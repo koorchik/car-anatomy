@@ -10,6 +10,7 @@ import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import { BalanceOverlay, FORCE_COLORS } from '../scene/balance-arrows.ts';
 import type { EngineModel } from '../scene/model-types.ts';
+import { forcesToggle } from './forces-toggle.ts';
 import './balance-panel.css';
 
 const num = (v: number): string => roughly(v).toLocaleString(numberLocale, { maximumFractionDigits: v < 10 ? 1 : 0 });
@@ -73,29 +74,21 @@ export class BalancePanel {
   /** Viewport y the full card has to end above: other overlays on the right of the stage live under it. */
   private room: () => number = () => Infinity;
   private refit: () => void = () => {};
+  /** What shareStage watches, let go when it is called again with another list. */
+  private sharing: { disconnect(): void }[] = [];
   private on = false;
   /** The card is redrawn with each engine and set of layers, and must not fold the note back up. */
   private noteOpen = false;
   private shownRpm = -1;
   private lastText = 0;
 
-  /** @param tools Row of view options under the stage, where the switch goes. */
-  constructor(tools: HTMLElement, host: HTMLElement) {
-    const label = document.createElement('label');
-    label.className = 'check tool-forces';
-    label.innerHTML = `<input type="checkbox" /> ${t('Сили інерції')}`;
-    this.checkbox = label.querySelector('input')!;
+  /**
+   * @param tools Row of view options under the stage, where the switch goes.
+   * @param checkbox The switch, when the page put it there before this code loaded (forces-toggle.ts).
+   */
+  constructor(tools: HTMLElement, host: HTMLElement, checkbox: HTMLInputElement = forcesToggle(tools)) {
+    this.checkbox = checkbox;
     this.checkbox.addEventListener('change', () => this.show(this.checkbox.checked));
-    // Stacked under the shake switch, which is about the same thing, so the row of tools does not grow.
-    const shake = tools.querySelector('.tool-shake');
-    if (shake) {
-      const column = document.createElement('div');
-      column.className = 'tool-checks';
-      shake.replaceWith(column);
-      column.append(shake, label);
-    } else {
-      tools.append(label);
-    }
 
     this.card.className = 'forces-card';
     this.card.hidden = true;
@@ -138,13 +131,15 @@ export class BalancePanel {
   /**
    * Other overlays on the right of the stage. `room` gives the viewport y the full card has to end above; while it
    * does not, the card takes its compact form at the bottom left. A change to the size, classes or visibility of any
-   * of `watched` asks again.
+   * of `watched` asks again. A later call replaces the earlier one: the valve gear's labels may load after the card.
    */
   shareStage(room: () => number, watched: HTMLElement[]): void {
     this.room = room;
+    for (const old of this.sharing) old.disconnect();
     const again = (): void => this.refit();
     const observer = new MutationObserver(again);
     const sizes = new ResizeObserver(again);
+    this.sharing = [observer, sizes];
     for (const element of watched) {
       observer.observe(element, { attributes: true, attributeFilter: ['class', 'hidden'] });
       sizes.observe(element);

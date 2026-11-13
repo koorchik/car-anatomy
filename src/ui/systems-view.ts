@@ -3,6 +3,7 @@
 
 import type { Engine } from '../engine/kinematics.ts';
 import { isDieselSystem } from '../engine/systems-spec.ts';
+import { withDictionaries } from '../i18n/dictionaries.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import type { EngineModel, ViewMode } from '../scene/model-types.ts';
@@ -206,7 +207,7 @@ export class SystemsView {
   private buildLayers(): void {
     const target = this.target;
     if (!target || this.layers) return;
-    SystemsView.layersCode ??= import('../scene/systems/index.ts');
+    SystemsView.layersCode ??= withDictionaries(['engines', 'systems'], () => import('../scene/systems/index.ts'));
     void SystemsView.layersCode.then(({ SystemsLayers }) => {
       // Another engine may have come on stage meanwhile; its own attach builds its layers.
       if (this.target !== target || this.layers) return;
@@ -318,7 +319,7 @@ export class SystemsView {
 
   frame(frame: SystemsFrame): void {
     const state = this.sim.step(frame);
-    this.layers?.update(state, frame.theta, frame.dt);
+    this.layers?.update(state, frame.theta, frame.dt, frame.hold);
     if (this.readout.hidden) return;
     const now = performance.now();
     if (now - this.lastText < 200) return;

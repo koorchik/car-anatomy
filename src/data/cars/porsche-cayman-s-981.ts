@@ -1,5 +1,8 @@
 // Porsche Cayman S (981) with the six-speed manual. Mass (DIN, without a driver), wheelbase, tyres, top speed and
 // 0-100 km/h from Porsche's 2012 brochure; the weight split is the oil page's own figure and the tracks are recalled.
+// EPA tested the Boxster S and the Cayman GTS of this generation but not the Cayman S, and no limiter holds its
+// 283 km/h, so its drag comes from that top speed (scripts/calibrate-road-load.ts). Porsche gives Cd 0.30 but no
+// frontal area.
 
 import type { CarRecord } from '../../vehicle/car.ts';
 

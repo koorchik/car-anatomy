@@ -19,6 +19,7 @@ import { plural, t } from '../../i18n/t.ts';
 import { RpmChart, type ChartSeries } from '../designer/chart.ts';
 import { publishedText } from '../published.ts';
 import { RunRecorder, StepTest, peaksOf, shownPoint, turboSag, type Run, type RunKind } from './runs.ts';
+import { dynoToggle } from './toggle.ts';
 
 export type DynoMode = 'off' | 'hold' | 'sweep';
 export type EngineSource = { kind: 'catalogue' } | { kind: 'designer'; design: Design; perf: Performance };
@@ -35,6 +36,9 @@ export interface DynoHost {
   leaveSlowMotion(): void;
   /** The dyno went on or off. */
   changed(on: boolean): void;
+  /** The toggle and the dash's column already on the page (toggle.ts), if the page put them there before this loaded. */
+  toggle?: HTMLButtonElement;
+  column?: HTMLElement;
 }
 
 /** Lever arm from the absorber's axis to the load cell on this rig, m. */
@@ -69,8 +73,8 @@ const STOP_TEXT: Record<NonNullable<Run['stopped']>, string> = {
 };
 
 export class DynoPanel {
-  readonly element = document.createElement('section');
-  readonly toggleButton = document.createElement('button');
+  readonly element: HTMLElement;
+  readonly toggleButton: HTMLButtonElement;
   private readonly help = document.createElement('div');
   private readonly torqueChart = new RpmChart(t('Момент на стенді за обертами'));
   private readonly powerChart = new RpmChart(t('Потужність на стенді за обертами'));
@@ -112,11 +116,8 @@ export class DynoPanel {
   constructor(host: DynoHost) {
     this.host = host;
     host.extras.add(this.rig.group);
-    this.toggleButton.type = 'button';
-    this.toggleButton.className = 'btn';
-    this.toggleButton.id = 'dyno-toggle';
-    this.toggleButton.textContent = t('На стенд');
-    this.toggleButton.setAttribute('aria-pressed', 'false');
+    this.toggleButton = host.toggle ?? dynoToggle();
+    this.element = host.column ?? document.createElement('section');
     this.toggleButton.addEventListener('click', () => this.setActive(!this.active));
 
     this.element.className = 'dyno-col';
@@ -279,9 +280,11 @@ export class DynoPanel {
       const target = event.target as HTMLElement;
       if (target === this.help || target.closest('[data-act="close-help"]')) this.help.hidden = true;
     });
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !this.help.hidden) this.help.hidden = true;
-    });
+  }
+
+  /** Closes the help on how to read the dyno, as Esc does (the page's keys). */
+  closeHelp(): void {
+    this.help.hidden = true;
   }
 
   setActive(on: boolean): void {

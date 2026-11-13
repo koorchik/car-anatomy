@@ -72,8 +72,11 @@ export interface MeshInfo {
   memberB: string;
   carrier: string | null;
   internal: boolean;
+  /** A crown wheel and its pinion on crossing axes: no centre distance, no phase from topology.ts. */
+  bevel: boolean;
+  /** For a bevel pair, the equivalent spur pair at the outer module: it gives the tangential force on the outer pitch circle. */
   geometry: PairGeometry;
-  /** Distance between the two axes in the data, mm. */
+  /** Distance between the two axes in the data, mm; 0 for a bevel pair. */
   axisDistance: number;
   /** Direction from a's axis to b's, rad, clockwise from +Y seen from the front. */
   direction: number;
@@ -153,15 +156,22 @@ export function buildGearbox(spec: GearboxSpec): Gearbox {
     links.push(row);
     const axisA = axisOf(a.member);
     const axisB = axisOf(b.member);
-    const axisDistance = Math.hypot(axisB.x - axisA.x, axisB.y - axisA.y);
+    // A bevel pair (a crown wheel and its pinion) meshes across the shafts. Its row is an external mesh's, the sign
+    // chosen so that forward stays forward; its axes cross, so there is no centre distance to check and no phase to
+    // pass on through it (the 3D sets the bevel pair's own).
+    const bevel = a.cone !== undefined || b.cone !== undefined;
+    if (bevel !== ((axisA.across === undefined) !== (axisB.across === undefined))) {
+      throw new Error(`${spec.id}: mesh ${mesh.a}/${mesh.b}: only a bevel pair, and every bevel pair, has one axis across the shafts`);
+    }
+    const axisDistance = bevel ? 0 : Math.hypot(axisB.x - axisA.x, axisB.y - axisA.y);
     if (internal) throw new Error(`${spec.id}: internal mesh ${mesh.a}/${mesh.b} needs the planetary stage`);
     const geometry = pairGeometry(a, b);
-    if (Math.abs(geometry.centre - axisDistance) > CENTRE_TOLERANCE) {
+    if (!bevel && Math.abs(geometry.centre - axisDistance) > CENTRE_TOLERANCE) {
       throw new Error(`${spec.id}: mesh ${mesh.a}/${mesh.b} runs at ${geometry.centre.toFixed(4)} mm but its axes are ${axisDistance.toFixed(4)} mm apart`);
     }
     return {
-      a: a.id, b: b.id, memberA: a.member, memberB: b.member, carrier: mesh.carrier ?? null, internal,
-      geometry, axisDistance, direction: direction(axisA, axisB),
+      a: a.id, b: b.id, memberA: a.member, memberB: b.member, carrier: mesh.carrier ?? null, internal, bevel,
+      geometry, axisDistance, direction: bevel ? 0 : direction(axisA, axisB),
     };
   });
   for (const [a, b] of spec.couplings) {
@@ -275,10 +285,11 @@ function powerPath(box: Gearbox, closed: string[], speeds: number[]): Pick<State
 /**
  * Tooth-0 angle of every gear with all members at angle 0, propagated mesh by mesh from the first gear of each
  * connected group. A gear reached twice (a closed loop of meshes) must agree to a tooth, or the data cannot be built.
+ * Bevel pairs are left out: a gear only in a bevel pair has no phase here.
  */
 function meshPhases(spec: GearboxSpec, meshes: MeshInfo[], gearOf: (id: string) => GearDef): Record<string, number> {
   const phases: Record<string, number> = {};
-  const pending = new Set(spec.gears.filter((g) => meshes.some((m) => m.a === g.id || m.b === g.id)).map((g) => g.id));
+  const pending = new Set(spec.gears.filter((g) => meshes.some((m) => !m.bevel && (m.a === g.id || m.b === g.id))).map((g) => g.id));
   while (pending.size) {
     const first = pending.values().next().value!;
     phases[first] = 0;
@@ -287,7 +298,7 @@ function meshPhases(spec: GearboxSpec, meshes: MeshInfo[], gearOf: (id: string) 
     while (queue.length) {
       const id = queue.shift()!;
       for (const mesh of meshes) {
-        if (mesh.a !== id && mesh.b !== id) continue;
+        if (mesh.bevel || (mesh.a !== id && mesh.b !== id)) continue;
         const from = gearOf(id);
         const to = gearOf(mesh.a === id ? mesh.b : mesh.a);
         const phi = mesh.a === id ? mesh.direction : mesh.direction + Math.PI;

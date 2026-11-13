@@ -4,18 +4,16 @@
 // record by vehicleSpec() in car.ts.
 
 import { AIR_DENSITY, G } from './constants.ts';
-// Compatibility until stage O2a: the oil page still reads TYRES[id].name. Then pages translate ids with TYRE_NAMES
-// themselves, and this import, the only one that gives src/vehicle text, goes.
-import { TYRE_NAMES } from '../data/vehicle-names.ts';
+import { roadLoadN, type RoadLoadCoeffs } from './road-load.ts';
+import { TYRE_MU } from './tyre-data.ts';
 
 export { AIR_DENSITY, G };
 
 export type TyreId = 'classic' | 'street' | 'semi' | 'slick';
 
 export interface TyreSpec {
+  /** Pages show it through TYRE_NAMES (src/data/vehicle-names.ts). */
   id: TyreId;
-  /** @deprecated Until stage O2a; pages translate the id with TYRE_NAMES (src/data/vehicle-names.ts). */
-  name: string;
   /** Peak friction, the same along and across, independent of load. */
   mu: number;
 }
@@ -26,10 +24,10 @@ export interface TyreSpec {
  * of a 1980s car, which the oil page does not offer; 0.8 is an estimate. Sources and status in docs/vehicle-model.md.
  */
 export const TYRES: Record<TyreId, TyreSpec> = {
-  classic: { id: 'classic', name: TYRE_NAMES.classic, mu: 0.8 },
-  street: { id: 'street', name: TYRE_NAMES.street, mu: 1.0 },
-  semi: { id: 'semi', name: TYRE_NAMES.semi, mu: 1.25 },
-  slick: { id: 'slick', name: TYRE_NAMES.slick, mu: 1.6 },
+  classic: { id: 'classic', mu: TYRE_MU.classic },
+  street: { id: 'street', mu: TYRE_MU.street },
+  semi: { id: 'semi', mu: TYRE_MU.semi },
+  slick: { id: 'slick', mu: TYRE_MU.slick },
 };
 
 /** The tyres the oil page offers. */
@@ -45,13 +43,12 @@ export interface EngineMount {
 
 export interface VehicleSpec {
   name: string;
+  /** With the driver: roadLoad.massKg is the same number. */
   massKg: number;
-  /** Drag area Cd·A, m². */
-  cdA: number;
+  /** Rolling resistance and drag: the one road load of the site (road-load.ts), derived from the car's record. */
+  roadLoad: RoadLoadCoeffs;
   /** Downforce area Cl·A, m², positive pushes down. */
   clA: number;
-  /** Rolling resistance coefficient. */
-  crr: number;
   drive: 'fwd' | 'rwd' | 'awd';
   /** Share of weight on the driven wheels at rest: the traction limit when no chassis data is given. */
   drivenShare: number;
@@ -65,5 +62,5 @@ export interface VehicleSpec {
   frontShare?: number;
 }
 
-/** Rolling and aerodynamic drag at a speed, newtons. */
-export const dragForce = (car: VehicleSpec, v: number): number => 0.5 * AIR_DENSITY * car.cdA * v * v + car.crr * car.massKg * G;
+/** Rolling and aerodynamic drag at a speed on the level, newtons: roadLoadN with the car's coefficients. */
+export const dragForce = (car: Pick<VehicleSpec, 'roadLoad'>, v: number): number => roadLoadN(car.roadLoad, v, 0);

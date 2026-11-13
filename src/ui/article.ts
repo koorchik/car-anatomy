@@ -6,7 +6,8 @@ import { ALL_LAYERS, BalanceForces, atRpm, massesOf, roughly } from '../engine/b
 import { COOLING_NAMES, FUEL_SYSTEM_NAMES } from '../designer/systems.ts';
 import { SUMP_NAMES } from '../designer/lubrication.ts';
 import { balance, groupIntervals, torqueCurve, type Engine } from '../engine/kinematics.ts';
-import { ASPIRATION_NAMES, VALVETRAIN_NAMES, type EngineSpec } from '../engine/spec.ts';
+import { ASPIRATION_NAMES, VALVETRAIN_NAMES } from '../data/engine-names.ts';
+import type { EngineSpec } from '../engine/spec.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import { VALVETRAIN_FIELD_NAMES, valvetrainArticleHtml, valvetrainFigures } from './valvetrain-article.ts';

@@ -10,9 +10,20 @@
 // Not in the paper, so typical geometry here, marked as such where the page shows it: the wheel centre height, the
 // second bush of the arm (any point on the published axis gives the same motion), the spring seats, the bump stop,
 // the end stops, and the halfshaft.
+//
+// Knuckle variants on the same strut, arm and rack. A split steering axis (Honda dual-axis, Ford RevoKnuckle) leaves
+// the strut, the arm and the lower joint where JTEKT has them, now on a strut carrier, and hangs the wheel on a second
+// knuckle that turns in the carrier about its own axis, nearer the wheel: Ford's RevoKnuckle slides (Ford Research &
+// Advanced Engineering, Aachen, 2004, slides 5, 11, 13) put the plain Focus or Mondeo knuckle's kingpin offset at
+// 50–75 mm and the RevoKnuckle's at 20–30 mm, carried in the carrier on a ball joint above and a roller bearing below,
+// the carrier on the lower arm by a sleeve joint. Honda publishes no figure for the Civic Type R (its page says only
+// that rigid parts separate the steering axis from the damper axis); half the plain offset is an estimate. It sits
+// inside the 30–40 mm (KPI 4–14°) of Honda's patent US8205900B1 for a strut with its own steering axis, primary, but
+// that patent is not confirmed to be the FK8's design. The rest is typical: the axis's KPI, its bearings' heights,
+// and the carrier's hold, the sleeve joint taken as turning about the arm's axis.
 
-import type { AxleSpec, CornerSpec, Vec3 } from '../spec.ts';
-import { add, dist, dot, scale, sub, unit } from '../vec.ts';
+import type { AxleSpec, CornerSpec, KnuckleKind, SplitKnuckle, Vec3 } from '../spec.ts';
+import { add, cross, dist, dot, scale, sub, unit } from '../vec.ts';
 import { TYRE_VERTICAL, TYRE_FILES } from '../../vehicle/tyre-data.ts';
 import { dampingFromZeta, G } from '../forces.ts';
 import { CornerSolver } from '../solve.ts';
@@ -42,7 +53,33 @@ export const fromJtekt = (p: Mm, h: number): Vec3 => [p[1] / 1000, p[0] / 1000, 
 export interface MacphersonIntent {
   /** Wheel centre height above the road at design ride height, m: the loaded radius of the tyre. */
   wheelCentreZM: number;
+  /** The knuckle: 'plain' as measured (the default), or a split steering axis. */
+  knuckle?: KnuckleKind;
+  /** Split axis only: kingpin offset at the hub (m, inboard) and KPI (degrees); defaults per variant. */
+  kingpinOffsetM?: number;
+  kpiDeg?: number;
 }
+
+/**
+ * Kingpin offset at the hub of the plain JTEKT knuckle, m: where its steering axis (lower ball joint to strut top)
+ * passes at wheel-centre height, inboard of the wheel centre. 68.6 mm, inside Ford's 50–75 mm for a plain strut.
+ */
+export function jtektKingpinOffsetM(): number {
+  const J = JTEKT_TABLE1;
+  const t = (J.wheelCentre[2] - J.kingpinLower[2]) / (J.strutUpper[2] - J.kingpinLower[2]);
+  const x = J.kingpinLower[0] + t * (J.strutUpper[0] - J.kingpinLower[0]);
+  return (J.wheelCentre[0] - x) / 1000;
+}
+
+/** Defaults of the split axes: kingpin offset at the hub, KPI, and how far the axis's bearings sit below and above the
+ *  wheel centre (inside the rim), m. */
+export const SPLIT_KNUCKLE_DEFAULTS: Record<Exclude<KnuckleKind, 'plain'>, { kingpinOffsetM: number; kpiDeg: number; belowM: number; aboveM: number }> = {
+  // Ford: 20–30 mm (primary, the slides); KPI and bearing heights typical.
+  revoknuckle: { kingpinOffsetM: 0.025, kpiDeg: 8, belowM: 0.09, aboveM: 0.12 },
+  // Half the plain strut's offset: not published by Honda for the car, unverified (within its patent's 30–40 mm).
+  // KPI and bearing heights typical.
+  'dual-axis': { kingpinOffsetM: jtektKingpinOffsetM() / 2, kpiDeg: 8, belowM: 0.09, aboveM: 0.12 },
+};
 
 /** Wheel travel from design to the bump stop, m: the plan's figure for the bump scene, typical. */
 export const BUMP_STOP_TRAVEL_M = 0.08;
@@ -59,9 +96,13 @@ export function macphersonJtekt(intent: MacphersonIntent): AxleSpec {
   const ball = fromJtekt(J.kingpinLower, h);
   // The second bush: 0.35 m back along the published axis. Drawing only; the motion is the same for any point on it.
   const rearBush = add(pivot, scale(axis, -0.35));
+  const kind = intent.knuckle ?? 'plain';
+  const split = kind === 'plain' ? null : splitAxis(kind, intent, wc, ball, top, axis);
   // Outer CV joint: the point of the hub axis nearest the steering axis, where designers put it to keep the plunge
   // small while steering. The inner joint 0.25 m from the car's centre line, level with it: an estimate.
-  const outer = nearestOnLine(wc, [0, 1, 0], ball, unit(sub(top, ball)));
+  const outer = split
+    ? nearestOnLine(wc, [0, 1, 0], split.knuckle.axisLower, unit(sub(split.knuckle.axisUpper, split.knuckle.axisLower)))
+    : nearestOnLine(wc, [0, 1, 0], ball, unit(sub(top, ball)));
   const diffOutput: Vec3 = [outer[0], 0.25, outer[2]];
   const spec: AxleSpec = {
     layout: 'macpherson',
@@ -71,6 +112,8 @@ export function macphersonJtekt(intent: MacphersonIntent): AxleSpec {
       wishbones: [{ id: 'lower-arm', front: pivot, rear: rearBush, ball, part: 'susp.lower-arm' }],
       rods: [
         {
+          // Where JTEKT measured it on every knuckle. Moved outboard with a split axis, the steering arm's joint would
+          // sit 4 mm outboard of the wheel's centre plane, 120 mm from the hub axis: inside the brake disc.
           id: 'tie-rod',
           body: fromJtekt(J.tieRodInner, h),
           knuckle: fromJtekt(J.tieRodOuter, h),
@@ -79,6 +122,7 @@ export function macphersonJtekt(intent: MacphersonIntent): AxleSpec {
         },
       ],
       strut: { top, lower },
+      ...(split ? { knuckle: split.knuckle } : {}),
     },
     wheelCentre: wc,
     spinAxis: [0, 1, 0],
@@ -129,6 +173,42 @@ export function macphersonJtekt(intent: MacphersonIntent): AxleSpec {
   return spec;
 }
 
+/**
+ * The split steering axis of a dual-axis or RevoKnuckle strut on the JTEKT corner: KPI and kingpin offset at the hub
+ * from the intent, the plain axis's caster, through the plain axis's x at hub height; its bearings below and above the
+ * wheel centre. The carrier's hold turns about the lower arm's axis.
+ */
+function splitAxis(
+  kind: Exclude<KnuckleKind, 'plain'>,
+  intent: MacphersonIntent,
+  wc: Vec3,
+  ball: Vec3,
+  top: Vec3,
+  armAxis: Vec3,
+): { knuckle: SplitKnuckle } {
+  const d = SPLIT_KNUCKLE_DEFAULTS[kind];
+  const offset = intent.kingpinOffsetM ?? d.kingpinOffsetM;
+  const kpi = ((intent.kpiDeg ?? d.kpiDeg) * Math.PI) / 180;
+  const plain = unit(sub(top, ball));
+  const h = wc[2];
+  const plainAt = (z: number): Vec3 => add(ball, scale(plain, (z - ball[2]) / plain[2]));
+  const caster = Math.atan2(-plain[0], plain[2]);
+  const dir = unit([-Math.tan(caster), -Math.tan(kpi), 1]);
+  const hub: Vec3 = [plainAt(h)[0], wc[1] - offset, h];
+  const at = (z: number): Vec3 => add(hub, scale(dir, (z - h) / dir[2]));
+  const strutAxis = unit(sub(top, fromJtekt(JTEKT_TABLE1.strutBottom, h)));
+  return {
+    knuckle: {
+      kind,
+      axisLower: at(h - d.belowM),
+      axisUpper: at(h + d.aboveM),
+      hold: { body: armAxis, carrier: unit(cross(strutAxis, armAxis)) },
+      carrierPart: 'susp.strut-carrier',
+      knucklePart: 'susp.steering-knuckle',
+    },
+  };
+}
+
 /** Length of the strut (top mount to the strut's lower point) at `travel`, by a direct solve. */
 export function strutLengthAt(spec: AxleSpec, travel: number): number {
   const strut = spec.linkage.strut!;
@@ -137,7 +217,7 @@ export function strutLengthAt(spec: AxleSpec, travel: number): number {
   const res = solver.solve(pose, travel, 0, 40);
   if (!res.ok) throw new Error(`The strut does not reach ${travel} m of travel: ${res.worst}`);
   const p = [0, 0, 0];
-  solver.point(pose, strut.lower, p);
+  solver.carrierPoint(pose, strut.lower, p);
   const shift = strut.topShift ?? [0, 0, 0];
   return dist(add(strut.top, shift), [p[0], p[1], p[2]]);
 }
