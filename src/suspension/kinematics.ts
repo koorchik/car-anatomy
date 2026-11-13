@@ -110,7 +110,9 @@ export class Axle<L extends AnyCornerLinkage = CornerLinkage> {
     const link: AnyCornerLinkage = spec.linkage;
     // A single pivot axis has a closed form (solve-pivot.ts); links go through Newton.
     this.solver =
-      link.kind === 'pivot' ? new PivotSolver({ ...spec, linkage: link }) : new CornerSolver({ ...spec, linkage: link });
+      link.kind === 'pivot'
+        ? new PivotSolver({ ...spec, linkage: link })
+        : new CornerSolver({ ...spec, linkage: link });
     this.radius = spec.wheelCentre[2];
     const strut = link.kind === 'links' ? link.strut : undefined;
     this.strutLower = strut ? strut.lower : null;

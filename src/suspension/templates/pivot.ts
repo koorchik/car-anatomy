@@ -12,8 +12,8 @@
 // zero for a trailing arm (cot α → ∞) and the pivot height for a swing axle about the centre line. The camber gain at
 // design is −sin α / d, d being the plan-view distance from the wheel centre to the axis.
 //
-// No drawing of a real car is behind these numbers: every point here is typical geometry [О] (docs/suspension-model.md
-// has the table). The half-shaft joint limits are the GKN figures the macpherson corner already uses.
+// No drawing of a real car is behind these numbers: every point here is typical geometry, an estimate
+// (docs/suspension-model.md has the table). The half-shaft joint limits are the GKN figures of the macpherson corner.
 
 import type { AxleSpec, LayoutId, PivotLinkage, Vec3 } from '../spec.ts';
 import { add, cross, dist, dot, scale, sub, unit } from '../vec.ts';
@@ -54,8 +54,8 @@ export function pivotLayout(sweepDeg: number): PivotLayout {
 const COMMON = { svAngleDeg: 0, pivotZM: 0.3, bushSpanM: 0.35, trackM: 1.4, wheelCentreZM: 0.3 } as const;
 
 /**
- * Typical intents of each layout [О]. The semi-trailing sweep sits in the plan's 10–25° and puts the roll centre into
- * the research's 90–120 mm for a rear axle; the swing axle turns about joints 0.1 m off the centre line, as at a
+ * Typical intents of each layout, estimates. The semi-trailing sweep sits in the plan's 10–25° and puts the roll centre
+ * into the research's 90–120 mm for a rear axle; the swing axle turns about joints 0.1 m off the centre line, as at a
  * differential.
  */
 export const PIVOT_TYPICAL: Record<PivotLayout, PivotIntent> = {
@@ -73,11 +73,12 @@ const ARM_PART: Record<PivotLayout, string> = {
 /** Wheel travel from design to the bump stop, m, as on the macpherson corner (the plan's figure for the bump scene). */
 export const PIVOT_BUMP_STOP_TRAVEL_M = 0.08;
 /** Where the coil-over sits on the arm: this share of the way from the axis to the wheel centre, then this far inboard;
- *  and how long it is at design. Typical [О]. */
+ *  and how long it is at design. Typical, an estimate. */
 const SPRING_SHARE = 0.75;
 const SPRING_INBOARD_M = 0.15;
 const SPRING_LENGTH_M = 0.3;
-/** Outer CV joint of a trailing or semi-trailing half-shaft: on the hub axis this far inboard of the wheel centre [О]. */
+/** Outer CV joint of a trailing or semi-trailing half-shaft: on the hub axis this far inboard of the wheel centre, m.
+ *  An estimate. */
 const OUTER_JOINT_INBOARD_M = 0.12;
 
 const DEG = Math.PI / 180;
@@ -101,7 +102,8 @@ export function pivotAxle(intent: PivotIntent): AxleSpec<PivotLinkage> {
   const W: Vec3 = [0, trackM / 2, wheelCentreZM];
   const e = pivotAxisDirection(sweepDeg, svAngleDeg);
   const Q: Vec3 = [armM, pivotYM, pivotZM];
-  const linkage: PivotLinkage = { kind: 'pivot', axisA: Q, axisB: add(Q, scale(e, bushSpanM)), armPart: ARM_PART[layout] };
+  const armPart = ARM_PART[layout];
+  const linkage: PivotLinkage = { kind: 'pivot', axisA: Q, axisB: add(Q, scale(e, bushSpanM)), armPart };
   // Foot of the wheel centre on the axis, and the arm across it.
   const foot = add(Q, scale(e, dot(sub(W, Q), e)));
   const arm = sub(W, foot);
@@ -111,8 +113,8 @@ export function pivotAxle(intent: PivotIntent): AxleSpec<PivotLinkage> {
   const seat = add(add(foot, scale(arm, SPRING_SHARE)), [0, -SPRING_INBOARD_M, 0]);
   const top = add(seat, [0, 0, SPRING_LENGTH_M]);
 
-  // The swing axle's shaft is its arm: the inner joint sits on the axis, there is no outer joint, and the wheel is square
-  // to the shaft. Other driven layouts run a two-joint half-shaft from the differential to the hub.
+  // The swing axle's shaft is its arm: the inner joint sits on the axis, there is no outer joint, and the wheel is
+  // square to the shaft. Other driven layouts run a two-joint half-shaft from the differential to the hub.
   let spinAxis: Vec3 = [0, 1, 0];
   let halfshaft: AxleSpec['halfshaft'] = null;
   if (layout === 'swing-axle') {
@@ -125,7 +127,7 @@ export function pivotAxle(intent: PivotIntent): AxleSpec<PivotLinkage> {
         outerJoint: W,
         inner: 'cross',
         outer: 'none',
-        // No maker figure found for the joint; the shaft swings about ±11° over the typical travel [О].
+        // No maker figure found for the joint; the shaft swings about ±11° over the typical travel; an estimate.
         innerMaxDeg: 20,
         outerMaxDeg: 0,
         plungeM: [0, 0],
@@ -159,7 +161,7 @@ export function pivotAxle(intent: PivotIntent): AxleSpec<PivotLinkage> {
       wheel: seat,
       compression: 0,
       rebound: 0,
-      // As on the macpherson corner: knee at 0.1 m/s [О].
+      // As on the macpherson corner: knee at 0.1 m/s, an estimate.
       kneeMs: 0.1,
       highRatio: 0.5,
       strokeM: 0.2,
