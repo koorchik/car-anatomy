@@ -69,9 +69,9 @@ describe('ratios from teeth', () => {
     expect(Math.abs(Math.abs(stateByName(e30, 'R').ratio!) - e30Record.published.reverse!)).toBeLessThanOrEqual(0.005);
   });
 
-  it("Honda Civic Type R FK8: every figure Honda publishes, as Honda gives it (the ratio cut after three places)", () => {
+  it("Honda Civic Type R FK8: every figure Honda publishes, cut after three places as we read Honda's figures", () => {
     // Honda Europe: 3.625 / 2.115 / 1.529 / 1.125 / 0.911 / 0.734, reverse 3.757, final drive 4.111. Sixth, 36/49 =
-    // 0.73469, is 0.734 for Honda and 0.735 for DSPORT: Honda cuts, it does not round.
+    // 0.73469, is 0.734 for Honda and 0.735 for DSPORT, so we take it that Honda cuts rather than rounds (an assumption).
     const cut = (r: number) => Math.floor(Math.abs(r) * 1000 + 1e-9);
     const published = civicRecord.published;
     published.ratios.forEach((p, k) => expect(cut(speedRatio(civic, stateByName(civic, String(k + 1)))!), `gear ${k + 1}`).toBe(Math.round(p * 1000)));
@@ -242,6 +242,14 @@ describe('transaxle descriptions that cannot be built are refused', () => {
   const desc = civicRecord.layout.desc as TransaxleDesc;
   it('a reverse idler too short to reach both gears', () => {
     expect(() => transaxleSpec({ ...desc, reverse: { ...desc.reverse, teeth: [17, 17, 17] } })).toThrow(/idler/);
+  });
+
+  it('a crown wheel and pinion with a face wider than a third of their cone distance', () => {
+    const d992 = p992Record.layout.desc as TransaxleDesc;
+    if (d992.final.kind !== 'bevel') throw new Error('the 911 has a crown wheel and pinion');
+    // 9/32 at 6.5 mm: cone distance hypot(29.25, 104) = 108.0 mm, so 36 mm is past a third.
+    expect(() => transaxleSpec({ ...d992, final: { ...d992.final, faceWidth: 37 } })).toThrow(/third/);
+    expect(() => transaxleSpec({ ...d992, final: { ...d992.final, faceWidth: 36 } })).not.toThrow();
   });
 
   it('a bevel gear on parallel axes', () => {

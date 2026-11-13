@@ -194,7 +194,7 @@ export function transaxleSpec(desc: TransaxleDesc): GearboxSpec {
   } else {
     const cones = bevelCones(f.teeth[0], f.teeth[1]);
     const { rCrown, cone } = bevelSizes(f.module, f.teeth[0], f.teeth[1]);
-    if (f.faceWidth > cone / 2.5) throw new Error(`${desc.id}: a bevel face of ${f.faceWidth} mm is wider than the usual third of the cone distance ${cone.toFixed(1)} mm`);
+    if (f.faceWidth > cone / 3) throw new Error(`${desc.id}: a bevel face of ${f.faceWidth} mm is wider than a third of the cone distance ${cone.toFixed(1)} mm`);
     const gz = place(f.faceWidth * Math.cos(cones.pinion));
     // The pitch cones share an apex on the pinion's axis, ahead of the pinion (toward the engine).
     const mean = cone - f.faceWidth / 2;
