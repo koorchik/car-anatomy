@@ -40,7 +40,7 @@ export interface ChoiceControl extends ControlBase {
 export type Control = RangeControl | ToggleControl | ChoiceControl;
 
 /** Address parameters the viewer keeps for itself. */
-export const RESERVED_KEYS = ['m', 'view', 'explode', 'highlight', 'ghost', 'cam', 'dist', 'still', 'ui', 'grid', 'lang'] as const;
+export const RESERVED_KEYS = ['m', 'view', 'explode', 'highlight', 'ghost', 'cam', 'dist', 'at', 'still', 'ui', 'grid', 'lang'] as const;
 
 export interface PartCard {
   name: string;
