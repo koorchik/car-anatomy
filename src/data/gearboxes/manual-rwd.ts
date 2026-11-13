@@ -7,11 +7,11 @@
 //   manual with these figures was found;
 // - centre distance 76 mm and a 380 N·m rating: auto motor und sport on the Getrag 265 (secondary).
 //
-// Reconstructed (ours): at 76 mm with helix angles of 15–35° only the main pairs 23/45 and 23/36 reproduce all four
-// three-place ratios, so the input gear most likely has 23 teeth; 23/45 needs pair modules of 1.75–2.25 mm while
-// 23/36 needs at most 1.77 mm on third and at least 2.65 mm on fourth. gear-pick.ts then gives each pair the teeth
-// below, the nearest to the published ratio. Reverse, face widths, hands and the sleeves'
-// order (1/R, 2/3, 4/5, which a dogleg pattern implies) are estimates.
+// Reconstructed (ours): at 76 mm with helix angles of 15–35°, modules of 1.5–4.5 mm and 10–60 teeth per gear only the
+// main pairs 23/45 and 23/36 reproduce all four three-place ratios (finer modules allow others), so the input gear most
+// likely has 23 teeth; 23/45 needs pair modules of 1.75–2.25 mm while 23/36 needs at most 1.77 mm on third and at least
+// 2.65 mm on fourth. gear-pick.ts then gives each pair the teeth below, the nearest to the published ratio. Reverse,
+// face widths, hands and the sleeves' order (1/R, 2/3, 4/5, which a dogleg pattern implies) are estimates.
 
 import { applyGearboxEnglish } from '../../i18n/en/apply-gearbox.ts';
 import { GEARBOX_MANUAL_RWD_EN } from '../../i18n/en/gearbox-manual-rwd.ts';
@@ -52,7 +52,7 @@ const GETRAG_265_M3: GearboxRecord = {
     'Передаточні числа 3,717 / 2,404 / 1,766 / 1,264 / 1,000 наводить форум e9coupe.com для близькоступеневої Getrag 265/5, не називаючи авто. ' +
     'Для M3 E30 ті самі числа, округлені до 3,72 / 2,40 / 1,77 / 1,26 / 1,00, і задній хід 4,23 дають тест auto motor und sport і сайт m3-klassik.de, ' +
     'а міжосьову відстань 76 мм і розрахунковий момент 380 Н·м — стаття auto motor und sport про цю коробку. Брошури чи керівництва з ремонту BMW із цими числами ми не знайшли. ' +
-    'Зубці, модулі й кути нахилу — наша реконструкція. З міжосьовою 76 мм і кутами нахилу 15–35° усі чотири точні числа відтворюють лише головні пари 23/45 і 23/36, ' +
+    'Зубці, модулі й кути нахилу — наша реконструкція. З міжосьовою 76 мм, кутами нахилу 15–35°, модулями 1,5–4,5 мм і 10–60 зубцями на шестерні усі чотири точні числа відтворюють лише головні пари 23/45 і 23/36, ' +
     'тож шестерня первинного вала, найімовірніше, має 23 зубці. Ми взяли 23/45, бо її пари обходяться модулями 1,75–2,25 мм. ' +
     'Зубці заднього ходу (25 і 54 через проміжну на 19), ширини вінців, напрям нахилу зубців і синхронізатор заднього ходу — оцінка.',
   sources: [
