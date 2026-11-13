@@ -1,7 +1,10 @@
-// Kinematic curves of the macpherson page corner and its quarter car over a bump, as CSV in .tmp/suspension-sweep/.
+// Kinematic curves of the macpherson page corner and its quarter car over a bump, and the curves of its tyre, as CSV in
+// .tmp/suspension-sweep/.
 // node scripts/suspension-sweep.ts [speed=30] [bump=50] [length=0.5] [spring=25] [damper=comfort|worn|sport|track|0.3]
 //                                  [ride=0] [camber=factory|-1.5] [toe=factory|0.1] [pressure=2.3]
-// Speed in km/h, bump height in mm, length in m, spring in N/mm, ride height in mm, angles in degrees, pressure in bar.
+//                                  [tyre=street|semi|slick|classic] [surface=1]
+// Speed in km/h, bump height in mm, length in m, spring in N/mm, ride height in mm, angles in degrees, pressure in bar,
+// surface as the share of dry friction.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { jtektCorner } from '../src/suspension/templates/macpherson.ts';
@@ -10,6 +13,8 @@ import { newCornerSample } from '../src/suspension/kinematics.ts';
 import { QuarterSim } from '../src/suspension/quarter.ts';
 import { EventRoad, RoadBuffer } from '../src/suspension/road.ts';
 import { G } from '../src/suspension/forces.ts';
+import { mfEval, newMfForces, sigmaAlpha, sigmaKappa, tyreAt } from '../src/vehicle/tyre.ts';
+import { TYRE_IDS, TYRES, type TyreId } from '../src/vehicle/vehicle.ts';
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.split('=') as [string, string]));
 const num = (key: string, fallback: number): number => (args[key] !== undefined ? Number(args[key]) : fallback);
@@ -80,3 +85,62 @@ console.log(`corner: top shift ${(rc.topShiftM * 1000).toFixed(2)} mm, tie rod $
 console.log(`at rest: roll centre ${(rc.atRest.contactY * rc.atRest.tanBeta * 1000).toFixed(0)} mm, camber gain ${((rc.axle.value('camber', rc.staticTravelM + 0.001) - rc.axle.value('camber', rc.staticTravelM - 0.001)) / 0.002 * DEG).toFixed(1)}°/m, ${(toStop * 1000).toFixed(0)} mm to the bump stop`);
 console.log(`bump ${(bumpM * 1000).toFixed(0)} mm × ${lengthM} m at ${(speed * 3.6).toFixed(0)} km/h: body up to ${(peakAcc / G).toFixed(2)} g, tyre ${(minTyre / staticN).toFixed(2)}–${(maxTyre / staticN).toFixed(2)} of static, in the air ${(air * 1000).toFixed(0)} ms, travel up to ${((maxTravel - rc.staticTravelM) * 1000).toFixed(0)} mm of ${(toStop * 1000).toFixed(0)}, settled ${Math.max(0, settled - leave).toFixed(2)} s after the bump`);
 console.log(`wrote ${dir}/kinematics.csv and ${dir}/bump.csv`);
+
+// The tyre of the corner (stage P2): fitted to the corner's static load, so μ there is the lap's μ.
+const tyreId = (args.tyre ?? corner.tyre) as TyreId;
+if (!(tyreId in TYRES)) throw new Error(`tyre= takes ${[...TYRE_IDS, 'classic'].join(', ')}`);
+const surface = num('surface', 1);
+const tyre = tyreAt(tyreId, staticN);
+const mfo = newMfForces();
+const DEG_RAD = Math.PI / 180;
+const loads = [0.5, 1, 1.5, 2].map((k) => k * staticN);
+
+// Side force over slip angle on four loads, and the aligning moment.
+const lateral = [`alpha_deg,${loads.map((fz) => `fy_n_${fz.toFixed(0)},mz_nm_${fz.toFixed(0)}`).join(',')}`];
+for (let deg = -15; deg <= 15 + 1e-9; deg += 0.25) {
+  const cells = [deg.toFixed(2)];
+  for (const fz of loads) {
+    mfEval(tyre.set, 0, deg * DEG_RAD, 0, fz, surface, mfo);
+    cells.push(mfo.fy.toFixed(1), mfo.mz.toFixed(2));
+  }
+  lateral.push(cells.join(','));
+}
+writeFileSync(`${dir}/tyre-lateral.csv`, lateral.join('\n') + '\n');
+
+// Friction ellipse at the static load: force along against force across, slip swept at fixed slip angles.
+const ellipse = ['alpha_deg,kappa,fx_n,fy_n,ellipse'];
+let ellipseMax = 0;
+for (const deg of [0, 1, 2, 4, 6, 8, 10, 12]) {
+  for (let k = -0.3; k <= 0.3 + 1e-9; k += 0.005) {
+    mfEval(tyre.set, k, deg * DEG_RAD, 0, staticN, surface, mfo);
+    const r = Math.hypot(mfo.fx / mfo.dx, mfo.fy / mfo.dy);
+    ellipseMax = Math.max(ellipseMax, r);
+    ellipse.push([deg, k.toFixed(3), mfo.fx.toFixed(1), mfo.fy.toFixed(1), r.toFixed(4)].join(','));
+  }
+}
+writeFileSync(`${dir}/tyre-ellipse.csv`, ellipse.join('\n') + '\n');
+
+console.log(`tyre ${tyreId} on ${(staticN / 1000).toFixed(2)} kN, surface ${surface}: σ_κ ${(sigmaKappa(tyre.set, staticN) * 1000).toFixed(0)} mm, σ_α ${(sigmaAlpha(tyre.set, staticN) * 1000).toFixed(0)} mm, combined up to ${ellipseMax.toFixed(3)} of the friction ellipse`);
+for (const fz of loads) {
+  const peak = [0, 0];
+  let peakAt = 0;
+  let mzPeak = 0;
+  let mzAt = 0;
+  for (let i = 1; i <= 3000; i++) {
+    const a = i * 0.005 * DEG_RAD;
+    for (const sign of [1, -1]) {
+      mfEval(tyre.set, 0, sign * a, 0, fz, surface, mfo);
+      const j = sign > 0 ? 0 : 1;
+      if (Math.abs(mfo.fy) > peak[j]!) {
+        peak[j] = Math.abs(mfo.fy);
+        if (sign < 0) peakAt = a;
+      }
+      if (sign > 0 && mfo.mz > mzPeak) [mzPeak, mzAt] = [mfo.mz, a];
+    }
+  }
+  mfEval(tyre.set, 0, 0.001, 0, fz, surface, mfo);
+  const stiff = -mfo.ky / fz;
+  const mu = (peak[0]! + peak[1]!) / 2 / fz;
+  console.log(`  ${(fz / 1000).toFixed(2)} kN: μ ${mu.toFixed(3)} (${(peak[0]! / fz).toFixed(3)} / ${(peak[1]! / fz).toFixed(3)} the two ways), peak at ${(peakAt / DEG_RAD).toFixed(1)}°, C_α/F_z ${stiff.toFixed(1)} /rad, M_z up to ${mzPeak.toFixed(0)} N·m at ${(mzAt / DEG_RAD).toFixed(1)}°`);
+}
+console.log(`wrote ${dir}/tyre-lateral.csv and ${dir}/tyre-ellipse.csv`);
