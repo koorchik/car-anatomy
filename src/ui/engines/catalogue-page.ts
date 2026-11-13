@@ -2,7 +2,7 @@
 
 import { ENGINES, engineById, pageChoices } from '../../data/engines.ts';
 import { buildEngine, type Engine } from '../../engine/kinematics.ts';
-import { ASPIRATION_NAMES } from '../../engine/spec.ts';
+import { ASPIRATION_NAMES } from '../../data/engine-names.ts';
 import { t } from '../../i18n/t.ts';
 import { articleHtml } from '../article.ts';
 import { tableHtml } from '../table.ts';
