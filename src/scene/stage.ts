@@ -65,6 +65,8 @@ export class Stage {
   private readonly floor: THREE.Mesh;
   private readonly key: THREE.DirectionalLight;
   private model: EngineModel | null = null;
+  /** Things beside the engine that do not shake with it, such as a dyno. Framed and picked with the model. */
+  readonly extras = new THREE.Group();
   private readonly raycaster = new THREE.Raycaster();
   private insets: Insets = { left: 0, right: 0, top: 0, bottom: 0 };
   private width = 1;
@@ -124,6 +126,12 @@ export class Stage {
     this.floor.position.y = -0.02;
     this.floor.receiveShadow = true;
     this.scene.add(this.floor);
+    this.scene.add(this.extras);
+  }
+
+  /** Lowers the shadow floor, for a rig that stands below the engine's own base. */
+  setFloor(y: number): void {
+    this.floor.position.y = y - 0.02;
   }
 
   resize(width: number, height: number, insets: Insets): void {
@@ -177,6 +185,7 @@ export class Stage {
     if (!this.model) return;
     this.model.group.updateMatrixWorld(true);
     const box = fitBox(this.model.group);
+    if (this.extras.children.some((c) => c.visible)) box.union(new THREE.Box3().setFromObject(this.extras));
     const sphere = box.getBoundingSphere(new THREE.Sphere());
     const freeW = Math.max(120, this.width - this.insets.left - this.insets.right);
     const freeH = Math.max(120, this.height - this.insets.top - this.insets.bottom);
@@ -224,7 +233,7 @@ export class Stage {
     const rect = this.canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
-    const hits = this.raycaster.intersectObject(this.model.group, true);
+    const hits = this.raycaster.intersectObjects([this.model.group, this.extras], true);
     const shown = (hit: THREE.Intersection): boolean => {
       for (let obj: THREE.Object3D | null = hit.object; obj; obj = obj.parent) if (!obj.visible) return false;
       return true;

@@ -1,6 +1,8 @@
 // Crankshaft speed as a small dynamic system. Runs on the audio thread when sound is on,
 // and on the main thread otherwise, so the code must stay free of DOM and Web Audio.
 
+import type { LoadedCrank } from './loaded-crank.ts';
+
 export type EngineState = 'off' | 'cranking' | 'running' | 'stopping';
 
 export interface SimParams {
@@ -25,7 +27,7 @@ export interface SimParams {
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 /** Speed asked for by a full pedal, as a share of redline. Past 1, so the end of the travel reaches the limiter. */
-const PEDAL_TOP_SPEED = 1.1;
+export const PEDAL_TOP_SPEED = 1.1;
 /** Butterfly opening per unit of normalised speed still missing. */
 const PEDAL_GAIN = 10;
 
@@ -53,6 +55,10 @@ export class EngineSim {
   boost = 0;
   /** Hold the crank at this speed, ignoring the pedal. Used for slow motion. */
   lockedRpm: number | null = null;
+  /** A load on the crank, such as a dyno. While it sets its own torque it moves the crank in newton-metres. */
+  crank: LoadedCrank | null = null;
+  /** Engine's share of what the free path turns: below 1 while a load only adds its inertia. */
+  inertiaShare = 1;
 
   private idleIntegral = 0;
   private stateTime = 0;
@@ -91,10 +97,16 @@ export class EngineSim {
     this.rpm = Math.max(this.rpm, this.params.idleRpm);
   }
 
+  /** Couples a load to the crank, or takes it off with null. */
+  attach(crank: LoadedCrank | null): void {
+    this.crank = crank;
+    if (!crank) this.inertiaShare = 1;
+  }
+
   /** Scaled so that a full-throttle run from idle to redline takes about revTimeS. */
   private get accelWot(): number {
     const { redlineRpm, idleRpm, revTimeS } = this.params;
-    return (1.5 * (redlineRpm - idleRpm)) / revTimeS;
+    return ((1.5 * (redlineRpm - idleRpm)) / revTimeS) * this.inertiaShare;
   }
 
   private torque(n: number): number {
@@ -136,8 +148,9 @@ export class EngineSim {
     const p = this.params;
     this.stateTime += dt;
     // Pedal response is quick but not instantaneous, like a real butterfly and manifold.
-    const pedalRate = this.pedal > this.throttle ? 18 : 9;
-    this.throttle += (this.pedal - this.throttle) * Math.min(1, pedalRate * dt);
+    const pedal = this.crank ? this.crank.pedal(this) : this.pedal;
+    const pedalRate = pedal > this.throttle ? 18 : 9;
+    this.throttle += (pedal - this.throttle) * Math.min(1, pedalRate * dt);
 
     if (this.lockedRpm !== null) {
       this.rpm += (this.lockedRpm - this.rpm) * Math.min(1, 6 * dt);
@@ -148,11 +161,13 @@ export class EngineSim {
       return;
     }
 
+    // A load that sets its own torque (a dyno now, a gearbox later) has already moved the crank in newton-metres.
+    const coupled = this.crank?.step(this, dt) ?? false;
     const n = this.rpm / p.redlineRpm;
     let accel = 0;
     let requested = 0;
 
-    switch (this.state) {
+    switch (coupled ? 'coupled' : this.state) {
       case 'off':
         this.rpm = Math.max(0, this.rpm - 600 * dt);
         this.load = 0;
@@ -209,7 +224,7 @@ export class EngineSim {
       }
     }
 
-    if (p.turbo) {
+    if (p.turbo && !coupled) {
       const running = this.state === 'running';
       const target = running ? clamp(this.load * Math.pow(n * 1.15, 0.8), 0, 1) : 0;
       const rate = target > this.boost ? 1 / (p.boostLagS ?? 0.7) : 0.9;

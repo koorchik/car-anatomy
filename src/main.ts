@@ -17,6 +17,7 @@ import { Stage } from './scene/stage.ts';
 import { articleHtml } from './ui/article.ts';
 import { BalancePanel } from './ui/balance-panel.ts';
 import { DesignerPage } from './ui/designer/designer-page.ts';
+import { DynoPanel } from './ui/dyno/dyno-panel.ts';
 import { FiringDiagram, legendHtml } from './ui/firing-diagram.ts';
 import { Spectrum } from './ui/spectrum.ts';
 import { tableHtml } from './ui/table.ts';
@@ -238,6 +239,25 @@ const systems = new SystemsView($('systems-tool'), $('systems-readout'), {
   },
   markers: (markers) => firing.setMarkers(markers),
 });
+const dyno = new DynoPanel({
+  drive,
+  extras: stage.extras,
+  setFloor(y) {
+    stage.setFloor(y);
+  },
+  layout() {
+    layoutPanels();
+    stage.fit(false, true);
+  },
+  leaveSlowMotion() {
+    if (speed === 'slow') setSpeed('readable');
+  },
+  changed(on) {
+    $<HTMLButtonElement>('speed').querySelector<HTMLButtonElement>('[data-v="slow"]')!.disabled = on;
+  },
+});
+app.querySelector('.dash')!.append(dyno.element);
+$('to-designer').before(dyno.toggleButton);
 
 let model: EngineModel | null = null;
 let view: ViewMode = 'xray';
@@ -303,6 +323,7 @@ function showEngine(next: Engine, keepCamera: boolean): void {
   model.setExplode(explode);
   balancePanel.setEngine(engine, newModel, onDesigner);
   systems.attach(engine, newModel);
+  dyno.attachModel(newModel);
   tacho.configure(spec.redlineRpm);
   tachoScale = spec.redlineRpm;
   applyZones();
@@ -338,6 +359,7 @@ function loadEngine(next: Engine, keepRunning: boolean, keepCamera = false): voi
   showEngine(next, keepCamera);
   // Each catalogue engine starts warm: the usual picture. A cold start is the visitor's own choice.
   systems.reset('warm');
+  dyno.setEngine(next, { kind: 'catalogue' });
   const spec = engine.spec;
   renderVariants(spec.id);
   $('engine-title').textContent = spec.title;
@@ -384,12 +406,14 @@ const designer = new DesignerPage({
     drive.setEngine(next);
     // Mixture, ignition and boost change the systems' numbers without changing the model.
     systems.retune(next);
+    dyno.setEngine(next, { kind: 'designer', design: designer.current, perf });
     if (running && !perf.catches) drive.stop();
   },
   setTrim(trim) {
     drive.setTrim(trim);
   },
   wreck() {
+    dyno.abort('broken');
     drive.bang();
     drive.setDistress(0);
     drive.stop();
@@ -649,9 +673,12 @@ function setView(next: ViewMode): void {
   setSegment('view', next);
   model?.setView(next);
   systems.setView(next);
+  dyno.setView(next);
 }
 
 function setSpeed(next: SpeedMode): void {
+  // Slow motion locks the crank at walking pace, where no absorber can work.
+  if (next === 'slow' && dyno.isActive) return;
   speed = next;
   setSegment('speed', next);
   $('slow-tool').hidden = next !== 'slow';
@@ -662,6 +689,7 @@ async function toggleIgnition(): Promise<void> {
   const button = $('ignition');
   const state = drive.snapshot().state;
   if (state === 'running' || state === 'cranking') {
+    dyno.abort('stopped');
     drive.stop();
     button.textContent = t('Запустити двигун');
     button.classList.remove('on');
@@ -776,6 +804,7 @@ $<HTMLInputElement>('explode').addEventListener('input', (event) => {
   explode = Number((event.target as HTMLInputElement).value);
   model?.setExplode(explode);
   systems.setExplode(explode);
+  dyno.setExplode(explode);
 });
 
 $<HTMLInputElement>('shake').addEventListener('change', (event) => {
@@ -1152,6 +1181,7 @@ function frame(now: number): void {
   sf.dt = dt;
   sf.timeScale = Math.min(1, shownSpeed / Math.max(systemsRpm * 6, 1));
   systems.frame(sf);
+  dyno.frame(snap, theta, dt);
   stage.render(dt);
   updateScaleBar();
 
@@ -1190,7 +1220,7 @@ requestAnimationFrame(frame);
 // Handy for manual checks in the browser console.
 declare global {
   interface Window {
-    __engine: { drive: Drive; stage: Stage; designer: DesignerPage; systems: SystemsView; readonly sump: SumpPage | null };
+    __engine: { drive: Drive; stage: Stage; designer: DesignerPage; systems: SystemsView; dyno: DynoPanel; readonly sump: SumpPage | null };
   }
 }
 window.__engine = {
@@ -1198,6 +1228,7 @@ window.__engine = {
   stage,
   designer,
   systems,
+  dyno,
   get sump() {
     return sump;
   },

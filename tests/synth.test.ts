@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ENGINES, engineById } from '../src/data/engines.ts';
-import { engineOrders, type OrderRow } from '../scripts/analysis.ts';
+import { engineOrders, goertzel, measureOrders, type OrderRow } from '../scripts/analysis.ts';
 import { peak, render, rmsDb } from '../scripts/render-audio.ts';
 import { EngineSynth, synthConfig, type SynthConfig } from '../src/audio/synth.ts';
 import { measureTrim } from '../src/designer/loudness.ts';
@@ -10,6 +10,9 @@ import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
 import { randomDesign, withLayout } from '../src/designer/presets.ts';
 import { designToSpec } from '../src/designer/to-spec.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
+import { sizeAbsorber, sweepEndRpm, sweepStartRpm } from '../src/engine/dyno-load.ts';
+import { ATM_BAR, holdCharge, manifoldBar, mapValue, turboShaft } from '../src/engine/torque-map.ts';
+import { catalogueTorqueMap } from '../src/designer/torque-map.ts';
 
 const energy = (rows: OrderRow[], test: (order: number) => boolean): number =>
   rows.filter((r) => test(r.order)).reduce((sum, r) => sum + r.amp * r.amp, 0);
@@ -309,5 +312,95 @@ describe('starting', () => {
     const r = new Float32Array(48000);
     synth.process(l, r);
     expect(Math.max(...l.map(Math.abs))).toBeGreaterThan(0.002);
+  });
+});
+
+describe('on the dyno', () => {
+  it('full load on the dyno is louder on the firing order than the same speed held free, by the cylinder pressure', () => {
+    // The pressure at exhaust valve opening goes with the trapped charge, that is with the manifold pressure. A free
+    // engine held at 4000 rpm needs only the charge that covers friction and pumping; on the dyno at full load the
+    // manifold is at atmospheric pressure. At least 2.5 times the pressure is 8 dB; the synth must give 6 or more.
+    const map = catalogueTorqueMap(engineById('i4')!);
+    const freeManifold = manifoldBar(map, 4000, holdCharge(map, 4000), 1) + ATM_BAR;
+    expect(freeManifold).toBeLessThan(0.4);
+    const free = measureOrders('i4', 4000, 'free', 0, 'l', 6);
+    const dyno = measureOrders('i4', 4000, 'dyno', 1, 'l', 6);
+    expect(free.out.synth.sim.load).toBeLessThan(0.4);
+    expect(dyno.out.crank!.lastCharge).toBeGreaterThan(0.99);
+    expect(dyno.out.synth.sim.fuelCut).toBe(false);
+    const level = (rows: OrderRow[], order: number): number => rows.find((r) => r.order === order)!.level;
+    expect(level(dyno.rows, 2) - level(free.rows, 2)).toBeGreaterThan(6);
+  });
+
+  it('holds boost, and the turbo whistle stands out as a tone', () => {
+    // The whine is a tone at a frequency set by the shaft speed. Measured as its prominence over the noise floor
+    // around it, so the louder broadband exhaust under load cannot pass for it.
+    const spec = engineById('i3')!;
+    const map = catalogueTorqueMap(spec);
+    const rpm = Math.round((0.5 * map.limitRpm) / 50) * 50;
+    const prominence = (whine: number): { db: number; boost: number } => {
+      const out = render('i3', [{ seconds: 1, pedal: 0, dyno: 'off' }, { seconds: 8, pedal: 1, dyno: { hold: rpm } }], undefined, { config: (c) => ({ ...c, turboWhine: whine }) });
+      const boost = out.synth.sim.boost;
+      const hz = 1600 + 8200 * boost;
+      const x = out.l.subarray(out.l.length - 24000);
+      let top = 0;
+      for (let f = hz - 40; f <= hz + 40; f += 2) top = Math.max(top, goertzel(x, f));
+      const around: number[] = [];
+      for (let f = hz - 300; f <= hz + 300; f += 10) if (Math.abs(f - hz) > 40) around.push(goertzel(x, f));
+      around.sort((a, b) => a - b);
+      return { db: 20 * Math.log10(top / around[Math.floor(around.length / 2)]!), boost };
+    };
+    const on = prominence(spec.turboWhine);
+    expect(on.boost).toBeGreaterThan(0.9 * turboShaft(map, mapValue(map, map.pressureRatio, rpm)));
+    expect(on.db).toBeGreaterThan(10);
+    expect(prominence(0).db).toBeLessThan(6);
+  });
+
+  it.each([
+    ['i3', true],
+    ['i3/fiesta-10-ecoboost', false],
+  ] as const)('%s: when the cell shuts the throttle after a sweep, a blow-off valve vents (%s)', (id, vents) => {
+    // The valve opens on a throttle that shuts fast with boost behind it. Heard as a burst of noise around 2.8 kHz
+    // in the first 0.3 s of the ramp down, measured against the same run with the valve taken out. The Fiesta 1.0
+    // recirculates into the intake, so nothing is heard.
+    const map = catalogueTorqueMap(engineById(id)!);
+    const dyno = sizeAbsorber(map, 'eddy');
+    const from = sweepStartRpm(map, dyno);
+    const to = sweepEndRpm(dyno);
+    const steps = [
+      { seconds: 1, pedal: 0, dyno: 'off' as const },
+      { seconds: 5 + (to - from) / 1200 + (to - from) / 1000, pedal: 0, dyno: { sweep: { from, to, rate: 1200 } } },
+    ];
+    const valve = render(id, steps);
+    const none = render(id, steps, undefined, { config: (c) => ({ ...c, blowoff: 0 }) });
+    let top = 0;
+    valve.rpm.forEach((v, i) => {
+      if (v > valve.rpm[top]!) top = i;
+    });
+    const band = (x: Float32Array): number => {
+      const window = x.subarray(top * 128, top * 128 + 0.3 * 48000);
+      let sum = 0;
+      for (let f = 2200; f <= 3400; f += 100) sum += goertzel(window, f) ** 2;
+      return sum;
+    };
+    const db = 10 * Math.log10(band(valve.l) / band(none.l));
+    if (vents) expect(db).toBeGreaterThan(2);
+    else expect(Math.abs(db)).toBeLessThan(0.5);
+  });
+
+  it.each(['i1', 'v8-cross', 'i3', 'i4d', 'r2', 'w16'])('%s has no NaN or overload through a held point, a fast sweep and the ramp down', (id) => {
+    const map = catalogueTorqueMap(engineById(id)!);
+    const dyno = sizeAbsorber(map, 'eddy');
+    const from = sweepStartRpm(map, dyno);
+    const to = sweepEndRpm(dyno);
+    const out = render(id, [
+      { seconds: 1, pedal: 0, dyno: 'off' },
+      { seconds: 3, pedal: 1, dyno: { hold: Math.round(0.5 * map.limitRpm) } },
+      { seconds: 4 + (to - from) / 1200 + (to - from) / 1000, pedal: 0, dyno: { sweep: { from, to, rate: 1200 } } },
+    ]);
+    let finite = true;
+    for (let i = 0; i < out.l.length; i++) if (!Number.isFinite(out.l[i]!) || !Number.isFinite(out.r[i]!)) finite = false;
+    expect(finite).toBe(true);
+    expect(Math.max(peak(out.l), peak(out.r))).toBeLessThanOrEqual(1);
   });
 });

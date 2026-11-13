@@ -2,7 +2,11 @@
 // and runs its own copy of the simulation when it is not.
 
 import type { Engine } from '../engine/kinematics.ts';
+import type { LoadCommand, LoadSpec } from '../engine/load.ts';
+import { LoadedCrank, type CrankReadings } from '../engine/loaded-crank.ts';
+import { createLoad } from '../engine/loads.ts';
 import { EngineSim, type EngineState } from '../engine/sim.ts';
+import type { EngineTorqueMap } from '../engine/torque-map.ts';
 import { synthConfig, type ListenPosition, type SynthConfig } from './synth.ts';
 import type { WorkletCommand, WorkletReport } from './worklet.ts';
 import workletUrl from './worklet.ts?worker&url';
@@ -54,6 +58,12 @@ export class Drive {
   /** Set by start, cleared by stop: the audio thread's last report can still say running just after a stop. */
   private wanted = false;
   audioFailed = false;
+  // A load on the crank, mirrored in the local copy and on the audio thread.
+  private torqueMap: EngineTorqueMap | null = null;
+  private loadSpec: LoadSpec | null = null;
+  /** The last command that sets a lasting mode, replayed when the audio thread starts. */
+  private keptCommand: LoadCommand | null = null;
+  private readingQueue: CrankReadings[] = [];
 
   constructor(engine: Engine) {
     this.config = synthConfig(engine);
@@ -89,6 +99,7 @@ export class Drive {
       node.port.onmessage = (event: MessageEvent<WorkletReport>) => {
         this.report = event.data;
         this.reportAt = performance.now();
+        if (event.data.crank) this.queueReading(event.data.crank);
       };
       this.node = node;
 
@@ -132,6 +143,9 @@ export class Drive {
       this.post({ type: 'pedal', value: this.pedal });
       this.post({ type: 'listen', position: this.listen });
       if (this.lockedRpm !== null) this.post({ type: 'lock', rpm: this.lockedRpm, running: false });
+      if (this.torqueMap) this.post({ type: 'torqueMap', map: this.torqueMap });
+      if (this.loadSpec) this.post({ type: 'load', spec: this.loadSpec });
+      if (this.keptCommand) this.post({ type: 'loadCommand', command: this.keptCommand });
       await ctx.resume();
       return true;
     } catch (error) {
@@ -212,6 +226,51 @@ export class Drive {
     }
   }
 
+  /** The engine's torque map for a load on the crank. Null when nothing is attached. */
+  setTorqueMap(map: EngineTorqueMap | null): void {
+    this.torqueMap = map;
+    this.coupleLocal(false);
+    this.post({ type: 'torqueMap', map });
+  }
+
+  /** Puts a load on the crank, or takes it off with null. A new load starts in its resting state. */
+  setLoad(spec: LoadSpec | null): void {
+    this.loadSpec = spec;
+    this.keptCommand = null;
+    this.coupleLocal(true);
+    this.post({ type: 'load', spec });
+  }
+
+  loadCommand(command: LoadCommand): void {
+    this.local.crank?.load.command(command);
+    this.post({ type: 'loadCommand', command });
+    if (command.action === 'hold' || command.action === 'off' || command.action === 'free') this.keptCommand = command;
+  }
+
+  private coupleLocal(newLoad: boolean): void {
+    this.readingQueue = [];
+    if (!this.torqueMap || !this.loadSpec) this.local.attach(null);
+    else if (this.local.crank && !newLoad) this.local.crank.setMap(this.torqueMap);
+    else this.local.attach(new LoadedCrank(this.torqueMap, createLoad(this.loadSpec)));
+  }
+
+  private queueReading(reading: CrankReadings): void {
+    this.readingQueue.push(reading);
+    if (this.readingQueue.length > 64) this.readingQueue.shift();
+  }
+
+  /** Readings from the load since the last call, oldest first. */
+  takeReadings(): CrankReadings[] {
+    const out = this.readingQueue;
+    this.readingQueue = [];
+    return out;
+  }
+
+  /** Which simulation the readings come from. A change in the middle of a run means the run cannot be trusted. */
+  get readingsSource(): 'worklet' | 'local' {
+    return this.usingWorklet() ? 'worklet' : 'local';
+  }
+
   private usingWorklet(): boolean {
     return this.node !== null && this.report !== null && this.ctx?.state === 'running';
   }
@@ -223,6 +282,7 @@ export class Drive {
       const steps = Math.max(1, Math.ceil(dt / 0.005));
       for (let i = 0; i < steps; i++) this.local.step(dt / steps);
       this.shownAngle = this.local.angle;
+      if (this.local.crank) this.queueReading(this.local.crank.readings());
       return this.snapshot();
     }
     const r = this.report!;

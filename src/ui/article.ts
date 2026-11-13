@@ -148,6 +148,7 @@ export const FIELD_NAMES: Record<string, string> = {
   rotorR: t('радіус ротора'), rotorE: t('ексцентриситет'), rotorWidth: t('ширину ротора'),
   fuelSystem: t('систему живлення'), cooling: t('тип охолодження'), oilCooler: t('оливний радіатор'), pistonJets: t('охолодження поршнів оливою'), sparkPlugs: t('кількість свічок'), ignition: t('систему запалювання'), glowPlugs: t('свічки розжарювання'), oilPump: t('привід оливного насоса'), oilFilter: t('оливний фільтр'),
   sump: t('тип мащення'), oilL: t('об’єм оливи'),
+  flywheelKg: t('масу маховика'),
 };
 
 /** What this engine's exhaust is set to, in words, so the difference between engines of a page can be read as well as heard. */

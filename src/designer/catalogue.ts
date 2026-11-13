@@ -6,7 +6,7 @@ import { mod } from '../engine/kinematics.ts';
 import type { Article, EngineSpec } from '../engine/spec.ts';
 import { resolveDesign } from './constraints.ts';
 import { axisAngle } from './crank.ts';
-import { DEFAULT_DESIGN, type CrankThrow, type Design } from './design.ts';
+import { DEFAULT_DESIGN, type CrankThrow, type Design, type PublishedFigures } from './design.ts';
 import type { SYSTEM_KEYS } from './systems.ts';
 import { factoryInputs, designToSpec } from './to-spec.ts';
 
@@ -82,7 +82,12 @@ function throwsForFiring(d: Design, order: number[], intervals: number[]): Crank
   return throws;
 }
 
-export function catalogueDesign(entry: CatalogueEntry, variant?: EngineVariant): Design {
+/** The figures an article quotes, as the designer keeps them beside its own. */
+export const publishedOf = (facts: EngineFacts | undefined): PublishedFigures | null =>
+  facts ? { powerHp: facts.powerHp, powerRpm: facts.powerRpm, torqueNm: facts.torqueNm, torqueRpm: facts.torqueRpm } : null;
+
+/** @param facts What the article says about this engine. A variant is its own facts. */
+export function catalogueDesign(entry: CatalogueEntry, variant?: EngineVariant, facts: EngineFacts | undefined = variant): Design {
   const name = variant?.name ?? entry.example;
   const trimKey = variant ? `${entry.id}/${variant.id}` : entry.id;
   const base: Design = { ...DEFAULT_DESIGN, ...entry.design, ...variant?.design, ...(variant ? variant.systems : entry.systems), name };
@@ -94,7 +99,7 @@ export function catalogueDesign(entry: CatalogueEntry, variant?: EngineVariant):
     crankPreset: rotary ? 'even' : 'custom',
     throws: rotary ? [] : throwsForFiring(base, order, firing.intervals ?? order.map(() => 720 / order.length)),
     rotorOrder: rotary ? order : null,
-    factory: { ...(variant?.factory ?? entry.factory), trim: LOUDNESS_TRIM[trimKey] ?? 0.4 },
+    factory: { ...(variant?.factory ?? entry.factory), trim: LOUDNESS_TRIM[trimKey] ?? 0.4, published: publishedOf(facts) },
   });
 }
 

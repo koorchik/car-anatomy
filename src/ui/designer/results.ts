@@ -8,6 +8,7 @@ import { SAFE_LOAD, type Reliability } from '../../designer/reliability.ts';
 import { causesOf, type Cause, type Probe } from '../../designer/sensitivity.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
+import { publishedText } from '../published.ts';
 import { RpmChart, type ChartSeries } from './chart.ts';
 
 const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { maximumFractionDigits: digits, minimumFractionDigits: digits });
@@ -47,6 +48,8 @@ const seriesOf = (perf: Performance, of: (p: RpmPoint) => number): ChartSeries =
 export class DesignerResults {
   readonly root = document.createElement('div');
   private readonly hero = document.createElement('div');
+  /** The maker's figures beside the model's, while the design is still a catalogue engine. */
+  private readonly factoryFigures = document.createElement('p');
   private readonly heroCauses = document.createElement('div');
   private readonly verdict = document.createElement('div');
   private reliability: Reliability | null = null;
@@ -74,6 +77,7 @@ export class DesignerResults {
   constructor() {
     this.root.className = 'designer-results';
     this.hero.className = 'hero-figures';
+    this.factoryFigures.className = 'note factory-figures';
     this.diagnostics.className = 'diagnostics';
     this.stats.className = 'readouts stats';
     this.energy.className = 'energy';
@@ -142,6 +146,7 @@ export class DesignerResults {
 
     this.root.append(
       this.hero,
+      this.factoryFigures,
       this.heroCauses,
       this.verdict,
       this.compareButton,
@@ -246,6 +251,11 @@ export class DesignerResults {
     const { design, perf, baseline } = this;
     if (!design || !perf) return;
     this.hero.innerHTML = this.heroHtml(perf, baseline);
+    const published = design.factory?.published;
+    this.factoryFigures.hidden = !published;
+    if (published) {
+      this.factoryFigures.textContent = `${t('Заводські дані: {figures}', { figures: publishedText(published) })}. ${t('Цифри вище рахує модель, тому кожна зміна дає фізичну різницю.')}`;
+    }
     const heroOpen = this.openMetric === 'power' || this.openMetric === 'torque' || this.openMetric === 'cruise';
     this.heroCauses.hidden = !heroOpen;
     this.heroCauses.innerHTML = heroOpen ? this.causesHtml() : '';

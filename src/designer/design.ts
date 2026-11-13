@@ -23,12 +23,22 @@ export interface CrankThrow {
   turn: 0 | 1;
 }
 
+/** Published figures of a real engine, as its article shows them. */
+export interface PublishedFigures {
+  powerHp: number;
+  powerRpm: number | null;
+  torqueNm: number | null;
+  torqueRpm: number | null;
+}
+
 /** Exact figures of a real engine. They hold only until the first engineering change. */
 export interface FactoryCalibration {
   idleRpm: number;
   revTimeS: number;
   rough: number;
   trim: number;
+  /** What the maker published, shown beside the model's own figures. Null when unknown. */
+  published?: PublishedFigures | null;
 }
 
 export interface Design {

@@ -32,7 +32,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 9.5,
       torqueRpm: 7500,
       voiceEvidence: 'estimate',
-      unverified: ['compression', 'powerHp', 'torqueNm', 'torqueRpm', 'redline', 'blockMaterial', 'fuel', 'years', 'fuelSystem', 'cooling'],
+      unverified: ['compression', 'powerHp', 'torqueNm', 'torqueRpm', 'redline', 'blockMaterial', 'fuel', 'years', 'fuelSystem', 'cooling', 'flywheelKg'],
       sources: ['https://en.wikipedia.org/wiki/Honda_CG125', 'https://www.moto-data.net/honda/cg-125-1991-1994'],
       factory: {
         idleRpm: 1560,
@@ -40,6 +40,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         rough: 0.64,
       },
       design: {
+        flywheelKg: 2,
         bore: 56.5,
         stroke: 49.5,
         rodLength: 91.5,
@@ -78,7 +79,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 74,
       torqueRpm: 6500,
       voiceEvidence: 'default',
-      unverified: ['compression', 'torqueNm', 'redline', 'blockMaterial', 'fuel', 'sparkPlugs', 'sump'],
+      unverified: ['compression', 'torqueNm', 'redline', 'blockMaterial', 'fuel', 'sparkPlugs', 'sump', 'flywheelKg'],
       sources: ['https://www.totalmotorcycle.com/motorcycles/2016/2016-KTM-690-Duke', 'https://www.motorcycle.com/specs/ktm/sport/2018/duke/690/detail.html', 'https://en.wikipedia.org/wiki/KTM_690_Duke'],
       factory: {
         idleRpm: 1740,
@@ -86,6 +87,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         rough: 0.88,
       },
       design: {
+        flywheelKg: 4,
         bore: 105,
         stroke: 80,
         rodLength: 148,
@@ -126,7 +128,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 26,
       torqueRpm: 5250,
       voiceEvidence: 'default',
-      unverified: ['compression', 'redline', 'blockMaterial', 'fuel', 'directInjection'],
+      unverified: ['compression', 'redline', 'blockMaterial', 'fuel', 'directInjection', 'flywheelKg'],
       sources: ['https://www.moto-data.net/vespa/gts-300-hpe-basic-2019/m:amp', 'https://www.bennetts.co.uk/bikesocial/reviews/bikes/vespa/vespa-gts-300-hpe-review-2019-specs'],
       factory: {
         idleRpm: 1590,
@@ -134,6 +136,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         rough: 0.64,
       },
       design: {
+        flywheelKg: 3,
         bore: 75,
         stroke: 63,
         rodLength: 116.5,
@@ -678,7 +681,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 144.6,
       torqueRpm: 8750,
       voiceEvidence: 'estimate',
-      unverified: ['compression', 'redline', 'fuel', 'blockMaterial', 'firingIntervals'],
+      unverified: ['compression', 'redline', 'fuel', 'blockMaterial', 'firingIntervals', 'flywheelKg'],
       sources: ['https://ultimatemotorcycling.com/2014/11/03/2015-ducati-1299-panigale-first-look-205-hp-367-lbs/', 'https://www.moto-data.net/ducati/1299-panigale-2017/m:amp', 'https://en.wikipedia.org/wiki/Ducati_Superquadro_engine'],
       factory: {
         idleRpm: 1280,
@@ -690,6 +693,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         intervals: [270, 450],
       },
       design: {
+        flywheelKg: 4,
         veeAngle: 90,
         bore: 116,
         stroke: 60.8,
@@ -731,7 +735,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 140,
       torqueRpm: 8000,
       voiceEvidence: 'default',
-      unverified: ['redline', 'fuel', 'blockMaterial', 'firingIntervals', 'years', 'sparkPlugs', 'sump'],
+      unverified: ['redline', 'fuel', 'blockMaterial', 'firingIntervals', 'years', 'sparkPlugs', 'sump', 'flywheelKg'],
       sources: ['https://moto-data.net/ktm/1290-super-duke-r-2020', 'https://www.visordown.com/news/new-bikes/2020-ktm-1290-super-duke-r-revealed-–-overview-full-specs'],
       factory: {
         idleRpm: 1280,
@@ -743,6 +747,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         intervals: [285, 435],
       },
       design: {
+        flywheelKg: 4,
         veeAngle: 75,
         bore: 108,
         stroke: 71,
@@ -784,7 +789,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 128,
       torqueRpm: 6750,
       voiceEvidence: 'default',
-      unverified: ['powerRpm', 'fuel', 'directInjection', 'firingIntervals', 'sump'],
+      unverified: ['powerRpm', 'fuel', 'directInjection', 'firingIntervals', 'sump', 'flywheelKg'],
       sources: ['https://ultimatemotorcycling.com/?p=229359', 'https://www.enginebuildermag.com/?p=51398', 'https://ironcitymotorcycles.co.uk/harley-davidson/new-bikes/adventure-touring/pan-america-1250/2023', 'https://canadamotoguide.com/2021/02/26/harley-davidson-revolution-max-1250-engine-a-closer-look/'],
       factory: {
         idleRpm: 1280,
@@ -796,6 +801,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         intervals: [270, 450],
       },
       design: {
+        flywheelKg: 5,
         veeMirror: false,
         veeAngle: 60,
         bore: 105,
@@ -840,7 +846,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 80,
       torqueRpm: 5000,
       voiceEvidence: 'default',
-      unverified: ['compression', 'redline', 'torqueNm', 'torqueRpm', 'fuel', 'blockMaterial', 'firingIntervals', 'cooling'],
+      unverified: ['compression', 'redline', 'torqueNm', 'torqueRpm', 'fuel', 'blockMaterial', 'firingIntervals', 'cooling', 'flywheelKg'],
       sources: ['https://www.visordown.com/news/new-bikes/moto-guzzi-v85-tt-specs-tech-and-video', 'https://www.moto-data.net/moto-guzzi/v85-tt-2024', 'https://www.bennetts.co.uk/bikesocial/news-and-views/news/2018/november/moto-guzzi-2019-v85tt-eicma-show', 'https://www.bikeleague.in/?p=16747'],
       factory: {
         idleRpm: 1150,
@@ -852,6 +858,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         intervals: [270, 450],
       },
       design: {
+        flywheelKg: 6,
         veeAngle: 90,
         bore: 84,
         stroke: 77,
@@ -2283,7 +2290,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 620,
       torqueRpm: 2000,
       voiceEvidence: 'default',
-      unverified: ['firingOrder', 'redline', 'compression'],
+      unverified: ['firingOrder', 'redline', 'compression', 'flywheelKg'],
       sources: ['https://en.wikipedia.org/wiki/BMW_B57'],
       factory: {
         idleRpm: 760,
@@ -2291,6 +2298,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         rough: 0.24,
       },
       design: {
+        flywheelKg: 14,
         bore: 84,
         stroke: 90,
         rodLength: 144,
@@ -2332,7 +2340,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 760,
       torqueRpm: 2000,
       voiceEvidence: 'default',
-      unverified: ['compression', 'firingOrder', 'redline', 'engineCode'],
+      unverified: ['compression', 'firingOrder', 'redline', 'engineCode', 'flywheelKg'],
       sources: ['https://en.wikipedia.org/wiki/BMW_B57', 'https://www.press.bmwgroup.com/africa-dom-easteurope/article/detail/T0270145EN/the-new-bmw-m550d-xdrive', 'https://carsart.net/en/cars/bmw/5-series/sedan-g30/400hp-xdrive-steptronic'],
       factory: {
         idleRpm: 760,
@@ -2340,6 +2348,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         rough: 0.24,
       },
       design: {
+        flywheelKg: 14,
         bore: 84,
         stroke: 90,
         rodLength: 144,
@@ -2383,7 +2392,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 700,
       torqueRpm: 1200,
       voiceEvidence: 'default',
-      unverified: ['firingOrder', 'redline'],
+      unverified: ['firingOrder', 'redline', 'flywheelKg'],
       sources: ['https://en.wikipedia.org/wiki/Mercedes-Benz_OM656_engine'],
       factory: {
         idleRpm: 760,
@@ -2391,6 +2400,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         rough: 0.24,
       },
       design: {
+        flywheelKg: 14,
         bore: 82,
         stroke: 92.4,
         rodLength: 148,
@@ -2483,7 +2493,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 430,
       torqueRpm: 1200,
       voiceEvidence: 'default',
-      unverified: ['firingOrder', 'blockMaterial', 'years', 'fuelSystem'],
+      unverified: ['firingOrder', 'blockMaterial', 'years', 'fuelSystem', 'flywheelKg'],
       sources: ['https://en.wikipedia.org/wiki/Toyota_HD_engine', 'https://www.carsguide.com.au/car-advice/1hd-fte-engine-your-guide-to-the-toyota-turbo-diesel-hd-motor-80098'],
       factory: {
         idleRpm: 760,
@@ -2491,6 +2501,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         rough: 0.24,
       },
       design: {
+        flywheelKg: 16,
         bore: 94,
         stroke: 100,
         rodLength: 160,
@@ -3428,7 +3439,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: null,
       torqueRpm: null,
       voiceEvidence: 'estimate',
-      unverified: ['compression', 'fuel', 'powerRpm', 'torqueNm', 'torqueRpm', 'firingOrder', 'years', 'fuelSystem'],
+      unverified: ['compression', 'fuel', 'powerRpm', 'torqueNm', 'torqueRpm', 'firingOrder', 'years', 'fuelSystem', 'flywheelKg'],
       sources: ['https://en.wikipedia.org/wiki/Bugatti_Type_35', 'https://thoroughbred-cars.com/cars/france/bugatti/Bugatti%20type%2035.htm', 'https://www.ultimatespecs.com/car-specs/Bugatti/27194/Bugatti-Type-35-.html'],
       factory: {
         idleRpm: 710,
@@ -3436,6 +3447,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         rough: 0.21,
       },
       design: {
+        flywheelKg: 8,
         bore: 60,
         stroke: 88,
         rodLength: 154,
@@ -3516,7 +3528,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 253,
       torqueRpm: 6450,
       voiceEvidence: 'estimate',
-      unverified: ['blockMaterial', 'redline', 'firingOrder', 'powerHp', 'torqueNm', 'sparkPlugs', 'sump'],
+      unverified: ['blockMaterial', 'redline', 'firingOrder', 'powerHp', 'torqueNm', 'sparkPlugs', 'sump', 'flywheelKg'],
       sources: ['https://en.wikipedia.org/wiki/Mercedes-Benz_M196_engine', 'https://en.wikipedia.org/wiki/Mercedes-Benz_W196', 'https://www.ultimatecarpage.com/spec/362/Mercedes-Benz-W196.html'],
       factory: {
         idleRpm: 770,
@@ -3524,6 +3536,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         rough: 0.24,
       },
       design: {
+        flywheelKg: 6,
         bore: 76,
         stroke: 68.8,
         rodLength: 120.5,
@@ -3565,7 +3578,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: null,
       torqueRpm: null,
       voiceEvidence: 'estimate',
-      unverified: ['compression', 'firingOrder', 'fuel', 'redline', 'blockMaterial', 'powerHp', 'torqueNm', 'torqueRpm', 'fuelSystem', 'sump'],
+      unverified: ['compression', 'firingOrder', 'fuel', 'redline', 'blockMaterial', 'powerHp', 'torqueNm', 'torqueRpm', 'fuelSystem', 'sump', 'flywheelKg'],
       sources: ['https://en.wikipedia.org/wiki/Alfa_Romeo_8C', 'https://www.conceptcarz.com/w10253/alfa-romeo-8c-2300.aspx', 'https://www.ultimatecarpage.com/spec/3/Alfa-Romeo-8C-2300-Touring-Spider.html'],
       factory: {
         idleRpm: 710,
@@ -3573,6 +3586,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         rough: 0.21,
       },
       design: {
+        flywheelKg: 8,
         bore: 65,
         stroke: 88,
         rodLength: 154,

@@ -2,6 +2,10 @@
 // the picture cannot drift apart.
 
 import { EngineSynth, type ListenPosition, type SynthConfig } from './synth.ts';
+import type { LoadCommand, LoadSpec } from '../engine/load.ts';
+import { LoadedCrank, type CrankReadings } from '../engine/loaded-crank.ts';
+import { createLoad } from '../engine/loads.ts';
+import type { EngineTorqueMap } from '../engine/torque-map.ts';
 
 declare const sampleRate: number;
 declare function registerProcessor(name: string, ctor: unknown): void;
@@ -18,7 +22,10 @@ export type WorkletCommand =
   | { type: 'listen'; position: ListenPosition }
   | { type: 'trim'; value: number }
   | { type: 'distress'; value: number }
-  | { type: 'bang' };
+  | { type: 'bang' }
+  | { type: 'torqueMap'; map: EngineTorqueMap | null }
+  | { type: 'load'; spec: LoadSpec | null }
+  | { type: 'loadCommand'; command: LoadCommand };
 
 export interface WorkletReport {
   angle: number;
@@ -28,6 +35,8 @@ export interface WorkletReport {
   throttle: number;
   fuelCut: boolean;
   boost: number;
+  /** Averages from a load on the crank since the last report. */
+  crank: CrankReadings | null;
 }
 
 const REPORT_EVERY = 512;
@@ -35,6 +44,8 @@ const REPORT_EVERY = 512;
 class EngineProcessor extends AudioWorkletProcessor {
   private synth: EngineSynth | null = null;
   private sinceReport = 0;
+  private torqueMap: EngineTorqueMap | null = null;
+  private loadSpec: LoadSpec | null = null;
 
   constructor() {
     super();
@@ -45,7 +56,10 @@ class EngineProcessor extends AudioWorkletProcessor {
     switch (cmd.type) {
       case 'config':
         if (this.synth) this.synth.setConfig(cmd.config);
-        else this.synth = new EngineSynth(cmd.config, sampleRate);
+        else {
+          this.synth = new EngineSynth(cmd.config, sampleRate);
+          this.couple(true);
+        }
         if (cmd.running) this.synth.sim.startImmediately();
         break;
       case 'pedal':
@@ -74,7 +88,27 @@ class EngineProcessor extends AudioWorkletProcessor {
       case 'bang':
         this.synth?.bang();
         break;
+      case 'torqueMap':
+        this.torqueMap = cmd.map;
+        this.couple(false);
+        break;
+      case 'load':
+        this.loadSpec = cmd.spec;
+        this.couple(true);
+        break;
+      case 'loadCommand':
+        this.synth?.sim.crank?.load.command(cmd.command);
+        break;
     }
+  }
+
+  /** A load needs both its description and the engine's torque map. A new map keeps the load and its state. */
+  private couple(newLoad: boolean): void {
+    const sim = this.synth?.sim;
+    if (!sim) return;
+    if (!this.torqueMap || !this.loadSpec) sim.attach(null);
+    else if (sim.crank && !newLoad) sim.crank.setMap(this.torqueMap);
+    else sim.attach(new LoadedCrank(this.torqueMap, createLoad(this.loadSpec)));
   }
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
@@ -95,6 +129,7 @@ class EngineProcessor extends AudioWorkletProcessor {
         throttle: sim.throttle,
         fuelCut: sim.fuelCut,
         boost: sim.boost,
+        crank: sim.crank ? sim.crank.readings() : null,
       };
       this.port.postMessage(report);
     }
