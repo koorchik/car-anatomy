@@ -62,6 +62,7 @@ describe.each(ENGINES.map((e) => [e.id, e] as const))('%s opened in the designer
     expect(c.tuning?.flywheelKg).toBe(spec.tuning?.flywheelKg);
     if (spec.tuning?.counterweightMm !== undefined) expect(c.tuning?.counterweightMm).toBeCloseTo(spec.tuning.counterweightMm, 6);
     expect(c.tuning?.vibrationGain ?? 1).toBe(spec.tuning?.vibrationGain ?? 1);
+    for (const key of ['reciprocatingKg', 'rotatingKg', 'rotorKg', 'balanceShafts'] as const) expect(c.tuning?.[key], key).toBe(spec.tuning?.[key]);
   });
 
   it('same sound settings', () => {

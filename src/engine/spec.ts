@@ -82,6 +82,14 @@ export interface EngineTuning {
   /** Multiplies the visible shake, for balance shafts. */
   vibrationGain?: number;
   counterweightMm?: number;
+  /** Piston, pin, rings and a third of the rod of one cylinder, kg. Sizes the balance arrows. */
+  reciprocatingKg?: number;
+  /** Rest of the rod and the crankpin share of one cylinder, which turn with the crank, kg. */
+  rotatingKg?: number;
+  /** One rotor of a Wankel, kg. */
+  rotorKg?: number;
+  /** As in the designer: 1 shaft cancels what is left of the first order, 2 the second order as well. */
+  balanceShafts?: 0 | 1 | 2;
   /** Loudness correction measured for this exact engine. */
   trim?: number;
 }

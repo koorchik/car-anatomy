@@ -2,6 +2,7 @@
 
 import { ENGINES, engineFacts } from '../data/engines.ts';
 import type { EngineFacts } from '../designer/catalogue.ts';
+import { ALL_LAYERS, BalanceForces, atRpm, massesOf, roughly } from '../engine/balance-forces.ts';
 import { balance, groupIntervals, torqueCurve, type Engine } from '../engine/kinematics.ts';
 import { ASPIRATION_NAMES, VALVETRAIN_NAMES, type EngineSpec } from '../engine/spec.ts';
 import { numberLocale } from '../i18n/locale.ts';
@@ -52,9 +53,35 @@ const BAL_LABELS: Array<[keyof ReturnType<typeof balance>, string, string]> = [
   ['couple2', t('Момент, 2-й порядок'), t('Гойдає двигун удвічі частіше')],
 ];
 
+/** The forces in newtons at the rev limit, and the way to the arrows on the model. */
+const forcesAtRedline = (engine: Engine): string => {
+  const bf = new BalanceForces(engine, massesOf(engine.spec));
+  const rpm = engine.spec.redlineRpm;
+  const n = (perOmega2: number): string => num(roughly(atRpm(perOmega2, rpm)));
+  const left = bf.left();
+  const peak = bf.peaks(ALL_LAYERS);
+  const force = left.includes('force1') || left.includes('force2');
+  const couple = left.includes('couple1') || left.includes('couple2');
+  // What the model leaves, not what reaches the mounts: a real engine may have a balance shaft that the spec does not carry.
+  const after = bf.shafts.length ? t('після противаг колінвала й балансирних валів') : t('після противаг колінвала');
+  const values = { rpm: num(rpm), piston: n(bf.pistonPeak), force: n(peak.force), couple: n(peak.couple), after };
+  const text = engine.isRotary
+    ? t('На межі обертів ({rpm} об/хв) кожен ротор тягне вал убік із силою {force} Н.', { rpm: num(rpm), force: n(bf.primary) })
+    : force && couple
+      ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а {after} лишається до {force} Н сили й {couple} Н·м моменту.', values)
+      : force
+        ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а {after} лишається до {force} Н сили.', values)
+        : couple
+          ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а {after} лишається до {couple} Н·м моменту.', values)
+          : bf.higherLeft()
+            ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а {after} 1-й і 2-й порядки гасять одне одного. Лишаються лише слабкі вищі порядки, до {force} Н.', values)
+            : t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, але {after} всі вони гасять одна одну.', values);
+  return `<p>${text} <button type="button" class="btn forces-show" data-show-forces>${t('Показати стрілки сил на моделі')}</button></p>`;
+};
+
 const balanceChart = (engine: Engine): string => {
   if (engine.isRotary) {
-    return `<p class="note">${t('Ротор обертається, а не рухається туди-сюди, і зрівноважується противагами на ексцентриковому валу. Вільних сил майже немає, тому тут графіка немає.')}</p>`;
+    return `<p class="note">${t('Ротор обертається, а не рухається туди-сюди, і зрівноважується противагами на ексцентриковому валу. Вільних сил майже немає, тому тут графіка немає.')}</p>${forcesAtRedline(engine)}`;
   }
   const b = balance(engine);
   const max = 3;
@@ -69,7 +96,8 @@ const balanceChart = (engine: Engine): string => {
     </div>`;
   }).join('');
   return `<div class="bars">${rows}</div>
-    <p class="note">${t('Пораховано з геометрії цього двигуна. Одиниця: сила інерції одного поршня. Моменти поділено ще й на відстань між циліндрами. Частину першого порядку, яку можуть прибрати противаги колінвала, вже вилучено.')}</p>`;
+    <p class="note">${t('Пораховано з геометрії цього двигуна. Одиниця: сила інерції одного поршня. Моменти поділено ще й на відстань між циліндрами. Частину першого порядку, яку можуть прибрати противаги колінвала, вже вилучено.')}</p>
+    ${forcesAtRedline(engine)}`;
 };
 
 const torqueSvg = (engine: Engine): string => {

@@ -28,6 +28,8 @@ const TRIM_DELAY_MS = 700;
 export interface DesignerHost {
   /** Rebuild the 3D model and everything drawn from the engine's geometry. */
   showEngine(engine: Engine): void;
+  /** A new engine with the same geometry: what is drawn over the model may still change, like the force arrows. */
+  sameShape(engine: Engine): void;
   /** Hand the engine to the sound thread. */
   soundEngine(engine: Engine, perf: Performance): void;
   setTrim(trim: number): void;
@@ -326,7 +328,10 @@ export class DesignerPage {
     if (!this.active) return;
     this.lastRebuild = performance.now();
     const key = geometryKey(this.engine);
-    if (key === this.lastGeometry) return;
+    if (key === this.lastGeometry) {
+      this.host.sameShape(this.engine);
+      return;
+    }
     this.lastGeometry = key;
     this.host.showEngine(this.engine);
   }

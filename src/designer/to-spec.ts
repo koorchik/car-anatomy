@@ -5,7 +5,7 @@ import { firingFromCrank, layoutDef } from './crank.ts';
 import { safeCounterweight } from './constraints.ts';
 import { effectiveOpen, effectivePops, effectiveRasp, exhaustGroups, isRotary, isTurbo, type Design } from './design.ts';
 import { FUELS } from './fuels.ts';
-import { valveEvents, type Performance } from './physics.ts';
+import { reciprocatingMass, rotatingMass, rotorMass, valveEvents, type Performance } from './physics.ts';
 
 const FAMILY: Record<Design['layout'], Family> = {
   inline: 'inline',
@@ -135,6 +135,10 @@ export function designToSpec(d: Design, perf: SpecInputs): EngineSpec {
       flywheelKg: d.flywheelKg,
       vibrationGain: d.balanceShafts === 2 ? 0.2 : d.balanceShafts === 1 ? 0.55 : 1,
       counterweightMm: rotary ? undefined : safeCounterweight(d.bore, d.stroke, d.rodLength),
+      reciprocatingKg: rotary ? undefined : reciprocatingMass(d),
+      rotatingKg: rotary ? undefined : rotatingMass(d),
+      rotorKg: rotary ? rotorMass(d) : undefined,
+      balanceShafts: rotary ? undefined : d.balanceShafts,
     },
   };
 }

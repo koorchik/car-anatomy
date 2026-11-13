@@ -173,12 +173,29 @@ export const exhaustTuneRpm = (d: Design, events: ValveEvents): number => {
   return (850 * (180 + events.evoBbdc)) / (lengthIn + 3);
 };
 
-/** Peak inertia mass, kg. Pistons scale with the cube of the bore, rods with their own size. */
-function reciprocatingMass(d: Design): number {
-  const piston = 0.55e-6 * d.bore ** 3 * { cast: 1.08, forged: 1, light: 0.78 }[d.pistonMaterial];
-  const rod = 5.35e-7 * d.rodLength * d.bore ** 2 * { steel: 1, titanium: 0.62 }[d.rodMaterial];
-  return piston + rod / 3;
+/** Piston with its pin and rings, kg. Scales with the cube of the bore. */
+const pistonMass = (d: Design): number => 0.55e-6 * d.bore ** 3 * { cast: 1.08, forged: 1, light: 0.78 }[d.pistonMaterial];
+
+/** Connecting rod, kg. Scales with its own size. */
+const rodMass = (d: Design): number => 5.35e-7 * d.rodLength * d.bore ** 2 * { steel: 1, titanium: 0.62 }[d.rodMaterial];
+
+/** Peak inertia mass, kg: the piston and the third of the rod that moves with it. */
+export function reciprocatingMass(d: Design): number {
+  return pistonMass(d) + rodMass(d) / 3;
 }
+
+/**
+ * Mass that turns on the crankpin for one cylinder, kg: the rest of the rod and its share of the pin,
+ * a steel cylinder of the size the 3D model draws. Webs are left out. An estimate, used by the balance arrows.
+ */
+export function rotatingMass(d: Design): number {
+  const bore = d.bore / 1000;
+  const pin = 7850 * (Math.PI / 4) * (0.44 * bore) ** 2 * (0.28 * bore);
+  return (rodMass(d) * 2) / 3 + pin;
+}
+
+/** One rotor with its bearing, kg, scaled from the 13B's 4.5 kg. */
+export const rotorMass = (d: Design): number => 4.5 * (d.rotorWidth / 80) * (d.rotorR / 105) ** 2;
 
 const pistonAccelAt = (d: Design, rpm: number): number => {
   const w = (rpm * Math.PI) / 30;
@@ -601,7 +618,7 @@ function rotatingInertia(d: Design, reciprocating: number): number {
   const flyR = 0.13 * (d.flywheelKg / 9) ** (1 / 3);
   const fly = 0.5 * d.flywheelKg * flyR * flyR;
   if (isRotary(d)) {
-    const rotor = 0.5 * 4.5 * (d.rotorWidth / 80) * (d.rotorR / 105) ** 2 * d.cylinders * ((d.rotorE / 1000) ** 2 + 0.002);
+    const rotor = 0.5 * rotorMass(d) * d.cylinders * ((d.rotorE / 1000) ** 2 + 0.002);
     return fly + 0.012 + rotor;
   }
   const r = d.stroke / 2000;

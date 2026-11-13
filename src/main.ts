@@ -15,6 +15,7 @@ import { PistonEngineModel } from './scene/piston-engine.ts';
 import { RotaryEngineModel } from './scene/rotary-engine.ts';
 import { Stage } from './scene/stage.ts';
 import { articleHtml } from './ui/article.ts';
+import { BalancePanel } from './ui/balance-panel.ts';
 import { DesignerPage } from './ui/designer/designer-page.ts';
 import { FiringDiagram, legendHtml } from './ui/firing-diagram.ts';
 import { Spectrum } from './ui/spectrum.ts';
@@ -213,6 +214,7 @@ const firing = new FiringDiagram($('tooltip'));
 $('firing-body').append(firing.element);
 const spectrum = new Spectrum();
 $('spectrum-body').append(spectrum.element);
+const balancePanel = new BalancePanel(app.querySelector<HTMLElement>('.view-tools')!, app);
 
 let model: EngineModel | null = null;
 let view: ViewMode = 'xray';
@@ -265,6 +267,7 @@ function showEngine(next: Engine, keepCamera: boolean): void {
   model = newModel;
   model.setView(view);
   model.setExplode(explode);
+  balancePanel.setEngine(engine, newModel, onDesigner);
   tacho.configure(spec.redlineRpm);
   tachoScale = spec.redlineRpm;
   applyZones();
@@ -332,6 +335,9 @@ function applyZones(): void {
 const designer = new DesignerPage({
   showEngine(next) {
     showEngine(next, true);
+  },
+  sameShape(next) {
+    balancePanel.updateEngine(next);
   },
   heading() {
     syncDesignerHeading();
@@ -638,6 +644,12 @@ const setResults = (open: boolean): void => {
   layoutPanels();
 };
 $('results-open').addEventListener('click', () => setResults(true));
+// The article can switch the force arrows on; a phone then needs the sheet out of the way.
+$('article').addEventListener('click', (event) => {
+  if (!(event.target as HTMLElement).closest('[data-show-forces]')) return;
+  balancePanel.show(true);
+  if (window.innerWidth <= 860) setPanel(false);
+});
 $('results-close').addEventListener('click', () => setResults(false));
 
 const openTable = (open: boolean): void => {
@@ -916,6 +928,7 @@ function frame(now: number): void {
     dt,
     shake: demoMode ? 0 : shake,
   });
+  balancePanel.frame(theta, demoMode ? spec.idleRpm : snap.rpm);
   stage.render(dt);
   updateScaleBar();
 
