@@ -210,6 +210,61 @@ export class DrivetrainSolver {
     return e / 2;
   }
 
+  /** Numbers in a snapshot (snapshot, restore). */
+  snapshotSize(): number {
+    const { n } = this.core;
+    return 2 * n + 8 * this.core.elements.ids.length + 2 * this.core.members.length + 2;
+  }
+
+  /**
+   * Flat state for the hand-over between the audio thread and the main-thread copy: angles and speeds, every element's
+   * command, state, slip, torque, direction, heat and temperature, the members' outside torques and speed holds, the
+   * time and the loss counter. The anchors are the caller's; the rest is rebuilt on every step.
+   */
+  snapshot(out: Float64Array, offset: number): void {
+    let o = offset;
+    const put = (a: ArrayLike<number>) => {
+      for (let i = 0; i < a.length; i++) out[o++] = a[i]!;
+    };
+    put(this.phi);
+    put(this.phiDot);
+    put(this.command);
+    put(this.state);
+    put(this.slip);
+    put(this.torque);
+    put(this.slipDir);
+    put(this.crossed);
+    put(this.energy);
+    put(this.temperature);
+    put(this.memberTorque);
+    put(this.drive);
+    out[o++] = this.time;
+    out[o++] = this.lossEnergy;
+  }
+
+  /** Takes the state of snapshot() back, from a solver of the same core. */
+  restore(from: Float64Array, offset: number): void {
+    let o = offset;
+    const take = (a: { length: number; [i: number]: number }) => {
+      for (let i = 0; i < a.length; i++) a[i] = from[o++]!;
+    };
+    take(this.phi);
+    take(this.phiDot);
+    take(this.command);
+    take(this.state);
+    take(this.slip);
+    take(this.torque);
+    take(this.slipDir);
+    take(this.crossed);
+    take(this.energy);
+    take(this.temperature);
+    take(this.memberTorque);
+    take(this.drive);
+    this.time = from[o++]!;
+    this.lossEnergy = from[o++]!;
+    this.events = [];
+  }
+
   private dotRow(m: Float64Array, row: number, x: Float64Array): number {
     const n = this.core.n;
     let s = 0;
