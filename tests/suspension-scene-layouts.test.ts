@@ -1,7 +1,8 @@
 // Every independent corner on links in 3D, without WebGL: double wishbones, a five-link and MacPherson struts with a
-// split knuckle (dual-axis, RevoKnuckle) beside the plain strut of the macpherson page. The generic link builder must
-// draw each link at the solver's length with both ends where the solver has them, over the whole travel and with the
-// rack turned; coilovers stand on their arm or link at the tables' damper length; each part has a card.
+// split knuckle (dual-axis, RevoKnuckle) beside the plain strut of the macpherson page, and a double wishbone with its
+// spring apart from the damper. The generic link builder must draw each link at the solver's length with both ends
+// where the solver has them, over the whole travel and with the rack turned; coilovers stand on their arm or link at
+// the tables' damper length, a lone coil at the tables' spring length; each part has a card.
 
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
@@ -24,6 +25,24 @@ const resolve = (axle: AxleSpec): ResolvedCorner => {
   return resolveCorner(corner, factorySetup(corner));
 };
 const jtekt = jtektCorner();
+
+/**
+ * The rear double wishbone with its coil apart from the damper, as many rear axles have it: the coil on the lower arm
+ * nearer the body, the damper on the knuckle behind the hub. Not a template: it runs the builder's other seats.
+ */
+function springApart(): AxleSpec {
+  const dw = doubleWishbone({ ...wishboneDefaults('rear'), wheelCentreZM: h });
+  const arm = dw.linkage.wishbones.find((w) => w.id === dw.spring.on)!;
+  const at = (a: Vec3, b: Vec3, s: number): Vec3 => [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s, a[2] + (b[2] - a[2]) * s];
+  const seat = at(at(arm.front, arm.rear, 0.5), arm.ball, 0.45);
+  const [x, y, z] = dw.wheelCentre;
+  return {
+    ...dw,
+    spring: { ...dw.spring, body: [seat[0], seat[1], seat[2] + 0.3], wheel: seat },
+    damper: { ...dw.damper, body: [x - 0.12, y - 0.12, z + 0.42], wheel: [x - 0.12, y - 0.1, z - 0.05], on: undefined },
+  };
+}
+
 const CORNERS: Array<[string, ResolvedCorner]> = [
   ['plain strut', resolveCorner(jtekt, factorySetup(jtekt))],
   ['dual-axis strut', resolve(macphersonJtekt({ wheelCentreZM: h, knuckle: 'dual-axis' }))],
@@ -32,6 +51,7 @@ const CORNERS: Array<[string, ResolvedCorner]> = [
   ['rear double wishbone', resolve(doubleWishbone({ ...wishboneDefaults('rear'), wheelCentreZM: h }))],
   ['front multilink', resolve(multilink({ ...multilinkDefaults('front'), wheelCentreZM: h }))],
   ['rear multilink', resolve(multilink({ ...multilinkDefaults('rear'), wheelCentreZM: h }))],
+  ['rear double wishbone with the spring apart', resolve(springApart())],
 ];
 
 const scene = (p: ArrayLike<number>): THREE.Vector3 => new THREE.Vector3(p[1]! * 10, p[2]! * 10, p[0]! * 10);
@@ -113,7 +133,7 @@ describe.each(CORNERS)('the %s in 3D', (_name, resolved) => {
     model.dispose();
   });
 
-  it('stands the strut or the coilover on its seat at the tables’ damper length', () => {
+  it('stands the strut, the coilover or the lone coil on its seat at the tables’ lengths', () => {
     const model = new CornerModel(resolved);
     const frame = cornerFrame();
     const table = resolved.axle.table;
@@ -122,6 +142,7 @@ describe.each(CORNERS)('the %s in 3D', (_name, resolved) => {
       model.update(frame);
       // The tables interpolate between exact nodes; on a node they are exact.
       expect(Math.abs(model.damper.length / 10 - resolved.axle.value('damperLen', frame.travel)), `at ${frame.travel}`).toBeLessThan(1e-6);
+      if (model.loneSpring) expect(Math.abs(model.loneSpring.length / 10 - resolved.axle.value('springLen', frame.travel)), `spring at ${frame.travel}`).toBeLessThan(1e-6);
     }
     model.dispose();
   });

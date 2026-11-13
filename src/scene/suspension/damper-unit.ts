@@ -117,7 +117,8 @@ export class DamperUnit {
         ]
       : [
           latheAlong(ringProfile(s.rodR, 0.3, -s.upperSeat + 0.04, -0.1), new THREE.Vector3(), UP, 24, true),
-          latheAlong(ringProfile(s.rodR, seatR, -s.upperSeat, -s.upperSeat + 0.04), new THREE.Vector3(), UP, 32, true),
+          // The spring's upper seat, only when the coil is on this unit.
+          ...(s.wire !== null ? [latheAlong(ringProfile(s.rodR, seatR, -s.upperSeat, -s.upperSeat + 0.04), new THREE.Vector3(), UP, 32, true)] : []),
           boss(new THREE.Vector3(0, 0.22, 0), UP, 0.14, 0.1, 6),
         ];
     this.upper = tag(new THREE.Mesh(merge(upperParts), m.steel), 'susp.top-mount');

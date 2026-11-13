@@ -545,8 +545,9 @@ export class CornerModel {
     this.group.traverse((o) => this.orders.set(o, o.renderOrder));
     // Shadows from what can cast one: not the road, not the overlays, and not parts that sit inside others (the piston,
     // the oil, the tripod's spider and the joint's balls, the rack's bar in its housing, the links' bushes in their
-    // eyes) or under the wheel (the nuts).
+    // eyes, a lone coil's seat cups under its end turns) or under the wheel (the nuts).
     const inside = new Set<THREE.Object3D>([...this.xrayOnly, this.nuts]);
+    if (this.loneSpring) inside.add(this.loneSpring.seats).add(this.loneSpring.lowerSeat);
     if (this.halfshaft) for (const o of [this.halfshaft.spider, this.halfshaft.balls]) inside.add(o);
     if (this.linkSet.bushes) inside.add(this.linkSet.bushes);
     this.group.traverse((o) => {
