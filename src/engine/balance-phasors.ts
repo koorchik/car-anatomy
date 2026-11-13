@@ -125,8 +125,11 @@ const axisOf = (deg: number): number => {
   return 180 - a < 1e-9 ? 0 : a;
 };
 
-/** Where a turning pair puts its tip at crank angle theta (degrees), in the front view: x right, y up. */
-export function phasorAt(plus: Complex, minus: Complex, order: number, theta: number, side: PolygonSide = 'net'): Vec2 {
+/**
+ * Where a turning pair puts its tip at crank angle theta (degrees), in the front view: x right, y up. Written into out
+ * when given, so a picture redrawn every frame makes no garbage, as BalanceForces.sum does.
+ */
+export function phasorAt(plus: Complex, minus: Complex, order: number, theta: number, side: PolygonSide = 'net', out: Vec2 = { x: 0, y: 0 }): Vec2 {
   const a = order * theta * DEG;
   const c = Math.cos(a);
   const s = Math.sin(a);
@@ -140,12 +143,19 @@ export function phasorAt(plus: Complex, minus: Complex, order: number, theta: nu
     re += minus.re * c + minus.im * s;
     im += minus.im * c - minus.re * s;
   }
-  return { x: im, y: re };
+  out.x = im;
+  out.y = re;
+  return out;
 }
 
-/** One element's vector at crank angle theta. */
-export const vectorAt = (element: PhasorElement, order: number, theta: number, side: PolygonSide = 'net'): Vec2 =>
-  phasorAt(element.plus, element.minus, order, theta, side);
+/** One element's vector at crank angle theta, written into out when given. */
+export const vectorAt = (element: PhasorElement, order: number, theta: number, side: PolygonSide = 'net', out?: Vec2): Vec2 =>
+  phasorAt(element.plus, element.minus, order, theta, side, out);
+
+/** Scratch for the functions below that hand back points of their own, never anything a caller keeps. */
+const step: Vec2 = { x: 0, y: 0 };
+const forceTip: Vec2 = { x: 0, y: 0 };
+const coupleTip: Vec2 = { x: 0, y: 0 };
 
 /**
  * Path of the tip of plus e^(i n theta) + minus e^(-i n theta): an ellipse with half axes |plus| + |minus| and
@@ -167,32 +177,39 @@ export function locusOf(plus: Complex, minus: Complex, unit: number): Locus {
 
 /**
  * Elements laid head to tail at crank angle theta: the origin, then the tip after each element, so point k + 1 is the
- * head of element k and the last point is the view's sum. A couple polygon weights each vector by its z, in m.
+ * head of element k and the last point is the view's sum. A couple polygon weights each vector by its z, in m. Pass the
+ * array the last call returned as out and its points are reused.
  */
-export function polygon(view: PhasorView, theta: number, side: PolygonSide = 'net', quantity: Quantity = 'force'): Vec2[] {
-  const points: Vec2[] = [{ x: 0, y: 0 }];
+export function polygon(view: PhasorView, theta: number, side: PolygonSide = 'net', quantity: Quantity = 'force', out: Vec2[] = []): Vec2[] {
+  const count = view.elements.length + 1;
+  if (out.length > count) out.length = count;
+  while (out.length < count) out.push({ x: 0, y: 0 });
+  out[0]!.x = 0;
+  out[0]!.y = 0;
   let x = 0;
   let y = 0;
-  for (const el of view.elements) {
-    const v = vectorAt(el, view.order, theta, side);
+  view.elements.forEach((el, i) => {
+    const v = vectorAt(el, view.order, theta, side, step);
     const k = quantity === 'couple' ? el.z / 1000 : 1;
     x += v.x * k;
     y += v.y * k;
-    points.push({ x, y });
-  }
-  return points;
+    const p = out[i + 1]!;
+    p.x = x;
+    p.y = y;
+  });
+  return out;
 }
 
-/** The view's net force or couple at crank angle theta, or one turning half of it. */
-export function netAt(view: PhasorView, theta: number, quantity: Quantity = 'force', side: PolygonSide = 'net'): Vec2 {
+/** The view's net force or couple at crank angle theta, or one turning half of it, written into out when given. */
+export function netAt(view: PhasorView, theta: number, quantity: Quantity = 'force', side: PolygonSide = 'net', out?: Vec2): Vec2 {
   const sum = view[quantity];
-  return phasorAt(sum.plus, sum.minus, view.order, theta, side);
+  return phasorAt(sum.plus, sum.minus, view.order, theta, side, out);
 }
 
 /** The view's sum at crank angle theta in the form BalanceForces.sum gives it: forces, then pitch and yaw couples. */
 export function sumAt(view: PhasorView, theta: number, out: ForceSum = { fx: 0, fy: 0, mx: 0, my: 0 }): ForceSum {
-  const f = netAt(view, theta, 'force');
-  const c = netAt(view, theta, 'couple');
+  const f = netAt(view, theta, 'force', 'net', forceTip);
+  const c = netAt(view, theta, 'couple', 'net', coupleTip);
   out.fx = f.x;
   out.fy = f.y;
   // The couple polygon holds z F; the couple itself is z x F: -z Fy about X, z Fx about Y.

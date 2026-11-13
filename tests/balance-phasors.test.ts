@@ -17,6 +17,7 @@ import {
   type PhasorView,
   type PolygonSide,
   type Quantity,
+  type Vec2,
   type ViewOptions,
 } from '../src/engine/balance-phasors.ts';
 import { buildEngine, pistonAcceleration, vibrationTable, type Engine } from '../src/engine/kinematics.ts';
@@ -379,6 +380,24 @@ describe('polygons', () => {
             }
           }
         }
+      }
+    }
+  });
+
+  it('redrawn every frame into the same points, give what fresh ones would, whatever the view', () => {
+    const ph = phasors('v8-cross');
+    const views = [ph.view('order1', WEIGHTS), ph.view('rotating', BARE), ph.view('order1', BARE), ph.view('order2', BARE)];
+    const points: Vec2[] = [];
+    const tip: Vec2 = { x: 0, y: 0 };
+    for (const theta of [0, 41, 233]) {
+      for (const v of views) {
+        // Views of different sizes one after another: the array grows and shrinks to fit.
+        expect(polygon(v, theta, 'minus', 'couple', points)).toBe(points);
+        expect(points).toEqual(polygon(v, theta, 'minus', 'couple'));
+        expect(netAt(v, theta, 'force', 'plus', tip)).toBe(tip);
+        expect(tip).toEqual(netAt(v, theta, 'force', 'plus'));
+        expect(vectorAt(v.elements[0]!, v.order, theta, 'net', tip)).toBe(tip);
+        expect(tip).toEqual(vectorAt(v.elements[0]!, v.order, theta));
       }
     }
   });
