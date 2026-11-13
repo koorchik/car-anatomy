@@ -8,6 +8,7 @@ import { effectiveSump } from '../../designer/lubrication.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
 import { TYRE_IDS, TYRES } from '../../vehicle/vehicle.ts';
+import { nextTask } from '../next-task.ts';
 
 const DELAY_MS = 800;
 const STEPS_PER_SLICE = 1500;
@@ -72,7 +73,7 @@ export class TrackWidget {
     for (const tyre of TYRE_IDS) {
       const runner = scenario.oilRunner(engine, systems, car, scenario.lapFor(plain, null, car, tyre), choice);
       while (!runner.advance(STEPS_PER_SLICE)) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise<void>((resolve) => nextTask(resolve));
         if (generation !== this.generation) return;
       }
       const s = runner.run.summary;

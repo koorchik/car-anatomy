@@ -27,6 +27,7 @@ import { WELL_PLACES, type WellPlace } from '../../systems/sump.ts';
 import { newLapSample, sampleLap, type LapSample, type LapTrace } from '../../vehicle/lap.ts';
 import { TYRE_IDS, TYRES, type TyreId, type VehicleSpec } from '../../vehicle/vehicle.ts';
 import { Tacho } from '../tacho.ts';
+import { nextTask } from '../next-task.ts';
 import { sumpArticleHtml } from './article.ts';
 import { GgMeter, PressureGauge, StripChart, TrackMap } from './gauges.ts';
 
@@ -51,6 +52,8 @@ export interface SumpFrame {
 type Source = { kind: 'car'; car: SumpCar } | { kind: 'design'; design: Design; code: string };
 
 const STEPS_PER_SLICE = 1500;
+
+
 const fmt = (v: number, digits = 1): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 const BAND_TEXT: Record<RiskBand, string> = {
@@ -151,7 +154,6 @@ export class SumpPage {
   private health = 1;
   private broken = false;
   private active = false;
-  private computeTimer = 0;
   private generation = 0;
   private readonly compare = new Map<string, LubeRun>();
   private compareQueue: Array<{ key: string; choice: OilChoice }> = [];
@@ -330,7 +332,6 @@ export class SumpPage {
   leave(): void {
     this.active = false;
     this.playing = false;
-    clearTimeout(this.computeTimer);
     this.generation++;
     this.scene?.dispose();
     this.scene = null;
@@ -439,7 +440,6 @@ export class SumpPage {
 
   /** Works the oil out in slices between frames, then the comparison table, the same way. */
   private startRun(): void {
-    clearTimeout(this.computeTimer);
     const generation = ++this.generation;
     const engine = this.engine!;
     const trace = this.trace!;
@@ -480,9 +480,9 @@ export class SumpPage {
       } else {
         return;
       }
-      this.computeTimer = window.setTimeout(slice, 0);
+      nextTask(slice);
     };
-    this.computeTimer = window.setTimeout(slice, 0);
+    nextTask(slice);
     if (this.compare.size > 64) this.compare.clear();
   }
 

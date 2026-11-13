@@ -235,7 +235,8 @@ export class SystemsView {
     this.syncButtons();
   }
 
-  toggle(id: LayerId): void {
+  /** Switches a layer. A page that switches one for itself passes `remember = false`, so the visitor's choice stays. */
+  toggle(id: LayerId, remember = true): void {
     if (!LAYERS.some((l) => l.id === id)) return;
     const next = !this.on.has(id);
     if (next) {
@@ -250,7 +251,7 @@ export class SystemsView {
     else if (next) this.buildLayers();
     if (id === 'fuel' && !next) this.host.markers?.(null);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...this.on]));
+      if (remember) localStorage.setItem(STORAGE_KEY, JSON.stringify([...this.on]));
     } catch {
       // Only a convenience.
     }

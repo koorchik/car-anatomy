@@ -492,12 +492,12 @@ function setSumpMode(on: boolean): void {
     stage.setOrbit(false);
     setView('xray');
     oilLayerBefore = systems.isOn('oil');
-    if (!oilLayerBefore) systems.toggle('oil');
+    if (!oilLayerBefore) systems.toggle('oil', false);
     panelOpen = window.innerWidth > 860;
   } else {
     sump?.leave();
     drive.lock(speed === 'slow' ? slowRpm : null);
-    if (!oilLayerBefore && systems.isOn('oil')) systems.toggle('oil');
+    if (!oilLayerBefore && systems.isOn('oil')) systems.toggle('oil', false);
     systems.sim.oilSupply = 1;
     $('article').hidden = false;
     for (const id of ['prev', 'next', 'to-designer']) $(id).hidden = false;
