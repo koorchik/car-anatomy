@@ -11,7 +11,9 @@
 // (the classic 50% balance factor). Balance shafts then take out what is left of their order.
 
 import type { EngineSpec } from './spec.ts';
-import { pistonAcceleration, pistonPin, type Engine } from './kinematics.ts';
+import { harmonic, pistonAcceleration, pistonPin, type Complex, type Engine } from './kinematics.ts';
+
+export { harmonic, type Complex };
 
 const DEG = Math.PI / 180;
 
@@ -92,12 +94,6 @@ export interface OrderResidual {
   couple2: number;
 }
 
-/** A force or couple in the crank's plane as w = Fy + i Fx: e^(i theta) turns clockwise seen from the front, with the crank. */
-export interface Complex {
-  re: number;
-  im: number;
-}
-
 const STEPS = 360;
 
 /** Share of each piston's first order a counterweight balances: the half that turns with the crank. */
@@ -109,23 +105,6 @@ export const BALANCE_FACTOR = 0.5;
  */
 const ROTARY_PULLEY_MM = 40;
 const ROTARY_FLYWHEEL_MM = 45;
-
-/**
- * One harmonic of a quantity sampled evenly over a crank turn: the c in c e^(i order theta). A positive order turns
- * with the crank, a negative one against it.
- */
-export const harmonic = (samples: Complex[], order: number): Complex => {
-  let re = 0;
-  let im = 0;
-  samples.forEach((s, i) => {
-    const a = (-2 * Math.PI * order * i) / samples.length;
-    const c = Math.cos(a);
-    const d = Math.sin(a);
-    re += s.re * c - s.im * d;
-    im += s.re * d + s.im * c;
-  });
-  return { re: re / samples.length, im: im / samples.length };
-};
 
 const size = (c: Complex): number => Math.hypot(c.re, c.im);
 
