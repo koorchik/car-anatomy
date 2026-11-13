@@ -24,6 +24,8 @@ import { t } from './i18n/t.ts';
 import { Tacho } from './ui/tacho.ts';
 import { SystemsView } from './ui/systems-view.ts';
 import { shownAdvance, type SystemsFrame } from './systems/sim.ts';
+import type { SumpHost, SumpPage } from './ui/sump/sump-page.ts';
+import type { SystemLayer } from './scene/systems/layer.ts';
 
 type SpeedMode = 'slow' | 'readable' | 'real';
 
@@ -48,6 +50,7 @@ app.innerHTML = `
     <nav class="sections" aria-label="${t('Розділи')}">
       <a class="current" id="nav-engines" href="#/engines/${DEFAULT_ENGINE}">${t('Двигуни')}</a>
       <a id="nav-designer" href="#/designer">${t('Свій двигун')}</a>
+      <a id="nav-sump" href="#/sump">${t('Олива на треку')}</a>
       <span>${t('Коробки передач')} <small>${t('готуємо')}</small></span>
       <span>${t('Підвіски')} <small>${t('готуємо')}</small></span>
     </nav>
@@ -130,6 +133,7 @@ app.innerHTML = `
     </div>
     <div class="panel-scroll" id="article" tabindex="0"></div>
     <div class="panel-scroll" id="designer-host" tabindex="0" hidden></div>
+    <div class="panel-scroll" id="sump-host" tabindex="0" hidden></div>
   </aside>
 
   <aside class="results-panel" id="results-panel" aria-label="${t('Показники двигуна')}" hidden>
@@ -175,11 +179,15 @@ app.innerHTML = `
     </section>
   </footer>
 
+  <footer class="sump-dash" id="sump-dash" hidden></footer>
+  <div class="sump-summary" id="sump-summary" hidden></div>
+
   <div class="table-overlay" id="table-overlay" hidden role="dialog" aria-modal="true" aria-label="${t('Усі двигуни')}">
     <div class="table-head">
       <div>
         <h2>${t('Усі двигуни')}</h2>
         <p>${t('Кожна компоновка зі своїми реальними двигунами. На значках видно напрям циліндрів, якщо дивитись на двигун спереду.')}</p>
+        <p><a class="sibling" href="#/sump">${t('Олива на треку: як картер тримає оливу в поворотах')}</a></p>
       </div>
       <button class="btn" id="table-close" type="button">${t('Закрити')}</button>
     </div>
@@ -200,6 +208,7 @@ try {
 }
 
 const onDesignerRoute = (): boolean => location.hash.startsWith('#/designer');
+const onSumpRoute = (): boolean => location.hash.startsWith('#/sump');
 
 const resolveEngine = (): Engine => {
   const match = /^#\/engines\/([\w-]+(?:\/[\w-]+)?)/.exec(location.hash);
@@ -248,6 +257,12 @@ let panelOpen = window.innerWidth > 860;
 let resultsOpen = window.innerWidth > 860;
 let onDesigner = false;
 let wasSmall = window.innerWidth <= 860;
+/** The oil-on-track page, loaded the first time it is visited. */
+let onSump = false;
+let sump: SumpPage | null = null;
+let sumpCode: Promise<typeof import('./ui/sump/sump-page.ts')> | null = null;
+let oilLayerBefore = false;
+let flattenedLayer: SystemLayer | null = null;
 
 /** How much bigger the largest engine of this page is. Size goes as the cube root of displacement, near enough to frame by. */
 function pageFrameScale(next: Engine): number {
@@ -275,7 +290,7 @@ function showEngine(next: Engine, keepCamera: boolean): void {
   const newModel: EngineModel = engine.isRotary ? new RotaryEngineModel(engine) : new PistonEngineModel(engine);
   // A rotary explains itself from the front, a piston engine from a three-quarter view.
   // The same scale for a whole page, or for a design as its sliders move, so that size can be seen.
-  stage.setModel(newModel, engine.isRotary ? [0.34, 0.22, 1] : undefined, keepCamera, true, onDesigner ? 1 : pageFrameScale(next));
+  stage.setModel(newModel, engine.isRotary ? [0.34, 0.22, 1] : onSump ? [0.95, 0.1, 0.7] : undefined, keepCamera, true, onDesigner || onSump ? 1 : pageFrameScale(next));
   model = newModel;
   model.setView(view);
   model.setExplode(explode);
@@ -407,8 +422,122 @@ function syncDesignerHeading(): void {
   document.title = t('{title}. Анатомія авто', { title: designer.title });
 }
 
+const sumpHost: SumpHost = {
+  showEngine(next, keepCamera) {
+    drive.setEngine(next);
+    showEngine(next, keepCamera);
+    if (!keepCamera) {
+      // Look at the bottom half, where the oil is.
+      const drop = 0.15 * stage.camera.position.distanceTo(stage.controls.target) * Math.tan((stage.camera.fov * Math.PI) / 360);
+      stage.controls.target.y -= drop;
+      stage.camera.position.y -= drop;
+    }
+    return model!;
+  },
+  heading(title, sub) {
+    $('engine-title').textContent = title;
+    $('engine-sub').textContent = sub;
+    document.title = t('{title}. Анатомія авто', { title });
+  },
+  sound(rpm, throttle) {
+    if (rpm === null) {
+      drive.lock(null);
+      drive.setPedal(0);
+      drive.stop();
+      return;
+    }
+    const state = drive.snapshot().state;
+    if (state === 'off' || state === 'stopping') {
+      demoMode = false;
+      void drive.ensureAudio().then(() => drive.start());
+    }
+    drive.lock(rpm);
+    drive.setPedal(throttle);
+  },
+  oilSupply(share) {
+    systems.sim.oilSupply = share;
+  },
+  showFailure(part) {
+    model?.setFailure(part);
+  },
+};
+
+/** In and out of the oil-on-track page: its own panel, dash and summary, the X-ray with the oil layer on. */
+function setSumpMode(on: boolean): void {
+  onSump = on;
+  document.body.classList.toggle('sump-mode', on);
+  $('nav-sump').classList.toggle('current', on);
+  for (const id of ['sump-host', 'sump-dash', 'sump-summary']) $(id).hidden = !on;
+  if (on) {
+    if (onDesigner) {
+      designer.leave();
+      onDesigner = false;
+      document.body.classList.remove('designer-mode');
+      $('designer-host').hidden = true;
+      $('results-panel').hidden = true;
+      $('health').hidden = true;
+      $('to-catalog').hidden = true;
+    }
+    $('nav-engines').classList.remove('current');
+    $('nav-designer').classList.remove('current');
+    $('article').hidden = true;
+    $('variants').hidden = true;
+    $('panel-title').textContent = t('Олива на треку');
+    for (const id of ['prev', 'next', 'to-designer']) $(id).hidden = true;
+    drive.stop();
+    explode = 0;
+    $<HTMLInputElement>('explode').value = '0';
+    stage.fitScale = 0.6;
+    // The oil stays in view: no slow orbit here.
+    stage.setOrbit(false);
+    setView('xray');
+    oilLayerBefore = systems.isOn('oil');
+    if (!oilLayerBefore) systems.toggle('oil');
+    panelOpen = window.innerWidth > 860;
+  } else {
+    sump?.leave();
+    drive.lock(speed === 'slow' ? slowRpm : null);
+    if (!oilLayerBefore && systems.isOn('oil')) systems.toggle('oil');
+    systems.sim.oilSupply = 1;
+    $('article').hidden = false;
+    for (const id of ['prev', 'next', 'to-designer']) $(id).hidden = false;
+    stage.fitScale = 0.68;
+    stage.setOrbit(!reducedMotion);
+    $('nav-engines').classList.add('current');
+  }
+  layoutPanels();
+}
+
+function enterSump(): void {
+  sumpCode ??= import('./ui/sump/sump-page.ts');
+  void sumpCode.then(({ SumpPage }) => {
+    if (!onSump) return;
+    if (!sump) {
+      sump = new SumpPage(sumpHost);
+      $('sump-host').append(sump.panel);
+      $('sump-dash').append(sump.dash);
+      $('sump-summary').append(sump.summary, sump.liveRegion);
+    }
+    sump.enter(location.hash);
+    layoutPanels();
+  });
+}
+
 /** Switches the panels and the engine between the catalogue and the designer. */
 function applyRoute(): void {
+  const wantsSump = onSumpRoute();
+  if (wantsSump !== onSump) {
+    setSumpMode(wantsSump);
+    if (!wantsSump && !onDesignerRoute()) {
+      loadEngine(resolveEngine(), true);
+      $('table-overlay').hidden = true;
+    }
+  }
+  if (wantsSump) {
+    $('table-overlay').hidden = true;
+    enterSump();
+    return;
+  }
   const wantsDesigner = onDesignerRoute();
   const small = window.innerWidth <= 860;
   if (wantsDesigner !== onDesigner) {
@@ -459,10 +588,10 @@ function layoutPanels(): void {
   const panelSize = onDesigner ? (narrowDesk ? 360 : 420) : 400;
   const panelW = panelOpen && !small ? panelSize : 0;
   const leftW = onDesigner && resultsOpen && !small ? (narrowDesk ? 300 : 340) : 0;
-  const dashH = $('tacho-wrap').parentElement!.offsetHeight;
+  const dashH = onSump ? $('sump-dash').offsetHeight : $('tacho-wrap').parentElement!.offsetHeight;
   $('results-panel').classList.toggle('closed', !resultsOpen);
   $('results-open').hidden = !(small && onDesigner);
-  $('panel-open').textContent = onDesigner ? t('Параметри') : t('Про двигун');
+  $('panel-open').textContent = onDesigner ? t('Параметри') : onSump ? t('Налаштування') : t('Про двигун');
   document.documentElement.style.setProperty('--left-w', `${leftW}px`);
   $('panel').classList.toggle('closed', !panelOpen);
   document.body.classList.toggle('panel-closed', !panelOpen);
@@ -481,6 +610,7 @@ function layoutPanels(): void {
   firing.resize(fb.clientWidth, fb.clientHeight);
   const sb = $('spectrum-body');
   spectrum.resize(sb.clientWidth, sb.clientHeight);
+  if (onSump) sump?.resize();
 }
 
 new ResizeObserver(layoutPanels).observe(app);
@@ -689,7 +819,7 @@ $('prev').addEventListener('click', () => stepEngine(-1));
 $('next').addEventListener('click', () => stepEngine(1));
 
 window.addEventListener('hashchange', () => {
-  if (onDesignerRoute() || onDesigner) {
+  if (onDesignerRoute() || onDesigner || onSumpRoute() || onSump) {
     applyRoute();
     return;
   }
@@ -820,6 +950,11 @@ window.addEventListener('keydown', (event) => {
     return;
   }
   if (!$('table-overlay').hidden || enteringText(event.target)) return;
+  // The oil-on-track page: space plays the lap, the arrows move through it, the layer keys stay off.
+  if (onSump && sump && !typing(event.target) && sump.key(event)) {
+    event.preventDefault();
+    return;
+  }
   const onRange = typing(event.target);
   if (event.code === 'Space' || (event.code === 'ArrowUp' && !onRange)) {
     event.preventDefault();
@@ -918,13 +1053,29 @@ function frame(now: number): void {
   const snap = drive.tick(dt);
   const spec = engine.spec;
   const running = snap.state === 'running';
+  const lap = onSump && sump?.isActive ? sump.frame(dt) : null;
+  if (lap) {
+    // The oil layer's own flat surface gives way to the page's sloshing oil.
+    const layer = systems.sceneLayers?.layer('oil') ?? null;
+    if (layer && layer !== flattenedLayer) {
+      layer.setOilSurface(-1000, 0, 0);
+      flattenedLayer = layer;
+    }
+  }
 
   let theta: number;
   let shownSpeed: number;
   let shownRunning = running;
   let shownLoad = snap.load;
   let shownCut = snap.fuelCut;
-  if (demoMode) {
+  if (lap) {
+    shownSpeed = reducedMotion ? 0 : readableDegreesPerSecond(lap.rpm);
+    visualTheta = (visualTheta + shownSpeed * dt) % engine.cycle;
+    theta = visualTheta;
+    shownRunning = true;
+    shownLoad = lap.throttle;
+    shownCut = lap.throttle < 0.02;
+  } else if (demoMode) {
     // Before the first start the mechanism turns gently so the page isn't dead on arrival.
     shownSpeed = reducedMotion ? 0 : 30 * 6;
     visualTheta = (visualTheta + shownSpeed * dt) % engine.cycle;
@@ -944,7 +1095,7 @@ function frame(now: number): void {
 
   model?.update({
     theta,
-    rpm: demoMode ? spec.idleRpm : snap.rpm,
+    rpm: lap ? lap.rpm : demoMode ? spec.idleRpm : snap.rpm,
     load: shownLoad,
     fuelCut: shownCut,
     running: shownRunning,
@@ -953,8 +1104,8 @@ function frame(now: number): void {
     shake: demoMode ? 0 : shake,
   });
   // The systems are worked out at idle in the demo and in slow motion: at 40 rpm oil would barely flow at all.
-  const slowed = demoMode || speed === 'slow';
-  const systemsRpm = slowed && shownRunning ? spec.idleRpm : snap.rpm;
+  const slowed = !lap && (demoMode || speed === 'slow');
+  const systemsRpm = lap ? lap.rpm : slowed && shownRunning ? spec.idleRpm : snap.rpm;
   const sf = systemsFrame;
   // How far the shown angle really moved: in real mode Drive keeps nudging it toward the audio thread's angle.
   sf.advance = shownAdvance(sf.theta, theta, shownSpeed * dt, engine.cycle);
@@ -966,7 +1117,7 @@ function frame(now: number): void {
   sf.running = shownRunning;
   sf.cranking = snap.state === 'cranking';
   sf.fuelCut = shownCut;
-  sf.live = !slowed;
+  sf.live = !slowed && !lap;
   sf.demo = demoMode;
   sf.dt = dt;
   sf.timeScale = Math.min(1, shownSpeed / Math.max(systemsRpm * 6, 1));
@@ -1009,7 +1160,15 @@ requestAnimationFrame(frame);
 // Handy for manual checks in the browser console.
 declare global {
   interface Window {
-    __engine: { drive: Drive; stage: Stage; designer: DesignerPage; systems: SystemsView };
+    __engine: { drive: Drive; stage: Stage; designer: DesignerPage; systems: SystemsView; readonly sump: SumpPage | null };
   }
 }
-window.__engine = { drive, stage, designer, systems };
+window.__engine = {
+  drive,
+  stage,
+  designer,
+  systems,
+  get sump() {
+    return sump;
+  },
+};

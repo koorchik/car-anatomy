@@ -173,6 +173,11 @@ export class SystemsView {
     return { root, lines, gauge, flags, warning };
   }
 
+  /** Whether the visitor has this layer switched on. */
+  isOn(id: LayerId): boolean {
+    return this.on.has(id);
+  }
+
   get state(): SystemsState {
     return this.sim.state;
   }

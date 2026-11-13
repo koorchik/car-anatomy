@@ -227,14 +227,14 @@ export class SumpScene {
     const tank = this.layout.tank;
     if (tank) {
       const glass = new THREE.CylinderGeometry(0.035, 0.035, tank.height, 10, 1, true);
-      glass.translate(tank.position.x + tank.radius + 0.05, tank.position.y, tank.position.z);
+      glass.translate(tank.position.x, tank.position.y, tank.position.z + tank.radius + 0.05);
       add(glass, 'sight-glass', new THREE.Color('#c9d6dc'));
       const oil = new THREE.CylinderGeometry(0.028, 0.028, 1, 10);
       oil.translate(0, 0.5, 0);
       const material = new THREE.MeshStandardMaterial({ color: OIL, emissive: '#5a3405', roughness: 0.3 });
       this.materials.push(material);
       this.sightOil = new THREE.Mesh(oil, material);
-      this.sightOil.position.set(tank.position.x + tank.radius + 0.05, tank.position.y - tank.height / 2, tank.position.z);
+      this.sightOil.position.set(tank.position.x, tank.position.y - tank.height / 2, tank.position.z + tank.radius + 0.05);
       this.sightOil.userData.part = 'sight-glass';
       this.root.add(this.sightOil);
       this.geometries.push(oil);
@@ -392,9 +392,8 @@ export class SumpScene {
     // Oil standing in each head: a puddle at the head's low point, as deep as its share of what the head holds.
     if (o.heads.length) {
       const plate = new THREE.BoxGeometry(1, 1, 1);
-      plate.translate(0, 0.5, 0);
       this.geometries.push(plate);
-      const material = new THREE.MeshStandardMaterial({ color: OIL, emissive: '#5a3405', transparent: true, opacity: 0.85, roughness: 0.3, depthWrite: false });
+      const material = new THREE.MeshStandardMaterial({ color: OIL, emissive: '#5a3405', transparent: true, opacity: 0.55, roughness: 0.3, depthWrite: false });
       this.materials.push(material);
       this.puddles = new THREE.InstancedMesh(plate, material, o.heads.length);
       this.puddles.userData.instanceParts = o.heads.map(() => 'head-oil');
@@ -402,11 +401,12 @@ export class SumpScene {
       this.puddles.renderOrder = 6;
       for (const alpha of o.heads) {
         const a = (alpha * Math.PI) / 180;
-        const reach = engine.deck * MM + 0.3 * b;
+        // A slab in the middle of the head that grows as the head fills: how much oil is held up there.
+        const reach = engine.deck * MM + 0.35 * b;
         this.puddleData.push({
           position: new THREE.Vector3(Math.sin(a) * reach, Math.cos(a) * reach, ((engine.zMax + engine.zMin) / 2) * MM),
           rotation: -a,
-          size: new THREE.Vector3(0.9 * b, 0.25 * b, (engine.zMax - engine.zMin) * MM + 0.6 * b),
+          size: new THREE.Vector3(0.3 * b, 0.3 * b, ((engine.zMax - engine.zMin) * MM + 0.4 * b) * 0.85),
         });
       }
       this.root.add(this.puddles);
@@ -537,7 +537,8 @@ export class SumpScene {
         const d = this.puddleData[i]!;
         const share = Math.min(1, Math.max(0.001, f.heads[i] ?? 0));
         this.q.setFromAxisAngle(this.v.set(0, 0, 1), d.rotation);
-        this.s.set(d.size.x, d.size.y * share, d.size.z);
+        const k = Math.sqrt(share);
+        this.s.set(d.size.x * k, d.size.y * k, d.size.z);
         this.m4.compose(d.position, this.q, this.s);
         this.puddles.setMatrixAt(i, this.m4);
       }

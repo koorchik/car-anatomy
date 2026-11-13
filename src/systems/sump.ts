@@ -269,7 +269,7 @@ export function sumpLayout(engine: Engine, systems: SystemsSpec, o: PanOptions =
     // Beside the engine, clear of its heads, standing level with the pan's floor.
     const bore = engine.spec.bore * MM;
     const reach = Math.max(shape.halfW, ...engine.banks.map((k) => Math.abs(Math.sin((k.alpha * Math.PI) / 180)) * (engine.deck * MM + bore) + 0.6 * bore));
-    const position = new THREE.Vector3(-(reach + t.radius + 0.3), shape.yFloor + t.height / 2, (shape.zMin + shape.zMax) / 2);
+    const position = new THREE.Vector3(reach + t.radius + 0.3, shape.yFloor + t.height / 2, (shape.zMin + shape.zMax) / 2);
     return {
       kind: shape.kind,
       pan,
