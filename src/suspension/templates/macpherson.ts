@@ -16,9 +16,11 @@
 // knuckle that turns in the carrier about its own axis, nearer the wheel: Ford's RevoKnuckle slides (Ford Research &
 // Advanced Engineering, Aachen, 2004, slides 5, 11, 13) put the plain Focus or Mondeo knuckle's kingpin offset at
 // 50–75 mm and the RevoKnuckle's at 20–30 mm, carried in the carrier on a ball joint above and a roller bearing below,
-// the carrier on the lower arm by a sleeve joint. Honda publishes no figure (its page says only that rigid parts
-// separate the steering axis from the damper axis); half the plain offset is an estimate. The rest is typical: the
-// axis's KPI, its bearings' heights, and the carrier's hold, the sleeve joint taken as turning about the arm's axis.
+// the carrier on the lower arm by a sleeve joint. Honda publishes no figure for the Civic Type R (its page says only
+// that rigid parts separate the steering axis from the damper axis); half the plain offset is an estimate. It sits
+// inside the 30–40 mm (KPI 4–14°) of Honda's patent US8205900B1 for a strut with its own steering axis, primary, but
+// that patent is not confirmed to be the FK8's design. The rest is typical: the axis's KPI, its bearings' heights,
+// and the carrier's hold, the sleeve joint taken as turning about the arm's axis.
 
 import type { AxleSpec, CornerSpec, KnuckleKind, SplitKnuckle, Vec3 } from '../spec.ts';
 import { add, cross, dist, dot, scale, sub, unit } from '../vec.ts';
@@ -74,7 +76,8 @@ export function jtektKingpinOffsetM(): number {
 export const SPLIT_KNUCKLE_DEFAULTS: Record<Exclude<KnuckleKind, 'plain'>, { kingpinOffsetM: number; kpiDeg: number; belowM: number; aboveM: number }> = {
   // Ford: 20–30 mm (primary, the slides); KPI and bearing heights typical.
   revoknuckle: { kingpinOffsetM: 0.025, kpiDeg: 8, belowM: 0.09, aboveM: 0.12 },
-  // Half the plain strut's offset: not published by Honda, unverified. KPI and bearing heights typical.
+  // Half the plain strut's offset: not published by Honda for the car, unverified (within its patent's 30–40 mm).
+  // KPI and bearing heights typical.
   'dual-axis': { kingpinOffsetM: jtektKingpinOffsetM() / 2, kpiDeg: 8, belowM: 0.09, aboveM: 0.12 },
 };
 
