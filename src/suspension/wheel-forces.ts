@@ -10,7 +10,9 @@
 // patches, shared by load, so the drag and the rolling part add up to roadLoadN (whole-car plan, the edits to the
 // suspension plan, item 6). The brakes or the drive make up the difference: the brakes between the axles by the brake
 // balance, the drive by the driven axles (`driveFront` when both are), each half and half between the two wheels, as
-// an open differential and a brake circuit give it.
+// an open differential and a brake circuit give it. The brakes act only against the motion (standing, against the
+// forward motion a scene starts from): a car rolling backwards speeds up backwards on its drive (reverse gear) and slows
+// down on its brakes. A car with no driven axle cannot drive at all: what it is asked is the shortfall.
 //
 // Each wheel can make only so much: its peaks D_x and D_y from the Magic Formula at its load (the car's tyre fitted to
 // the mean static load, as statics.ts and the lap fit it, on this wheel's surface), and along the road only what the
@@ -19,6 +21,8 @@
 // wheel brakes, only driven ones drive): an ideal ABS with brake-force distribution, or limited-slip differentials and
 // four-wheel drive. Then Σ F_x = m·a_x − F_drag holds exactly. When every wheel that could help is at its limit, the
 // sample is impossible for these tyres: the forces stay at the limits and the shortfall is written down, not lost.
+// Without the limit (`gripLimit = false`) a wheel makes whatever it is asked, but only on the road: a wheel in the air
+// passes its share on as at its limit.
 //
 // The side forces are not cut: the lateral acceleration is what the scene asks for, and the roll scene and the rollover
 // diagnosis need the car to feel all of it. A wheel whose side force is past its peak is marked at its limit (with
@@ -103,8 +107,8 @@ export class WheelForces {
 
   /**
    * Patch forces for loads `fz` at accelerations `ax`, `ay` (m/s², x forward, y left) and speed `v` (m/s, negative
-   * backwards) on surfaces `mu` (share of dry friction per wheel). Without `limit` every wheel makes what it is asked.
-   * Allocates nothing.
+   * backwards) on surfaces `mu` (share of dry friction per wheel). Without `limit` every wheel on the road makes what it
+   * is asked. Allocates nothing.
    */
   share(fz: Float64Array, ax: number, ay: number, v: number, mu: Float64Array, limit: boolean, o: TyreShare): void {
     const c = this.chassis;
@@ -145,28 +149,31 @@ export class WheelForces {
     }
     o.dragN = drag;
     const need = m * ax - drag - sumRolling;
-    const braking = need < 0;
-    const sign = braking ? -1 : 1;
+    // The brakes only against the motion; standing, a car brakes (from the forward motion the scene starts from).
+    const braking = dir < 0 ? need > 0 : need < 0;
+    const sign = need < 0 ? -1 : 1;
     const total = Math.abs(need);
+    // A car without a driven axle has nothing to drive with.
+    let shortX = !braking && !this.driven[0] && !this.driven[1] ? total : 0;
     for (let k = 0; k < 2; k++) {
       const share = braking ? (k === 0 ? lon.brakeFront : 1 - lon.brakeFront) : this.driveShare[k];
       const able = braking || this.driven[k];
       for (let i = 2 * k; i < 2 * k + 2; i++) {
         demand[i] = (total * share) / 2;
-        if (!limit) continue;
-        if (!able) {
+        if (!able || !(fz[i] > 0)) {
           cap[i] = 0;
-          continue;
+        } else if (!limit) {
+          cap[i] = Infinity;
+        } else {
+          // Room along the road beside the side force, less the rolling resistance that already pushes the same way.
+          const dy = o.limitYN[i];
+          const r = dy > 0 ? o.fy[i] / dy : 1;
+          const room = r * r < 1 ? o.limitXN[i] * Math.sqrt(1 - r * r) : 0;
+          cap[i] = Math.max(0, room - sign * o.rollingN[i]);
         }
-        // Room along the road beside the side force, less the rolling resistance that already pushes the same way.
-        const dy = o.limitYN[i];
-        const r = dy > 0 ? o.fy[i] / dy : 1;
-        const room = r * r < 1 ? o.limitXN[i] * Math.sqrt(1 - r * r) : 0;
-        cap[i] = Math.max(0, room - sign * o.rollingN[i]);
       }
     }
-    let shortX = 0;
-    if (limit && total > 0) {
+    if (total > 0) {
       // The excess of a wheel to the other wheel of its axle, then each axle's leftover to the other axle.
       const left = this.left;
       for (let k = 0; k < 2; k++) left[k] = this.toPartner(2 * k, 2 * k + 1) + this.toPartner(2 * k + 1, 2 * k);
@@ -182,7 +189,7 @@ export class WheelForces {
         demand[j + 1] += take - toL;
         shortX += left[k] - take;
       }
-      for (let i = 0; i < 4; i++) if (cap[i] > 0 && demand[i] >= cap[i] * (1 - 1e-12)) o.atLimit[i] = 1;
+      if (limit) for (let i = 0; i < 4; i++) if (cap[i] > 0 && demand[i] >= cap[i] * (1 - 1e-12)) o.atLimit[i] = 1;
     }
     o.axlePropNm[0] = 0;
     o.axlePropNm[1] = 0;
