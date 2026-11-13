@@ -4,8 +4,8 @@
 // Enveloping: the wheel centre cannot sink into a gap narrower than the tyre, and a sharp edge is felt over the length
 // of the contact patch. So the height the tyre feels at x is the lowest position of a rigid circle of the free radius
 // r resting on the profile (a dilation: max over |s| ≤ r of y(x+s) + √(r² − s²), minus r), averaged over the patch
-// length ℓ (0.1–0.2 m with the load). A pothole of 0.2 m × 60 mm becomes a smooth dip of about 15 mm, a kerb edge a
-// ramp as long as the patch.
+// length ℓ (0.1–0.2 m with the load). A pothole of 0.2 m × 60 mm becomes a smooth dip of about 5 mm (the bare circle
+// sinks 15 mm, the patch average spreads it), a kerb edge a ramp as long as the patch.
 //
 // Buffer: the enveloped road is computed in 20 m segments on a 5 mm grid (Float32Array) ahead of the wheel and kept
 // in a small ring. Each segment evaluates the profile itself with a margin, so joins are exact. A random road

@@ -48,6 +48,12 @@ describe('enveloping', () => {
     expect(deepest).toBeGreaterThan(-0.016);
     // No step anywhere: the steepest 5 mm change is far below the pothole's 60 mm edge.
     expect(steepest).toBeLessThan(0.001);
+    // Without the patch average the dip is the circle's sagitta over the gap, and the average only makes it shallower.
+    const circle = new RoadBuffer(new EventRoad([{ kind: 'pothole', atM: 6, lengthM: 0.2, depthM: 0.06 }]), R, 0);
+    let bare = 0;
+    for (let x = 5; x < 7; x += ROAD_STEP_M) bare = Math.min(bare, circle.heightAt(x));
+    expect(Math.abs(-bare - (R - Math.sqrt(R * R - 0.1 * 0.1)))).toBeLessThan(1e-4);
+    expect(deepest).toBeGreaterThan(bare);
   });
 
   it('stretches a kerb edge over more than the patch length', () => {
