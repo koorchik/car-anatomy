@@ -162,6 +162,21 @@ export class CornerSolver {
     for (let a = 0; a < 3; a++) this.top[a] = top[a] + shift[a];
   }
 
+  /** Number of distance rows (two per wishbone, then one per rod); the strut's two rows follow, the travel row is last. */
+  get distanceRows(): number {
+    return this.nDist;
+  }
+
+  /**
+   * The 6×6 Jacobian of the rows at `pose` into `out` (row-major; columns δt, then δθ about the wheel centre). Row i
+   * read as a force is the direction its constraint pushes the knuckle with (knuckle-statics.ts).
+   */
+  jacobian(pose: Float64Array, travel: number, rack: number, out: Float64Array): void {
+    this.assemble(pose, travel, rack);
+    // Only the first 36 numbers: the 6×6 matrix of a corner with six unknowns, whatever room J has.
+    out.set(this.J.subarray(0, 36));
+  }
+
   /** Index of the first steered rod among the distance rows, or −1. */
   steerRow(): number {
     for (let i = 0; i < this.nDist; i++) if (this.steer[i]) return i;
