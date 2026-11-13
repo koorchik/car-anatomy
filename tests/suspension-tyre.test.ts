@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CARS } from '../src/data/cars.ts';
 import { SUMP_CARS } from '../src/data/sump-cars.ts';
-import { modelMassKg, type CarRecord } from '../src/vehicle/car.ts';
+import { drivingMassKg, type CarRecord } from '../src/vehicle/car.ts';
 import {
   brushAdhesionShare,
   brushForce,
@@ -197,7 +197,7 @@ describe('the tyre fitted to a car', () => {
   it('centres the set on each oil-page car and gives the lap μ there, along and across', () => {
     expect(LAP_CARS).toHaveLength(6);
     for (const car of LAP_CARS) {
-      const load = (modelMassKg(car) * G) / 4;
+      const load = (drivingMassKg(car) * G) / 4;
       expect(staticWheelLoadN(car)).toBeCloseTo(load, 9);
       for (const id of TYRE_IDS) {
         const tyre = tyreFor(car, id);
@@ -213,7 +213,7 @@ describe('the tyre fitted to a car', () => {
   it('loses 0.5–1 % of the summed peak at rest to the weight split, and no more', () => {
     for (const car of LAP_CARS) {
       const tyre = tyreFor(car);
-      const m = modelMassKg(car);
+      const m = drivingMassKg(car);
       const front = (m * G * car.body.frontShare) / 2;
       const rear = (m * G * (1 - car.body.frontShare)) / 2;
       const sum = 2 * (lateralPeakN(tyre.set, front) + lateralPeakN(tyre.set, rear));

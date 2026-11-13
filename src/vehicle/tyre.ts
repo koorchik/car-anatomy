@@ -19,7 +19,7 @@
 // book: μy changes with camber as (1 − PDY3·γ²), so the Sedan file's negative PDY3 raises it (Chrono writes
 // 1 + PDY3·γ²), and the combined trail uses sign(α_t) (Chrono writes sign(κ)). Chrono's clamp of B·x at ±π/2 is not used: it bends the curve past the peak.
 
-import { modelMassKg, type CarRecord } from './car.ts';
+import { drivingMassKg, type CarRecord } from './car.ts';
 import { G } from './constants.ts';
 import { MF_185_80R14, TYRE_SETS, type MfSet } from './tyre-data.ts';
 import { TYRES, type TyreId } from './vehicle.ts';
@@ -251,8 +251,8 @@ export function tyreAt(id: TyreId, wheelLoadN: number, mu: number = TYRES[id].mu
   return { id, set, wheelLoadN, mu };
 }
 
-/** Mean static load on one wheel of a car, N: the mass every derived model carries (modelMassKg), over four wheels. */
-export const staticWheelLoadN = (car: CarRecord): number => (modelMassKg(car) * G) / 4;
+/** Mean static load on one wheel of a car, N: the mass every derived model carries (drivingMassKg), over four wheels. */
+export const staticWheelLoadN = (car: CarRecord): number => (drivingMassKg(car) * G) / 4;
 
 /** The car's tyre, or another choice on the same car (the oil page offers three). */
 export const tyreFor = (car: CarRecord, id: TyreId = car.tyre.id): Tyre => tyreAt(id, staticWheelLoadN(car));
