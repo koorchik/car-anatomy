@@ -11,7 +11,7 @@ export interface OilMoment {
   /** Lap time of the start and end, s. */
   start: number;
   end: number;
-  /** Track sector name, or '' between named corners. */
+  /** Track sector id, or '' between named corners. Pages show it through SECTOR_NAMES (src/data/vehicle-names.ts). */
   sector: string;
   phase: Phase;
   /** Shortfall integrated over the stretch, bar·s. */
@@ -56,9 +56,9 @@ export function worstMoments(run: LubeRun, trace: LapTrace, limit = 3): OilMomen
   for (const m of moments) {
     // What the car was doing as the dip began: the cause comes before the effect.
     sampleLap(trace, Math.max(0, m.start - 0.3), sample);
-    const name = sample.sector >= 0 ? trace.track.sectors[sample.sector]!.name : '';
+    const id = sample.sector >= 0 ? trace.track.sectors[sample.sector]!.id : '';
     sampleLap(trace, m.start, sample);
-    m.sector = name || (sample.sector >= 0 ? trace.track.sectors[sample.sector]!.name : '');
+    m.sector = id || (sample.sector >= 0 ? trace.track.sectors[sample.sector]!.id : '');
     m.phase = sample.avF < -0.15 * G ? 'crest' : sample.axF < -0.3 * G ? 'braking' : Math.abs(sample.ayF) > 0.3 * G ? 'cornering' : 'accelerating';
   }
   return moments.sort((a, b) => b.shortfall - a.shortfall).slice(0, limit);
