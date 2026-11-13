@@ -240,8 +240,8 @@ export function resolveCorner(corner: CornerSpec, raw: CornerSetup): ResolvedCor
     const et = toeSet ? t - want[1] : 0;
     err = Math.max(Math.abs(ec), Math.abs(et));
     if (err < 1e-10 || it === 12) break;
-    // Finite-difference Jacobian of (camber, toe) on (shift, length). An unknown the layout lacks keeps its row and
-    // column of the identity, so the other one's coupling cannot move it.
+    // Finite-difference Jacobian of (camber, toe) on (shift, length). An adjuster that stays put (not asked for, or
+    // missing from the layout) keeps its row and column of the identity, so the other one's coupling cannot move it.
     const h = 1e-6;
     const [c1, t1] = camberSet ? angles(shiftY + h, tie) : [c, t];
     const [c2, t2] = toeSet ? angles(shiftY, tie + h) : [c, t];
