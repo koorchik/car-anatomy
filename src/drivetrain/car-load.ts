@@ -14,8 +14,9 @@ import { stableStep } from './modes.ts';
 import { RUN } from './runs.ts';
 
 /**
- * Deceleration the brakes give with the pedal floored, in g [estimate: more than any road tyre holds, so a floored
- * pedal locks the wheels, as on a car without ABS]. The car's own brakes are not in the data.
+ * Deceleration the brakes give with the pedal floored, in g [estimate: more than the classic and street tyres hold
+ * (TYRE_MU 0.8 and 1.0), so a floored pedal locks their wheels; the model has no ABS]. The semi-slick and the slick
+ * hold more, so on them a floored pedal stops short of the limit. The car's own brakes are not in the data.
  */
 export const BRAKE_FLOORED_G = 1.2;
 /** Deceleration at which the brake balance matches the axle loads, in g [estimate: a typical design point]. */
