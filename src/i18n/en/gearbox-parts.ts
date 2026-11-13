@@ -7,14 +7,14 @@ export const GEARBOX_PARTS_EN: Record<string, string> = {
   'Головна пара постійно крутить його від первинного вала. Його шестерні зачеплені з шестернями всіх передач одночасно, тому в коробці крутяться всі шестерні, хоч би яка передача була ввімкнена.':
     'The constant-mesh pair turns it from the input shaft all the time. Its gears mesh with the gears of every speed at once, so every gear in the box turns whichever gear is selected.',
   'Вторинний вал': 'Output shaft',
-  'Стоїть на одній осі з первинним і веде до кардана. Шестерні передач сидять на ньому вільно, а вал крутять лише муфти синхронізаторів, коли з’єднують із ним одну з цих шестерень.':
-    'It sits on the same axis as the input shaft and leads to the driveshaft. The speed gears run free on it, and only the synchronizer sleeves turn the shaft, when they lock one of those gears to it.',
+  'Стоїть на одній осі з первинним і веде до кардана. Шестерні передач сидять на ньому вільно, а вал крутять лише муфти синхронізаторів: муфта з’єднує з ним одну з цих шестерень, а на прямій передачі — сам первинний вал.':
+    'It sits on the same axis as the input shaft and leads to the driveshaft. The speed gears run free on it, and only the synchronizer sleeves turn the shaft: a sleeve locks one of those gears to it, or the input shaft itself in direct drive.',
   'Шестерня проміжного вала': 'Countershaft gear',
-  'Закріплена на проміжному валу. Разом із шестернею вторинного вала, з якою вона зачеплена, задає число передачі: у скільки разів вихід крутиться повільніше за вхід.':
-    'It is fixed to the countershaft. Together with the output shaft gear it meshes with, it sets the gear ratio: how many times slower the output turns than the input.',
+  'Закріплена на проміжному валу й крутиться разом із ним. Шестерня головної пари бере обертання від первинного вала, а решта віддають його шестерням передач. Число передачі — у скільки разів вихід крутиться повільніше за вхід — це добуток чисел двох пар, якими йде потужність: головної й пари цієї передачі.':
+    'It is fixed to the countershaft and turns with it. The gear of the constant-mesh pair takes the drive from the input shaft, and the others pass it on to the speed gears. The gear ratio, how many times slower the output turns than the input, is the product of the two pairs the power runs through: the constant-mesh pair and the pair of that gear.',
   'Шестерня передачі': 'Speed gear',
-  'Крутиться на вторинному валу вільно, на голчастому підшипнику, і завжди зачеплена з проміжним валом. Передача вмикається, коли муфта синхронізатора з’єднує цю шестерню з валом.':
-    'It runs free on the output shaft on a needle bearing and is always in mesh with the countershaft. The gear is engaged when a synchronizer sleeve locks this gear to the shaft.',
+  'Крутиться на вторинному валу вільно, на голчастому підшипнику, і завжди зачеплена з шестернею проміжного вала, а шестерня заднього ходу — з проміжною шестернею. Передача вмикається, коли муфта синхронізатора з’єднує цю шестерню з валом.':
+    'It runs free on the output shaft on a needle bearing and is always in mesh with a countershaft gear, or the reverse gear with the reverse idler. The gear is engaged when a synchronizer sleeve locks this gear to the shaft.',
   'Маточина синхронізатора': 'Synchronizer hub',
   'Сидить на шліцах вторинного вала й крутиться разом із ним. По її зовнішніх шліцах ковзає муфта.':
     'It sits on splines of the output shaft and turns with it. The sleeve slides on its outer splines.',
