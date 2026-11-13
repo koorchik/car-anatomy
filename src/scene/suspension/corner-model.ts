@@ -967,9 +967,10 @@ export class CornerModel {
       return;
     }
     // Rows: two per wishbone, then one per rod, then the strut's two (CornerSolver's order).
-    const nW = this.linkSet.arms.length;
-    this.linkSet.arms.forEach((arm, i) => arrows.setLink(i, arm.ball, this.rowSum(2 * i, 2 * i + 2, this.forceB).add(this.seatForce[i]!)));
-    this.linkSet.rods.forEach((rod, j) => arrows.setLink(nW + j, rod.knuckleEnd, this.rowSum(2 * nW + j, 2 * nW + j + 1, this.forceB).add(this.seatForce[nW + j]!)));
+    const { arms, rods } = this.linkSet;
+    const nW = arms.length;
+    for (let i = 0; i < nW; i++) arrows.setLink(i, arms[i]!.ball, this.rowSum(2 * i, 2 * i + 2, this.forceB).add(this.seatForce[i]!));
+    for (let j = 0; j < rods.length; j++) arrows.setLink(nW + j, rods[j]!.knuckleEnd, this.rowSum(2 * nW + j, 2 * nW + j + 1, this.forceB).add(this.seatForce[nW + j]!));
     if (unit.size.strut) {
       const n = s.solver.distanceRows;
       arrows.set('strutTop', this.top, this.rowSum(n, n + 2, this.forceB));
