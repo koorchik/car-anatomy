@@ -20,6 +20,11 @@ export const CAR_LIST: readonly CarRecord[] = [
   subaruWrxStiVa,
 ];
 
-export const CARS: Readonly<Record<string, CarRecord>> = Object.fromEntries(CAR_LIST.map((car) => [car.id, car]));
+// Ids arrive from addresses (#/car/<id>, ?car=), so the map has no prototype: 'constructor' or '__proto__' must find
+// no car rather than a function of Object.prototype.
+export const CARS: Readonly<Record<string, CarRecord>> = Object.assign(
+  Object.create(null) as Record<string, CarRecord>,
+  Object.fromEntries(CAR_LIST.map((car) => [car.id, car])),
+);
 
 export const carById = (id: string): CarRecord | undefined => CARS[id];

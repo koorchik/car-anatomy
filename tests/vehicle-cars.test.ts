@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CAR_LIST, CARS } from '../src/data/cars.ts';
+import { CAR_LIST, carById, CARS } from '../src/data/cars.ts';
 import { engineById } from '../src/data/engines.ts';
 import { SUMP_CARS } from '../src/data/sump-cars.ts';
 import { SECTOR_NAMES, TYRE_NAMES } from '../src/data/vehicle-names.ts';
@@ -34,6 +34,14 @@ describe('car records', () => {
     expect(CAR_LIST.map((c) => c.id).sort()).toEqual(files);
     expect(Object.keys(CARS)).toHaveLength(CAR_LIST.length);
     for (const car of CAR_LIST) expect(car.id).not.toBe('designer');
+  });
+
+  it('find no car for an address naming a property of Object.prototype', () => {
+    for (const id of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(carById(id), id).toBeUndefined();
+      expect(CARS[id], id).toBeUndefined();
+    }
+    for (const car of CAR_LIST) expect(carById(car.id)).toBe(car);
   });
 
   it('has no Russian cars', () => {
