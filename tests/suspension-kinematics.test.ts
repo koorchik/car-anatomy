@@ -10,6 +10,7 @@ import {
   pivotAxisDirection,
   pivotAxle,
   pivotLayout,
+  PIVOT_BUMP_STOP_TRAVEL_M,
   PIVOT_TRAVEL,
   PIVOT_TYPICAL,
   type PivotIntent,
@@ -572,6 +573,24 @@ describe('single pivot axis: trailing arm, semi-trailing arm, swing axle', () =>
     // A swing axle whose joint is beyond the wheel would turn its shaft inward; one at the wheel has no arm at all.
     expect(() => pivotAxle({ ...swing, pivotYM: 1.4 })).toThrow(/not inboard/);
     expect(() => pivotAxle({ ...swing, pivotYM: 0.7 })).toThrow(/too short/);
+  });
+
+  it('keeps the swing axle’s cross joint inside its limit and touches every bump stop 80 mm into bump', () => {
+    for (const layout of ['trailing-arm', 'semi-trailing', 'swing-axle'] as const) {
+      const spec = pivotAxle(PIVOT_TYPICAL[layout]);
+      const axle = buildAxle(spec);
+      const d = spec.damper;
+      if (d.wheel === 'strut') throw new Error('a pivot corner has no strut');
+      const contact = dist(d.body, d.wheel) - spec.bumpStop.gapM;
+      expect(axle.value('damperLen', PIVOT_BUMP_STOP_TRAVEL_M)).toBeCloseTo(contact, 9);
+      const shaft = spec.halfshaft;
+      if (!shaft) continue;
+      const s = newCornerSample();
+      for (const z of nodes(axle)) {
+        axle.sample('left', z, 0, s);
+        expect(s.cvInner / DEG).toBeLessThanOrEqual(shaft.innerMaxDeg);
+      }
+    }
   });
 
   it('refuses to adjust rods or a strut top that a pivot corner does not have', () => {
