@@ -5,6 +5,7 @@
 // src/data/.
 
 import type { TyreChoice } from '../vehicle/tyre-data.ts';
+import type { VehicleBody } from '../vehicle/car.ts';
 
 /** ISO 8855, metres: x forward, y left, z up. Points of an independent corner are given for the left side. */
 export type Vec3 = readonly [number, number, number];
@@ -233,3 +234,60 @@ export interface CornerSpec {
   /** Free tyre radius when the car's tyre size is known, m; null takes the radius of the tyre file. */
   tyreRadiusM: number | null;
 }
+
+/**
+ * Anti-roll bar of an axle: a torsion bar across the car whose two arms run to drop links on the wheels. Its torsional
+ * rate is K_θ = G·π·(d⁴ − d_i⁴)/(32·span) (forces.ts); the drop links are taken as upright and short against the arms,
+ * so each arm's end rises with its link point and the bar twists by the difference of the two rises over `armM`.
+ * Bending of the arms and the rubber of the bushes are left out (docs/suspension-model.md).
+ */
+export interface SwayBarSpec {
+  /** Outer diameter, m, and wall thickness of a tube; null for a solid bar. */
+  diameterM: number;
+  wallM: number | null;
+  /** Lever arm from the bar's axis to the drop link, m. */
+  armM: number;
+  /** Length of the twisting section between the two arms, m. */
+  spanM: number;
+  /** Lower end of the left drop link at design: a point of the knuckle (of the strut carrier on a split knuckle), of the
+   *  wishbone or rod named by `on`, of the arm on a twist beam, of the axle on a solid axle. The right one is the mirror. */
+  link: Vec3;
+  on?: string;
+}
+
+/** Every linkage an axle of the chassis may have. */
+export type AnyAxleLinkage = AnyCornerLinkage | BeamLinkage;
+
+/** One axle of a chassis: the axle as the templates give it, its bar, the unsprung mass and the tyre radius. */
+export interface ChassisAxleSpec {
+  axle: AxleSpec<AnyAxleLinkage>;
+  swayBar: SwayBarSpec | null;
+  /** Unsprung mass of one corner (wheel, tyre, brake, hub, knuckle, half the links, spring and damper); on a beam axle
+   *  half the axle, kg. */
+  unsprungKg: number;
+  /** Free tyre radius when the car's tyre size is known, m; null takes the radius of the tyre file. */
+  tyreRadiusM: number | null;
+}
+
+/**
+ * A whole chassis for ChassisSim and statics.ts. `body` holds what NHTSA measures for the whole car, unsprung masses
+ * included (the shared VehicleBody of src/vehicle/car.ts with the mass, as bodyOf gives it); buildChassis derives the
+ * sprung body from it. The tracks of the chassis are those of its axles.
+ */
+export interface ChassisSpec {
+  id: string;
+  body: VehicleBody & { massKg: number };
+  front: ChassisAxleSpec;
+  rear: ChassisAxleSpec;
+  /** Which tyre the car rides on (src/vehicle/tyre-data.ts), the same on all four wheels. */
+  tyre: TyreChoice;
+  /** 'measured' only for published hardpoints (JTEKT). Everything else is typical geometry. */
+  geometry: 'measured' | 'typical';
+}
+
+/**
+ * The body on the springs: the whole car of VehicleBody without the four unsprung corners (point masses at the wheel
+ * centres). Heights above the road, x from the whole car's centre of mass (positive forward), inertias about the sprung
+ * centre of mass, kg·m².
+ */
+export interface SprungBody { massKg: number; cgHeightM: number; cgX: number; ixx: number; iyy: number; izz: number }
