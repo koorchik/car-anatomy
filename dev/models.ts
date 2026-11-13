@@ -98,13 +98,20 @@ const viewerApi = {
   get values(): Values {
     return { ...(current?.values ?? {}) };
   },
-  /** Same as moving a control by hand. */
+  /** Same as moving a control by hand. A key or value the panel could not give throws, so a typo cannot pass for a shot. */
   set: (key: string, value: Value): void => {
+    const c = current?.controls.find((x) => x.key === key);
+    if (!c) throw new Error(`Немає контролу «${key}». Є: ${current?.controls.map((x) => x.key).join(', ') ?? 'жодного'}.`);
+    const problem = misfit(c, value);
+    if (problem) throw new Error(problem);
     change(key, value);
     renderPanel();
   },
   /** home, front, side, rear or top. */
-  cameraPreset: (preset: string): void => applyPreset(preset),
+  cameraPreset: (preset: string): void => {
+    if (!PRESETS.some((p) => p.name === preset)) throw new Error(`Немає вигляду камери «${preset}». Є: ${PRESETS.map((p) => p.name).join(', ')}.`);
+    applyPreset(preset);
+  },
   pause: (on: boolean): void => setStill(on),
 };
 (window as unknown as { __viewer: typeof viewerApi }).__viewer = viewerApi;
@@ -126,6 +133,18 @@ function parseValue(c: Control, raw: string | null): Value {
 }
 
 const formatValue = (v: Value): string => (typeof v === 'boolean' ? (v ? '1' : '0') : String(v));
+
+/** Why a value from a script does not fit a control, or null when it does. */
+function misfit(c: Control, v: Value): string | null {
+  switch (c.kind) {
+    case 'range':
+      return typeof v === 'number' && v >= c.min && v <= c.max ? null : `«${c.key}»: ${String(v)} не число від ${c.min} до ${c.max}.`;
+    case 'toggle':
+      return typeof v === 'boolean' ? null : `«${c.key}»: ${String(v)} не true і не false.`;
+    case 'choice':
+      return c.options.some((o) => o.value === v) ? null : `«${c.key}»: ${String(v)} немає серед ${c.options.map((o) => o.value).join(', ')}.`;
+  }
+}
 
 /** The viewer's own controls, for what this model can do. */
 function builtinControls(def: ModelDef, model: ViewerModel): Control[] {
