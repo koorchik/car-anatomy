@@ -1006,7 +1006,7 @@ export class PistonEngineModel implements EngineModel {
     this.undoFailure = null;
     if (!part) return;
     const m = this.materials;
-    const target = { rod: m.rod, piston: m.piston, valve: m.valveExhaust, exhaust: m.valveExhaust, gasket: m.head, turbo: m.turboHot, mounts: m.sump }[part];
+    const target = { rod: m.rod, piston: m.piston, valve: m.valveExhaust, exhaust: m.valveExhaust, gasket: m.head, turbo: m.turboHot, mounts: m.sump, bearing: m.crank }[part];
     if (target) this.undoFailure = markDamaged(target);
   }
 

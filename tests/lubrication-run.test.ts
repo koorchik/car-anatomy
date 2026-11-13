@@ -67,11 +67,12 @@ describe('a Camaro SS lapping the test circuit', () => {
     expect(s.belowNeedS).toBeGreaterThan(0);
     expect(s.wearPerLap).toBeLessThanOrEqual(0.01);
   });
-  it('wears on slicks with full oil, within bounds', () => {
+  it('dips for seconds a lap on slicks with full oil, and wears no more than a fifth of the bearings a lap', () => {
     const s = run('wet', 'slick', 0).summary;
     expect(s.belowNeedS).toBeGreaterThan(1);
-    expect(s.wearPerLap).toBeGreaterThan(0);
+    expect(s.belowNeedS).toBeGreaterThan(run('wet', 'semi', 0).summary.belowNeedS);
     expect(s.wearPerLap).toBeLessThanOrEqual(0.2);
+    expect(run('wet', 'slick', -1).summary.wearPerLap).toBeGreaterThan(0);
   });
   it('a track pan holds on semi-slicks, but its doors do not save a litre short through long corners on slicks', () => {
     expect(run('baffled', 'semi', 0).summary.belowNeedS).toBe(0);

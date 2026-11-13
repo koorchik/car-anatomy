@@ -58,7 +58,11 @@ export function panGrid(shape: PanShape, nx = GRID_X, nz = GRID_Z): PanGrid {
     for (let j = 0; j < nz; j++) {
       const x = -shape.halfW + (i + 0.5) * dx;
       const z = shape.zMin + (j + 0.5) * dz;
-      const floor = inside(shape.well, x, z) ? shape.yFloor : shape.yShelf;
+      // A column the well's edge crosses gets the floor averaged over its area, so the volume stays exact.
+      const w = shape.well;
+      const ox = Math.max(0, Math.min(x + dx / 2, w.x1) - Math.max(x - dx / 2, w.x0)) / dx;
+      const oz = Math.max(0, Math.min(z + dz / 2, w.z1) - Math.max(z - dz / 2, w.z0)) / dz;
+      const floor = shape.yShelf + (shape.yFloor - shape.yShelf) * ox * oz;
       const inBox = !!shape.box && inside(shape.box, x, z);
       const ceil = inBox ? shape.box!.top : shape.top;
       const cell = { x, z, floor, ceil };

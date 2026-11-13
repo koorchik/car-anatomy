@@ -67,4 +67,41 @@ export const LUBRICATION_EN: Record<string, string> = {
   'Інтегрований сухий картер 9A1: олива в самому двигуні, але ступені відкачування забирають її з головок.': 'The 9A1’s integrated dry sump: the oil stays in the engine, but scavenge stages pull it out of the heads.',
   'Сухий картер з окремим баком. Двигун стоїть шківом назад, тож гальмування жене оливу до маховика.': 'A dry sump with a separate tank. The engine sits pulley rearward, so braking drives the oil toward the flywheel.',
   'Шестиступінчастий сухий картер з окремим відкачуванням кожного відсіку колінвала.': 'A six-stage dry sump that scavenges every crank bay separately.',
+  // Parts of the page's 3D (src/scene/lubrication/parts.ts)
+  'Олива в піддоні': 'Oil in the pan',
+  'На гальмуванні й у поворотах олива відкочується до стінки піддона, а її поверхня нахиляється і хлюпає. Якщо вона відійде від сітки забірника, насос засмокче повітря.':
+    'Under braking and in corners the oil runs to one wall of the pan, and its surface tilts and sloshes. If it leaves the pickup screen, the pump draws air.',
+  'Перегородка заводського піддона': 'Factory pan baffle',
+  'Невисокі стінки навколо колодязя з вирізами. Вони гасять хлюпання і трохи затримують оливу біля забірника, але в довгому повороті олива все одно переливається через них.':
+    'Low walls with cut-outs round the well. They calm the sloshing and hold the oil by the pickup for a moment, but in a long corner it still spills over them.',
+  'Коробка навколо забірника': 'Box round the pickup',
+  'Трековий піддон тримає оливу біля забірника в закритій коробці. Олива заходить усередину крізь дверцята, а назовні виходить лише щілинами, тож коробка лишається повною довше за поворот.':
+    'A track pan keeps the oil by the pickup in a closed box. Oil comes in through trap doors and leaks out only through gaps, so the box stays full longer than a corner lasts.',
+  'Дверцята перегородки': 'Trap door',
+  'Пластинки на завісах, що відкриваються лише всередину коробки. Коли олива набігає на стінку, вони пропускають її до забірника, а коли вона відкочується назад, закриваються.':
+    'Hinged flaps that open only into the box. When the oil surges against the wall they let it through to the pickup, and when it runs back they close.',
+  'Сітка від розбризкування': 'Windage screen',
+  'Сітка між колінвалом і оливою. Вона знімає краплі, які відкидають противаги, і не дає валу збивати оливу в піну. Це дає трохи потужності на високих обертах і менше повітря в оливі.':
+    'A screen between the crank and the oil. It strips the drops the counterweights throw and keeps the crank from whipping the oil into foam: a little more power at high revs and less air in the oil.',
+  'Скребок колінвала': 'Crank scraper',
+  'Пластина за кілька міліметрів від противаг. Вона знімає оливу, яку вал тягне за собою, і відправляє її в піддон.':
+    'A blade a few millimeters off the counterweights. It strips the oil the crank drags round with it and sends it down to the pan.',
+  'Камера відділення повітря': 'Deaeration chamber',
+  'Сюди ступені відкачування зганяють спінену оливу з головок і картера. Олива закручується, повітря виходить, і насос тиску бере вже чисту оливу.':
+    'The scavenge stages send the foamy oil from the heads and the crankcase here. It swirls, the air escapes, and the pressure stage draws clean oil.',
+  'Відкачування з головок': 'Head scavenging',
+  'Окремі ступені насоса висмоктують оливу з головок. Без них олива в повороті збирається в головці на зовнішньому боці й повертається в піддон занадто повільно.':
+    'Separate pump stages suck the oil out of the heads. Without them, in a corner the oil collects in the outer head and returns to the pan too slowly.',
+  'Олива в головці': 'Oil in the head',
+  'Частина оливи завжди в дорозі: у головках, на стінках картера, у каналах. На високих обертах її більше, а в піддоні відповідно менше.':
+    'Some of the oil is always on its way: in the heads, on the crankcase walls, in the passages. At high revs there is more of it, and so less in the pan.',
+  'Рівень у баку': 'Tank level',
+  'Скільки оливи в баку сухого картера. Вихід знизу по центру бака, тому нахил оливи в баку насосу не страшний, поки рівень не впаде майже до дна.':
+    'How much oil the dry sump’s tank holds. Its outlet is at the bottom center, so the oil tilting in the tank does not bother the pump until the level falls almost to the bottom.',
+  'Акумулятор оливи': 'Oil accumulator',
+  'Циліндр з поршнем: з одного боку олива, з другого стиснене повітря. Поки тиск у магістралі високий, він набирає оливу, а коли тиск падає, віддає її назад. Рятує на короткі провали, але не на довгі.':
+    'A cylinder with a piston: oil on one side, compressed air on the other. While the gallery pressure is high it takes oil in, and when the pressure drops it gives it back. It saves short dips, not long ones.',
+  'Висота колінвала': 'Crank height',
+  'Відстань від осі колінвала до найнижчої точки піддона. Що глибший піддон, то вище доводиться ставити двигун. Сухий картер дозволяє посадити його нижче.':
+    'From the crank axis to the lowest point of the pan. The deeper the pan, the higher the engine has to sit. A dry sump lets it sit lower.',
 };
