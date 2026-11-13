@@ -14,7 +14,9 @@ const RED = '#ff5a3c';
 const OIL = '#e8a93a';
 const BLUE = '#62c6ec';
 
-const fmt = (v: number, digits = 1): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+/** One formatter per number of digits, made once: toLocaleString with options builds a new one on every call. */
+const FORMATS = [0, 1, 2].map((d) => new Intl.NumberFormat(numberLocale, { minimumFractionDigits: d, maximumFractionDigits: d }));
+const fmt = (v: number, digits = 1): string => FORMATS[digits]!.format(v);
 
 abstract class CanvasWidget {
   readonly element = document.createElement('canvas');

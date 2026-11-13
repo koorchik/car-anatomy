@@ -262,6 +262,11 @@ let onSump = false;
 let sump: SumpPage | null = null;
 let sumpCode: Promise<typeof import('./ui/sump/sump-page.ts')> | null = null;
 let oilLayerBefore = false;
+/** The view and the explode slider before the page, given back on leaving it. */
+let viewBefore: ViewMode = 'xray';
+let explodeBefore = 0;
+/** The page wants its engine heard: a start that lands after the page has gone or gone quiet is dropped. */
+let sumpSoundWanted = false;
 let flattenedLayer: SystemLayer | null = null;
 
 /** How much bigger the largest engine of this page is. Size goes as the cube root of displacement, near enough to frame by. */
@@ -440,6 +445,7 @@ const sumpHost: SumpHost = {
     document.title = t('{title}. Анатомія авто', { title });
   },
   sound(rpm, throttle) {
+    sumpSoundWanted = rpm !== null;
     if (rpm === null) {
       drive.lock(null);
       drive.setPedal(0);
@@ -447,12 +453,15 @@ const sumpHost: SumpHost = {
       return;
     }
     const state = drive.snapshot().state;
-    if (state === 'off' || state === 'stopping') {
+    if (!drive.wantsRunning || state === 'off' || state === 'stopping') {
       demoMode = false;
-      void drive.ensureAudio().then(() => drive.start());
+      // The page may have been left, or the sound switched off, while the audio was starting.
+      void drive.ensureAudio().then(() => {
+        if (sumpSoundWanted && onSump) drive.start();
+      });
     }
-    drive.lock(rpm);
-    drive.setPedal(throttle);
+    drive.lock(rpm === 'idle' ? null : rpm);
+    drive.setPedal(rpm === 'idle' ? 0 : throttle);
   },
   oilSupply(share) {
     systems.sim.oilSupply = share;
@@ -485,6 +494,8 @@ function setSumpMode(on: boolean): void {
     $('panel-title').textContent = t('Олива на треку');
     for (const id of ['prev', 'next', 'to-designer']) $(id).hidden = true;
     drive.stop();
+    viewBefore = view;
+    explodeBefore = explode;
     explode = 0;
     $<HTMLInputElement>('explode').value = '0';
     stage.fitScale = 0.6;
@@ -496,7 +507,13 @@ function setSumpMode(on: boolean): void {
     panelOpen = window.innerWidth > 860;
   } else {
     sump?.leave();
+    sumpSoundWanted = false;
     drive.lock(speed === 'slow' ? slowRpm : null);
+    // The next engine is built with these.
+    setView(viewBefore);
+    explode = explodeBefore;
+    $<HTMLInputElement>('explode').value = String(explodeBefore);
+    systems.setExplode(explodeBefore);
     if (!oilLayerBefore && systems.isOn('oil')) systems.toggle('oil', false);
     systems.sim.oilSupply = 1;
     $('article').hidden = false;

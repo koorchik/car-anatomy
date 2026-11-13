@@ -36,8 +36,8 @@ export interface SumpHost {
   showEngine(engine: Engine, keepCamera: boolean): EngineModel;
   /** Title and line under it. */
   heading(title: string, sub: string): void;
-  /** Starts the engine's sound on the first call; then follows the lap's speed and throttle. Null stops it. */
-  sound(rpm: number | null, throttle: number): void;
+  /** Starts the engine's sound on the first call; then follows the lap's speed and throttle. 'idle' lets it idle with the pedal up, null stops it. */
+  sound(rpm: number | 'idle' | null, throttle: number): void;
   /** The share of oil the pump gets, for the oil layer's flow. */
   oilSupply(share: number): void;
   showFailure(part: string | null): void;
@@ -51,10 +51,20 @@ export interface SumpFrame {
 
 type Source = { kind: 'car'; car: SumpCar } | { kind: 'design'; design: Design; code: string };
 
-const STEPS_PER_SLICE = 1500;
+/** The oil is worked out in chunks of this many steps until a slice has used its time, so a click never stalls a frame. */
+const STEPS_PER_CHUNK = 100;
+const SLICE_MS = 7;
 
+/** Advances a run for about SLICE_MS; true once it is done. */
+const advanceSlice = (runner: LubeRunner): boolean => {
+  const start = performance.now();
+  let done = runner.advance(STEPS_PER_CHUNK);
+  while (!done && performance.now() - start < SLICE_MS) done = runner.advance(STEPS_PER_CHUNK);
+  return done;
+};
 
-const fmt = (v: number, digits = 1): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+const FORMATS = [0, 1, 2].map((d) => new Intl.NumberFormat(numberLocale, { minimumFractionDigits: d, maximumFractionDigits: d }));
+const fmt = (v: number, digits = 1): string => FORMATS[digits]!.format(v);
 
 const BAND_TEXT: Record<RiskBand, string> = {
   none: t('знос незначний'),
@@ -78,14 +88,29 @@ const KIND_SHORT: Record<SumpKind, string> = {
   dry: t('Сухий'),
 };
 
+/** The oil levels offered: full, about the dipstick's minimum, and a litre under it, as an engine that burns oil on track ends up. */
+const OIL_LEVELS: Array<[number, string, string]> = [
+  [0, t('Повно'), t('повно')],
+  [-1, t('Мінімум (−1 л)'), t('мінімум за щупом')],
+  [-2, t('Нижче мінімуму (−2 л)'), t('на літр нижче мінімуму')],
+];
+
 const PLACE_TEXT: Record<WellPlace, string> = {
   front: t('Спереду'),
   middle: t('Посередині'),
   rear: t('Ззаду'),
 };
 
+/** Letters and digits only, for comparing names that differ in punctuation: "Civic Type R (FK8)" and "Civic Type R FK8". */
+const bare = (name: string): string => name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
 /** The car and its engine in one name, without saying the car twice when the engine's name already does. */
-const carEngineName = (car: string, engine: string): string => (engine.includes(car) ? engine : `${car} · ${engine}`);
+const carEngineName = (car: string, engine: string): string => {
+  const e = bare(engine);
+  // The engine's name names the car when it carries the car's model words, whatever the brackets: "Chevrolet Corvette Z06 (C8)".
+  const model = bare(car).split(' ').filter((w) => w.length > 1);
+  return model.every((w) => e.includes(w)) || e.includes(bare(car)) ? engine : `${car} · ${engine}`;
+};
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag);
@@ -94,10 +119,10 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
   return node;
 };
 
-const segmented = (label: string, options: Array<[string, string]>, onPick: (value: string) => void): { root: HTMLElement; set: (value: string, factory?: string) => void; disable: (value: string, off: boolean) => void } => {
+const segmented = (label: string, options: Array<[string, string]>, onPick: (value: string) => void, grid = ''): { root: HTMLElement; set: (value: string, factory?: string) => void; disable: (value: string, off: boolean) => void } => {
   const root = el('div', 'sump-field');
   root.append(el('span', 'sump-label', label));
-  const group = el('div', 'segmented sump-segmented');
+  const group = el('div', `segmented sump-segmented${grid ? ` ${grid}` : ''}`);
   group.setAttribute('role', 'group');
   group.setAttribute('aria-label', label);
   const buttons = options.map(([value, text]) => {
@@ -164,6 +189,10 @@ export class SumpPage {
   private tubeArea = 3e-4;
   private lastText = 0;
   private lastSound = 0;
+  /** Paused with the sound on: the engine idles until the lap plays again. */
+  private idling = false;
+  /** What the 3D was last built for: engine, sump, well and accumulator. Tyres and oil only change the numbers. */
+  private geometryKey = '';
   private lastAnnounce = '';
   private readonly sample: LapSample = newLapSample();
   private readonly sceneFrame: SumpSceneFrame = { levelOut: 0, levelBox: 0, slopeX: 0, slopeZ: 0, pickupOil: 1, pumpSupply: 1, boxFlow: 0, heads: new Float32Array(4), tankShare: 0, accumulatorShare: 0, dt: 0, tubeSpeed: 0 };
@@ -207,9 +236,9 @@ export class SumpPage {
     this.carSelect = el('select', 'sump-select');
     this.carSelect.addEventListener('change', () => this.pickCar(this.carSelect.value));
     carField.append(this.carSelect);
-    this.kindField = segmented(t('Картер'), SUMP_KINDS.map((k) => [k, KIND_SHORT[k]]), (v) => this.choose({ kind: v as SumpKind }));
+    this.kindField = segmented(t('Картер'), SUMP_KINDS.map((k) => [k, KIND_SHORT[k]]), (v) => this.choose({ kind: v as SumpKind }), 'sump-two');
     this.tyreField = segmented(t('Шини'), TYRE_IDS.map((id) => [id, TYRES[id].name]), (v) => this.choose({ tyre: v as TyreId }));
-    this.oilField = segmented(t('Олива'), [['0', t('Повно')], ['-1', t('Мінімум (−1 л)')]], (v) => this.choose({ oil: Number(v) }));
+    this.oilField = segmented(t('Олива'), OIL_LEVELS.map(([v, text]) => [String(v), text]), (v) => this.choose({ oil: Number(v) }), 'sump-oil');
     this.placeField = segmented(t('Колодязь піддона'), WELL_PLACES.map((p) => [p, PLACE_TEXT[p]]), (v) => this.choose({ place: v as WellPlace }));
     this.accRow = el('label', 'check sump-check');
     this.accToggle = el('input');
@@ -245,6 +274,8 @@ export class SumpPage {
     const bearings = el('div', 'health sump-bearings');
     bearings.setAttribute('role', 'meter');
     bearings.setAttribute('aria-label', t('Ресурс вкладишів'));
+    // The wear belongs to the engine: another engine comes with new bearings, a change of sump, tyres or oil keeps them.
+    bearings.title = t('Вкладиші цього двигуна. Інший картер, шини чи олива їх не відновлюють, лише ремонт; інший двигун приходить з новими.');
     bearings.setAttribute('aria-valuemin', '0');
     bearings.setAttribute('aria-valuemax', '100');
     const track = el('i');
@@ -320,13 +351,15 @@ export class SumpPage {
     this.sumpKind = (SUMP_KINDS as readonly string[]).includes(k ?? '') ? (k as SumpKind) : changedEngine ? factoryKind : this.sumpKind;
     const ty = params.get('t');
     this.tyre = (TYRE_IDS as readonly string[]).includes(ty ?? '') ? (ty as TyreId) : changedEngine ? 'street' : this.tyre;
-    this.oilDeltaL = params.get('o') === '-1' ? -1 : params.get('o') === '0' ? 0 : changedEngine ? 0 : this.oilDeltaL;
+    const o = OIL_LEVELS.find(([v]) => String(v) === params.get('o'));
+    this.oilDeltaL = o ? o[0] : changedEngine ? 0 : this.oilDeltaL;
     this.accumulator = params.get('a') === '1' ? true : params.get('a') === '0' ? false : changedEngine ? false : this.accumulator;
     const w = params.get('w');
     const factoryPlace = nextSource.kind === 'car' ? nextSource.car.well : 'middle';
     this.place = (WELL_PLACES as readonly string[]).includes(w ?? '') ? (w as WellPlace) : changedEngine ? factoryPlace : this.place;
     this.fillCarSelect();
     this.rebuild(changedEngine);
+    if (changedEngine) this.freshBearings();
   }
 
   leave(): void {
@@ -336,6 +369,9 @@ export class SumpPage {
     this.scene?.dispose();
     this.scene = null;
     this.model = null;
+    this.geometryKey = '';
+    this.idling = false;
+    this.syncPlay();
     if (this.soundOn) {
       this.soundOn = false;
       this.host.sound(null, 0);
@@ -405,15 +441,22 @@ export class SumpPage {
     this.car = s.kind === 'car' ? s.car.vehicle : genericCar(s.design.name, evaluate(s.design).peakPower.powerHp);
     this.baseSystems = systemsOf(spec);
     const systems = systemsWith(this.baseSystems, this.choice(), this.car);
-    const engine = buildEngine({ ...spec, systems });
-    this.engine = engine;
-    this.scene?.dispose();
-    this.model = this.host.showEngine(engine, !newEngine);
-    const setup = setupFor(engine, this.baseSystems, this.car, this.choice());
-    this.headCapacity = setup.heads[0]?.capacityL ?? 1;
-    this.tubeArea = (Math.PI / 4) * setup.tube.d * setup.tube.d;
-    this.scene = new SumpScene(engine, systems, this.car.mount, { accumulator: this.choice().accumulator, heads: setup.heads.map((h) => h.alpha), inlet: { y: setup.tube.inletY, z: engine.zMax * 0.01 + 0.12 * engine.spec.bore * 0.01 } });
-    this.scene.addTo(this.model.mounted);
+    const geometry = `${this.sourceKey(s)} ${this.sumpKind} ${this.place} ${this.choice().accumulator}`;
+    if (newEngine || geometry !== this.geometryKey || !this.engine || !this.scene) {
+      const engine = buildEngine({ ...spec, systems });
+      this.engine = engine;
+      this.scene?.dispose();
+      this.model = this.host.showEngine(engine, !newEngine);
+      const setup = setupFor(engine, this.baseSystems, this.car, this.choice());
+      this.headCapacity = setup.heads[0]?.capacityL ?? 1;
+      this.tubeArea = (Math.PI / 4) * setup.tube.d * setup.tube.d;
+      this.scene = new SumpScene(engine, systems, this.car.mount, { accumulator: this.choice().accumulator, heads: setup.heads.map((h) => h.alpha), inlet: { y: setup.tube.inletY, z: engine.zMax * 0.01 + 0.12 * engine.spec.bore * 0.01 } });
+      this.scene.addTo(this.model.mounted);
+      this.geometryKey = geometry;
+      // A new model of the same engine still has its spun bearing.
+      if (this.broken) this.host.showFailure('bearing');
+    }
+    const engine = this.engine;
     this.tacho.configure(engine.spec.redlineRpm);
     const factory = systemsOf(spec).sump;
     this.kindField.set(this.sumpKind, factory);
@@ -461,7 +504,7 @@ export class SumpPage {
     const slice = (): void => {
       if (generation !== this.generation || !this.active) return;
       if (this.runner) {
-        if (this.runner.advance(STEPS_PER_SLICE)) {
+        if (advanceSlice(this.runner)) {
           const run = this.runner.run;
           this.compare.set(key, run);
           this.runner = null;
@@ -469,7 +512,7 @@ export class SumpPage {
           this.renderTable();
         }
       } else if (this.compareRunner) {
-        if (this.compareRunner.runner.advance(STEPS_PER_SLICE)) {
+        if (advanceSlice(this.compareRunner.runner)) {
           this.compare.set(this.compareRunner.key, this.compareRunner.runner.run);
           this.compareRunner = null;
           this.renderTable();
@@ -505,7 +548,7 @@ export class SumpPage {
       return `<tr${kind === this.sumpKind ? ' class="current"' : ''}><th>${name}</th><td>${fmt(s.minPressure)}</td><td>${fmt(s.belowNeedS)}</td><td class="band${band}">${BAND_TEXT[s.band]}</td></tr>`;
     }).join('');
     this.table.innerHTML = `<table><thead><tr><th>${t('Картер')}</th><th>${t('Мін. тиск, бар')}</th><th>${t('Нижче потрібного, с')}</th><th>${t('Вкладиші витримають')}</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="note small">${t('Шини: {tyre}, олива: {oil}. Кіл до поломки модель дає лише за порядком величини.', { tyre: TYRES[this.tyre].name.toLowerCase(), oil: this.oilDeltaL < 0 ? t('мінімум за щупом') : t('повно') })}</p>`;
+      <p class="note small">${t('Шини: {tyre}, олива: {oil}. Кіл до поломки модель дає лише за порядком величини.', { tyre: TYRES[this.tyre].name.toLowerCase(), oil: OIL_LEVELS.find(([v]) => v === this.oilDeltaL)?.[2] ?? '' })}</p>`;
   }
 
   private renderMoments(): void {
@@ -549,6 +592,7 @@ export class SumpPage {
     this.speed = speed;
     this.speedButton.textContent = speed === 1 ? '×1' : '×¼';
     if (speed !== 1 && this.soundOn) this.host.sound(null, 0);
+    this.idling = false;
   }
 
   private toggleSound(): void {
@@ -556,6 +600,7 @@ export class SumpPage {
     this.soundButton.setAttribute('aria-pressed', String(this.soundOn));
     if (!this.soundOn) this.host.sound(null, 0);
     this.lastSound = 0;
+    this.idling = false;
   }
 
   seek(time: number): void {
@@ -565,10 +610,17 @@ export class SumpPage {
   }
 
   private repair(): void {
+    this.freshBearings();
+  }
+
+  /** New bearings: after a repair, and with another engine. */
+  private freshBearings(): void {
     this.broken = false;
     this.health = 1;
     this.failure.hidden = true;
     this.host.showFailure(null);
+    this.idling = false;
+    this.lastText = 0;
     this.syncPlay();
   }
 
@@ -636,11 +688,19 @@ export class SumpPage {
     this.gg.draw(smp.axF, smp.ayF, this.tyre, this.playing);
     this.map.draw(smp.index);
     if (run) this.strip.draw(run, trace, this.time);
-    if (this.soundOn && this.speed === 1 && this.playing) {
-      const now = performance.now();
-      if (now - this.lastSound > 50) {
-        this.lastSound = now;
-        this.host.sound(smp.rpm, smp.throttle);
+    if (this.soundOn && this.speed === 1 && !this.broken) {
+      if (this.playing) {
+        const now = performance.now();
+        if (now - this.lastSound > 50) {
+          this.lastSound = now;
+          this.idling = false;
+          this.host.sound(smp.rpm, smp.throttle);
+        }
+      } else if (!this.idling) {
+        // Paused, the car stands and the engine idles rather than holding the lap's revs over a still picture.
+        this.idling = true;
+        this.lastSound = 0;
+        this.host.sound('idle', 0);
       }
     }
     const now = performance.now();
@@ -656,9 +716,10 @@ export class SumpPage {
     this.broken = true;
     this.playing = false;
     this.failure.hidden = false;
-    this.failure.textContent = t('Провернуло шатунний вкладиш: олива не дійшла до підшипника.');
+    this.failure.textContent = `${t('Провернуло шатунний вкладиш: олива не дійшла до підшипника.')} ${t('Інший картер, шини чи олива цьому двигуну вже не допоможуть: спершу ремонт.')}`;
     this.host.showFailure('bearing');
     if (this.soundOn) this.host.sound(null, 0);
+    this.idling = false;
     this.live.textContent = this.failure.textContent;
     this.syncPlay();
   }
@@ -672,7 +733,7 @@ export class SumpPage {
     this.bearingText.parentElement?.setAttribute('aria-valuenow', String(percent));
     const smp = this.sample;
     const sector = smp.sector >= 0 ? this.trace!.track.sectors[smp.sector]!.name : '';
-    this.rpmText.textContent = t('{rpm} об/хв, {gear}-а', { rpm: Math.round(smp.rpm).toLocaleString(numberLocale), gear: smp.gear });
+    this.rpmText.textContent = t('{rpm} об/хв, {gear}-а', { rpm: fmt(Math.round(smp.rpm), 0), gear: smp.gear });
     this.status.textContent = run ? `${sector ? `${sector} · ` : ''}${t('{v} км/год', { v: Math.round(smp.v * 3.6) })}` : t('Рахую коло…');
     if (!run) {
       for (const line of this.lines) line.textContent = '';
@@ -697,7 +758,7 @@ export class SumpPage {
     const flags: string[] = [];
     if (low) flags.push(t('Тиск нижче потрібного'));
     if (run.reserve[i]! <= 0) flags.push(t('Вкладиші без плівки оливи'));
-    if (run.lifters[i]) flags.push(t('Гідрокомпенсатори просідають: клапани відкриваються менше, чути цокіт'));
+    if (run.lifters[i]) flags.push(t('До гідрокомпенсаторів дійшла олива з повітрям: на справжньому двигуні вони просідають'));
     if (this.accumulator && run.accOilL[i]! < run.accOilL[Math.max(0, i - 10)]! - 0.005) flags.push(t('Акумулятор віддає оливу'));
     this.flags.textContent = flags.join(' · ');
     this.flags.hidden = !flags.length;

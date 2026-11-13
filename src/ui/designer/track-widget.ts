@@ -11,7 +11,9 @@ import { TYRE_IDS, TYRES } from '../../vehicle/vehicle.ts';
 import { nextTask } from '../next-task.ts';
 
 const DELAY_MS = 800;
-const STEPS_PER_SLICE = 1500;
+/** Steps per chunk, and how long a slice may run before it gives the frame back, ms. */
+const STEPS_PER_CHUNK = 100;
+const SLICE_MS = 7;
 
 const BANDS: Record<string, string> = {
   hundreds: t('сотні кіл'),
@@ -72,7 +74,11 @@ export class TrackWidget {
     const lines: string[] = [];
     for (const tyre of TYRE_IDS) {
       const runner = scenario.oilRunner(engine, systems, car, scenario.lapFor(plain, null, car, tyre), choice);
-      while (!runner.advance(STEPS_PER_SLICE)) {
+      for (;;) {
+        const start = performance.now();
+        let done = runner.advance(STEPS_PER_CHUNK);
+        while (!done && performance.now() - start < SLICE_MS) done = runner.advance(STEPS_PER_CHUNK);
+        if (done) break;
         await new Promise<void>((resolve) => nextTask(resolve));
         if (generation !== this.generation) return;
       }

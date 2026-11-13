@@ -484,11 +484,12 @@ export class SumpScene {
       posA[(top + 1) * 3] = x;
       posA[(top + 1) * 3 + 1] = this.floor[k]!;
       posA[(top + 1) * 3 + 2] = z;
-      for (const v of [top, top + 1]) {
+      const alpha = colA[k * 4 + 3]!;
+      for (let v = top; v <= top + 1; v++) {
         colA[v * 4] = OIL.r * 0.8;
         colA[v * 4 + 1] = OIL.g * 0.8;
         colA[v * 4 + 2] = OIL.b * 0.8;
-        colA[v * 4 + 3] = colA[k * 4 + 3]!;
+        colA[v * 4 + 3] = alpha;
       }
     }
     pos.needsUpdate = true;
