@@ -37,6 +37,12 @@ export interface HalfshaftState {
   outerOver: boolean;
 }
 
+/** A joint past its limit glows red. */
+const paint = (mat: THREE.MeshStandardMaterial, on: boolean): void => {
+  mat.emissive.set(on ? '#ff2a10' : '#000000');
+  mat.emissiveIntensity = on ? 0.9 : 1;
+};
+
 export class HalfshaftView {
   /** Parts on the body: the tulip, the spider, the shaft and the boots. */
   readonly group = new THREE.Group();
@@ -65,6 +71,11 @@ export class HalfshaftView {
   private readonly outerBellows = new Bellows(0.17, 0.4, 6, 0.06);
   private readonly shaftRadius: number;
   private xray = false;
+  /** Whether each joint is drawn red now; null: write it on the next update. Written only when it changes, so a
+   *  highlight on the joints stays, and never while `held` (a failure's own mark is on). */
+  private innerRed: boolean | null = null;
+  private outerRed: boolean | null = null;
+  private held = { inner: false, outer: false };
   // Scratch
   private readonly q = new THREE.Quaternion();
   private readonly a = new THREE.Vector3();
@@ -169,6 +180,21 @@ export class HalfshaftView {
     this.balls.visible = on;
   }
 
+  /** The joints' own materials, both views: for a highlight or a ghost of the whole corner. */
+  materials(): THREE.MeshStandardMaterial[] {
+    return [this.innerMaterial, this.outerMaterial, this.innerGlass, this.outerGlass];
+  }
+
+  /**
+   * Has the next update write both joints' red marks afresh (after a highlight or a failure tinted them), and leaves a
+   * joint's mark alone while `held` (its failure is shown).
+   */
+  refreshMarks(held = { inner: false, outer: false }): void {
+    this.held = held;
+    this.innerRed = null;
+    this.outerRed = null;
+  }
+
   /** Boot materials for the X-ray swap (the corner owns them). */
   setBootMaterials(solid: THREE.Material, glass: THREE.Material): void {
     for (const boot of [this.innerBoot, this.outerBoot]) {
@@ -196,14 +222,16 @@ export class HalfshaftView {
     s.outerAngle = Math.acos(Math.min(1, this.dir.dot(hubAxis)));
     s.innerOver = s.innerAngle > spec.innerMaxDeg * DEG || s.plunge < spec.plungeM[0] || s.plunge > spec.plungeM[1];
     s.outerOver = s.outerAngle > spec.outerMaxDeg * DEG;
-    const red = (mat: THREE.MeshStandardMaterial, on: boolean): void => {
-      mat.emissive.set(on ? '#ff2a10' : '#000000');
-      mat.emissiveIntensity = on ? 0.9 : 1;
-    };
-    red(this.innerMaterial, s.innerOver);
-    red(this.innerGlass, s.innerOver);
-    red(this.outerMaterial, s.outerOver);
-    red(this.outerGlass, s.outerOver);
+    if (s.innerOver !== this.innerRed && !this.held.inner) {
+      this.innerRed = s.innerOver;
+      paint(this.innerMaterial, s.innerOver);
+      paint(this.innerGlass, s.innerOver);
+    }
+    if (s.outerOver !== this.outerRed && !this.held.outer) {
+      this.outerRed = s.outerOver;
+      paint(this.outerMaterial, s.outerOver);
+      paint(this.outerGlass, s.outerOver);
+    }
 
     // Exploded: the tulip goes furthest towards the car's centre, the shaft and spider half as far.
     const inward = explode * 2.4;

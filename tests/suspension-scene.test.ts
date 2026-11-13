@@ -203,6 +203,41 @@ describe('MacPherson corner in 3D', () => {
     model.dispose();
   });
 
+  it('keeps a highlight on every part, and the red marks right once it goes', () => {
+    const model = new CornerModel(resolved);
+    const frame = cornerFrame();
+    const stop = model.materials.bumpStop;
+    const joint = model.halfshaft!.tulip.material as THREE.MeshStandardMaterial;
+    // Deep in bump the stop is squeezed past a fifth of its length and glows red.
+    frame.travel = 0.12;
+    model.update(frame);
+    expect(model.bumpStopSqueeze).toBeGreaterThan(0.2);
+    expect(stop.emissive.getHexString()).toBe('ff2a10');
+    model.setHighlight(true);
+    model.update(frame);
+    // The shaft's joints keep the highlight frame after frame, as everything else does.
+    expect(joint.emissive.getHexString()).toBe('ffb35c');
+    // Back to rest under the highlight, then the highlight goes: the stop is not red any more.
+    frame.travel = 0;
+    model.update(frame);
+    model.setHighlight(false);
+    model.update(frame);
+    expect(stop.emissive.getHexString()).toBe('000000');
+    expect(joint.emissive.getHexString()).toBe('000000');
+    model.dispose();
+  });
+
+  it('ghosts the materials of both views, so a view change keeps the ghost', () => {
+    const model = new CornerModel(resolved);
+    model.setView('xray');
+    model.setGhost(0.3);
+    model.setView('solid');
+    for (const mesh of [model.halfshaft!.tulip, model.halfshaft!.bell, ...partOf(model, 'susp.wheel')]) {
+      expect((mesh.material as THREE.Material).opacity, mesh.userData.part as string).toBeCloseTo(0.3, 9);
+    }
+    model.dispose();
+  });
+
   it('sizes the coil wire from the spring rate', () => {
     // k = G·d⁴/(8·D³·n): 25 N/mm on a 120 mm coil with 4.5 active turns takes 11.8 mm wire, and four times the rate
     // takes √2 times the wire.

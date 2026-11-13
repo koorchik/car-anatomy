@@ -581,14 +581,12 @@ export class CornerModel {
     this.schematic = new CornerSchematic(m);
     this.body.add(this.schematic.group);
 
+    // Lines and sprites sort by renderOrder too, so the band takes every object, overlays included, not only meshes.
+    this.group.traverse((o) => this.orders.set(o, o.renderOrder));
     this.group.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      this.orders.set(o, o.renderOrder);
-      if (o.userData.part && o !== this.road.mesh) mesh.castShadow = true;
+      if (mesh.isMesh && o.userData.part && o !== this.road.mesh) mesh.castShadow = true;
     });
-    for (const o of [this.forces.group, this.laser.group]) o.traverse((c) => this.orders.set(c, c.renderOrder));
-    this.forces.group.traverse((o) => ((o as THREE.Mesh).castShadow = false));
     this.setView('solid');
     this.update(this.frame);
   }
@@ -662,7 +660,9 @@ export class CornerModel {
     for (const undo of this.failures) undo();
     this.failures = [];
     this.failed = part;
+    // The per-frame red marks of the bump stop and the shaft's joints are written afresh, except on the failed part.
     this.stopRed = null;
+    this.halfshaft?.refreshMarks({ inner: part === 'susp.cv-inner', outer: part === 'susp.cv-outer' });
     if (!part) return;
     const seen = new Set<THREE.Material>();
     this.group.traverse((o) => {
@@ -679,6 +679,11 @@ export class CornerModel {
 
   setHighlight(on: boolean): void {
     for (const undo of this.highlightUndo) undo();
+    if (this.highlightUndo.length > 0) {
+      // The undo put back the tints of the moment the highlight came on; a stop or a joint may have changed since.
+      if (this.failed !== 'susp.bump-stop') this.stopRed = null;
+      this.halfshaft?.refreshMarks({ inner: this.failed === 'susp.cv-inner', outer: this.failed === 'susp.cv-outer' });
+    }
     this.highlightUndo = [];
     if (!on) return;
     for (const mat of this.ownMaterials()) {
@@ -730,7 +735,9 @@ export class CornerModel {
   }
 
   private ownMaterials(): THREE.Material[] {
+    // Every material of either view, not only the ones on show: the view may change while the tint is on.
     const list = new Set<THREE.Material>(Object.values(this.materials) as THREE.Material[]);
+    for (const m of this.halfshaft?.materials() ?? []) list.add(m);
     this.group.traverse((o) => {
       const mat = (o as THREE.Mesh).material;
       for (const m of [mat].flat() as Array<THREE.Material | undefined>) if (m) list.add(m);
