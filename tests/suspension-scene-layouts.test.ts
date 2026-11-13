@@ -12,6 +12,7 @@ import { jtektCorner, macphersonJtekt } from '../src/suspension/templates/macphe
 import { multilink, multilinkDefaults } from '../src/suspension/templates/multilink.ts';
 import { typicalCorner, typicalWheelCentreZM } from '../src/suspension/templates/typical-corner.ts';
 import type { AxleSpec, Vec3 } from '../src/suspension/spec.ts';
+import { DRAWING } from '../src/scene/suspension/drawing.ts';
 
 const context = new Proxy({}, { get: () => () => ({ addColorStop: () => {} }), set: () => true });
 vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => context }) });
@@ -172,6 +173,65 @@ describe.each(CORNERS)('the %s in 3D', (_name, resolved) => {
         expect(p.distanceTo(scene(out))).toBeLessThan(1e-5);
       }
     }
+    model.dispose();
+  });
+
+  it('keeps the knuckle’s castings out of the spinning brake disc over the travel and the rack', () => {
+    // The disc's braking ring in the hub frame (along the spin axis from the wheel centre, outboard positive), as the
+    // model draws it; the caliper straddles it by design. Every casting the knuckle or a split knuckle's carrier has
+    // must stay out of the ring with 2 mm to spare, sampled over each triangle, not only at its corners.
+    const model = new CornerModel(resolved);
+    const frame = cornerFrame();
+    const table = resolved.axle.table;
+    const face = DRAWING.wheelOffsetM;
+    const ringIn = face - DRAWING.hatDepthM - DRAWING.discThickM;
+    const ringOut = ringIn + DRAWING.discThickM;
+    const clear = 0.002;
+    const castings: THREE.Mesh[] = [];
+    for (const group of [model.knuckle, model.carrier]) {
+      for (const o of group?.children ?? []) {
+        const part = o.userData.part as string | undefined;
+        if ((o as THREE.Mesh).isMesh && part !== 'susp.caliper' && (part === 'susp.knuckle' || part === link.knuckle?.knucklePart || part === link.knuckle?.carrierPart)) castings.push(o as THREE.Mesh);
+      }
+    }
+    expect(castings.length).toBe(link.knuckle ? 2 : 1);
+    const toHub = new THREE.Matrix4();
+    const corners = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    const p = new THREE.Vector3();
+    let deepest = -Infinity;
+    let where = '';
+    for (const rack of steered ? [-0.03, 0, 0.03] : [0]) {
+      for (let i = 0; i < table.n; i += 10) {
+        frame.travel = table.travel0 + i * table.step;
+        frame.rack = rack;
+        model.update(frame);
+        model.group.updateMatrixWorld(true);
+        toHub.copy((model as unknown as { hubFrame: THREE.Object3D }).hubFrame.matrixWorld).invert();
+        for (const mesh of castings) {
+          const pos = mesh.geometry.attributes.position!;
+          const index = mesh.geometry.index;
+          const count = index ? index.count : pos.count;
+          const m = new THREE.Matrix4().multiplyMatrices(toHub, mesh.matrixWorld);
+          for (let t = 0; t < count; t += 3) {
+            for (let k = 0; k < 3; k++) corners[k]!.fromBufferAttribute(pos, index ? index.getX(t + k) : t + k).applyMatrix4(m);
+            for (let a = 0; a <= 4; a++) {
+              for (let b = 0; a + b <= 4; b++) {
+                p.set(0, 0, 0).addScaledVector(corners[0]!, a / 4).addScaledVector(corners[1]!, b / 4).addScaledVector(corners[2]!, (4 - a - b) / 4);
+                const axial = p.x / 10;
+                const radius = Math.hypot(p.y, p.z) / 10;
+                if (axial < ringIn - clear || axial > ringOut + clear || radius < DRAWING.discInnerM) continue;
+                const depth = DRAWING.discOuterM + clear - radius;
+                if (depth > deepest) {
+                  deepest = depth;
+                  where = `${mesh.userData.part} at ${(frame.travel * 1000).toFixed(0)} mm, rack ${rack}`;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(deepest, where).toBeLessThanOrEqual(0);
     model.dispose();
   });
 

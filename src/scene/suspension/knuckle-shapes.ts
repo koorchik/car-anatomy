@@ -26,6 +26,12 @@ export interface DiscRoom {
 const ARM_PLANE = -0.62;
 /** Radius inside which an arm may still run straight from the hub boss to the arm plane. */
 const HUB_REACH = 0.7;
+/**
+ * Length along the steering axis of a split axis's bearing boss on the wheel knuckle, and of the carrier's ear beside
+ * it. The axis is nearly radial where its bearings sit, so the two stack between the disc's edge (150 mm from the hub
+ * axis) and the rim's well (198 mm on the street tyre's 18-inch rim): 18 mm each round a pivot at 175 mm.
+ */
+export const PIVOT_BOSS = 0.18;
 
 /** What a knuckle holds, and the boss it holds it with. */
 export type HoldKind =
@@ -97,8 +103,10 @@ export function holdEnd(hold: Hold, c0: THREE.Vector3, spin: THREE.Vector3, disc
       end = { at: hold.at.clone(), axis: spin.clone(), radius: 0.15, length: 0.3, arm: 0.13 };
       break;
     case 'pivot': {
+      // The bearing's boss runs from the pivot towards the hub, PIVOT_BOSS long, and the carrier's ear the other way:
+      // both fit between the disc's edge and the rim's well.
       const axis = hold.axis ?? UP;
-      end = { at: hold.at.clone().addScaledVector(axis, (hold.side ?? 1) * 0.15), axis, radius: 0.16, length: 0.3, arm: 0.15 };
+      end = { at: hold.at.clone().addScaledVector(axis, ((hold.side ?? 1) * PIVOT_BOSS) / 2), axis, radius: 0.15, length: PIVOT_BOSS, arm: 0.12 };
       break;
     }
   }

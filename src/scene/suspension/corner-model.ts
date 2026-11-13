@@ -34,7 +34,7 @@ import { linkBody, strutBody } from './corner-body.ts';
 import { DamperUnit, LoneSpring } from './damper-unit.ts';
 import { DRAWING, springWireM } from './drawing.ts';
 import { HalfshaftView } from './halfshaft.ts';
-import { armPlane, axisPivots, holdEnd, type DiscRoom, type Hold } from './knuckle-shapes.ts';
+import { armPlane, axisPivots, holdEnd, PIVOT_BOSS, type DiscRoom, type Hold } from './knuckle-shapes.ts';
 import { LinkSet, type DrawnLink, type RodView } from './link-builder.ts';
 import { createCornerMaterials, disposeMaterials, type CornerMaterials } from './materials.ts';
 import { CamberLaser, ForceArrows } from './overlays.ts';
@@ -389,7 +389,7 @@ export class CornerModel {
       const root = clampFrom.clone().lerp(clampTo, 0.35);
       // Round the back of the wheel, behind the caliper and clear of the halfshaft, at the hub's height.
       const behind = this.c0.clone().addScaledVector(this.spinAxis0, -1.05).addScaledVector(rear, 1.25);
-      const ear = (at: THREE.Vector3, side: 1 | -1): KnuckleEnd => ({ at: at.clone().addScaledVector(pivots.dir, side * 0.15), axis: pivots.dir, radius: 0.2, length: 0.3, arm: 0.16 });
+      const ear = (at: THREE.Vector3, side: 1 | -1): KnuckleEnd => ({ at: at.clone().addScaledVector(pivots.dir, (side * PIVOT_BOSS) / 2), axis: pivots.dir, radius: 0.18, length: PIVOT_BOSS, arm: 0.13 });
       const above = ear(pivots.above, 1);
       const below = ear(pivots.below, -1);
       // Behind the disc, out past its edge in the arms' plane, then outboard to the ear.
@@ -416,6 +416,7 @@ export class CornerModel {
         const ball0 = toScene(wishbone.ball);
         for (const rod of this.linkSet.rods) ends.push({ at: rod.knuckle0.clone().addScaledVector(UP, 0.12), axis: UP, radius: 0.17, length: 0.3, arm: 0.15 });
         knuckleGeo = knuckleGeometry({
+          rootShare: 0.5,
           hub,
           clamp: {
             from: this.lower0.clone().addScaledVector(strutDir0, tubeBottom - 0.04),
