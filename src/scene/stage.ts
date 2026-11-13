@@ -75,6 +75,8 @@ export class Stage {
   private slowFrames = 0;
   private idleSince = 0;
   private orbitAllowed = true;
+  /** Held still for a snapshot: the resolution stays put and the orbit does not pick itself back up. */
+  private frozen = false;
   /** How tightly the model fills the free area. Below 1 it may reach under the panels when turned. */
   fitScale = 0.68;
   private frameScale = 1;
@@ -227,6 +229,30 @@ export class Stage {
     this.controls.autoRotate = enabled;
   }
 
+  /**
+   * Holds the picture still for a snapshot: the resolution at `quality` of the device's, the orbit as asked and the
+   * camera at the page's home. Null lets go: the orbit and the slow-machine fallback work as before.
+   */
+  freeze(options: { quality: number; orbit: boolean } | null): void {
+    if (!options) {
+      if (!this.frozen) return;
+      this.frozen = false;
+      this.controls.enableDamping = true;
+      this.controls.autoRotate = this.orbitAllowed;
+      return;
+    }
+    this.frozen = true;
+    this.controls.autoRotate = options.orbit;
+    // Without damping the controls drop what is left of a drag or of the orbit at once instead of drifting on.
+    this.controls.enableDamping = false;
+    this.controls.update(0);
+    this.qualityScale = options.quality;
+    this.slowFrames = 0;
+    this.applyPixelRatio();
+    this.renderer.setSize(this.width, this.height, false);
+    this.fit(true);
+  }
+
   /** Part name at a pointer position, or null. Ignores the transparent shell when something solid is behind it. */
   pick(clientX: number, clientY: number): PartInfo | null {
     if (!this.model) return null;
@@ -262,13 +288,14 @@ export class Stage {
 
   render(dtSeconds: number): void {
     // Picks the slow orbit back up after the viewer has left the model alone for a while.
-    if (this.orbitAllowed && this.idleSince > 0 && performance.now() - this.idleSince > 12000) {
+    if (!this.frozen && this.orbitAllowed && this.idleSince > 0 && performance.now() - this.idleSince > 12000) {
       this.controls.autoRotate = true;
       this.idleSince = 0;
     }
     this.controls.update(dtSeconds);
     this.renderer.render(this.scene, this.camera);
     // Lower the resolution a step when a machine can't keep up.
+    if (this.frozen) return;
     if (dtSeconds > 1 / 28) {
       this.slowFrames++;
       if (this.slowFrames > 45 && this.qualityScale > 0.6) {

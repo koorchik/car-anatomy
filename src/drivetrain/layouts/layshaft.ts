@@ -9,7 +9,7 @@
 // follows from the shared centre distance, its module, its teeth and its profile shift.
 
 import { centreDistance, gearGeometry, helixForCentre } from '../gear-geometry.ts';
-import type { AxisDef, ElementDef, GearboxSpec, GearDef, GearState, MemberDef, MeshDef } from '../spec.ts';
+import type { AxisDef, ElementDef, GearboxSpec, GearDef, GearState, MemberDef, MeshDef, SleevePlace } from '../spec.ts';
 
 export interface PairDesc {
   /** Driving and driven teeth: input gear and countershaft gear for the main pair, countershaft gear and loose output-shaft gear for a speed. */
@@ -74,6 +74,18 @@ const FRONT_WALL = 12;
 const CONE = 9;
 const GAP = 4;
 
+/**
+ * Shafts and sleeves for the dynamics [estimate, layout rules rather than data]: steel shafts of 0.4 times the centre
+ * distance in diameter (30 mm at 76 mm) along the gear stack, the input reaching 150 mm further to the clutch splines;
+ * each hub with its sleeve a steel ring from the shaft out to 0.55 times the centre distance. Gears add their own.
+ */
+const SHAFT_SHARE = 0.4;
+const INPUT_REACH = 150;
+const SLEEVE_SHARE = 0.55;
+const STEEL = 7850;
+/** Polar inertia of a steel ring of width w between radii r1 < r2, all in mm, kg·m². */
+const ringInertia = (w: number, r1: number, r2: number): number => (STEEL * Math.PI * (w / 1000) * ((r2 / 1000) ** 4 - (r1 / 1000) ** 4)) / 2;
+
 export const speedGearId = (speed: number | 'R'): string => (speed === 'R' ? 'main-R' : `main-${speed}`);
 export const elementId = (speed: number | 'R'): string => `sync-${speed}`;
 export const stateName = (speed: number | 'R'): string => String(speed);
@@ -126,6 +138,7 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
   const gears: GearDef[] = [];
   const meshes: MeshDef[] = [];
   const elements: ElementDef[] = [];
+  const sleeves: SleevePlace[] = [];
 
   // Along the shafts: the main pair, then each sleeve with its front gear, the sleeve itself and its back gear.
   let z = FRONT_WALL;
@@ -198,10 +211,21 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
     if (!direct) z += GAP;
     if (s.front !== null) addSpeed(s.front);
     z += CONE;
-    place(desc.sleeveWidth);
+    const middle = place(desc.sleeveWidth);
+    sleeves.push({
+      id: s.id, z: middle, width: desc.sleeveWidth, gap: CONE,
+      front: s.front === null ? null : elementId(s.front), back: s.back === null ? null : elementId(s.back),
+    });
     z += CONE;
     if (s.back !== null) addSpeed(s.back);
   });
+
+  // Shafts over the stack, the input on to the clutch, and the hubs with their sleeves on the output shaft.
+  const shaftR = (SHAFT_SHARE * a) / 2;
+  const stack = z;
+  members[0]!.inertia = ringInertia(stack + INPUT_REACH, 0, shaftR);
+  members[1]!.inertia = ringInertia(stack, 0, shaftR);
+  members[2]!.inertia = ringInertia(stack, 0, shaftR) + desc.sleeves.length * ringInertia(desc.sleeveWidth, shaftR, SLEEVE_SHARE * a);
 
   const states: GearState[] = [
     ...(desc.reverse ? [{ name: stateName('R'), closed: [elementId('R')] }] : []),
@@ -221,6 +245,7 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
     input: 'input',
     output: 'output',
     meshEfficiency: desc.meshEfficiency,
+    sleeves,
   };
 }
 

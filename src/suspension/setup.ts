@@ -12,10 +12,9 @@
 //   - a damper preset or ζ becomes coefficients by the OptimumG baseline at the corner's ride frequency;
 //   - pressure changes only the tyre's vertical stiffness.
 
-import type { CornerLinkage, CornerSpec, DamperSpec, Vec3 } from './spec.ts';
+import type { AxleSpec, CornerLinkage, CornerSpec, DamperSpec, Vec3 } from './spec.ts';
 import { Axle, newCornerSample, type CornerSample } from './kinematics.ts';
 import { CornerSolver } from './solve.ts';
-import { dist } from './vec.ts';
 import { coilCompression, coilForce, bumpStopForce, dampingFromZeta, G } from './forces.ts';
 import { patchLengthM, tyreVertical, verticalStiffness } from '../vehicle/tyre-data.ts';
 
@@ -162,19 +161,22 @@ export interface ResolvedCorner {
 
 const DEG = Math.PI / 180;
 
-/** Length of the damper (top mount to the strut's lower point, or body point to knuckle point) for a solved pose. */
-function damperLength(solver: CornerSolver, spec: CornerSpec['axle'], pose: Float64Array): number {
-  const p = [0, 0, 0];
-  const strut = spec.linkage.strut;
-  if (strut) {
-    solver.point(pose, strut.lower, p);
-    const shift = strut.topShift ?? [0, 0, 0];
-    return dist([strut.top[0] + shift[0], strut.top[1] + shift[1], strut.top[2] + shift[2]], [p[0], p[1], p[2]]);
+/** Damper lengths at bump-stop contact and at top-out of each corner as drawn, kept per spec: they are hardware, so no
+ *  setup changes them, and finding them takes the drawn corner's whole table (wherever the damper sits). */
+const drawnStops = new WeakMap<AxleSpec, { contactM: number; topOutM: number }>();
+
+function damperStops(spec: AxleSpec): { contactM: number; topOutM: number } {
+  let stops = drawnStops.get(spec);
+  if (!stops) {
+    const drawn = new Axle(spec);
+    const s = newCornerSample();
+    drawn.measureAt(0, s);
+    const contactM = s.damperLen - spec.bumpStop.gapM;
+    drawn.measureAt(-spec.travel.droopM, s);
+    stops = { contactM, topOutM: s.damperLen };
+    drawnStops.set(spec, stops);
   }
-  const d = spec.damper;
-  if (d.wheel === 'strut') throw new Error('A damper on a strut needs a strut');
-  solver.point(pose, d.wheel, p);
-  return dist(d.body, [p[0], p[1], p[2]]);
+  return stops;
 }
 
 /** Travel in [from, to] where the damper is `len` long (it shortens in bump), by bisection on the table; the nearer
@@ -205,14 +207,7 @@ export function resolveCorner(corner: CornerSpec, raw: CornerSetup): ResolvedCor
   const tieRow = solver.steerRow();
   const tieRodDesign = tieRow >= 0 ? solver.lengthOf(tieRow) : 0;
   // The damper's end stops are hardware, so their lengths come from the corner as drawn, before any alignment.
-  const drawnDamper = (travel: number): number => {
-    const p = CornerSolver.identity();
-    const res = solver.solve(p, travel, 0, 40);
-    if (!res.ok) throw new Error(`The corner does not reach ${(travel * 1000).toFixed(0)} mm of travel: ${res.worst}`);
-    return damperLength(solver, spec, p);
-  };
-  const contactM = drawnDamper(0) - spec.bumpStop.gapM;
-  const topOutM = drawnDamper(-spec.travel.droopM);
+  const { contactM, topOutM } = damperStops(spec);
   const camberSet = !!strut && setup.camberDeg !== 'factory';
   const toeSet = tieRow >= 0 && (setup.toeDeg !== 'factory' || camberSet);
   let shiftY = 0;

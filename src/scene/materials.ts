@@ -10,18 +10,34 @@ const noiseTexture = (size: number, draw: (ctx: CanvasRenderingContext2D, size: 
   return tex;
 };
 
+/**
+ * A fixed sequence of numbers in [0, 1) for the surface noise (mulberry32), so an engine looks the same on every visit
+ * and two snapshots of one page can be compared.
+ */
+const seeded = (seed: number): (() => number) => {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
 let castBump: THREE.Texture | null = null;
 let crinkleBump: THREE.Texture | null = null;
 
 /** Sand-cast surface for blocks and heads. */
 const castTexture = (): THREE.Texture => {
   castBump ??= noiseTexture(256, (ctx, size) => {
+    const random = seeded(1);
     ctx.fillStyle = '#808080';
     ctx.fillRect(0, 0, size, size);
     for (let i = 0; i < 14000; i++) {
-      const v = 95 + Math.random() * 70;
+      const v = 95 + random() * 70;
       ctx.fillStyle = `rgb(${v},${v},${v})`;
-      ctx.fillRect(Math.random() * size, Math.random() * size, 1 + Math.random() * 2, 1 + Math.random() * 2);
+      ctx.fillRect(random() * size, random() * size, 1 + random() * 2, 1 + random() * 2);
     }
   });
   castBump.repeat.set(0.7, 0.7);
@@ -34,17 +50,18 @@ export const castBumpTexture = (): THREE.Texture => castTexture();
 /** Wrinkle paint on cam covers. */
 const crinkleTexture = (): THREE.Texture => {
   crinkleBump ??= noiseTexture(256, (ctx, size) => {
+    const random = seeded(2);
     ctx.fillStyle = '#707070';
     ctx.fillRect(0, 0, size, size);
     ctx.lineCap = 'round';
     for (let i = 0; i < 2600; i++) {
-      const v = Math.random() < 0.5 ? 40 : 200;
+      const v = random() < 0.5 ? 40 : 200;
       ctx.strokeStyle = `rgba(${v},${v},${v},0.35)`;
-      ctx.lineWidth = 0.7 + Math.random() * 1.4;
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      const a = Math.random() * Math.PI * 2;
-      const l = 2 + Math.random() * 5;
+      ctx.lineWidth = 0.7 + random() * 1.4;
+      const x = random() * size;
+      const y = random() * size;
+      const a = random() * Math.PI * 2;
+      const l = 2 + random() * 5;
       ctx.beginPath();
       ctx.moveTo(x, y);
       ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
@@ -225,3 +242,10 @@ export const glowTexture = (): THREE.Texture => {
   glowTex.colorSpace = THREE.SRGBColorSpace;
   return glowTex;
 };
+
+/** Cast aluminium of a gearbox case or a suspension casting: the engine block's surface. */
+export const castAluminiumMaterial = (): THREE.MeshStandardMaterial =>
+  new THREE.MeshStandardMaterial({ color: '#a9abac', metalness: 0.85, roughness: 0.62, bumpMap: castTexture(), bumpScale: 0.5 });
+
+/** Brass of synchronizer blocker rings. */
+export const brassMaterial = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ color: '#c9a04e', metalness: 1, roughness: 0.34 });

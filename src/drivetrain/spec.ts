@@ -63,7 +63,9 @@ export interface MeshDef {
 export type ElementKind = 'clutch' | 'brake' | 'synchro' | 'dog' | 'oneway' | 'variator';
 
 export interface FrictionDef {
+  /** Friction faces: 2 for a single dry disc, twice the plates for a pack. */
   faces: number;
+  /** Inner and outer radius of the facing, mm. */
   rIn: number;
   rOut: number;
   muStatic: number;
@@ -78,11 +80,16 @@ export interface FrictionDef {
 
 export interface SynchroDef {
   cones: 1 | 2 | 3;
+  /** Cone half angle α, degrees. */
   coneHalfAngle: number;
+  /** Mean radius of the outer cone, mm; further cones sit inside it (synchro-math.ts). */
   coneRadius: number;
+  /** Width of each cone face, mm; synchro-math.ts takes an estimate without it. */
+  coneWidth?: number;
   muCone: number;
   /** Half the roof angle of the blocking chamfers, from the shaft axis, degrees. */
   chamfer: number;
+  /** Radius of the blocking chamfers, mm. */
   chamferRadius: number;
   muChamfer: number;
   /** Engagement (dog) teeth on the gear, for the crunch pitch and the 3D. */
@@ -132,6 +139,22 @@ export interface GearboxSpec {
   spinLoss?: SpinLossDef;
   /** Mesh efficiency per tooth contact, rolling power. */
   meshEfficiency: number;
+  /** Where the shift sleeves sit along their shaft, for the 3D and the shift lever. Layouts without sleeves leave it out. */
+  sleeves?: SleevePlace[];
+}
+
+/** A shift sleeve on its shaft: its hub sits still at `z`, the sleeve slides toward the gear on either side. */
+export interface SleevePlace {
+  id: string;
+  /** Middle of the hub, mm behind the gearbox front face (like GearDef.z). */
+  z: number;
+  /** Hub and sleeve width, mm. */
+  width: number;
+  /** Space between the hub and the gear face on each side, for the dog ring and the blocker ring, mm. */
+  gap: number;
+  /** Element engaged by pushing the sleeve forward (toward the engine) and backward; null engages nothing. */
+  front: string | null;
+  back: string | null;
 }
 
 export type LaunchDef =
