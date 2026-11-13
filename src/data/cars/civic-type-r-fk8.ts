@@ -16,7 +16,7 @@ export const CAR: CarRecord = {
   years: '2017-2021',
   engine: 'i4/civic-type-r-k20c1',
   gearbox: 'manual-transaxle',
-  suspension: null,
+  suspension: { front: 'macpherson', rear: 'multilink' },
   mount: { axis: 'transverse', front: 'right', position: 'front' },
   massKg: 1380,
   massBasis: 'kerb',
