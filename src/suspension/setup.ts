@@ -130,10 +130,13 @@ export interface ResolvedCorner {
   bumpStop: {
     /** Damper length where the stop touches, m (fixed on the damper rod, so lowering eats into it). */
     contactM: number;
+    /** Wheel travel from rest to where the stop touches, on the table the quarter car reads, m. */
+    travelM: number;
     lengthM: number;
     rate: number;
   };
-  /** Damper length where it tops out (full droop), m. A stop of the bump-stop law catches the wheel there. */
+  /** Damper length where it tops out (full droop of the corner as drawn), m. A stop of the bump-stop law catches the
+   *  wheel there. Like the bump stop it is hardware: lowering and camber plates do not move it. */
   topOutM: number;
   tyre: {
     kt: number;
@@ -159,6 +162,36 @@ export interface ResolvedCorner {
 
 const DEG = Math.PI / 180;
 
+/** Length of the damper (top mount to the strut's lower point, or body point to knuckle point) for a solved pose. */
+function damperLength(solver: CornerSolver, spec: CornerSpec['axle'], pose: Float64Array): number {
+  const p = [0, 0, 0];
+  const strut = spec.linkage.strut;
+  if (strut) {
+    solver.point(pose, strut.lower, p);
+    const shift = strut.topShift ?? [0, 0, 0];
+    return dist([strut.top[0] + shift[0], strut.top[1] + shift[1], strut.top[2] + shift[2]], [p[0], p[1], p[2]]);
+  }
+  const d = spec.damper;
+  if (d.wheel === 'strut') throw new Error('A damper on a strut needs a strut');
+  solver.point(pose, d.wheel, p);
+  return dist(d.body, [p[0], p[1], p[2]]);
+}
+
+/** Travel in [from, to] where the damper is `len` long (it shortens in bump), by bisection on the table; the nearer
+ *  end when it never gets there. */
+function travelAtDamperLength(axle: Axle, len: number, from: number, to: number): number {
+  if (axle.value('damperLen', from) <= len) return from;
+  if (axle.value('damperLen', to) >= len) return to;
+  let lo = from;
+  let hi = to;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (axle.value('damperLen', mid) > len) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
 /** Turns a corner and a setup into the corner the simulation runs. Pure; throws only if the linkage cannot assemble. */
 export function resolveCorner(corner: CornerSpec, raw: CornerSetup): ResolvedCorner {
   const factory = factorySetup(corner);
@@ -171,6 +204,15 @@ export function resolveCorner(corner: CornerSpec, raw: CornerSetup): ResolvedCor
   const strut = spec.linkage.strut;
   const tieRow = solver.steerRow();
   const tieRodDesign = tieRow >= 0 ? solver.lengthOf(tieRow) : 0;
+  // The damper's end stops are hardware, so their lengths come from the corner as drawn, before any alignment.
+  const drawnDamper = (travel: number): number => {
+    const p = CornerSolver.identity();
+    const res = solver.solve(p, travel, 0, 40);
+    if (!res.ok) throw new Error(`The corner does not reach ${(travel * 1000).toFixed(0)} mm of travel: ${res.worst}`);
+    return damperLength(solver, spec, p);
+  };
+  const contactM = drawnDamper(0) - spec.bumpStop.gapM;
+  const topOutM = drawnDamper(-spec.travel.droopM);
   const camberSet = !!strut && setup.camberDeg !== 'factory';
   const toeSet = tieRow >= 0 && (setup.toeDeg !== 'factory' || camberSet);
   let shiftY = 0;
@@ -237,12 +279,9 @@ export function resolveCorner(corner: CornerSpec, raw: CornerSetup): ResolvedCor
   const bodyStaticM = wheelCentreZM - spec.wheelCentre[2] - q0;
 
   // Stops on the damper.
-  const top = spec.linkage.strut?.top;
-  const lower = spec.linkage.strut?.lower;
-  const designDamper = top && lower ? dist(top, lower) : design.damperLen;
-  const contactM = designDamper - spec.bumpStop.gapM;
   const bumpAtRest = bumpStopForce(contactM - atRest.damperLen, spec.bumpStop.rate, spec.bumpStop.lengthM);
-  const topOutM = axle.value('damperLen', -spec.travel.droopM);
+  const bumpEnd = axle.table.travel0 + (axle.table.n - 1) * axle.table.step;
+  const travelToStop = travelAtDamperLength(axle, contactM, q0, bumpEnd) - q0;
 
   // Spring: whatever the stop does not carry at rest.
   const rate = setup.springNmm * 1000;
@@ -293,7 +332,7 @@ export function resolveCorner(corner: CornerSpec, raw: CornerSetup): ResolvedCor
     spring: { rate, rate2, fromM, freeM, perchM, staticN },
     damper,
     zeta,
-    bumpStop: { contactM, lengthM: spec.bumpStop.lengthM, rate: spec.bumpStop.rate },
+    bumpStop: { contactM, travelM: travelToStop, lengthM: spec.bumpStop.lengthM, rate: spec.bumpStop.rate },
     topOutM,
     tyre: {
       kt,

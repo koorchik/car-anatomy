@@ -74,7 +74,7 @@ for (let i = 0; i < Math.round(seconds / 0.001); i++) {
 writeFileSync(`${dir}/bump.csv`, out.join('\n') + '\n');
 
 const leave = (at + lengthM) / speed;
-const toStop = (rc.atRest.damperLen - rc.bumpStop.contactM) / rc.atRest.mrDamper;
+const toStop = rc.bumpStop.travelM;
 console.log(`setup: spring ${setup.springNmm} N/mm, damper ${setup.damper} (ζ ${rc.zeta.toFixed(2)}), ride ${(setup.rideHeightM * 1000).toFixed(0)} mm, camber ${setup.camberDeg} (${(rc.atRest.camber * DEG).toFixed(2)}° at rest), toe ${setup.toeDeg} (${(rc.atRest.toe * DEG).toFixed(2)}°), ${setup.pressureBar} bar`);
 console.log(`corner: top shift ${(rc.topShiftM * 1000).toFixed(2)} mm, tie rod ${(rc.tieRodM * 1000).toFixed(2)} mm, perch ${(rc.spring.perchM * 1000).toFixed(1)} mm, wheel rate ${(rc.wheelRate / 1000).toFixed(1)} kN/m, body ${rc.bodyHz.toFixed(2)} Hz, hop ${rc.hopHz.toFixed(1)} Hz, tyre ${(rc.tyre.kt / 1000).toFixed(0)} kN/m, patch ${(rc.tyre.patchM * 1000).toFixed(0)} mm`);
 console.log(`at rest: roll centre ${(rc.atRest.contactY * rc.atRest.tanBeta * 1000).toFixed(0)} mm, camber gain ${((rc.axle.value('camber', rc.staticTravelM + 0.001) - rc.axle.value('camber', rc.staticTravelM - 0.001)) / 0.002 * DEG).toFixed(1)}°/m, ${(toStop * 1000).toFixed(0)} mm to the bump stop`);

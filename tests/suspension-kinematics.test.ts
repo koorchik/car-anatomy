@@ -206,10 +206,23 @@ describe('corner setup', () => {
     const base = resolveCorner(corner, factory);
     const rc = (r: typeof base): number => r.atRest.contactY * r.atRest.tanBeta;
     expect(rc(low)).toBeLessThan(rc(base) - 0.05);
-    expect(low.atRest.damperLen - low.bumpStop.contactM).toBeLessThan(base.atRest.damperLen - base.bumpStop.contactM - 0.03);
+    expect(base.bumpStop.travelM).toBeCloseTo(0.08, 6);
+    expect(low.bumpStop.travelM).toBeCloseTo(0.04, 6);
     // The perch moves down by about the height times the motion ratio.
     expect(low.spring.perchM).toBeLessThan(-0.035);
     expect(low.spring.perchM).toBeGreaterThan(-0.05);
+  });
+
+  it('keeps the damper stops where the hardware has them, whatever the alignment and height', () => {
+    const base = resolveCorner(corner, factory);
+    expect(base.topOutM).toBeCloseTo(page.value('damperLen', -corner.axle.travel.droopM), 9);
+    for (const s of [{ camberDeg: -3, toeDeg: 0.5 }, { camberDeg: 1, rideHeightM: 0.04 }, { rideHeightM: -0.04, springNmm: 80 }]) {
+      const r = resolveCorner(corner, { ...factory, ...s });
+      expect(r.bumpStop.contactM).toBe(base.bumpStop.contactM);
+      expect(r.topOutM).toBe(base.topOutM);
+      // The travel left to the stop is where the table reaches the contact length.
+      expect(r.axle.value('damperLen', r.staticTravelM + r.bumpStop.travelM)).toBeCloseTo(r.bumpStop.contactM, 9);
+    }
   });
 
   it('holds the car with any spring: the static support equals the sprung weight', () => {
