@@ -314,16 +314,21 @@ export class Drive {
   /** A load that hands its state over (a car) goes on, on the audio thread, from where the local copy has it. */
   private handOver(): void {
     const kept = this.local.crank?.load.snapshot?.();
-    if (kept) this.post({ type: 'loadRestore', snapshot: kept, rpm: this.local.state === 'running' ? this.local.rpm : null });
+    if (kept) this.post({ type: 'loadRestore', snapshot: kept, state: this.local.state, rpm: this.local.rpm });
   }
 
-  /** The audio thread stopped: the local copy goes on from its last report, the load from its snapshot. */
+  /**
+   * The audio thread stopped: the local copy goes on from its last report, the load from its snapshot. The local engine
+   * was not stepped while the audio thread ran, so it takes the reported state too (it may still be cranking from the
+   * start), unless the page has stopped it since.
+   */
   private takeOver(): void {
     this.wasWorklet = false;
     const r = this.report;
     if (!r) return;
     if (r.loadSnapshot) this.local.crank?.load.restore?.(r.loadSnapshot);
-    if (this.local.state === 'running' && r.state === 'running') this.local.rpm = r.rpm;
+    this.local.adopt(r.state as EngineState, r.rpm);
+    if (!this.wanted) this.local.stop();
   }
 
   snapshot(): DriveSnapshot {

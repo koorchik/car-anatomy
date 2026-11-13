@@ -39,6 +39,7 @@ import { vehicleLoadSpec } from '../src/drivetrain/car-load.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import { LoadedCrank } from '../src/engine/loaded-crank.ts';
 import { EngineSim } from '../src/engine/sim.ts';
+import { peakTorque } from '../src/engine/torque-map.ts';
 import { VehicleLoad, type VehicleCommand } from '../src/vehicle/vehicle-load.ts';
 
 const STEPS = [1 / 3000, 16 / 44100, 32 / 48000, 0.001, 0.005];
@@ -753,6 +754,24 @@ describe('16. state hand-over', () => {
     expect(b.load.control.gearIn(b.load.vehicle.solver)).toBe('4');
     expect(b.load.vehicle.solver.state[b.load.control.spec.clutch]).toBe(a.load.vehicle.solver.state[a.load.control.spec.clutch]);
     expect(b.load.vehicle.solver.state[b.load.control.spec.clutch]).toBe(LOCKED);
+  });
+
+  it('the copy that was not stepped meanwhile is still cranking from the start: it takes the engine\'s state too', () => {
+    // Drive's local copy starts with the audio thread and then waits; at the hand-over it adopts the reported engine.
+    const a = rolling();
+    const b = engineOnCar();
+    b.sim.start();
+    b.sim.pedal = a.sim.pedal;
+    b.load.restore(structuredClone(a.load.snapshot()));
+    b.sim.adopt(a.sim.state, a.sim.rpm);
+    expect(b.sim.state).toBe('running');
+    let damperPeak = 0;
+    const damper = b.load.vehicle.solver.core.springs.ids.indexOf('damper');
+    runFor(a.sim, 1);
+    runFor(b.sim, 1, () => (damperPeak = Math.max(damperPeak, Math.abs(b.load.vehicle.solver.springApplied[damper]!))));
+    expect(Math.abs(b.load.chassis.v / a.load.chassis.v - 1)).toBeLessThan(0.01);
+    // A starter dragging the crank would wind the damper far past the engine's own torque.
+    expect(damperPeak).toBeLessThan(peakTorque(e30Car.map).nm);
   });
 
   it('without the snapshot the new load starts from rest: the hand-over is what keeps the car going', () => {

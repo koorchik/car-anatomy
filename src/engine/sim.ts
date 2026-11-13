@@ -105,6 +105,23 @@ export class EngineSim {
     this.rpm = Math.max(this.rpm, this.params.idleRpm);
   }
 
+  /**
+   * Takes the state and speed of the other copy of this engine, at the hand-over between the audio thread and the
+   * main thread (a car's loadRestore). The copy that was not stepped meanwhile may still be cranking from a start the
+   * other one finished long ago; a car restored onto it would be dragged by a starter.
+   */
+  adopt(state: EngineState, rpm: number): void {
+    if (state !== this.state) {
+      if (state === 'running') this.startImmediately();
+      else if (state === 'stopping') this.stop();
+      else if (state === 'cranking') {
+        this.state = 'off';
+        this.start();
+      } else this.state = 'off';
+    }
+    this.rpm = rpm;
+  }
+
   /** Couples a load to the crank, or takes it off with null. */
   attach(crank: LoadedCrank<AnyLoadReadings> | null): void {
     this.crank = crank;

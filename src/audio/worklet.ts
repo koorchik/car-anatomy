@@ -6,6 +6,7 @@ import { EngineSynth, type ListenPosition, type SynthConfig } from './synth.ts';
 import type { AnyLoadReadings, LoadCommand, LoadSnapshot, LoadSpec } from '../engine/load.ts';
 import { LoadedCrank, type CrankReadings } from '../engine/loaded-crank.ts';
 import { createLoad } from '../engine/loads.ts';
+import type { EngineState } from '../engine/sim.ts';
 import type { EngineTorqueMap } from '../engine/torque-map.ts';
 
 declare const sampleRate: number;
@@ -27,8 +28,8 @@ export type WorkletCommand =
   | { type: 'torqueMap'; map: EngineTorqueMap | null }
   | { type: 'load'; spec: LoadSpec | null }
   | { type: 'loadCommand'; command: LoadCommand }
-  /** The load's state from the other copy (LoadSnapshot); rpm, when not null, is that copy's engine speed. */
-  | { type: 'loadRestore'; snapshot: LoadSnapshot; rpm: number | null };
+  /** The load's state from the other copy (LoadSnapshot), with the state and speed of that copy's engine. */
+  | { type: 'loadRestore'; snapshot: LoadSnapshot; state: EngineState; rpm: number };
 
 export interface WorkletReport {
   angle: number;
@@ -108,8 +109,9 @@ class EngineProcessor extends AudioWorkletProcessor {
         break;
       case 'loadRestore': {
         const sim = this.synth?.sim;
-        sim?.crank?.load.restore?.(cmd.snapshot);
-        if (sim && cmd.rpm !== null && sim.state === 'running') sim.rpm = cmd.rpm;
+        if (!sim?.crank?.load.restore) break;
+        sim.crank.load.restore(cmd.snapshot);
+        sim.adopt(cmd.state, cmd.rpm);
         break;
       }
     }
