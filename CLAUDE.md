@@ -33,6 +33,7 @@ node scripts/dyno-table.ts                    # кожен двигун на с�
 node scripts/orders.ts <id> <об/хв> 1 --dyno  # порядки під навантаженням (--free: утримання педаллю)
 npm run render-audio -- --dyno <id...>        # WAV зі стенда: утримання, розгін, спуск
 node scripts/suspension-sweep.ts [damper=worn ride=-40 …]  # кінематика й чверть авто кута Макферсона в CSV у .tmp/
+node scripts/suspension-templates.ts [upperAngleDeg=3 …]    # статичні числа й криві всіх незалежних шаблонів
 ```
 
 `tests/synth.test.ts` рендерить звук офлайн для кожного двигуна, тому це найповільніший файл.
