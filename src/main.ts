@@ -31,7 +31,7 @@ import { liveScratch, liveTiming, type ValveState } from './engine/valve-control
 import type { SumpHost, SumpPage } from './ui/sump/sump-page.ts';
 import type { SystemLayer } from './scene/systems/layer.ts';
 import type { FreezeOptions } from './shell/freeze.ts';
-import { parseRoute } from './shell/routes.ts';
+import { router } from './shell/router.ts';
 import { catalogueEngineId, enginesPage } from './ui/engines/routes.ts';
 
 type SpeedMode = 'slow' | 'readable' | 'real';
@@ -214,11 +214,11 @@ try {
   throw error;
 }
 
-const onDesignerRoute = (): boolean => enginesPage(parseRoute(location.hash)) === 'designer';
-const onSumpRoute = (): boolean => enginesPage(parseRoute(location.hash)) === 'sump';
+const onDesignerRoute = (): boolean => enginesPage(router.current) === 'designer';
+const onSumpRoute = (): boolean => enginesPage(router.current) === 'sump';
 
 const resolveEngine = (): Engine => {
-  const wanted = catalogueEngineId(parseRoute(location.hash));
+  const wanted = catalogueEngineId(router.current);
   // A variant that no longer exists falls back to its page rather than to another engine.
   const spec = (wanted && (engineById(wanted) ?? engineById(wanted.split('/')[0]!))) || engineById(DEFAULT_ENGINE)!;
   return buildEngine(spec);
@@ -631,7 +631,7 @@ function enterSump(): void {
       $('sump-dash').append(sump.dash);
       $('sump-summary').append(sump.summary, sump.liveRegion);
     }
-    sump.enter(parseRoute(location.hash));
+    sump.enter(router.current);
     layoutPanels();
   });
 }
@@ -681,7 +681,7 @@ function applyRoute(): void {
     layoutPanels();
   }
   if (onDesigner) {
-    designer.enter(DesignerPage.designFromRoute(parseRoute(location.hash)));
+    designer.enter(DesignerPage.designFromRoute(router.current));
     syncDesignerHeading();
     $('table-overlay').hidden = true;
   }
@@ -943,7 +943,7 @@ $('table-close').addEventListener('click', () => openTable(false));
 const stepEngine = (delta: number): void => {
   const i = ENGINES.findIndex((e) => e.id === engine.spec.id.split('/')[0]);
   const next = ENGINES[(i + delta + ENGINES.length) % ENGINES.length]!;
-  location.hash = `#/engines/${next.id}`;
+  router.push({ section: 'engines', page: 'catalogue', path: [next.id] });
 };
 $('prev').addEventListener('click', () => stepEngine(-1));
 $('next').addEventListener('click', () => stepEngine(1));

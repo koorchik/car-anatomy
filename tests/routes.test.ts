@@ -1,13 +1,17 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CATALOGUE, engineById, pageChoices } from '../src/data/engines.ts';
 import { decodeDesign, encodeDesign } from '../src/designer/codec.ts';
-import type { Design } from '../src/designer/design.ts';
+import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
 import { designFromSpec } from '../src/designer/presets.ts';
+import { Router, type RouterWindow } from '../src/shell/router.ts';
 import { CONTEXT_KEYS, formatRoute, HOME, parseRoute, PATTERNS, QUERY_KEYS, RESERVED, type Route, type SectionId } from '../src/shell/routes.ts';
-import { DesignerPage } from '../src/ui/designer/designer-page.ts';
+import { designerRoute, DesignerPage } from '../src/ui/designer/designer-page.ts';
 import { catalogueEngineId, enginesPage } from '../src/ui/engines/routes.ts';
 import { SumpPage } from '../src/ui/sump/sump-page.ts';
 
+const ROOT = join(import.meta.dirname, '..');
 const DEFAULT_ENGINE = 'v8-cross';
 const PAGE_IDS = CATALOGUE.map((entry) => entry.id);
 /** Every page of the catalogue and every real engine on it, as `page` and `page/variant`. */
@@ -76,6 +80,22 @@ const HASHES = [
   '#/no-such-section/x',
 ];
 
+/** A browser address bar for the router, with a log of what was written. */
+function fakeWindow(hash: string): RouterWindow & { writes: string[] } {
+  const writes: string[] = [];
+  const win = {
+    writes,
+    location: { hash, origin: 'https://example.org', pathname: '/car-anatomy/', search: '?lang=en' },
+    history: {
+      replaceState(_data: unknown, _unused: string, url?: string | null): void {
+        win.location.hash = url ?? '';
+        writes.push(`replace ${url}`);
+      },
+    },
+  };
+  return win;
+}
+
 describe('routes', () => {
   it('opens every address on the page it opened before the router', () => {
     for (const hash of HASHES) {
@@ -125,6 +145,18 @@ describe('routes', () => {
     }
   });
 
+  it('writes the addresses the pages wrote before the router', () => {
+    const design = designFromSpec(engineById('i4')!);
+    expect(formatRoute({ ...designerRoute(design), query: {} })).toBe(`#/designer/${encodeDesign(design)}`);
+    // The designer wrote its code alone, so a stray key goes; the visitor's context stays.
+    const win = fakeWindow(`#/designer/from/i4?stray=1&ret=car`);
+    new Router(() => win).replace(designerRoute(design));
+    expect(win.location.hash).toBe(`#/designer/${encodeDesign(design)}?ret=car`);
+    const q = new URLSearchParams({ k: 'wet', t: 'street', o: '-1', a: '0', w: 'middle' });
+    expect(formatRoute({ section: 'engines', page: 'sump', path: ['b6', 'porsche-cayman-981-3-4'], query: Object.fromEntries(q) })).toBe(`#/sump/b6/porsche-cayman-981-3-4?${q}`);
+    expect(formatRoute({ section: 'engines', page: 'catalogue', path: ['i4'], query: {} })).toBe('#/engines/i4');
+  });
+
   it('opens the engines on the empty address and nothing on an unknown one', () => {
     for (const hash of ['', '#', '#/', '#?lang=en']) expect(parseRoute(hash)).toMatchObject({ section: HOME.section, page: HOME.page, path: [] });
     expect(parseRoute('#/no-such-section/x?y=1')).toEqual({ section: 'not-found', page: '', path: ['no-such-section', 'x'], query: { y: '1' } });
@@ -149,5 +181,63 @@ describe('routes', () => {
       for (const s of k.sections) expect(sections, k.key).toContain(s);
       for (const s of Object.keys(k.values ?? {})) expect(k.sections, k.key).toContain(s);
     }
+  });
+});
+
+describe('router', () => {
+  it('keeps car= and ret= through several edits in the designer', () => {
+    const start = encodeDesign(DEFAULT_DESIGN);
+    const win = fakeWindow(`#/designer/${start}?car=civic-type-r-fk8&ret=car`);
+    const router = new Router(() => win);
+    for (const cylinders of [6, 8, 3]) {
+      const design: Design = { ...DEFAULT_DESIGN, cylinders };
+      router.replace(designerRoute(design));
+      const code = encodeDesign(design);
+      expect(win.location.hash).toBe(`#/designer/${code}?car=civic-type-r-fk8&ret=car`);
+      expect(router.current.path).toEqual([code]);
+      expect(encodeDesign(DesignerPage.designFromRoute(router.current)!)).toBe(code);
+    }
+    // The same address again writes nothing.
+    const writes = win.writes.length;
+    router.replace(designerRoute({ ...DEFAULT_DESIGN, cylinders: 3 }));
+    expect(win.writes.length).toBe(writes);
+  });
+
+  it('keeps the context on the oil page and when going to another engine', () => {
+    const win = fakeWindow('#/sump/v8-cross?car=civic-type-r-fk8&k=wet');
+    const router = new Router(() => win);
+    router.replace({ section: 'engines', page: 'sump', path: ['v8-cross'], query: { k: 'dry', t: 'slick', o: '0', a: '1', w: 'rear' } });
+    expect(win.location.hash).toBe('#/sump/v8-cross?k=dry&t=slick&o=0&a=1&w=rear&car=civic-type-r-fk8');
+    router.push({ section: 'engines', page: 'catalogue', path: ['i4'] });
+    expect(win.location.hash).toBe('#/engines/i4?car=civic-type-r-fk8');
+    expect(win.writes).toHaveLength(1);
+  });
+
+  it('drops the context only when asked, and never shares it', () => {
+    const design: Design = { ...DEFAULT_DESIGN, cylinders: 6 };
+    const code = encodeDesign(design);
+    const win = fakeWindow(`#/designer/${code}?car=civic-type-r-fk8&ret=car`);
+    const router = new Router(() => win);
+    expect(router.shareUrl(designerRoute(design))).toBe(`https://example.org/car-anatomy/?lang=en#/designer/${code}`);
+    expect(router.href({ section: 'engines', page: 'catalogue', path: ['i4'] })).toBe('#/engines/i4?car=civic-type-r-fk8&ret=car');
+    router.replace({ ...designerRoute(design), query: { car: null, ret: null } });
+    expect(win.location.hash).toBe(`#/designer/${code}`);
+  });
+
+  it('is the only code that writes the address', () => {
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (/\.ts$/.test(entry.name)) files.push(path);
+      }
+    };
+    walk(join(ROOT, 'src'));
+    const offenders = files
+      .filter((file) => relative(ROOT, file) !== join('src', 'shell', 'router.ts'))
+      .filter((file) => /history\.(replaceState|pushState)\s*\(|location\.hash\s*=(?!=)/.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(ROOT, file));
+    expect(offenders).toEqual([]);
   });
 });

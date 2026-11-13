@@ -17,6 +17,7 @@ import { assessReliability, restartOutlook, wearNow, type LimitItem, type Reliab
 import { compareMetrics, snapshot, type Metric } from '../../designer/sensitivity.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
+import { router, type RouteTarget } from '../../shell/router.ts';
 import type { Route } from '../../shell/routes.ts';
 import { probesFor } from './probes.ts';
 import { DesignerControls, type DesignPatch } from './controls.ts';
@@ -26,6 +27,9 @@ const STORAGE_KEY = 'car-anatomy.design';
 const REBUILD_INTERVAL_MS = 130;
 const SOUND_DELAY_MS = 240;
 const TRIM_DELAY_MS = 700;
+
+/** The designer's address for a design: #/designer/<code>, with no keys of its own; the router keeps the context. */
+export const designerRoute = (design: Design): RouteTarget => ({ section: 'engines', page: 'designer', path: [encodeDesign(design)], query: {} });
 
 export interface DesignerHost {
   /** Rebuild the 3D model and everything drawn from the engine's geometry. */
@@ -218,14 +222,13 @@ export class DesignerPage {
   }
 
   private async copyLink(): Promise<void> {
-    const base = `${location.origin}${location.pathname}${location.search}`;
-    const link = `${base}#/designer/${encodeDesign(this.design)}`;
+    const target = designerRoute(this.design);
     try {
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(router.shareUrl(target));
       this.copyButton.textContent = t('Посилання скопійовано');
     } catch {
-      // Without clipboard access the link is still in the address bar.
-      history.replaceState(null, '', link);
+      // Without clipboard access the address bar holds the link, as it would be shared: without the visitor's context.
+      router.replace({ ...target, query: { car: null, ret: null } });
       this.copyButton.textContent = t('Скопіюй з адресного рядка');
     }
     window.setTimeout(() => {
@@ -372,8 +375,9 @@ export class DesignerPage {
     window.clearTimeout(this.urlTimer);
     this.urlTimer = window.setTimeout(() => {
       if (!this.active) return;
-      const code = encodeDesign(this.design);
-      history.replaceState(null, '', `#/designer/${code}`);
+      const target = designerRoute(this.design);
+      const code = target.path[0]!;
+      router.replace(target);
       try {
         localStorage.setItem(STORAGE_KEY, code);
       } catch {
