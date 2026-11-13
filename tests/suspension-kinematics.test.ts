@@ -344,9 +344,27 @@ describe('derived quantities of the table', () => {
     expect(gain(0.04)).toBeLessThan(0);
     expect(gain(0.08)).toBeGreaterThan(0);
     expect(0.08).toBeLessThan(spec.travel.bumpM);
-    // The front-view instant centre runs to infinity where the gain changes sign: NaN beyond a kilometre.
-    const nan = travelsOf(axle).filter((z) => Number.isNaN(axle.value('icFrontY', z)));
-    for (const z of nan) expect(Math.abs(axle.value('camberGain', z))).toBeLessThan(0.0011);
+    // On the way the front-view instant centre swings from inboard to outboard through infinity (NaN beyond a
+    // kilometre). Its pole is not exactly where the camber gain is zero: the wheel is toed out there, so part of the
+    // side-view turn shows as camber.
+    const side = (z: number): number => {
+      const c = sampleAt(axle, z);
+      return Number.isNaN(c.icFrontY) ? 0 : Math.sign(c.icFrontY - c.wheelY);
+    };
+    expect(side(0.04)).toBe(-1);
+    expect(side(0.08)).toBe(1);
+    let lo = 0.04;
+    let hi = 0.08;
+    for (let i = 0; i < 60 && side((lo + hi) / 2) !== 0; i++) {
+      if (side((lo + hi) / 2) < 0) lo = (lo + hi) / 2;
+      else hi = (lo + hi) / 2;
+    }
+    const pole = sampleAt(axle, (lo + hi) / 2);
+    expect(pole.icFrontY).toBeNaN();
+    expect(pole.icFrontZ).toBeNaN();
+    expect(pole.travel).toBeGreaterThan(0.05);
+    expect(pole.travel).toBeLessThan(0.07);
+    expect(Number.isFinite(sampleAt(axle, 0.04).icFrontY)).toBe(true);
   });
 });
 
