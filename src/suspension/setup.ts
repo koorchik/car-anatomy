@@ -173,23 +173,27 @@ export function resolveCorner(corner: CornerSpec, raw: CornerSetup): ResolvedCor
     return [-Math.atan2(spin[2], Math.hypot(spin[0], spin[1])), Math.atan2(spin[0], spin[1])];
   };
   const want: [number, number] = [setup.camberDeg * DEG, setup.toeDeg * DEG];
-  for (let it = 0; it < 12; it++) {
+  let err = Infinity;
+  for (let it = 0; it <= 12; it++) {
     const [c, t] = angles(shiftY, tie);
     const ec = camberSet ? c - want[0] : 0;
     const et = toeSet ? t - want[1] : 0;
-    if (Math.abs(ec) < 1e-10 && Math.abs(et) < 1e-10) break;
-    // Finite-difference Jacobian of (camber, toe) on (shift, length); either unknown may be absent.
+    err = Math.max(Math.abs(ec), Math.abs(et));
+    if (err < 1e-10 || it === 12) break;
+    // Finite-difference Jacobian of (camber, toe) on (shift, length). An unknown the layout lacks keeps its row and
+    // column of the identity, so the other one's coupling cannot move it.
     const h = 1e-6;
     const [c1, t1] = camberSet ? angles(shiftY + h, tie) : [c, t];
     const [c2, t2] = toeSet ? angles(shiftY, tie + h) : [c, t];
     const a = camberSet ? (c1 - c) / h : 1;
-    const b = toeSet ? (c2 - c) / h : 0;
-    const cc = camberSet ? (t1 - t) / h : 0;
+    const b = camberSet && toeSet ? (c2 - c) / h : 0;
+    const cc = camberSet && toeSet ? (t1 - t) / h : 0;
     const d = toeSet ? (t2 - t) / h : 1;
     const det = a * d - b * cc;
     shiftY -= (d * ec - b * et) / det;
     tie -= (a * et - cc * ec) / det;
   }
+  if (err > 1e-8) throw new Error(`The corner cannot reach this camber and toe: off by ${(err / DEG).toFixed(4)}°`);
   const topShift: Vec3 = [0, shiftY, 0];
   const tieIndex = tieRow - 2 * spec.linkage.wishbones.length;
   const linkage: CornerLinkage = {

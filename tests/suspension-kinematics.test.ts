@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fromJtekt, jtektCorner, JTEKT_TABLE1, macphersonJtekt } from '../src/suspension/templates/macpherson.ts';
 import { buildAxle, newCornerSample } from '../src/suspension/kinematics.ts';
-import { factorySetup, resolveCorner, type CornerSetup } from '../src/suspension/setup.ts';
+import { factorySetup, resolveCorner, SETUP_RANGES, type CornerSetup } from '../src/suspension/setup.ts';
 import { dist } from '../src/suspension/vec.ts';
 import { PRESSURE_KT_SLOPE, patchLengthM, TYRE_FILES, tyreVertical, verticalStiffness } from '../src/vehicle/tyre-data.ts';
 
@@ -127,6 +127,27 @@ describe('corner setup', () => {
     expect(neg.topShiftM).toBeLessThan(0);
     const toeIn = resolveCorner(corner, { ...factory, toeDeg: 0.3 });
     expect(toeIn.tieRodChangeM).not.toBe(0);
+  });
+
+  it('leaves an adjuster the layout lacks alone: no steered rod, no toe change', () => {
+    const fixed = jtektCorner();
+    fixed.axle.linkage.rods = fixed.axle.linkage.rods.map((r) => ({ ...r, steer: false }));
+    const r = resolveCorner(fixed, { ...factorySetup(fixed), camberDeg: -2, toeDeg: 0.3 });
+    expect(r.toeSet).toBe(false);
+    expect(r.tieRodChangeM).toBe(0);
+    expect(Math.abs(r.atRest.camber / DEG + 2)).toBeLessThan(1e-6);
+  });
+
+  it('reaches every corner of the panel ranges', () => {
+    for (const camberDeg of SETUP_RANGES.camberDeg) {
+      for (const toeDeg of SETUP_RANGES.toeDeg) {
+        for (const rideHeightM of SETUP_RANGES.rideHeightM) {
+          const r = resolveCorner(corner, { ...factory, camberDeg, toeDeg, rideHeightM });
+          expect(Math.abs(r.atRest.camber / DEG - camberDeg)).toBeLessThan(0.01);
+          expect(Math.abs(r.atRest.toe / DEG - toeDeg)).toBeLessThan(0.01);
+        }
+      }
+    }
   });
 
   it('moves the static point along the kinematic curves with ride height', () => {
