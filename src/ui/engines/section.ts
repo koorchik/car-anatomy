@@ -343,6 +343,16 @@ export class EnginesSection implements Section {
       },
     });
     keys.bind('engines', [
+      // Esc closes the dyno's help and then goes on to the shell, which closes the table: Esc closes whatever is open.
+      {
+        codes: ['Escape'],
+        label: null,
+        reach: 'always',
+        down: () => {
+          this.features.dyno.closeHelp();
+          return false;
+        },
+      },
       // Space works on a slider too: it is the gas wherever the visitor is.
       { codes: ['Space'], reach: 'controls', ...gas },
       { codes: ['ArrowUp'], ...gas },

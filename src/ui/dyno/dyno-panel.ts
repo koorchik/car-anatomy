@@ -279,9 +279,11 @@ export class DynoPanel {
       const target = event.target as HTMLElement;
       if (target === this.help || target.closest('[data-act="close-help"]')) this.help.hidden = true;
     });
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !this.help.hidden) this.help.hidden = true;
-    });
+  }
+
+  /** Closes the help on how to read the dyno, as Esc does (the page's keys). */
+  closeHelp(): void {
+    this.help.hidden = true;
   }
 
   setActive(on: boolean): void {
