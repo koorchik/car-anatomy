@@ -75,15 +75,71 @@ const FIELDS = [
   'camberGainCross', 'rcHeight', 'beamTwist', 'twistRate',
 ] as const satisfies readonly (keyof WheelSample)[];
 type Field = (typeof FIELDS)[number];
+const NF = FIELDS.length;
 
-/** Lateral fields, negative on the right wheel of a mirrored corner. */
-const MIRRORED: ReadonlySet<Field> = new Set<Field>(['contactY', 'wheelY', 'tanBeta', 'tanBetaWC', 'tanBetaCross', 'tanBetaWCCross']);
+export const newWheelSample = (): WheelSample => ({
+  camber: 0, toe: 0, contactX: 0, contactY: 0, contactZ: 0, wheelX: 0, wheelY: 0, wheelZ: 0, springLen: 0, damperLen: 0,
+  barZ: 0, mrSpring: 0, mrDamper: 0, mrBar: 0, tanBeta: 0, tanBetaWC: 0, tanThetaCP: 0, tanThetaWC: 0, camberGain: 0,
+  mrSpringCross: 0, mrDamperCross: 0, mrBarCross: 0, tanBetaCross: 0, tanBetaWCCross: 0, tanThetaCPCross: 0,
+  tanThetaWCCross: 0, camberGainCross: 0, rcHeight: 0, beamTwist: 0, twistRate: 0,
+});
 
-export const newWheelSample = (): WheelSample => {
-  const s = {} as WheelSample;
-  for (const f of FIELDS) s[f] = 0;
-  return s;
-};
+/**
+ * One interpolated row (FIELDS order) into a sample. Named stores, not `out[f]` with a variable key: V8 boxes every
+ * number a keyed store writes into an object, which allocated 1.4–1.7 kB per chassis step and took most of its time.
+ */
+function unpack(b: Float64Array, o: WheelSample): void {
+  o.camber = b[0];
+  o.toe = b[1];
+  o.contactX = b[2];
+  o.contactY = b[3];
+  o.contactZ = b[4];
+  o.wheelX = b[5];
+  o.wheelY = b[6];
+  o.wheelZ = b[7];
+  o.springLen = b[8];
+  o.damperLen = b[9];
+  o.barZ = b[10];
+  o.mrSpring = b[11];
+  o.mrDamper = b[12];
+  o.mrBar = b[13];
+  o.tanBeta = b[14];
+  o.tanBetaWC = b[15];
+  o.tanThetaCP = b[16];
+  o.tanThetaWC = b[17];
+  o.camberGain = b[18];
+  o.mrSpringCross = b[19];
+  o.mrDamperCross = b[20];
+  o.mrBarCross = b[21];
+  o.tanBetaCross = b[22];
+  o.tanBetaWCCross = b[23];
+  o.tanThetaCPCross = b[24];
+  o.tanThetaWCCross = b[25];
+  o.camberGainCross = b[26];
+  o.rcHeight = b[27];
+  o.beamTwist = b[28];
+  o.twistRate = b[29];
+}
+
+/** The right wheel of two mirrored corners: the left corner's lateral numbers with the other sign. */
+function mirrorLateral(o: WheelSample): void {
+  o.contactY = -o.contactY;
+  o.wheelY = -o.wheelY;
+  o.tanBeta = -o.tanBeta;
+  o.tanBetaWC = -o.tanBetaWC;
+  o.tanBetaCross = -o.tanBetaCross;
+  o.tanBetaWCCross = -o.tanBetaWCCross;
+}
+
+/** Per-field tables to rows of NF numbers per node (FIELDS order), so a sample reads one contiguous run per node. */
+function pack(t: Record<Field, Float64Array>, nodes: number): Float64Array {
+  const rows = new Float64Array(nodes * NF);
+  for (let f = 0; f < NF; f++) {
+    const a = t[FIELDS[f]];
+    for (let k = 0; k < nodes; k++) rows[k * NF + f] = a[k];
+  }
+  return rows;
+}
 
 /** Grid step of a beam axle's (q_L, q_R) table, m. Its slopes vary slowly, and a node costs a least-squares solve on a
  *  solid axle. */
@@ -149,10 +205,13 @@ export class ChassisAxle {
   readonly n: number;
   /** The corner of an independent axle, for its exact poses (null on a beam). */
   readonly corner: Axle<CornerLinkage | PivotLinkage> | null;
-  /** Tables: per field, the left corner's values on a corner axle; on a beam, [left, right] values per node, node
-   *  (i, j) at i + n·j for q_L = travel0 + i·step, q_R = travel0 + j·step. */
-  private readonly left: Record<Field, Float64Array>;
-  private readonly right: Record<Field, Float64Array> | null;
+  /** Tables, a row of the FIELDS per node: the left corner's on a corner axle; on a beam, the left and the right
+   *  wheel's, node (i, j) at i + n·j for q_L = travel0 + i·step, q_R = travel0 + j·step. */
+  private readonly left: Float64Array;
+  private readonly right: Float64Array | null;
+  /** Interpolated rows of the two wheels, reused by every sample. */
+  private readonly rowL = new Float64Array(NF);
+  private readonly rowR = new Float64Array(NF);
 
   constructor(spec: AxleSpec<AnyAxleLinkage>, bar: SwayBarSpec | null) {
     this.spec = spec;
@@ -169,8 +228,8 @@ export class ChassisAxle {
       this.step = h;
       this.n = down + up + 1;
       const tables = buildBeam(spec as AxleSpec<TwistBeamLinkage | SolidAxleLinkage>, bar, this.travel0, h, this.n, down);
-      this.left = tables.left;
-      this.right = tables.right;
+      this.left = pack(tables.left, this.n * this.n);
+      this.right = pack(tables.right, this.n * this.n);
     } else {
       this.kind = 'corner';
       const corner = new Axle(spec as AxleSpec<CornerLinkage | PivotLinkage>);
@@ -179,7 +238,7 @@ export class ChassisAxle {
       this.travel0 = t.travel0;
       this.step = t.step;
       this.n = t.n;
-      this.left = buildCorner(corner, bar);
+      this.left = pack(buildCorner(corner, bar), this.n);
       this.right = null;
     }
   }
@@ -198,30 +257,37 @@ export class ChassisAxle {
     if (j < 0) j = 0;
     else if (j > n - 2) j = n - 2;
     y -= j;
+    const a = this.left;
+    const bl = this.rowL;
+    const br = this.rowR;
     if (!this.right) {
       // Two mirrored corners: the left at q_L, the right at q_R mirrored.
-      for (const f of FIELDS) {
-        const a = this.left[f];
-        l[f] = a[i] + (a[i + 1] - a[i]) * x;
-        const v = a[j] + (a[j + 1] - a[j]) * y;
-        r[f] = MIRRORED.has(f) ? -v : v;
+      const i0 = i * NF;
+      const j0 = j * NF;
+      for (let f = 0; f < NF; f++) {
+        bl[f] = a[i0 + f] + (a[i0 + NF + f] - a[i0 + f]) * x;
+        br[f] = a[j0 + f] + (a[j0 + NF + f] - a[j0 + f]) * y;
       }
+      unpack(bl, l);
+      unpack(br, r);
+      mirrorLateral(r);
       return;
     }
-    const k00 = i + n * j;
-    const k10 = k00 + 1;
-    const k01 = k00 + n;
-    const k11 = k01 + 1;
+    const b = this.right;
+    const k00 = (i + n * j) * NF;
+    const k10 = k00 + NF;
+    const k01 = k00 + n * NF;
+    const k11 = k01 + NF;
     const w00 = (1 - x) * (1 - y);
     const w10 = x * (1 - y);
     const w01 = (1 - x) * y;
     const w11 = x * y;
-    for (const f of FIELDS) {
-      const a = this.left[f];
-      l[f] = a[k00] * w00 + a[k10] * w10 + a[k01] * w01 + a[k11] * w11;
-      const b = this.right[f];
-      r[f] = b[k00] * w00 + b[k10] * w10 + b[k01] * w01 + b[k11] * w11;
+    for (let f = 0; f < NF; f++) {
+      bl[f] = a[k00 + f] * w00 + a[k10 + f] * w10 + a[k01 + f] * w01 + a[k11 + f] * w11;
+      br[f] = b[k00 + f] * w00 + b[k10 + f] * w10 + b[k01 + f] * w01 + b[k11 + f] * w11;
     }
+    unpack(bl, l);
+    unpack(br, r);
   }
 }
 

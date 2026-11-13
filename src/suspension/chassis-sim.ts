@@ -32,7 +32,8 @@
 // between its two wheels in proportion to their loads. A wheel off the road takes none. Longitudinal forces come with
 // stage P9-core.
 //
-// Fixed step 1 ms, semi-implicit Euler as in quarter.ts; nothing is allocated in a step.
+// Fixed step 1 ms, semi-implicit Euler as in quarter.ts; a step makes no objects (chassis-axle.ts writes its samples by
+// name for that).
 
 import type { Chassis } from './chassis.ts';
 import { newWheelSample, type WheelSample } from './chassis-axle.ts';
@@ -141,7 +142,7 @@ export class ChassisSim {
 
   /**
    * Accelerations of positions `p` and velocities `v` into `a` (the same layout). With `record`, also fills `out`.
-   * Allocates nothing.
+   * Makes no objects.
    */
   accelerations(p: Float64Array, v: Float64Array, a: Float64Array, record: boolean): void {
     const c = this.chassis;

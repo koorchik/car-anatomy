@@ -4,7 +4,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildChassis, type Chassis } from '../src/suspension/chassis.ts';
 import { ChassisSim } from '../src/suspension/chassis-sim.ts';
-import { newWheelSample } from '../src/suspension/chassis-axle.ts';
+import { newWheelSample, type WheelSample } from '../src/suspension/chassis-axle.ts';
+import { TwistBeamAxle, newBeamSample } from '../src/suspension/beam-kinematics.ts';
+import { SolidAxle, newSolidSample } from '../src/suspension/solid-kinematics.ts';
 import {
   axleRollStiffness, liftOff, millikenTransfer, rollModel, settle, understeerGradient,
 } from '../src/suspension/statics.ts';
@@ -17,7 +19,7 @@ import { factorySetup, resolveCorner } from '../src/suspension/setup.ts';
 import { EventRoad, RoadBuffer } from '../src/suspension/road.ts';
 import { estimateInertia, GYRATION_RATIOS, NHTSA_CARS } from '../src/vehicle/body-estimate.ts';
 import { tyreVertical } from '../src/vehicle/tyre-data.ts';
-import type { AxleSpec, ChassisSpec, CornerLinkage } from '../src/suspension/spec.ts';
+import type { AxleSpec, ChassisSpec, CornerLinkage, SolidAxleLinkage, TwistBeamLinkage } from '../src/suspension/spec.ts';
 
 const DEG = Math.PI / 180;
 
@@ -151,6 +153,63 @@ describe('chassis at rest', () => {
     }
     expect(peak).toBeGreaterThan(1000);
     expect(worst).toBeLessThan(0.02 * peak);
+  });
+});
+
+describe('reading an axle at a pair of travels', () => {
+  /** Every field that the axle modules measure themselves, by name. */
+  const MEASURED = [
+    'camber', 'toe', 'contactX', 'contactY', 'contactZ', 'wheelX', 'wheelY', 'wheelZ', 'springLen', 'damperLen',
+    'mrSpring', 'mrDamper', 'tanBeta', 'tanThetaCP', 'tanThetaWC', 'camberGain', 'rcHeight',
+  ] as const satisfies readonly (keyof WheelSample)[];
+  const CROSS = [
+    'mrSpringCross', 'mrDamperCross', 'tanBetaCross', 'tanThetaCPCross', 'tanThetaWCCross', 'camberGainCross',
+  ] as const satisfies readonly (keyof WheelSample)[];
+  const LATERAL = new Set<string>(['contactY', 'wheelY', 'tanBeta']);
+
+  it('gives each wheel of two corners its own row of the corner table, the right one mirrored', () => {
+    const ax = chassis(SEDAN).axles[0];
+    const t = ax.corner!.table;
+    const L = newWheelSample();
+    const R = newWheelSample();
+    for (const [i, j] of [[3, 30], [17, 4], [t.n - 2, 0]]) {
+      ax.sample(t.travel0 + i * t.step, t.travel0 + j * t.step, L, R);
+      for (const f of MEASURED) {
+        expect(Math.abs(L[f] - t.fields[f][i])).toBeLessThan(1e-12);
+        expect(Math.abs(R[f] - (LATERAL.has(f) ? -1 : 1) * t.fields[f][j])).toBeLessThan(1e-12);
+      }
+      for (const f of CROSS) expect(L[f]).toBe(0);
+    }
+  });
+
+  it('gives both wheels of a twist beam and a solid axle what their modules measure at a node of the grid', () => {
+    const beam = chassis(HOT_HATCH).axles[1];
+    const solid = chassis({ ...SEDAN, rear: 'live-axle', unsprungKg: [45, 60] }).axles[1];
+    const tb = new TwistBeamAxle(beam.spec as AxleSpec<TwistBeamLinkage>);
+    const sa = new SolidAxle(solid.spec as AxleSpec<SolidAxleLinkage>);
+    const bs = newBeamSample();
+    const ss = newSolidSample();
+    const L = newWheelSample();
+    const R = newWheelSample();
+    for (const [ax, measure] of [
+      [beam, (qL: number, qR: number, side: 'left' | 'right') => (tb.measureAt(qL, qR, side, bs), bs)],
+      [solid, (qL: number, qR: number, side: 'left' | 'right') => (sa.measureAt(qL, qR, side, ss), ss)],
+    ] as const) {
+      for (const [i, j] of [[4, 30], [25, 9]]) {
+        const qL = ax.travel0 + i * ax.step;
+        const qR = ax.travel0 + j * ax.step;
+        ax.sample(qL, qR, L, R);
+        for (const [mine, side] of [[L, 'left'], [R, 'right']] as const) {
+          const m = measure(qL, qR, side);
+          for (const f of [...MEASURED, ...CROSS]) expect(Math.abs(mine[f] - m[f])).toBeLessThan(1e-7);
+        }
+      }
+    }
+    // A twist beam's twist is the same on both wheels; each gets its own slope.
+    beam.sample(0.03, -0.03, L, R);
+    expect(L.beamTwist).not.toBe(0);
+    expect(R.beamTwist).toBeCloseTo(L.beamTwist, 12);
+    expect(L.twistRate * R.twistRate).toBeLessThan(0);
   });
 });
 
