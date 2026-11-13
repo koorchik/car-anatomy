@@ -26,15 +26,14 @@ export const FORCE_COLORS = {
   weight: '#a3abb0',
 } as const;
 
-export type ForceArrow = 'tyre' | 'spring' | 'damper' | 'stop' | 'arm' | 'tieRod' | 'strutTop' | 'weight';
-export const FORCE_ARROWS: readonly ForceArrow[] = ['tyre', 'spring', 'damper', 'stop', 'arm', 'tieRod', 'strutTop', 'weight'];
+/** The arrows every corner has; each link (a wishbone at its ball joint, a rod at its knuckle end) adds one more. */
+export type ForceArrow = 'tyre' | 'spring' | 'damper' | 'stop' | 'strutTop' | 'weight';
+export const FORCE_ARROWS: readonly ForceArrow[] = ['tyre', 'spring', 'damper', 'stop', 'strutTop', 'weight'];
 const COLOR_OF: Record<ForceArrow, string> = {
   tyre: FORCE_COLORS.tyre,
   spring: FORCE_COLORS.spring,
   damper: FORCE_COLORS.damper,
   stop: FORCE_COLORS.stop,
-  arm: FORCE_COLORS.links,
-  tieRod: FORCE_COLORS.links,
   strutTop: FORCE_COLORS.links,
   weight: FORCE_COLORS.weight,
 };
@@ -48,27 +47,39 @@ export class ForceArrows {
   private readonly headGeo = arrowHeadGeometry();
   private readonly material = overlayMaterial('#ffffff');
 
-  constructor() {
-    this.arrows = new Arrows(
-      this.shaftGeo,
-      this.headGeo,
-      this.material,
-      FORCE_ARROWS.map((k) => COLOR_OF[k]),
-      FORCE_ARROWS.map(() => ARROW_WIDTH),
-    );
+  readonly links: number;
+
+  /** `links`: how many links hold the knuckle, one arrow each. */
+  constructor(links: number) {
+    this.links = links;
+    const colors = [...FORCE_ARROWS.map((k) => COLOR_OF[k]), ...Array.from({ length: links }, () => FORCE_COLORS.links)];
+    this.arrows = new Arrows(this.shaftGeo, this.headGeo, this.material, colors, colors.map(() => ARROW_WIDTH));
     this.group.add(this.arrows.shafts, this.arrows.heads);
-    for (const arrow of FORCE_ARROWS) this.arrows.hide(FORCE_ARROWS.indexOf(arrow));
+    for (let i = 0; i < colors.length; i++) this.arrows.hide(i);
     this.arrows.commit();
   }
 
   /** Arrow for a force `f` (N, scene axes) from point `at` (scene). */
   set(which: ForceArrow, at: THREE.Vector3, f: THREE.Vector3): void {
+    this.setAt(FORCE_ARROWS.indexOf(which), at, f);
+  }
+
+  /** The force link `i` puts on the knuckle, at the point it holds. */
+  setLink(i: number, at: THREE.Vector3, f: THREE.Vector3): void {
+    this.setAt(FORCE_ARROWS.length + i, at, f);
+  }
+
+  private setAt(index: number, at: THREE.Vector3, f: THREE.Vector3): void {
     const s = FORCE_SCALE;
-    this.arrows.set(FORCE_ARROWS.indexOf(which), at.x, at.y, at.z, f.x * s, f.y * s, f.z * s);
+    this.arrows.set(index, at.x, at.y, at.z, f.x * s, f.y * s, f.z * s);
   }
 
   hide(which: ForceArrow): void {
     this.arrows.hide(FORCE_ARROWS.indexOf(which));
+  }
+
+  hideLinks(): void {
+    for (let i = 0; i < this.links; i++) this.arrows.hide(FORCE_ARROWS.length + i);
   }
 
   commit(): void {

@@ -179,6 +179,15 @@ export class CornerSolver {
     out.set(this.J.subarray(0, 36));
   }
 
+  /**
+   * The full n×n Jacobian of the rows at `pose` into `out` (row-major, n columns: δt, δθ about the wheel centre, and
+   * δψ on a split knuckle). Read as forces like jacobian()'s rows; the statics of a split knuckle need its 7×7.
+   */
+  fullJacobian(pose: Float64Array, travel: number, rack: number, out: Float64Array): void {
+    this.assemble(pose, travel, rack);
+    out.set(this.J.subarray(0, this.n * this.n));
+  }
+
   /** Index of the first steered rod among the distance rows, or −1. */
   steerRow(): number {
     for (let i = 0; i < this.nDist; i++) if (this.steer[i]) return i;

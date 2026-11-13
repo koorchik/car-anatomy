@@ -80,6 +80,8 @@ export interface CornerMaterials {
   /** Pressed steel of the arm, painted near-black. */
   arm: THREE.MeshStandardMaterial;
   knuckle: THREE.MeshStandardMaterial;
+  /** A split knuckle's strut carrier: cast like the knuckle, darker, so the two read as two parts. */
+  carrier: THREE.MeshStandardMaterial;
   steel: THREE.MeshStandardMaterial;
   chrome: THREE.MeshStandardMaterial;
   rubber: THREE.MeshStandardMaterial;
@@ -118,6 +120,7 @@ export function createCornerMaterials(press: RoadPressUniforms): CornerMaterials
   return {
     arm: new THREE.MeshStandardMaterial({ color: '#2f3236', metalness: 0.55, roughness: 0.5 }),
     knuckle: new THREE.MeshStandardMaterial({ color: '#a9abac', metalness: 0.85, roughness: 0.6, bumpMap: cast, bumpScale: 0.45 }),
+    carrier: new THREE.MeshStandardMaterial({ color: '#6f7477', metalness: 0.8, roughness: 0.62, bumpMap: cast, bumpScale: 0.45 }),
     steel: new THREE.MeshStandardMaterial({ color: '#8d9093', metalness: 0.85, roughness: 0.45 }),
     chrome: new THREE.MeshStandardMaterial({ color: '#e4e7ea', metalness: 1, roughness: 0.12 }),
     rubber: new THREE.MeshStandardMaterial({ color: '#2a2b2e', metalness: 0, roughness: 0.75 }),
