@@ -29,6 +29,7 @@ node scripts/orders.ts <id> [об/хв] [газ]     # рівень кожног
 node scripts/designer-table.ts                # модель конструктора проти заводських цифр
 node scripts/gearbox-table.ts [id...]         # числа коробок із зубців, стани й несучі зачеплення
 node scripts/sump-table.ts [id...]            # олива на треку: картер × шини × рівень оливи
+node scripts/calibrate-road-load.ts           # перегенерувати src/vehicle/road-load-trim.ts і друк опору авто
 node scripts/dyno-table.ts                    # кожен двигун на стенді: прив'язка, гальмо, турбіна
 node scripts/orders.ts <id> <об/хв> 1 --dyno  # порядки під навантаженням (--free: утримання педаллю)
 npm run render-audio -- --dyno <id...>        # WAV зі стенда: утримання, розгін, спуск
@@ -124,6 +125,8 @@ node scripts/suspension-sweep.ts [damper=worn ride=-40 …]  # кінемати�
 ### Спільне авто
 
 Справжнє авто описує один запис `CarRecord` (`src/vehicle/car.ts`) у власному файлі `src/data/cars/<id>.ts`, а `src/data/cars.ts` збирає їх по рядку на авто. Id спільні для всіх розділів. Розділи не повторюють масу, шини чи опір: коло бере `vehicleSpec(car)`, шасі `bodyOf(car)`, опір `roadLoadN` з `roadLoadCoeffs(car)`, радіус шини виводиться з розміру (`tyre-size.ts`). Деталі розділу (головна передача, точки кріплення) лежать у даних розділу з ключем id авто, а `gearbox` і `suspension` запису стають не `null` лише разом із цими даними. Незвірені поля перелічуй в `unverified` шляхами (`body.trackFrontM`).
+
+Опір руху має одне правило (`roadLoadCoeffs`): рядок EPA, інакше `C_dA` з необмеженої звіреної `v_max`, інакше брошурні `Cd·A` на `k_EPA`. Після зміни запису авто (маса, `aero`, `published`, `unverified`), опублікованої потужності його двигуна чи `DRIVELINE` запускай `node scripts/calibrate-road-load.ts`: він переписує `src/vehicle/road-load-trim.ts`, вручну цей файл не редагуємо, а тест перевіряє, що він актуальний. Моделі несуть масу з водієм (`drivingMassKg`), а канонічне коло сайту — рівень `CANONICAL_LAP_LEVEL` з `lap.ts`.
 
 Точки запису лежать у системі передньої осі, підвіски працюють у системі центру мас, і переходять між ними лише через `carFrameToCg`. `src/vehicle/` не імпортує `t()` і `src/data/`: ядро тримає id, а назви лежать у `src/data/vehicle-names.ts`. Виняток тимчасовий: `TYRES[id].name` і `Sector.name` для сторінки оливи до етапу O2a. Формули й статус чисел: `docs/vehicle-model.md`.
 
