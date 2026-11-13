@@ -53,20 +53,27 @@ export class LongitudinalChassis implements ChassisPort {
     this.spec = spec;
   }
 
-  /** Front and rear axle loads, N, at the present acceleration and grade. */
-  axleLoads(ax = this.ax): { front: number; rear: number } {
+  /** Rear axle load, N, at acceleration ax and the present grade. */
+  rearLoad(ax = this.ax): number {
     const { roadLoad, frontShare, cgHeightM: h, wheelbaseM: L } = this.spec;
     const m = roadLoad.massKg;
     const a = L * (1 - frontShare);
-    const rear = (m * G * (a * Math.cos(this.gradeRad) + h * Math.sin(this.gradeRad))) / L + (m * ax * h) / L;
-    return { front: m * G * Math.cos(this.gradeRad) - rear, rear };
+    return (m * G * (a * Math.cos(this.gradeRad) + h * Math.sin(this.gradeRad))) / L + (m * ax * h) / L;
   }
 
+  /** Front and rear axle loads, N, at the present acceleration and grade. */
+  axleLoads(ax = this.ax): { front: number; rear: number } {
+    const rear = this.rearLoad(ax);
+    return { front: this.spec.roadLoad.massKg * G * Math.cos(this.gradeRad) - rear, rear };
+  }
+
+  /** Allocates nothing: the audio thread steps it. */
   preStep(bus: WheelBus): void {
-    const { front, rear } = this.axleLoads();
-    const load = [front / 2, front / 2, rear / 2, rear / 2];
+    const rear = this.rearLoad();
+    const front = this.spec.roadLoad.massKg * G * Math.cos(this.gradeRad) - rear;
     for (let i = 0; i < WHEELS; i++) {
-      bus.fz[i] = this.lifted[i] ? 0 : Math.max(0, load[i]!);
+      const load = i === FL || i === FR ? front / 2 : rear / 2;
+      bus.fz[i] = this.lifted[i] ? 0 : Math.max(0, load);
       bus.vx[i] = this.v;
       bus.vy[i] = 0;
       bus.camber[i] = 0;
