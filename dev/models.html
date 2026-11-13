@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e2a33" />
+    <title>Стенд моделей</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e2a33'/%3E%3Ccircle cx='16' cy='20' r='6.5' fill='none' stroke='%23ece6d6' stroke-width='2.4'/%3E%3Cpath d='M16 18V6' stroke='%23ff7a1a' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header class="bar">
+      <label class="pick-model">
+        <span>Модель</span>
+        <select id="model" aria-label="Модель"></select>
+      </label>
+      <h1 id="title"></h1>
+    </header>
+    <main class="view" id="view">
+      <canvas id="canvas"></canvas>
+      <p class="message" id="message" hidden></p>
+      <div class="scale-bar" aria-hidden="true"><span class="scale-line" id="scale-line"></span><span id="scale-label"></span></div>
+      <div class="tip" id="tip" hidden></div>
+      <section class="card" id="card" hidden>
+        <h2 id="card-name"></h2>
+        <p id="card-text"></p>
+        <code id="card-key"></code>
+      </section>
+      <div class="stats" id="stats"></div>
+    </main>
+    <aside class="panel" id="panel">
+      <button type="button" class="panel-toggle" id="panel-toggle" aria-expanded="true">Налаштування</button>
+      <div class="panel-body">
+        <div id="controls"></div>
+        <fieldset class="group">
+          <legend>Камера</legend>
+          <div class="buttons" id="camera-presets"></div>
+        </fieldset>
+        <fieldset class="group" id="viewer-settings">
+          <legend>Стенд</legend>
+        </fieldset>
+        <p class="parts" id="parts"></p>
+      </div>
+    </aside>
+    <script type="module" src="./models.ts"></script>
+  </body>
+</html>

@@ -369,12 +369,17 @@ export interface BalanceReport {
   couple2: number;
 }
 
-interface Complex {
+/** A force or couple in the crank's plane as w = Fy + i Fx: e^(i theta) turns clockwise seen from the front, with the crank. */
+export interface Complex {
   re: number;
   im: number;
 }
 
-const harmonic = (samples: Complex[], order: number): Complex => {
+/**
+ * One harmonic of a quantity sampled evenly over a crank turn: the c in c e^(i order theta). A positive order turns
+ * with the crank, a negative one against it. The one copy: balance-forces.ts and balance-phasors.ts take it from here.
+ */
+export const harmonic = (samples: Complex[], order: number): Complex => {
   let re = 0;
   let im = 0;
   const n = samples.length;
