@@ -17,6 +17,7 @@ import { assessReliability, restartOutlook, wearNow, type LimitItem, type Reliab
 import { compareMetrics, snapshot, type Metric } from '../../designer/sensitivity.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
+import type { Route } from '../../shell/routes.ts';
 import { probesFor } from './probes.ts';
 import { DesignerControls, type DesignPatch } from './controls.ts';
 import { DesignerResults } from './results.ts';
@@ -232,14 +233,14 @@ export class DesignerPage {
     }, 2200);
   }
 
-  /** Reads what the address bar or local storage holds. */
-  static designFromRoute(hash: string): Design | null {
-    const rest = hash.replace(/^#\/designer\/?/, '');
-    if (rest.startsWith('from/')) {
-      const spec = engineById(rest.slice(5));
+  /** Reads what the designer's address or local storage holds: #/designer/from/<engine> or #/designer/<code>. */
+  static designFromRoute(route: Route): Design | null {
+    const [first, ...rest] = route.path;
+    if (first === 'from') {
+      const spec = engineById(rest.join('/'));
       return spec ? designFromSpec(spec) : null;
     }
-    if (rest) return decodeDesign(rest);
+    if (first) return decodeDesign(first);
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       return saved ? decodeDesign(saved) : null;

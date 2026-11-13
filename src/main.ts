@@ -31,6 +31,8 @@ import { liveScratch, liveTiming, type ValveState } from './engine/valve-control
 import type { SumpHost, SumpPage } from './ui/sump/sump-page.ts';
 import type { SystemLayer } from './scene/systems/layer.ts';
 import type { FreezeOptions } from './shell/freeze.ts';
+import { parseRoute } from './shell/routes.ts';
+import { catalogueEngineId, enginesPage } from './ui/engines/routes.ts';
 
 type SpeedMode = 'slow' | 'readable' | 'real';
 
@@ -212,12 +214,11 @@ try {
   throw error;
 }
 
-const onDesignerRoute = (): boolean => location.hash.startsWith('#/designer');
-const onSumpRoute = (): boolean => location.hash.startsWith('#/sump');
+const onDesignerRoute = (): boolean => enginesPage(parseRoute(location.hash)) === 'designer';
+const onSumpRoute = (): boolean => enginesPage(parseRoute(location.hash)) === 'sump';
 
 const resolveEngine = (): Engine => {
-  const match = /^#\/engines\/([\w-]+(?:\/[\w-]+)?)/.exec(location.hash);
-  const wanted = match?.[1];
+  const wanted = catalogueEngineId(parseRoute(location.hash));
   // A variant that no longer exists falls back to its page rather than to another engine.
   const spec = (wanted && (engineById(wanted) ?? engineById(wanted.split('/')[0]!))) || engineById(DEFAULT_ENGINE)!;
   return buildEngine(spec);
@@ -630,7 +631,7 @@ function enterSump(): void {
       $('sump-dash').append(sump.dash);
       $('sump-summary').append(sump.summary, sump.liveRegion);
     }
-    sump.enter(location.hash);
+    sump.enter(parseRoute(location.hash));
     layoutPanels();
   });
 }
@@ -680,7 +681,7 @@ function applyRoute(): void {
     layoutPanels();
   }
   if (onDesigner) {
-    designer.enter(DesignerPage.designFromRoute(location.hash));
+    designer.enter(DesignerPage.designFromRoute(parseRoute(location.hash)));
     syncDesignerHeading();
     $('table-overlay').hidden = true;
   }

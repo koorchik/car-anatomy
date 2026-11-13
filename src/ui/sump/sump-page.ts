@@ -21,6 +21,7 @@ import { worstMoments, type OilMoment, type Phase } from '../../lubrication/even
 import type { LubeRun, LubeRunner, RiskBand } from '../../lubrication/run.ts';
 import { lapFor, oilRunner, setupFor, systemsWith, type OilChoice } from '../../lubrication/scenario.ts';
 import type { EngineModel } from '../../scene/model-types.ts';
+import type { Route } from '../../shell/routes.ts';
 import { SumpScene, type SumpSceneFrame } from '../../scene/lubrication/sump-scene.ts';
 import { RELIEF_BAR, RELIEF_BAR_HEAVY } from '../../systems/oil.ts';
 import { WELL_PLACES, type WellPlace } from '../../systems/sump.ts';
@@ -314,9 +315,9 @@ export class SumpPage {
   }
 
   /** The route's choices: #/sump/<engine id>?k=&t=&o=&a=&w= or #/sump/design/<code>?... */
-  static parse(hash: string): { source: Source | null; params: URLSearchParams } {
-    const [path, query] = hash.replace(/^#\/sump\/?/, '').split('?');
-    const params = new URLSearchParams(query ?? '');
+  static parse(route: Route): { source: Source | null; params: URLSearchParams } {
+    const path = route.path.join('/');
+    const params = new URLSearchParams(route.query);
     if (!path) return { source: null, params };
     if (path.startsWith('design/')) {
       const code = path.slice(7);
@@ -338,10 +339,10 @@ export class SumpPage {
     return this.active;
   }
 
-  enter(hash: string): void {
+  enter(route: Route): void {
     const wasActive = this.active;
     this.active = true;
-    const { source, params } = SumpPage.parse(hash);
+    const { source, params } = SumpPage.parse(route);
     const nextSource = source ?? (wasActive ? this.source : { kind: 'car', car: DEFAULT_SUMP_CAR });
     const changedEngine = !wasActive || this.sourceKey(nextSource) !== this.sourceKey(this.source);
     this.source = nextSource;
