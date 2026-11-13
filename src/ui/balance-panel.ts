@@ -74,6 +74,8 @@ export class BalancePanel {
   /** Viewport y the full card has to end above: other overlays on the right of the stage live under it. */
   private room: () => number = () => Infinity;
   private refit: () => void = () => {};
+  /** What shareStage watches, let go when it is called again with another list. */
+  private sharing: { disconnect(): void }[] = [];
   private on = false;
   /** The card is redrawn with each engine and set of layers, and must not fold the note back up. */
   private noteOpen = false;
@@ -129,13 +131,15 @@ export class BalancePanel {
   /**
    * Other overlays on the right of the stage. `room` gives the viewport y the full card has to end above; while it
    * does not, the card takes its compact form at the bottom left. A change to the size, classes or visibility of any
-   * of `watched` asks again.
+   * of `watched` asks again. A later call replaces the earlier one: the valve gear's labels may load after the card.
    */
   shareStage(room: () => number, watched: HTMLElement[]): void {
     this.room = room;
+    for (const old of this.sharing) old.disconnect();
     const again = (): void => this.refit();
     const observer = new MutationObserver(again);
     const sizes = new ResizeObserver(again);
+    this.sharing = [observer, sizes];
     for (const element of watched) {
       observer.observe(element, { attributes: true, attributeFilter: ['class', 'hidden'] });
       sizes.observe(element);
