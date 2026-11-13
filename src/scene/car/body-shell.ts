@@ -558,8 +558,13 @@ export class BodyShell {
     this.shell.material = look.shell;
     this.lid.material = look.lid;
     this.bulkhead.material = look.bulkhead;
-    this.lineMaterial.opacity = (view === 'xray' ? 0.55 : 0.32) * this.ghost;
+    this.fadeLines();
     this.group.visible = view !== 'mechanism';
+  }
+
+  /** The outline's opacity for the view and the ghost. */
+  private fadeLines(): void {
+    this.lineMaterial.opacity = (this.view === 'xray' ? 0.55 : 0.32) * this.ghost;
   }
 
   setExplode(amount: number): void {
@@ -598,11 +603,12 @@ export class BodyShell {
     }
   }
 
-  /** Glass is transparent already: a ghost scales its alpha and the lines'. */
+  /** Glass is transparent already: a ghost scales its alpha and the lines'. It leaves the shell shown or hidden as its
+   *  owner set it (ChassisModel.setBody). */
   setGhost(alpha: number): void {
     this.ghost = Math.min(1, Math.max(0, alpha));
     for (const m of [...Object.values(this.solid), ...Object.values(this.xray)]) m.opacity = this.ghost;
-    this.setView(this.view);
+    this.fadeLines();
   }
 
   setRenderBand(base: number): void {

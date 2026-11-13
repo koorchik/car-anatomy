@@ -270,6 +270,21 @@ describe.each(IDS)('%s', (id) => {
     model.update(frame);
   });
 
+  it('keeps a body that is switched off hidden through the ghost and the views', () => {
+    model.setBody(false);
+    model.setGhost(0.4);
+    expect(model.shell!.group.visible).toBe(false);
+    model.setView('xray');
+    expect(model.shell!.group.visible).toBe(false);
+    model.setBody(true);
+    expect(model.shell!.group.visible).toBe(true);
+    model.setView('mechanism');
+    model.setGhost(1);
+    expect(model.shell!.group.visible).toBe(false);
+    model.setView('solid');
+    expect(model.shell!.group.visible).toBe(true);
+  });
+
   it('keeps the bar’s links their length as the wheel steers', () => {
     const frame = chassisFrame();
     const lengths = (): number[] => {
