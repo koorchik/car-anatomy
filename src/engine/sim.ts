@@ -1,6 +1,7 @@
 // Crankshaft speed as a small dynamic system. Runs on the audio thread when sound is on,
 // and on the main thread otherwise, so the code must stay free of DOM and Web Audio.
 
+import type { AnyLoadReadings } from './load.ts';
 import type { LoadedCrank } from './loaded-crank.ts';
 import { ValveControl, type VariableValves } from './valve-control.ts';
 
@@ -59,7 +60,7 @@ export class EngineSim {
   /** Hold the crank at this speed, ignoring the pedal. Used for slow motion. */
   lockedRpm: number | null = null;
   /** A load on the crank, such as a dyno. While it sets its own torque it moves the crank in newton-metres. */
-  crank: LoadedCrank | null = null;
+  crank: LoadedCrank<AnyLoadReadings> | null = null;
   /** Engine's share of what the free path turns: below 1 while a load only adds its inertia. */
   inertiaShare = 1;
   /** Cam phasers, cam profiles and resting cylinders, as the engine computer sets them. */
@@ -105,7 +106,7 @@ export class EngineSim {
   }
 
   /** Couples a load to the crank, or takes it off with null. */
-  attach(crank: LoadedCrank | null): void {
+  attach(crank: LoadedCrank<AnyLoadReadings> | null): void {
     this.crank = crank;
     if (!crank) this.inertiaShare = 1;
   }
