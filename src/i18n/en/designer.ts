@@ -1,4 +1,5 @@
-// English for the designer and its model: Ukrainian source text to English.
+// English for the designer and its model: Ukrainian source text to English. The names and notes of its starting
+// designs are in presets.ts, which the dyno and the oil on track register too.
 import { VALVETRAIN_EN } from './valvetrain.ts';
 
 export const DESIGNER_EN: Record<string, string> = {
@@ -7,28 +8,6 @@ export const DESIGNER_EN: Record<string, string> = {
   '{failure} {fix} Запуск полагодить двигун, але відсічка стоїть вище, ніж він витримує, тож на повному газу він зламається знову.': '{failure} {fix} Starting will repair the engine, but the rev limiter is set above what it can take, so at full throttle it will break again.',
   '{failure} {fix} Запуск полагодить двигун, але з такою конфігурацією він зламається знову, щойно дати повний газ.': '{failure} {fix} Starting will repair the engine, but as configured it will break again as soon as you give it full throttle.',
   '{failure} {fix} З такою конфігурацією двигун не витримує навіть холостого ходу, тож запуск зламає його знову.': '{failure} {fix} As configured, this engine cannot survive even at idle, so starting it will break it again.',
-  // Design names, fuels and presets
-  'Випадковий двигун': 'Random engine',
-  'Трилітровий сингл': 'Three-liter single',
-  'Один циліндр на три літри: вагон моменту, а маховик ледве встигає.': 'One cylinder, three liters. Loads of torque, and the flywheel can barely keep up.',
-  'Крихітний V12': 'Tiny V12',
-  'Крихітний V12 на літр': 'Tiny one-liter V12',
-  'Літр робочого об’єму на дванадцять циліндрів і дуже високі оберти.': 'One liter of displacement across twelve cylinders, and very high rpm.',
-  'V4 «великий удар»': 'Big-bang V4',
-  'V4 великий удар': 'Big-bang V4',
-  'Усі спалахи скупчені разом, а потім тиша. Рівний за балансом, рваний за звуком.': 'All firing events bunched together, then silence. Smooth in balance, ragged in sound.',
-  'I6 із плоским колінвалом': 'I6 with a flat-plane crankshaft',
-  'I6 із плоским валом': 'Flat-plane I6',
-  'Зрівноважену від природи шістку зіпсовано плоским валом: подивись на вібрації.': 'A naturally balanced six, spoiled by a flat-plane crankshaft. Check the vibration.',
-  'Турбодизельна двійка': 'Turbodiesel twin',
-  'Високий ступінь стиснення, велика турбіна і дуже мало циліндрів.': 'High compression ratio, a big turbo and very few cylinders.',
-  'Гіпернаддувний I3': 'Hyper-boosted I3',
-  'Літр, три циліндри і 3 бари наддуву на метанолі. Подивись, чим це закінчується.': 'One liter, three cylinders and 3 bar of boost on methanol. See how that ends.',
-  'Гоночний кулачок у місті': 'Race cam in city traffic',
-  'Дуже широкі фази на високому стисненні: холостий хід гуляє, а клапани можуть зустрітись із поршнем.': 'Very long cam duration with high compression. The idle hunts and the valves can meet the piston.',
-  'Чотирироторний наддув': 'Boosted four-rotor',
-  'Чотирироторний із наддувом': 'Boosted four-rotor',
-  'Чотири секції та дві турбіни: компактно, гучно і дуже спрагло.': 'Four rotors and two turbos. Compact, loud and very thirsty.',
   // Diagnosis
   'Дизель не заведеться': 'Diesel will not start',
   'При стисненні {ratio} : 1 повітря нагрівається лише до {temp} °C, а цього замало, щоб паливо спалахнуло саме.': 'At {ratio}:1 compression the air heats only to {temp} °C. That is not enough for the fuel to ignite on its own.',
@@ -197,8 +176,6 @@ export const DESIGNER_EN: Record<string, string> = {
   'Менший наддув.': 'Less boost.',
   'Розірвало колесо турбіни: воно перевищило граничні оберти.': 'The turbine wheel burst. It went past its speed limit.',
   // Cause and effect
-  'Потужність': 'Power',
-  'Момент': 'Torque',
   'Витрата на трасі': 'Highway fuel use',
   'Питома витрата': 'BSFC',
   'Маса': 'Weight',
@@ -210,11 +187,8 @@ export const DESIGNER_EN: Record<string, string> = {
   'увімкнути': 'turn on',
   'вимкнути': 'turn off',
   // Charts and units
-  '{rpm} об/хв: {value} {unit}, було {before}': '{rpm} rpm: {value} {unit}, was {before}',
-  '{rpm} об/хв: {value} {unit}': '{rpm} rpm: {value} {unit}',
   'мм': 'mm',
   'кг': 'kg',
-  'бар': 'bar',
   'л/год': 'L/h',
   'г/кВт·год': 'g/kWh',
   'л/100 км': 'L/100 km',

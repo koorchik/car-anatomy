@@ -28,12 +28,12 @@ export class Chunk<T> {
 }
 
 /** The designer (`#/designer`): its page, model, diagnoses and presets. Its controls name the oil and the systems too. */
-export const DESIGNER = new Chunk(() => withDictionaries(['engines', 'designer', 'systems', 'lubrication'], () => import('./designer-host.ts')));
+export const DESIGNER = new Chunk(() => withDictionaries(['engines', 'designer', 'presets', 'systems', 'lubrication'], () => import('./designer-host.ts')));
 /** The dyno: its panel, charts and rig. It runs the designer's model, presets and all, for a design's torque map. */
-export const DYNO = new Chunk(() => withDictionaries(['engines', 'dyno', 'designer'], () => import('../dyno/dyno-panel.ts')));
+export const DYNO = new Chunk(() => withDictionaries(['engines', 'dyno', 'presets'], () => import('../dyno/dyno-panel.ts')));
 /** The force arrows and their card. */
 export const FORCES = new Chunk(() => withDictionaries(['engines'], () => import('../balance-panel.ts')));
 /** The labels of what variable valve gear is doing. */
 export const VALVES = new Chunk(() => withDictionaries(['engines'], () => import('../valve-readout.ts')));
 /** The oil on track (`#/sump`): its page, lap and gauges, with the designer's model for an engine of one's own. */
-export const SUMP = new Chunk(() => withDictionaries(['engines', 'designer', 'systems', 'lubrication'], () => import('../sump/sump-page.ts')));
+export const SUMP = new Chunk(() => withDictionaries(['engines', 'presets', 'systems', 'lubrication'], () => import('../sump/sump-page.ts')));

@@ -420,4 +420,11 @@ export const ENGINE_UI_EN: Record<string, string> = {
   'Підйом впуску {mm} мм': 'Intake lift {mm} mm',
   'Працюють {active} з {all}': '{active} of {all} firing',
   'Відпочивають: {list}': 'Resting: {list}',
+  // Words the lazy chunks share: the charts of the designer and the dyno, the oil page's gauges (src/ui/designer/chart.ts,
+  // src/ui/dyno/dyno-panel.ts, src/designer/sensitivity.ts, src/ui/sump/gauges.ts)
+  'Потужність': 'Power',
+  'Момент': 'Torque',
+  '{rpm} об/хв: {value} {unit}, було {before}': '{rpm} rpm: {value} {unit}, was {before}',
+  '{rpm} об/хв: {value} {unit}': '{rpm} rpm: {value} {unit}',
+  'бар': 'bar',
 };

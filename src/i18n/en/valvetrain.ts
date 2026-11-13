@@ -2,10 +2,6 @@
 export const VALVETRAIN_EN: Record<string, string> = {
   'У крайньому положенні фазообертача клапан заходить на {depth} мм туди, де вже стоїть поршень, навіть із виборками в днищі. Так двигун згинає клапани вже на першому оберті.': 'At the far end of the cam phaser\'s travel the valve reaches {depth} mm into where the piston already is, valve reliefs and all. An engine like this bends its valves on the first turn.',
   'Менший діапазон фазообертача, менше стиснення чи підйом.': 'A smaller phaser range, lower compression or less lift.',
-  'Гібридний Аткінсон': 'Hybrid Atkinson',
-  'Стиснення 13 на звичайному бензині: впуск закривається так пізно, що поршень виштовхує частину заряду назад. Мало моменту, зате високий ККД, як у гібридів Toyota.': 'A 13 : 1 compression ratio on regular gasoline: the intake closes so late that the piston pushes part of the charge back out. Little torque, but high efficiency, as in Toyota\'s hybrids.',
-  'Міллер із турбіною': 'Turbo Miller',
-  'Високе для наддуву стиснення й короткий впускний кулачок. Фазообертач може закрити впуск ще до нижньої мертвої точки, тож стискається менше, ніж розширюється. Volkswagen 1.5 TSI evo іде цим шляхом аж до 12,5 : 1.': 'A high compression ratio for a boosted engine and a short intake cam. The phaser can close the intake before bottom dead center, so the engine compresses less than it expands. The Volkswagen 1.5 TSI evo takes this all the way to 12.5 : 1.',
   'Високий кулачок нічого не дає': 'The high cam adds nothing',
   'На жодних обертах високий кулачок не дає більше моменту, ніж низький, тож перемикання тільки додає деталей.': 'At no speed does the high cam give more torque than the low one, so the switch only adds parts.',
   'Збільш фазу чи підйом основного кулачка або зменш низький.': 'Give the main cam more duration or lift, or make the low cam milder.',

@@ -17,6 +17,7 @@ export const DICTIONARIES = {
   /** The engine pages: catalogue, article, dash, systems card, and what the lazy features show before they load. */
   engines: { module: 'src/i18n/en/engine-ui.ts', load: () => import('./en/engine-ui.ts').then((m) => m.ENGINE_UI_EN) },
   designer: { module: 'src/i18n/en/designer.ts', load: () => import('./en/designer.ts').then((m) => m.DESIGNER_EN) },
+  presets: { module: 'src/i18n/en/presets.ts', load: () => import('./en/presets.ts').then((m) => m.PRESETS_EN) },
   dyno: { module: 'src/i18n/en/dyno.ts', load: () => import('./en/dyno.ts').then((m) => m.DYNO_EN) },
   systems: { module: 'src/i18n/en/systems.ts', load: () => import('./en/systems.ts').then((m) => m.SYSTEMS_EN) },
   lubrication: { module: 'src/i18n/en/lubrication.ts', load: () => import('./en/lubrication.ts').then((m) => m.LUBRICATION_EN) },
