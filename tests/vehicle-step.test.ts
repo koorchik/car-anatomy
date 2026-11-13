@@ -88,12 +88,14 @@ describe('the step does not matter', () => {
 });
 
 describe('snapshot and restore', () => {
-  it('a load restored from a snapshot goes on bit for bit, with the controls, the clutch heat and the tyres', () => {
+  it('a load restored from a snapshot goes on bit for bit, with the controls, the clutch heat, the tyres and the road', () => {
     const { sim, load } = rig();
     const story = new DriveStory(cd, load, sim);
     // Into second gear at full throttle: a clutch that has slipped and heated, sleeves moved, tyres deflected.
     runStory(story, 1 / 3000, 9.3);
     expect(load.control.gearIn(load.vehicle.solver)).toBe('2');
+    // A road set by a command: the car's commands are not replayed on the other thread, so it travels in the state.
+    load.command({ kind: 'vehicle', action: 'road', gradeRad: 0.04, surfaceMu: [1, 1, 1, 0.5] });
     const copy = new VehicleLoad(spec);
     copy.restore(structuredClone(load.snapshot()));
     const input: CrankInput = { omega: 0, pedal: 0.8, engineNm: 150, engineInertia: cd.map.inertia, state: 'running' };
