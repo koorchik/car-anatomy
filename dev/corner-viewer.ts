@@ -49,15 +49,19 @@ export interface CornerViewerOptions {
 
 /**
  * The model definition of a corner. The setup controls are those the corner has hardware for: the camber with a
- * strut's top mount, the toe and the rack with a steered tie rod.
+ * strut's top mount, the toe and the rack with a steered tie rod. The controls are fixed when the viewer starts, so
+ * they offer what any variant has (a variant without that hardware ignores the control); the default variant alone
+ * would hide the rack of a steered variant picked later.
  */
 export function cornerModel(options: CornerViewerOptions): ModelDef {
-  const defaults: Values = Object.fromEntries((options.variants ?? []).map((c) => [c.key, c.value]));
+  const variants = options.variants ?? [];
+  const defaults: Values = Object.fromEntries(variants.map((c) => [c.key, c.value]));
   const first = options.corner(defaults);
   const factory = factorySetup(first);
   const spec = first.axle;
-  const strut = !!spec.linkage.strut;
-  const steered = spec.linkage.rods.some((r) => r.steer);
+  const every = [first, ...variants.flatMap((c) => c.options.map((o) => options.corner({ ...defaults, [c.key]: o.value })))];
+  const strut = every.some((c) => !!c.axle.linkage.strut);
+  const steered = every.some((c) => c.axle.linkage.rods.some((r) => r.steer));
   const controls: Control[] = [
     ...(options.variants ?? []).map((c) => ({ ...c, rebuild: true })),
     {
@@ -162,7 +166,7 @@ export function cornerModel(options: CornerViewerOptions): ModelDef {
         home: options.home ?? [-0.72, 0.42, 0.8],
         groundY: 0,
         frame(_time, dt) {
-          frame.rack = hasRack && steered ? (values.rack as number) / 1000 : 0;
+          frame.rack = hasRack ? (values.rack as number) / 1000 : 0;
           if (sim && scene) {
             // At most 0.1 s per frame: a frame that took longer (a tab in the background) is not caught up.
             pending = Math.min(pending + dt, 0.1);
