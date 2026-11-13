@@ -2,7 +2,7 @@
 // interface: six geometric ratios, top gear at the limiter at top speed, the driver always in the gear that pulls
 // hardest, shifts that take no time.
 
-import { AIR_DENSITY, G, type VehicleSpec } from './vehicle.ts';
+import { dragForce, type VehicleSpec } from './vehicle.ts';
 
 export interface DriveSample {
   /** Tractive force at the wheels, newtons, at full throttle. */
@@ -81,7 +81,7 @@ export function topSpeed(car: VehicleSpec, peakPowerW: number, efficiency: numbe
   let hi = 200;
   for (let i = 0; i < 80; i++) {
     const v = (lo + hi) / 2;
-    const need = (0.5 * AIR_DENSITY * car.cdA * v * v + car.crr * car.massKg * G) * v;
+    const need = dragForce(car, v) * v;
     if (need > efficiency * peakPowerW) hi = v;
     else lo = v;
   }

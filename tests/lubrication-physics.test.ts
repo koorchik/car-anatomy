@@ -16,13 +16,14 @@ import { newOilState, oilParams, oilStep } from '../src/systems/oil.ts';
 import type { WellPlace } from '../src/systems/sump.ts';
 import { simulateLap, type LapTrace } from '../src/vehicle/lap.ts';
 import { idealGearbox } from '../src/vehicle/powertrain.ts';
+import { coeffsFromDrag } from '../src/vehicle/road-load.ts';
 import { G, TYRES, type VehicleSpec } from '../src/vehicle/vehicle.ts';
 
 /** A lap that holds one speed and one acceleration throughout, for the steady-state checks. */
 function steadyTrace(rpm: number, ax: number, ay: number, av = 0): LapTrace {
   const track = testTrack();
   const pt = idealGearbox({ torqueAt: () => 400, idleRpm: 800, redlineRpm: 6600, gears: 6, spread: 4.3, topSpeedMs: 70, tyreRadiusM: 0.33, efficiency: 0.85 });
-  const car: VehicleSpec = { name: 'x', massKg: 1500, cdA: 0.7, clA: 0, crr: 0.015, drive: 'rwd', drivenShare: 0.5, tyreRadiusM: 0.33, mount: { axis: 'longitudinal', front: 'forward', position: 'front' } };
+  const car: VehicleSpec = { name: 'x', massKg: 1500, roadLoad: coeffsFromDrag(1500, 0.7, 0.015), clA: 0, drive: 'rwd', drivenShare: 0.5, tyreRadiusM: 0.33, mount: { axis: 'longitudinal', front: 'forward', position: 'front' } };
   const lap = simulateLap(track, car, TYRES.street, pt);
   for (const [arr, v] of [[lap.axF, ax], [lap.ax, ax], [lap.ayF, ay], [lap.ay, ay], [lap.avF, av], [lap.av, av], [lap.rpm, rpm], [lap.throttle, 1]] as const) arr.fill(v);
   return lap;
