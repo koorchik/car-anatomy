@@ -120,6 +120,8 @@ export function axleDraft(output: string, parts: AxleParts): CoreDraft {
       d.links.push([[SIDE_LEFT, 1], [SIDE_RIGHT, -1]]);
       break;
     case 'plate': {
+      // Without published locking values there is nothing to lock with, and 0 would pass for an open differential.
+      if (diff.lockDrive === undefined || diff.lockCoast === undefined) throw new Error('axle: a plate differential needs its locking values to drive');
       const element: DraftElement = { id: LSD, kind: 'friction', a: SIDE_LEFT, b: SIDE_RIGHT, friction: PLATE_UNIT };
       d.elements.push(element);
       // An unknown preload is taken as none: the locking value alone (docs/gearbox-model.md).
