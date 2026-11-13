@@ -60,6 +60,15 @@ export class EventRoad implements RoadProfile {
 // of a logarithmic grid, with amplitude √(2·G_d(n_i)·Δn_i) at the band's geometric centre and a seeded random phase.
 // With w = 2 the geometric centre makes Σ G_d(n_i)·Δn_i equal ∫G_d dn = G_d(n0)·n0²·(1/n1 − 1/n2) exactly, so the
 // height variance of the road is the standard's, not an approximation of it.
+//
+// Two wheel tracks. The left and right wheels of a car run on two profiles of the same spectrum that agree at long
+// waves and not at short ones; their difference is the roll the road gives the body. Bogsjö (2007, "Coherence of road
+// roughness in left and right wheel-path", Paper E of his Lund thesis) measured 520 km of roads two metres apart and
+// found the coherence |G_LR|/G = e^(−ρ·t_w·n) with a real cross-spectrum, much the same on a motorway and a gravel
+// road, and closer to the measurements than the isotropic model. The right track keeps each band's amplitude and moves
+// its phase by acos(γ(n_i)), alternately up and down so the imaginary part cancels between neighbouring bands: each
+// band then carries exactly the co-spectrum γ·G, so the heave G·(1 + γ)/2 and the roll G·(1 − γ)/2 of the pair are
+// the model's, not a random draw round it, as the height variance is.
 
 export type RoadClass = 'A' | 'B' | 'C' | 'D';
 
@@ -67,8 +76,20 @@ export type RoadClass = 'A' | 'B' | 'C' | 'D';
 export const ISO_8608_CLASSES: Record<RoadClass, number> = { A: 16e-6, B: 64e-6, C: 256e-6, D: 1024e-6 };
 /** Reference spatial frequency, cycle/m. */
 export const ISO_8608_N0 = 0.1;
-/** Spatial frequency band of the generated road, cycle/m (91 m to 0.35 m wavelengths; not checked with the standard). */
+/**
+ * Spatial frequency band of the generated road, cycle/m (91 m to 0.35 m wavelengths): the range over which ISO 8608
+ * fits its straight line to a measured spectrum, as Bogsjö (2007, Paper A) quotes it; the standard itself not read.
+ */
 export const ISO_8608_BAND: readonly [number, number] = [0.011, 2.83];
+/**
+ * Bogsjö's coherence parameter ρ: fitted 3.1–5.5 on the six roads his Paper E plots (figure 3); 3.6 is their median.
+ * A larger ρ makes the two tracks part sooner, and the road rolls the car more.
+ */
+export const TRACK_COHERENCE_RHO = 3.6;
+
+/** Coherence |G_LR|/G of two wheel tracks `trackM` apart at spatial frequency n, cycle/m (Bogsjö 2007). */
+export const trackCoherence = (n: number, trackM: number, rho: number = TRACK_COHERENCE_RHO): number =>
+  Math.exp(-rho * trackM * n);
 /** Cosines in the sum (suspensions plan, the road). */
 export const ISO_8608_WAVES = 400;
 
@@ -97,14 +118,24 @@ export interface Iso8608Options {
   seed: number;
   waves?: number;
   band?: readonly [number, number];
+  /**
+   * Which wheel track. The left one is the road of the seed whatever the track width; the right one, `trackM` to its
+   * side, is its partner with the coherence of trackCoherence (see the head of the section).
+   */
+  side?: 'left' | 'right';
+  /** Distance between the two wheel tracks, m (the car's track width); needed for the right track. */
+  trackM?: number;
 }
 
-/** A random road of an ISO 8608 class. The same class and seed give the same road. */
+/** A random road of an ISO 8608 class. The same class, seed and side give the same road. */
 export class Iso8608Road implements RoadProfile {
   /** G_d(n0), m³. */
   readonly gd0: number;
   readonly seed: number;
   readonly band: readonly [number, number];
+  readonly side: 'left' | 'right';
+  /** Distance to the other track, m (0 when no partner was asked for). */
+  readonly trackM: number;
   /** Per cosine: spatial frequency (cycle/m), band width (cycle/m), amplitude (m), wavenumber 2πn (rad/m), phase. */
   readonly n: Float64Array;
   readonly dn: Float64Array;
@@ -116,6 +147,10 @@ export class Iso8608Road implements RoadProfile {
     this.gd0 = typeof o.roadClass === 'number' ? o.roadClass : ISO_8608_CLASSES[o.roadClass];
     if (!(this.gd0 >= 0)) throw new Error(`G_d(n0) must not be negative: ${this.gd0}`);
     this.seed = o.seed;
+    this.side = o.side ?? 'left';
+    this.trackM = o.trackM ?? 0;
+    if (!(Number.isFinite(this.trackM) && this.trackM >= 0)) throw new Error(`Track width must be a distance: ${o.trackM}`);
+    if (this.side === 'right' && !(this.trackM > 0)) throw new Error('The right wheel track needs the track width');
     const band = o.band ?? ISO_8608_BAND;
     this.band = band;
     const waves = o.waves ?? ISO_8608_WAVES;
@@ -136,7 +171,9 @@ export class Iso8608Road implements RoadProfile {
       this.dn[i] = hi - lo;
       this.amp[i] = Math.sqrt(2 * roadPsd(this.gd0, n) * (hi - lo));
       this.k[i] = 2 * Math.PI * n;
-      this.phase[i] = 2 * Math.PI * random();
+      // The right track draws the same phases, so it stays the left one's partner for any seed.
+      const shift = this.side === 'right' ? (i % 2 === 0 ? 1 : -1) * Math.acos(trackCoherence(n, this.trackM)) : 0;
+      this.phase[i] = 2 * Math.PI * random() + shift;
     }
   }
 

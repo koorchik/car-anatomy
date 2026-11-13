@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   envelopeAtNode, EventRoad, ISO_8608_BAND, ISO_8608_CLASSES, ISO_8608_N0, Iso8608Road, ROAD_STEP_M, RoadBuffer, roadVariance,
-  SEGMENT_M, SEGMENT_NODES, type RoadProfile,
+  SEGMENT_M, SEGMENT_NODES, TRACK_COHERENCE_RHO, trackCoherence, type RoadProfile,
 } from '../src/suspension/road.ts';
 
 const R = 0.344;
@@ -261,6 +261,99 @@ describe('ISO 8608 road', () => {
     const ra = new RoadBuffer(a, R, PATCH);
     const rb = new RoadBuffer(b, R, PATCH);
     for (const x of [3.21, 45.678, 99.999]) expect(rb.heightAt(x)).toBe(ra.heightAt(x));
+  });
+
+  it('gives the right wheel track the left one\'s spectrum and Bogsjö\'s coherence with it (20 seeds)', () => {
+    const track = 1.5;
+    expect(trackCoherence(0, track)).toBe(1);
+    expect(trackCoherence(1 / (TRACK_COHERENCE_RHO * track), track)).toBeCloseTo(Math.exp(-1), 12);
+    // Naming a track width leaves the left track the road of the seed, bit for bit.
+    const plain = new Iso8608Road({ roadClass: 'C', seed: 4 });
+    const left = new Iso8608Road({ roadClass: 'C', seed: 4, side: 'left', trackM: track });
+    for (const x of [0, 12.3, 456.7]) expect(left.heightAt(x)).toBe(plain.heightAt(x));
+    expect(() => new Iso8608Road({ roadClass: 'C', seed: 4, side: 'right' })).toThrow();
+
+    // Cross-spectrum by Welch (Hann, half overlap) in logarithmic bins of 0.02–0.5 cycle/m, summed over the seeds.
+    const seg = 2048;
+    const w = Float64Array.from({ length: seg }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / seg));
+    const bins = 10;
+    const edges = Array.from({ length: bins + 1 }, (_, i) => 0.02 * 25 ** (i / bins));
+    const ll = new Float64Array(bins);
+    const rr = new Float64Array(bins);
+    const lrRe = new Float64Array(bins);
+    const lrIm = new Float64Array(bins);
+    let rollVar = 0;
+    let heaveVar = 0;
+    let rightVar = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const l = sampled(new Iso8608Road({ roadClass: 'C', seed }));
+      const r = sampled(new Iso8608Road({ roadClass: 'C', seed, side: 'right', trackM: track }));
+      const variance = (f: (i: number) => number): number => {
+        let mean = 0;
+        for (let i = 0; i < SAMPLES; i++) mean += f(i) / SAMPLES;
+        let v = 0;
+        for (let i = 0; i < SAMPLES; i++) v += (f(i) - mean) ** 2 / SAMPLES;
+        return v;
+      };
+      rollVar += variance((i) => l[i] - r[i]) / 20;
+      heaveVar += variance((i) => (l[i] + r[i]) / 2) / 20;
+      rightVar += variance((i) => r[i]) / 20;
+      for (let start = 0; start + seg <= SAMPLES; start += seg / 2) {
+        const lRe = new Float64Array(seg);
+        const lIm = new Float64Array(seg);
+        const rRe = new Float64Array(seg);
+        const rIm = new Float64Array(seg);
+        for (let i = 0; i < seg; i++) {
+          lRe[i] = l[start + i] * w[i];
+          rRe[i] = r[start + i] * w[i];
+        }
+        fft(lRe, lIm);
+        fft(rRe, rIm);
+        for (let k = 1; k < seg / 2; k++) {
+          const n = k / (seg * DX);
+          const b = Math.floor((bins * Math.log(n / 0.02)) / Math.log(25));
+          if (b < 0 || b >= bins) continue;
+          ll[b] += lRe[k] ** 2 + lIm[k] ** 2;
+          rr[b] += rRe[k] ** 2 + rIm[k] ** 2;
+          lrRe[b] += lRe[k] * rRe[k] + lIm[k] * rIm[k];
+          lrIm[b] += lIm[k] * rRe[k] - lRe[k] * rIm[k];
+        }
+      }
+    }
+    // The model's coherence over a bin, weighted by the spectrum the bin holds (∝ 1/n² · dn = 1/n · d ln n).
+    for (let b = 0; b < bins; b++) {
+      let num = 0;
+      let den = 0;
+      for (let j = 0; j < 200; j++) {
+        const n = edges[b] * (edges[b + 1] / edges[b]) ** ((j + 0.5) / 200);
+        num += trackCoherence(n, track) / n;
+        den += 1 / n;
+      }
+      const measured = Math.hypot(lrRe[b], lrIm[b]) / Math.sqrt(ll[b] * rr[b]);
+      expect(Math.abs(measured - num / den), `bin from ${edges[b].toFixed(3)} cycle/m`).toBeLessThan(0.03);
+      // The cross-spectrum is real, as Bogsjö's: the imaginary part is noise.
+      expect(Math.abs(lrIm[b]) / Math.sqrt(ll[b] * rr[b])).toBeLessThan(0.03);
+    }
+    // Heave and roll the pair gives a car: ∫G·(1 + γ)/2 dn and 2·∫G·(1 − γ) dn over the band, by the spectrum of the
+    // standard and the coherence of the model, not by the generator's own amplitudes (5 %).
+    const gd0 = ISO_8608_CLASSES.C;
+    let heave = 0;
+    let roll = 0;
+    const steps = 20_000;
+    const [n1, n2] = ISO_8608_BAND;
+    for (let j = 0; j < steps; j++) {
+      const lo = n1 * (n2 / n1) ** (j / steps);
+      const hi = n1 * (n2 / n1) ** ((j + 1) / steps);
+      const n = Math.sqrt(lo * hi);
+      const g = gd0 * (ISO_8608_N0 / n) ** 2 * (hi - lo);
+      heave += (g * (1 + trackCoherence(n, track))) / 2;
+      roll += 2 * g * (1 - trackCoherence(n, track));
+    }
+    expect(Math.abs(rightVar / roadVariance(gd0) - 1)).toBeLessThan(0.05);
+    expect(Math.abs(heaveVar / heave - 1)).toBeLessThan(0.05);
+    expect(Math.abs(rollVar / roll - 1)).toBeLessThan(0.05);
+    // A wider car is rolled more by the same road.
+    expect(trackCoherence(0.2, 1.8)).toBeLessThan(trackCoherence(0.2, 1.4));
   });
 
   it('fills the buffer like the direct sum and the direct envelope (1e-6 m), and interpolates within 0.1 mm', () => {
