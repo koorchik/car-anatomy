@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { fromJtekt, jtektCorner, JTEKT_TABLE1, macphersonJtekt } from '../src/suspension/templates/macpherson.ts';
+import { fromJtekt, jtektCorner, jtektKingpinOffsetM, JTEKT_TABLE1, macphersonJtekt, SPLIT_KNUCKLE_DEFAULTS } from '../src/suspension/templates/macpherson.ts';
+import { doubleWishbone, wishboneDefaults } from '../src/suspension/templates/double-wishbone.ts';
+import { multilink, multilinkDefaults } from '../src/suspension/templates/multilink.ts';
 import { buildAxle, newCornerSample } from '../src/suspension/kinematics.ts';
+import { buildAxleLite, rolledRollCentre } from '../src/suspension/axle-lite.ts';
+import { POSE_SIZE } from '../src/suspension/solve.ts';
+import type { AxleSpec, PivotLinkage, Vec3 } from '../src/suspension/spec.ts';
+import { cross, dot, rotateInto, sub, svd } from '../src/suspension/vec.ts';
 import { clampSetup, factorySetup, resolveCorner, SETUP_RANGES, type CornerSetup } from '../src/suspension/setup.ts';
 import { dist } from '../src/suspension/vec.ts';
 import { CornerSolver } from '../src/suspension/solve.ts';
@@ -16,7 +22,6 @@ import {
   type PivotIntent,
 } from '../src/suspension/templates/pivot.ts';
 import { pivotAsLinks, pivotFrontViewCentre, PivotSolver } from '../src/suspension/solve-pivot.ts';
-import type { PivotLinkage, Vec3 } from '../src/suspension/spec.ts';
 
 const DEG = Math.PI / 180;
 
@@ -511,7 +516,7 @@ describe('single pivot axis: trailing arm, semi-trailing arm, swing axle', () =>
       const dNewton = new Float64Array(6);
       for (const z of nodes(axle)) {
         expect(newton.solve(pose, z, 0, 20).ok).toBe(true);
-        const table = new Float64Array(7);
+        const table = new Float64Array(POSE_SIZE);
         const res = axle.solvePose(z, 0, null, table);
         expect(res.ok && res.iterations === 0).toBe(true);
         for (const k of [spec.wheelCentre, far]) {
@@ -598,5 +603,443 @@ describe('single pivot axis: trailing arm, semi-trailing arm, swing axle', () =>
     expect(solver.steerRow()).toBe(-1);
     expect(() => solver.setLength(0, 0.5)).toThrow();
     expect(() => solver.setTopShift([0, 0, 0], [0, 0.01, 0])).toThrow();
+  });
+});
+
+// ---- Stage P4-core: derived quantities, double wishbones, the five-link, knuckle variants, the light axle ----
+
+const front = { dw: doubleWishbone(wishboneDefaults('front')), ml: multilink(multilinkDefaults('front')) };
+const rear = { dw: doubleWishbone(wishboneDefaults('rear')), ml: multilink(multilinkDefaults('rear')) };
+const sampleAt = (a: ReturnType<typeof buildAxle>, travel: number): ReturnType<typeof newCornerSample> => {
+  const s = newCornerSample();
+  a.measureAt(travel, s);
+  return s;
+};
+const travelsOf = (a: ReturnType<typeof buildAxle>): number[] => Array.from({ length: a.table.n }, (_, i) => a.table.travel0 + i * a.table.step);
+
+describe('derived quantities of the table', () => {
+  it('take camber gain, bump steer and the roll centre from the Jacobian; they match differences of the curves', () => {
+    for (const spec of [macphersonJtekt({ wheelCentreZM: 0.3 }), front.dw, rear.ml, macphersonJtekt({ wheelCentreZM: 0.3, knuckle: 'revoknuckle' })]) {
+      const a = buildAxle(spec);
+      const h = 1e-5;
+      for (const z of [-0.06, 0, 0.05]) {
+        const [u, d, c] = [sampleAt(a, z + h), sampleAt(a, z - h), sampleAt(a, z)];
+        expect(Math.abs((u.camber - d.camber) / (2 * h) - c.camberGain)).toBeLessThan(1e-6);
+        expect(Math.abs((u.toe - d.toe) / (2 * h) - c.bumpSteer)).toBeLessThan(1e-6);
+        // The roll centre rests on tanβ, the contact point's sideways path; tanθ on its fore-aft path.
+        expect(Math.abs((u.contactY - d.contactY) / (2 * h) - c.tanBeta)).toBeLessThan(1e-6);
+        expect(Math.abs((u.contactX - d.contactX) / (2 * h) - c.tanThetaCP)).toBeLessThan(1e-6);
+        expect(Math.abs((u.wheelX - d.wheelX) / (2 * h) - c.tanThetaWC)).toBeLessThan(1e-6);
+        // The spring and damper motion ratios, wherever they sit (strut, lower arm, spring link).
+        expect(Math.abs(-(u.springLen - d.springLen) / (2 * h) - c.mrSpring)).toBeLessThan(1e-6);
+        expect(Math.abs(-(u.damperLen - d.damperLen) / (2 * h) - c.mrDamper)).toBeLessThan(1e-6);
+      }
+    }
+  });
+
+  it('JTEKT: camber gain −17.1°/m, bump steer −9.2°/m, roll centre 126 mm, kingpin offset 68.6 mm at design', () => {
+    const s = sampleAt(axle, 0);
+    expect(s.camberGain / DEG).toBeCloseTo(-17.14, 1);
+    expect(s.bumpSteer / DEG).toBeCloseTo(-9.25, 1);
+    expect(s.rcHeight * 1000).toBeCloseTo(126.1, 0);
+    // Ford's RevoKnuckle slides put a plain Focus or Mondeo knuckle at 50–75 mm.
+    expect(s.kingpinOffset * 1000).toBeCloseTo(68.6, 1);
+    expect(s.kingpinOffset).toBeCloseTo(jtektKingpinOffsetM(), 12);
+    // The front-view instant centre lies on the line from the contact patch through the roll centre.
+    const slope = (s.icFrontZ - s.contactZ) / (s.contactY - s.icFrontY);
+    expect(s.contactY * slope).toBeCloseTo(s.rcHeight, 9);
+  });
+
+  it('reverses the JTEKT camber gain within the travel, between +40 and +80 mm (acceptance)', () => {
+    const gain = (z: number): number => axle.value('camberGain', z);
+    expect(gain(0)).toBeLessThan(0);
+    expect(gain(0.04)).toBeLessThan(0);
+    expect(gain(0.08)).toBeGreaterThan(0);
+    expect(0.08).toBeLessThan(spec.travel.bumpM);
+    // On the way the front-view instant centre swings from inboard to outboard through infinity (NaN beyond a
+    // kilometre). Its pole is not exactly where the camber gain is zero: the wheel is toed out there, so part of the
+    // side-view turn shows as camber.
+    const side = (z: number): number => {
+      const c = sampleAt(axle, z);
+      return Number.isNaN(c.icFrontY) ? 0 : Math.sign(c.icFrontY - c.wheelY);
+    };
+    expect(side(0.04)).toBe(-1);
+    expect(side(0.08)).toBe(1);
+    let lo = 0.04;
+    let hi = 0.08;
+    for (let i = 0; i < 60 && side((lo + hi) / 2) !== 0; i++) {
+      if (side((lo + hi) / 2) < 0) lo = (lo + hi) / 2;
+      else hi = (lo + hi) / 2;
+    }
+    const pole = sampleAt(axle, (lo + hi) / 2);
+    expect(pole.icFrontY).toBeNaN();
+    expect(pole.icFrontZ).toBeNaN();
+    expect(pole.travel).toBeGreaterThan(0.05);
+    expect(pole.travel).toBeLessThan(0.07);
+    expect(Number.isFinite(sampleAt(axle, 0.04).icFrontY)).toBe(true);
+  });
+});
+
+describe('double wishbone', () => {
+  it('with equal and parallel arms keeps the camber within ±0.001° over ±80 mm', () => {
+    const base = wishboneDefaults('front');
+    const a = buildAxle(doubleWishbone({ ...base, lowerPivotZM: base.lowerBallZM, upperAngleDeg: 0, upperArmM: base.lowerArmM }));
+    for (let z = -0.08; z <= 0.08 + 1e-9; z += 0.004) expect(Math.abs(sampleAt(a, z).camber / DEG)).toBeLessThan(0.001);
+  });
+
+  it('gains camber as 1/FVSA (0.1 %) and has its roll centre where the instant-centre drawing puts it (0.5 mm)', () => {
+    // Arm axes level in the side view: the arms' planes meet in a line along x, so the knuckle turns about it alone.
+    for (const which of ['front', 'rear'] as const) {
+      const it0 = { ...wishboneDefaults(which), svAngleDeg: 0 };
+      const s = doubleWishbone(it0);
+      const c = sampleAt(buildAxle(s), 0);
+      const [lo, up] = s.linkage.wishbones;
+      const plane = (w: (typeof lo)): [Vec3, number] => {
+        const n = cross(sub(w.rear, w.front), sub(w.ball, w.front));
+        return [n, dot(n, w.front)];
+      };
+      // Line of the two arm planes cut by the plane x = W_x.
+      const [nL, dL] = plane(lo);
+      const [nU, dU] = plane(up);
+      const x = s.wheelCentre[0];
+      const r1 = dL - nL[0] * x;
+      const r2 = dU - nU[0] * x;
+      const det = nL[1] * nU[2] - nL[2] * nU[1];
+      const icY = (r1 * nU[2] - r2 * nL[2]) / det;
+      const icZ = (nL[1] * r2 - nU[1] * r1) / det;
+      const fvsa = c.wheelY - icY;
+      expect(Math.abs(Math.abs(c.camberGain) * fvsa - 1)).toBeLessThan(0.001);
+      const rc = (c.contactY * (icZ - c.contactZ)) / (c.contactY - icY);
+      expect(Math.abs(rc - c.rcHeight)).toBeLessThan(0.0005);
+      expect(Math.abs(c.icFrontY - icY)).toBeLessThan(1e-6);
+      expect(Math.abs(c.icFrontZ - icZ)).toBeLessThan(1e-6);
+    }
+  });
+
+  it('gains negative camber over the whole bump travel, while the JTEKT strut turns it back within the travel', () => {
+    for (const s of [front.dw, rear.dw]) {
+      const a = buildAxle(s);
+      for (const z of travelsOf(a).filter((t) => t >= 0)) expect(a.value('camberGain', z), `${z}`).toBeLessThan(0);
+    }
+    const gains = travelsOf(axle).filter((t) => t >= 0).map((z) => axle.value('camberGain', z));
+    expect(Math.min(...gains)).toBeLessThan(0);
+    expect(Math.max(...gains)).toBeGreaterThan(0);
+  });
+
+  it('lowered 40 mm: the strut loses more of its roll camber at 0.8 g than the double wishbone, by over 0.1', () => {
+    // Body roll at 0.8 g with a sports car's roll gradient of 3°/g (a weak secondary figure,
+    // docs/suspension-research/metrics_scenarios.md); the inequality holds from 2 to 6°/g.
+    for (const gradient of [2, 3, 6]) {
+      const phi = gradient * 0.8 * DEG;
+      // Share of the body roll the outer wheel shows as camber to the road, with its static point at q0.
+      const rcf = (a: ReturnType<typeof buildAxle>, half: number, q0: number): number => {
+        const dz = half * Math.sin(phi);
+        return 1 + (a.value('camber', q0 + dz) - a.value('camber', q0)) / phi;
+      };
+      const dw = buildAxle(front.dw);
+      const strut = rcf(axle, spec.track / 2, 0.04) - rcf(axle, spec.track / 2, 0);
+      const wish = rcf(dw, front.dw.track / 2, 0.04) - rcf(dw, front.dw.track / 2, 0);
+      expect(strut, `${gradient}°/g`).toBeGreaterThan(0.1);
+      expect(strut).toBeGreaterThan(wish);
+    }
+  });
+
+  it('shifting the inner tie-rod joint by 10 mm tilts the toe curve visibly', () => {
+    const base = wishboneDefaults('front');
+    const flat = buildAxle(doubleWishbone(base));
+    const raised = buildAxle(doubleWishbone({ ...base, tieRodDzM: 0.01 }));
+    expect(Math.abs(flat.value('bumpSteer', 0))).toBeLessThan(1e-9);
+    // Several degrees per metre: RACE Software saw 11.1°/m for 10 mm at the outer joint of a strut.
+    expect(Math.abs(raised.value('bumpSteer', 0) / DEG)).toBeGreaterThan(3);
+    expect(Math.abs(raised.value('toe', 0.08) - raised.value('toe', -0.08)) / DEG).toBeGreaterThan(0.3);
+  });
+});
+
+describe('default templates land in the research ranges', () => {
+  const ranges = (s: AxleSpec): { a: ReturnType<typeof buildAxle>; c: ReturnType<typeof newCornerSample>; rcf: number } => {
+    const a = buildAxle(s);
+    const c = sampleAt(a, 0);
+    return { a, c, rcf: 1 - (s.track / 2) * Math.abs(c.camberGain) };
+  };
+
+  it('roll centre 30–90 mm in front and 90–120 mm at the rear; side-view slope 0.05–0.15 toward the anti effect', () => {
+    for (const s of [front.dw, front.ml]) {
+      const { c } = ranges(s);
+      expect(c.rcHeight).toBeGreaterThanOrEqual(0.03);
+      expect(c.rcHeight).toBeLessThanOrEqual(0.09);
+      // Anti-dive with outboard brakes: the contact patch moves forward in bump.
+      expect(c.tanThetaCP).toBeGreaterThanOrEqual(0.05);
+      expect(c.tanThetaCP).toBeLessThanOrEqual(0.15);
+    }
+    for (const s of [rear.dw, rear.ml]) {
+      const { c } = ranges(s);
+      expect(c.rcHeight).toBeGreaterThanOrEqual(0.09);
+      expect(c.rcHeight).toBeLessThanOrEqual(0.12);
+      // Anti-squat with the differential on the body: the wheel centre moves back in bump.
+      expect(-c.tanThetaWC).toBeGreaterThanOrEqual(0.05);
+      expect(-c.tanThetaWC).toBeLessThanOrEqual(0.15);
+    }
+  });
+
+  it('steering axis: KPI 8–11° and kingpin offset 45–60 mm on arms; 10–15° and 60–80 mm on the JTEKT strut', () => {
+    for (const s of [front.dw, front.ml]) {
+      const { c } = ranges(s);
+      expect(c.kpi / DEG).toBeGreaterThanOrEqual(8);
+      expect(c.kpi / DEG).toBeLessThanOrEqual(11);
+      expect(c.kingpinOffset).toBeGreaterThanOrEqual(0.045);
+      expect(c.kingpinOffset).toBeLessThanOrEqual(0.06);
+    }
+    const c = sampleAt(axle, 0);
+    expect(c.kpi / DEG).toBeGreaterThanOrEqual(10);
+    expect(c.kpi / DEG).toBeLessThanOrEqual(15);
+    expect(c.kingpinOffset).toBeGreaterThanOrEqual(0.06);
+    expect(c.kingpinOffset).toBeLessThanOrEqual(0.08);
+  });
+
+  it('camber gain and RCF: double wishbone 15–25°/m and 0.67–0.80, five-link 15–20°/m and 0.70–0.85', () => {
+    for (const s of [front.dw, rear.dw]) {
+      const { c, rcf } = ranges(s);
+      expect(-c.camberGain / DEG).toBeGreaterThanOrEqual(15);
+      expect(-c.camberGain / DEG).toBeLessThanOrEqual(25);
+      expect(rcf).toBeGreaterThanOrEqual(0.67);
+      expect(rcf).toBeLessThanOrEqual(0.8);
+    }
+    for (const s of [front.ml, rear.ml]) {
+      const { c, rcf } = ranges(s);
+      expect(-c.camberGain / DEG).toBeGreaterThanOrEqual(15);
+      expect(-c.camberGain / DEG).toBeLessThanOrEqual(20);
+      expect(rcf).toBeGreaterThanOrEqual(0.7);
+      expect(rcf).toBeLessThanOrEqual(0.85);
+    }
+  });
+});
+
+describe('five-link', () => {
+  it('passes its whole travel on one branch, far from a singular pose, with smooth curves (acceptance)', () => {
+    for (const s of [front.ml, rear.ml]) {
+      const a = buildAxle(s);
+      expect(Math.max(...a.table.iterations)).toBeLessThanOrEqual(8);
+      // The constraint Jacobian keeps its smallest singular value well clear of zero over the whole travel.
+      for (let i = 0; i < a.table.n; i++) {
+        const J = a.solver.constraintJacobian(a.table.pose.subarray(POSE_SIZE * i, POSE_SIZE * (i + 1)), 0);
+        const { s: sv } = svd(J, 5, 6);
+        expect(sv[4] / sv[0]).toBeGreaterThan(0.02);
+      }
+      // No jumps: camber and toe change smoothly from node to node.
+      for (const f of ['camber', 'toe', 'camberGain'] as const) {
+        const v = a.table.fields[f];
+        for (let i = 1; i < a.table.n - 1; i++) expect(Math.abs(v[i + 1] - 2 * v[i] + v[i - 1]), `${f} at ${i}`).toBeLessThan(f === 'camberGain' ? 0.02 : 1e-4);
+      }
+      // The toe link set for a flat toe curve keeps the toe within ±0.1° over the travel.
+      for (let i = 0; i < a.table.n; i++) expect(Math.abs(a.table.fields.toe[i] / DEG)).toBeLessThan(0.1);
+    }
+  });
+
+  it('carries its steering axis on virtual pivots: at design those are its parent wishbone ball joints', () => {
+    const intent = multilinkDefaults('front');
+    const c = sampleAt(buildAxle(front.ml), 0);
+    expect(c.kpi / DEG).toBeCloseTo(intent.kpiDeg, 9);
+    expect(c.caster / DEG).toBeCloseTo(intent.casterDeg, 9);
+    expect(c.scrub).toBeCloseTo(intent.scrubM, 9);
+    // The pivots move with the links: in bump the axis is no longer the parent's.
+    const parent = buildAxle(front.dw);
+    expect(Math.abs(sampleAt(buildAxle(front.ml), 0.08).caster - sampleAt(parent, 0.08).caster)).toBeGreaterThan(0.001);
+  });
+});
+
+describe('MacPherson knuckle variants', () => {
+  const variants = (['plain', 'dual-axis', 'revoknuckle'] as const).map((knuckle) => {
+    const s = macphersonJtekt({ wheelCentreZM: 0.3, knuckle });
+    return { knuckle, s, a: buildAxle(s) };
+  });
+
+  it('bring the steering axis toward the wheel: RevoKnuckle 20–30 mm (Ford), dual-axis about half the plain strut', () => {
+    const offset = Object.fromEntries(variants.map((v) => [v.knuckle, v.a.value('kingpinOffset', 0)]));
+    expect(offset.plain).toBeGreaterThanOrEqual(0.05);
+    expect(offset.plain).toBeLessThanOrEqual(0.075);
+    expect(offset.revoknuckle).toBeGreaterThanOrEqual(0.02);
+    expect(offset.revoknuckle).toBeLessThanOrEqual(0.03);
+    expect(offset['dual-axis']).toBeCloseTo(offset.plain / 2, 9);
+    for (const v of variants.slice(1)) {
+      const c = sampleAt(v.a, 0);
+      expect(c.kpi / DEG).toBeCloseTo(SPLIT_KNUCKLE_DEFAULTS[v.knuckle as 'revoknuckle'].kpiDeg, 9);
+      // Scrub follows from offset and KPI: at the road the axis is r·tan(KPI) further out than at the hub.
+      expect(c.scrub).toBeCloseTo(c.kingpinOffset - (c.wheelZ - c.contactZ) * Math.tan(c.kpi), 3);
+      // The axis lives in the carrier with the wheel: its offset hardly moves over the travel (the plain one does).
+      const range = (a: ReturnType<typeof buildAxle>): number => {
+        const o = travelsOf(a).map((z) => a.value('kingpinOffset', z));
+        return Math.max(...o) - Math.min(...o);
+      };
+      expect(range(v.a)).toBeLessThan(0.001);
+      expect(range(variants[0].a)).toBeGreaterThan(0.004);
+    }
+  });
+
+  it('keep the strut, so the camber curve (and its reversal) is the plain strut’s', () => {
+    for (const v of variants.slice(1)) {
+      for (const z of travelsOf(v.a)) expect(Math.abs(v.a.value('camber', z) - variants[0].a.value('camber', z)) / DEG).toBeLessThan(0.05);
+      expect(v.a.value('camberGain', 0.08)).toBeGreaterThan(0);
+      expect(v.a.value('mrDamper', 0)).toBeCloseTo(variants[0].a.value('mrDamper', 0), 2);
+    }
+  });
+
+  it('turn the wheel knuckle in the carrier as the tie rod steers it in bump', () => {
+    for (const v of variants.slice(1)) {
+      const turn = (z: number): number => v.a.table.pose[POSE_SIZE * Math.round((z - v.a.table.travel0) / v.a.table.step) + 7];
+      expect(turn(0)).toBeCloseTo(0, 12);
+      expect(Math.abs(turn(0.08))).toBeGreaterThan(0.002);
+    }
+  });
+});
+
+describe('CV joints of the driven templates', () => {
+  it('stay inside the joint limits over the whole travel, and over the steering of the driven fronts', () => {
+    const driven = [
+      rear.dw,
+      rear.ml,
+      doubleWishbone({ ...wishboneDefaults('front'), driven: true }),
+      multilink({ ...multilinkDefaults('front'), driven: true }),
+      macphersonJtekt({ wheelCentreZM: 0.3, knuckle: 'dual-axis' }),
+      macphersonJtekt({ wheelCentreZM: 0.3, knuckle: 'revoknuckle' }),
+    ];
+    const s = newCornerSample();
+    const pose = new Float64Array(POSE_SIZE);
+    for (const spec of driven) {
+      const a = buildAxle(spec);
+      const shaft = spec.halfshaft!;
+      const steered = spec.linkage.rods.some((r) => r.steer);
+      for (const z of travelsOf(a).filter((_, i) => i % 5 === 0)) {
+        // Up to 25° of road-wheel steer either way (rack found from the steer rate at design).
+        const perRack = Math.abs(buildAxleLite(spec).steerPerRack);
+        const racks = steered ? [-1, -0.5, 0, 0.5, 1].map((k) => (k * 25 * DEG) / perRack) : [0];
+        for (const rack of racks) {
+          a.solvePose(z, 0, null, pose);
+          expect(a.solver.solve(pose, z, rack, 40).ok).toBe(true);
+          a.measure(pose, z, rack, s);
+          expect(s.cvInner / DEG, `${spec.layout} inner at ${z}, rack ${rack}`).toBeLessThanOrEqual(shaft.innerMaxDeg);
+          expect(s.cvOuter / DEG, `${spec.layout} outer at ${z}, rack ${rack}`).toBeLessThanOrEqual(shaft.outerMaxDeg);
+          expect(s.plunge).toBeGreaterThanOrEqual(shaft.plungeM[0]);
+          expect(s.plunge).toBeLessThanOrEqual(shaft.plungeM[1]);
+        }
+      }
+    }
+  });
+});
+
+describe('buildAxleLite', () => {
+  const all = [spec, front.dw, front.ml, rear.dw, rear.ml, macphersonJtekt({ wheelCentreZM: 0.3, knuckle: 'revoknuckle' })];
+
+  it('gives the table’s numbers at design exactly, from about ten solves and no grid', () => {
+    for (const s of all) {
+      const lite = buildAxleLite(s);
+      const full = sampleAt(buildAxle(s), 0);
+      expect(lite.solves).toBeLessThanOrEqual(10);
+      for (const [k, v] of Object.entries(full)) {
+        const l = lite.design[k as keyof typeof full];
+        if (Number.isNaN(v)) expect(l).toBeNaN();
+        else expect(Math.abs(l - v), k).toBeLessThan(1e-9);
+      }
+      expect(lite.rcf).toBeCloseTo(1 - (s.track / 2) * Math.abs(full.camberGain), 12);
+    }
+  });
+
+  it('measures the rising rate of the motion ratio', () => {
+    for (const s of all) {
+      const a = buildAxle(s);
+      const h = 0.002;
+      expect(buildAxleLite(s).mrSpringSlope).toBeCloseTo((sampleAt(a, h).mrSpring - sampleAt(a, -h).mrSpring) / (2 * h), 9);
+    }
+    // The strut's rising rate: its mr grows in bump.
+    expect(buildAxleLite(spec).mrSpringSlope).toBeGreaterThan(0);
+  });
+
+  // The force line of a left corner at travel q, drawn without the solver's derivatives: through the contact point,
+  // square to the velocity (central difference of exact solves) of the knuckle point that sits under the contact patch.
+  const forceLine = (a: ReturnType<typeof buildAxle>, q: number): { y: number; z: number; slope: number } => {
+    const pose = new Float64Array(POSE_SIZE);
+    a.solvePose(q, 0, null, pose);
+    const c = newCornerSample();
+    a.measure(pose, q, 0, c);
+    // The knuckle point at design that the pose carries to the contact point: c0 + R⁻¹·(C − c0 − t).
+    const c0 = a.solver.c0;
+    const back = [0, 0, 0];
+    rotateInto([-pose[3], -pose[4], -pose[5], pose[6]], 0, c.contactX - c0[0] - pose[0], c.contactY - c0[1] - pose[1], c.contactZ - c0[2] - pose[2], back, 0);
+    const k: Vec3 = [c0[0] + back[0], c0[1] + back[1], c0[2] + back[2]];
+    const h = 1e-5;
+    const [up, down] = [new Float64Array(POSE_SIZE), new Float64Array(POSE_SIZE)];
+    const [pu, pd] = [[0, 0, 0], [0, 0, 0]];
+    up.set(pose);
+    down.set(pose);
+    a.solver.solve(up, q + h, 0, 30);
+    a.solver.solve(down, q - h, 0, 30);
+    a.solver.point(up, k, pu);
+    a.solver.point(down, k, pd);
+    return { y: c.contactY, z: c.contactZ, slope: (pu[1] - pd[1]) / (pu[2] - pd[2]) };
+  };
+
+  it('finds the roll centre of a 3° roll where the force lines cross, measured from the rolled road', () => {
+    // A swing axle built from two wishbones whose pivot axes share one line along x, 250 mm up on the centre line, and
+    // a toe link from that line: the knuckle can only turn about it, so both force lines pass through the pivot at any
+    // roll, and the roll centre is the pivot seen from the road through the two contact points.
+    const pivotZ = 0.25;
+    const arm = (id: string, ball: Vec3, spread: number) => ({ id, front: [spread, 0, pivotZ] as Vec3, rear: [-spread, 0, pivotZ] as Vec3, ball, part: 'susp.lower-arm' });
+    const swing: AxleSpec = {
+      ...front.dw,
+      track: 1.5,
+      wheelCentre: [0, 0.75, 0.3],
+      linkage: {
+        kind: 'links',
+        wishbones: [arm('lower-arm', [0, 0.7, 0.12], 0.2), arm('upper-arm', [0, 0.68, 0.48], 0.15)],
+        rods: [{ id: 'toe-link', body: [-0.15, 0, pivotZ], knuckle: [-0.15, 0.68, 0.3], part: 'susp.toe-link' }],
+      },
+    };
+    const lite = buildAxleLite(swing);
+    expect(lite.design.rcHeight).toBeCloseTo(pivotZ, 12);
+    const a = buildAxle(swing);
+    const dz = 0.75 * Math.sin(3 * DEG);
+    const [o, i] = [sampleAt(a, dz), sampleAt(a, -dz)];
+    const road = [o.contactY + i.contactY, o.contactZ - i.contactZ];
+    const len = Math.hypot(road[0], road[1]);
+    const my = 0 - (o.contactY - i.contactY) / 2;
+    const mz = pivotZ - (o.contactZ + i.contactZ) / 2;
+    expect(lite.rolled.heightM).toBeCloseTo((road[0] * mz - road[1] * my) / len, 9);
+    expect(lite.rolled.lateralM).toBeCloseTo((road[0] * my + road[1] * mz) / len, 9);
+
+    for (const s of all) {
+      const a = buildAxle(s);
+      const lite = buildAxleLite(s);
+      const dz = (s.track / 2) * Math.sin(3 * DEG);
+      // The same crossing from force lines drawn by finite differences, in the body frame, where the outer contact
+      // point sits about dz higher and the inner one (the mirrored right corner) as much lower.
+      const out = forceLine(a, dz);
+      const inn = forceLine(a, -dz);
+      const [yo, zo, bo] = [out.y, out.z, out.slope];
+      const [yi, zi, bi] = [-inn.y, inn.z, inn.slope];
+      const y = (zo - zi + bo * yo + bi * yi) / (bo + bi);
+      const z = zo + bo * (yo - y);
+      const [ry, rz] = [yo - yi, zo - zi];
+      const len = Math.hypot(ry, rz);
+      const [dy, dzz] = [y - (yo + yi) / 2, z - (zo + zi) / 2];
+      expect(Math.abs(lite.rolled.heightM - (ry * dzz - rz * dy) / len), s.layout).toBeLessThan(2e-5);
+      expect(Math.abs(lite.rolled.lateralM - (ry * dy + rz * dzz) / len), s.layout).toBeLessThan(2e-5);
+      // With no roll the two lines meet on the centre line at y_C·tanβ.
+      const still = rolledRollCentre(sampleAt(a, 1e-7), sampleAt(a, -1e-7));
+      expect(Math.abs(still.heightM - lite.design.rcHeight)).toBeLessThan(1e-6);
+      expect(Math.abs(still.lateralM)).toBeLessThan(1e-4);
+      // On all these templates the centre drops in roll and runs off toward the inner wheel (typical geometry, not a
+      // law: the swing axle above keeps it at its pivot).
+      expect(lite.rolled.heightM).toBeLessThan(lite.design.rcHeight);
+      expect(lite.rolled.lateralM).toBeLessThan(-0.15);
+    }
+  });
+
+  it('is cheaper than the grid', () => {
+    const t0 = performance.now();
+    for (let i = 0; i < 20; i++) buildAxleLite(front.ml);
+    const lite = (performance.now() - t0) / 20;
+    const t1 = performance.now();
+    for (let i = 0; i < 20; i++) buildAxle(front.ml);
+    const full = (performance.now() - t1) / 20;
+    expect(lite).toBeLessThan(full / 3);
   });
 });

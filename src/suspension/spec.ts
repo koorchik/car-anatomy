@@ -1,5 +1,6 @@
 // Data types of the suspension section. Stage 1a carries what an independent corner with links and a MacPherson strut
-// needs; later stages add fields and linkage kinds (pivot arms, beams, solid axles) without changing these.
+// needs, stage P4-core the split strut knuckles, the multilink's virtual steering axis and springs on arms; later
+// stages add fields and linkage kinds (pivot arms, beams, solid axles) without changing these.
 // Conventions are at the top of kinematics.ts. Core modules hold no visitor-facing text: names live in the UI and in
 // src/data/.
 
@@ -30,12 +31,47 @@ export interface Wishbone { id: string; front: Vec3; rear: Vec3; ball: Vec3; par
  */
 export interface StrutSpec { top: Vec3; lower: Vec3; topShift?: Vec3 }
 
-/** Locates the knuckle of an independent corner with exactly five constraints. */
+/**
+ * The knuckle of a MacPherson strut. 'plain': rigid with the strut tube, so the steering axis runs from the lower ball
+ * joint to the top mount. A split axis ('dual-axis' as on the Honda Civic Type R, 'revoknuckle' as on the Ford Focus RS
+ * Mk2) puts the wheel on a second knuckle that turns relative to the strut carrier about its own axis, fixed in the
+ * carrier, closer to the wheel. The carrier then holds the strut, the wishbones and `hold`; the rods (the tie rod) act
+ * on the wheel knuckle, which adds one unknown (its turn) and no constraint of its own.
+ */
+export type KnuckleKind = 'plain' | 'dual-axis' | 'revoknuckle';
+
+export interface SplitKnuckle {
+  kind: Exclude<KnuckleKind, 'plain'>;
+  /** Two points of the steering axis on the carrier at design, the lower one first. */
+  axisLower: Vec3;
+  axisUpper: Vec3;
+  /**
+   * What keeps the carrier from spinning about the strut: its joint to the lower arm (a sleeve bush on the RevoKnuckle)
+   * lets it turn about `body` (a body direction, the arm's pivot axis) and tilt about `carrier` (a carrier direction,
+   * square to `body` at design), not spin about the third axis. One constraint: the two stay square.
+   */
+  hold: { body: Vec3; carrier: Vec3 };
+  /** Parts of the two knuckles, for the 3D cards. */
+  carrierPart: string;
+  knucklePart: string;
+}
+
+/**
+ * Locates the knuckle of an independent corner with exactly five constraints (six on a split knuckle, which has one
+ * unknown more).
+ */
 export type CornerLinkage = {
   kind: 'links';
   wishbones: Wishbone[];
   rods: Rod[];
   strut?: StrutSpec;
+  /** A MacPherson knuckle with a split steering axis; absent for a plain one. */
+  knuckle?: SplitKnuckle;
+  /**
+   * Where the steering axis is when no two ball joints carry it (a multilink): through two virtual pivots, each where
+   * the lines of two named rods come closest. The pivots move with the links, as on the car.
+   */
+  virtualAxis?: { lower: readonly [string, string]; upper: readonly [string, string] };
 };
 
 /**
@@ -60,6 +96,9 @@ export interface SpringSpec {
   body: Vec3;
   /** End on the arm or knuckle, or 'strut' for a coil around the damper (its length then follows the strut). */
   wheel: Vec3 | 'strut';
+  /** Id of the wishbone or rod that carries the `wheel` end; absent when it sits on the knuckle. A rod carries it on
+   *  its own line (its spin about that line is free). */
+  on?: string;
   /** For a coil on a strut: how far the upper seat sits below the top mount and the lower seat above the strut's lower
    *  point, m. The spring's length is the strut length minus both; only drawings and the perch need it. */
   strutSeats?: { upperM: number; lowerM: number };
@@ -71,6 +110,8 @@ export interface DamperSpec {
   kind: DamperKind;
   body: Vec3;
   wheel: Vec3 | 'strut';
+  /** Id of the wishbone or rod that carries the `wheel` end, as for the spring. */
+  on?: string;
   /** N·s/m along the damper, below the knee. */
   compression: number;
   rebound: number;
