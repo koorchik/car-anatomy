@@ -30,7 +30,7 @@ export interface MultilinkIntent extends WishboneIntent {
  * the research's 15–20°/m for this type) and the roll centre where the double wishbone has it. The lower links end
  * 0.10 m short of their virtual ball joint and the upper ones 0.04 m: with the two pairs split alike (0.05 and 0.04 m,
  * or 0.15 and 0.12 m) the upper virtual pivot ran away faster than the lower one and the camber gain changed sign in
- * droop, which a production five-link avoids. Typical geometry [О].
+ * droop, which a production five-link avoids. Typical geometry.
  */
 export function multilinkDefaults(axle: 'front' | 'rear'): MultilinkIntent {
   const front = axle === 'front';

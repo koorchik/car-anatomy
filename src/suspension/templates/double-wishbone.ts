@@ -63,7 +63,7 @@ export interface WishboneIntent {
 
 /**
  * Defaults of a road car. Front: steered, undriven (a rear-drive car); rear: driven. Every number is typical geometry
- * [О], tuned to the research ranges, not taken from a car.
+ * tuned to the research ranges, not taken from a car.
  */
 export function wishboneDefaults(axle: 'front' | 'rear'): WishboneIntent {
   const front = axle === 'front';

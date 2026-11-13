@@ -72,9 +72,9 @@ export function jtektKingpinOffsetM(): number {
 /** Defaults of the split axes: kingpin offset at the hub, KPI, and how far the axis's bearings sit below and above the
  *  wheel centre (inside the rim), m. */
 export const SPLIT_KNUCKLE_DEFAULTS: Record<Exclude<KnuckleKind, 'plain'>, { kingpinOffsetM: number; kpiDeg: number; belowM: number; aboveM: number }> = {
-  // Ford: 20–30 mm [П, slides]; KPI and bearing heights [О].
+  // Ford: 20–30 mm (primary, the slides); KPI and bearing heights typical.
   revoknuckle: { kingpinOffsetM: 0.025, kpiDeg: 8, belowM: 0.09, aboveM: 0.12 },
-  // Half the plain strut's offset [Н]: not published by Honda. KPI and bearing heights [О].
+  // Half the plain strut's offset: not published by Honda, unverified. KPI and bearing heights typical.
   'dual-axis': { kingpinOffsetM: jtektKingpinOffsetM() / 2, kpiDeg: 8, belowM: 0.09, aboveM: 0.12 },
 };
 
