@@ -7,7 +7,8 @@
 // body. The gearbox link comes with the gearbox data (stage K2b).
 // No EPA row, and the top speed of the 200 PS car is unchecked, so the drag is Cd·A times k_EPA: Cd 0.33 is the
 // figure Wikipedia gives for the M3 body; the frontal area is an estimate, areaShare (0.8585, the 911 Carrera 992.2's
-// published area over its width and height) times Wikipedia's 1680 mm by 1370 mm.
+// published area over its width and height) times Wikipedia's 1680 mm by 1370 mm. BMW Group Classic gives 230 km/h
+// without naming the version, which leaves the 200 PS car's 235 km/h unchecked.
 
 import type { CarRecord } from '../../vehicle/car.ts';
 
@@ -27,6 +28,6 @@ export const CAR: CarRecord = {
   roadLoad: null,
   aero: { cd: 0.33, areaM2: 1.98 },
   published: { vmaxKmh: 235, vmaxLimited: false, vmaxGear: null, zeroTo100S: null },
-  sources: ['https://en.wikipedia.org/wiki/BMW_M3', 'https://www.lfs.net/attachment/44487'],
+  sources: ['https://en.wikipedia.org/wiki/BMW_M3', 'https://www.lfs.net/attachment/44487', 'https://www.bmwgroup-classic.com/en/models/bmw-classics/product-description-page.ad-239-1.bmw-m3-e30.html'],
   unverified: ['massKg', 'massBasis', 'body.frontShare', 'body.cgHeightM', 'body.trackFrontM', 'body.trackRearM', 'tyre.size', 'aero.cd', 'aero.areaM2', 'published.vmaxKmh', 'published.vmaxLimited'],
 };

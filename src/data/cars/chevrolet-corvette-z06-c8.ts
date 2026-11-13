@@ -3,7 +3,8 @@
 // the mass, so it stays unverified. Wheelbase, tyres and top speed (195 mph) from Wikipedia, tracks (66.3 and
 // 66.1 in) from GM Authority's copy of the spec sheet, seen only in a search excerpt. The road load is the EPA
 // coast-down of the 2023 Z06: EPA lists two test cars, and this is the one with the lower drag (C 0.0176 against
-// 0.0227 lbf/mph²); which of them carries the Z07 package is our guess.
+// 0.0227 lbf/mph²); which of them carries the Z07 package is our guess. docs/vehicle-model.md weighs it: the MY2025
+// list's carbon-aero rows share the other car's A and B, but on this row the lap's top speed is 9 % over 195 mph.
 
 import type { CarRecord } from '../../vehicle/car.ts';
 
