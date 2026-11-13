@@ -6,7 +6,9 @@
 
 ## Автомобіль на колі (`src/vehicle/`)
 
-Коло, шини, опір і записи авто описано в `docs/vehicle-model.md`, бо `src/vehicle/` спільний для всіх розділів. Сторінка оливи бере авто з їхніх записів (`src/data/cars/`) через `vehicleSpec`, а від кола читає лише `t`, `lapTime`, `axF`, `ayF`, `avF`, `rpm` і `throttle`.
+Коло, шини, опір і записи авто описано в `docs/vehicle-model.md`, бо `src/vehicle/` спільний для всіх розділів. Сторінка оливи бере авто з їхніх записів (`src/data/cars/`) через `vehicleSpec`, а від кола читає лише `t`, `lapTime`, `axF`, `ayF`, `avF`, `rpm`, `throttle` і сектор траси (для найгірших моментів, `events.ts`).
+
+Прискорення переходять з авто в двигун через `carToEngine` (`docs/vehicle-model.md`). Нахил поверхні оливи `tan φ_u = −a_u / (g + a_v)`: при 1 g 45°, при 1,3 g 52,4°.
 
 ## Піддон (`panShape`)
 
