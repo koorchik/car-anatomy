@@ -717,9 +717,12 @@ describe('twist beam: heave about the bushes, roll about the shear centre', () =
 
   it('heave turns both arms about the bushes: no camber, toe, patch drift or twist; a static alignment only turns with them', () => {
     const a = beam();
+    // The typical arm is level at design, so heave h lifts the wheel by armM·sin h.
+    expect(TWIST_BEAM_TYPICAL.pivotZM).toBe(TWIST_BEAM_TYPICAL.wheelCentreZM);
     for (let z = -0.1; z <= 0.12 + 1e-9; z += 0.01) {
       const state = TwistBeamSolver.rest();
       a.solve(state, z, z);
+      expect(Math.abs(state[0] - Math.asin(z / TWIST_BEAM_TYPICAL.armM))).toBeLessThan(1e-12);
       expect(Math.abs(state[1])).toBeLessThan(1e-12);
       const s = newBeamSample();
       a.measure(state, 'left', s);
@@ -734,7 +737,7 @@ describe('twist beam: heave about the bushes, roll about the shear centre', () =
     for (const z of [-0.1, -0.03, 0, 0.06, 0.12]) {
       const state = TwistBeamSolver.rest();
       golf.solve(state, z, z);
-      const h = state[0];
+      const h = Math.asin(z / TWIST_BEAM_TYPICAL.armM);
       const sx = s0[0] * Math.cos(h) + s0[2] * Math.sin(h);
       const sz = -s0[0] * Math.sin(h) + s0[2] * Math.cos(h);
       const s = newBeamSample();

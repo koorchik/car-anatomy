@@ -9,7 +9,8 @@
 //
 // State: two angles, heave h and roll r. The left arm turns by R = R_y(h)·R_e(r), e the unit axis from B to S at
 // design: a twist r about that axis, then a turn h about the bushes' line. Read the other way round, heave carries the
-// whole beam, S with it, and the arm then twists about the moved line from B to S, which is the order of the real part.
+// whole beam, S with it, and the arm then twists about the moved line from B to S. That is how we read the real part
+// (its only body mounts are the bushes); no source gives the order (docs/suspension-model.md).
 // The right arm is the mirror of the left one at (h, −r). An arm point k (given at design) sits at p = B + R·(k − B).
 //
 // With r0 = c0 − B split into r∥ along e and r⊥ across it, and m = e × r⊥, the twisted arm is v(r) = r∥ + cos r·r⊥ +
