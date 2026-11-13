@@ -239,18 +239,45 @@ describe('the tyre on the road', () => {
     model.dispose();
   });
 
-  it('never lets the bump through the tyre, and never hangs it over the road it stands on', () => {
-    const model = new CornerModel(resolved, bump);
-    const sim = new QuarterSim(resolved, new RoadBuffer(bump, resolved.tyre.freeRadiusM, resolved.tyre.patchM), 30 / 3.6);
+  /** Height of the strip's top as drawn (straight between its columns) at scene Z. */
+  const drawnTop = (model: InstanceType<typeof CornerModel>, z: number): number => {
+    const top = model.road.mesh.geometry.getAttribute('position');
+    const columns = top.count / 6;
+    const z0 = top.getZ(2);
+    const dz = (top.getZ(6 * (columns - 1) + 2) - z0) / (columns - 1);
+    const u = (z - z0) / dz;
+    const i = Math.max(0, Math.min(columns - 2, Math.floor(u)));
+    const a = top.getY(6 * i + 2);
+    return a + (top.getY(6 * i + 8) - a) * (u - i);
+  };
+
+  const SCENES = {
+    bump,
+    kerb: new EventRoad([
+      { kind: 'step', atM: 5, heightM: 0.1 },
+      { kind: 'step', atM: 8, heightM: -0.1 },
+    ]),
+    pothole: new EventRoad([{ kind: 'pothole', atM: 5, lengthM: 0.2, depthM: 0.06 }]),
+  };
+
+  it.each([
+    ['bump', 6.2],
+    ['kerb', 8.6],
+    ['pothole', 6.2],
+  ] as const)('never lets the %s through the tyre, and never hangs it over the road it stands on', (name, until) => {
+    const road = SCENES[name];
+    const model = new CornerModel(resolved, road);
+    const sim = new QuarterSim(resolved, new RoadBuffer(road, resolved.tyre.freeRadiusM, resolved.tyre.patchM), 30 / 3.6);
     sim.reset(4.3);
     const frame = cornerFrame();
     const positions = model.tyre.geometry.getAttribute('position');
     const local = new THREE.Vector3();
     const out = new THREE.Vector3();
-    let deepest = 0;
+    let throughDrawn = 0;
+    let offProfile = 0;
     let frames = 0;
     let loaded = 0;
-    while (sim.x < 6.2) {
+    while (sim.x < until) {
       for (let k = 0; k < 4; k++) sim.step();
       frameFromQuarter(sim.observe(), frame);
       model.update(frame);
@@ -258,9 +285,10 @@ describe('the tyre on the road', () => {
       for (let i = 0; i < positions.count; i += 2) {
         local.fromBufferAttribute(positions, i);
         if (pressPoint(model.press, local, out)) pressed++;
-        // The exact profile, not the samples: what the road strip draws.
-        const road = bump.heightAt(frame.roadX + out.z / 10 - x0) * 10;
-        deepest = Math.max(deepest, road - out.y);
+        // The strip as it is drawn: a kerb's edge is a 2 cm ramp there, and the tread must not dip under it.
+        throughDrawn = Math.max(throughDrawn, drawnTop(model, out.z) - out.y);
+        // And the exact profile, where it is smooth.
+        if (name === 'bump') offProfile = Math.max(offProfile, road.heightAt(frame.roadX + out.z / 10 - x0) * 10 - out.y);
       }
       if (frame.tyreN > 0.2 * (resolved.sprungKg + resolved.unsprungKg) * 9.81) {
         loaded++;
@@ -270,9 +298,21 @@ describe('the tyre on the road', () => {
     }
     expect(frames).toBeGreaterThan(50);
     expect(loaded).toBeGreaterThan(frames / 2);
-    // Sampled every 17 mm, the press follows a 0.5 m cosine bump to a fraction of a millimetre.
-    expect(deepest).toBeLessThan(0.005);
+    // Read at the strip's own columns, the press lies on the drawn top to float precision (scene units: 0.01 mm).
+    expect(throughDrawn).toBeLessThan(1e-4);
+    // Columns 2 cm apart follow a 0.5 m cosine bump to a fraction of a millimetre.
+    expect(offProfile).toBeLessThan(0.005);
     expect(roadHeightAt(model.press, model.press.uRoadZ0.value)).toBeCloseTo(model.press.uRoadH.value[0]!, 9);
+    model.dispose();
+  });
+
+  it('presses nothing once the wheel is pulled off its hub', () => {
+    const model = new CornerModel(resolved, bump);
+    model.setExplode(1);
+    const positions = model.tyre.geometry.getAttribute('position');
+    const local = new THREE.Vector3();
+    const out = new THREE.Vector3();
+    for (let i = 0; i < positions.count; i++) expect(pressPoint(model.press, local.fromBufferAttribute(positions, i), out)).toBe(false);
     model.dispose();
   });
 });

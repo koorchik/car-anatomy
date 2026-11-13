@@ -43,7 +43,7 @@ import {
 import { HalfshaftView } from './halfshaft.ts';
 import { createCornerMaterials, disposeMaterials, type CornerMaterials } from './materials.ts';
 import { CamberLaser, ForceArrows } from './overlays.ts';
-import { RoadStrip, type RoadView } from './road-strip.ts';
+import { COLUMN_DZ, RoadStrip, type RoadView } from './road-strip.ts';
 import { CornerSchematic } from './schematic.ts';
 import { ROAD_SAMPLES, roadPressUniforms, type RoadPressUniforms } from './tyre-press.ts';
 
@@ -896,14 +896,15 @@ export class CornerModel {
     this.m1.copy(this.group.matrixWorld).invert();
     u.uRoadFromLocal.value.multiplyMatrices(this.m1, this.tyre.matrixWorld);
     u.uLocalFromRoad.value.copy(u.uRoadFromLocal.value).invert();
-    // Samples over the tyre's length around the wheel centre, in the model frame.
-    const centreZ = this.wheelCentre.z;
-    const half = this.resolved.tyre.freeRadiusM * 10 + 0.6;
-    const dz = (2 * half) / (ROAD_SAMPLES - 1);
-    u.uRoadZ0.value = centreZ - half;
-    u.uRoadDz.value = dz;
+    // The strip's own columns round the wheel centre, so the press reads the very top the strip draws. A wheel pulled
+    // off its hub by the explode stands on nothing.
+    const strip = this.road;
+    const first = Math.round((this.wheelCentre.z - strip.firstZ) / COLUMN_DZ) - (ROAD_SAMPLES >> 1);
+    u.uRoadZ0.value = strip.columnZ(first);
+    u.uRoadDz.value = COLUMN_DZ;
     const h = u.uRoadH.value;
-    for (let i = 0; i < ROAD_SAMPLES; i++) h[i] = this.road.heightAt(this.view, centreZ - half + i * dz) * 10;
+    const onRoad = this.explode < 0.01;
+    for (let i = 0; i < ROAD_SAMPLES; i++) h[i] = onRoad ? strip.heightAt(this.view, strip.columnZ(first + i)) * 10 : -1e3;
   }
 
   private updateForces(f: CornerFrame): void {

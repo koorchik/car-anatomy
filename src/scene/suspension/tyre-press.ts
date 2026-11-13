@@ -6,15 +6,16 @@
 // normal becomes the road's, so the contact patch lights flat. The same code runs in the tyre's shadow material, so the
 // shadow is flattened too. Picking uses the unpressed mesh: a few millimetres do not matter there.
 //
-// The road is a height field along the direction of travel (scene Z) in the frame of the corner model: the drawn
-// profile under the wheel, sampled ROAD_SAMPLES times over the tyre's length and read linearly between samples. The
+// The road is a height field along the direction of travel (scene Z) in the frame of the corner model: the heights of
+// the road strip's own columns under the wheel (road-strip.ts, 2 cm apart), read linearly between them. That is exactly
+// the top the strip draws, so not even a kerb's edge, a step 2 cm wide on the strip, shows through the tread. The
 // suspensions plan pressed onto the plane of the enveloped road under the patch; on the 50 mm × 0.5 m bump that plane
-// sits about 6 mm below the crest, which then showed through the tread. The profile itself has no such gap.
-// pressPoint below is the shader's twin for the tests; change both together.
+// sits about 6 mm below the crest, which then showed through the tread. pressPoint below is the shader's twin for the
+// tests; change both together.
 
 import * as THREE from 'three';
 
-/** Road samples under one tyre. 17 mm apart over ±0.4 m, the chord of a cosine bump is off by under 0.2 mm. */
+/** Road samples under one tyre: 48 columns of the strip, 2 cm apart, cover ±0.46 m round the wheel centre. */
 export const ROAD_SAMPLES = 48;
 
 export interface RoadPressUniforms {

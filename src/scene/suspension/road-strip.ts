@@ -1,6 +1,7 @@
 // A strip of road under one wheel: the scene's profile (bump, pothole, kerb) drawn as a slab whose top follows it and
-// whose asphalt slides under the wheel as the road goes by. The same height function feeds the tyre's press
-// (tyre-press.ts), so the tyre lies on exactly what is drawn. It sits outside the model's framing (noFit).
+// whose asphalt slides under the wheel as the road goes by. Its top is straight between columns fixed in the model's
+// frame; the tyre's press (tyre-press.ts) reads the heights at those same columns, so the tyre lies on exactly what is
+// drawn, a kerb's edge included. It sits outside the model's framing (noFit).
 
 import * as THREE from 'three';
 import { tag } from '../model-types.ts';
@@ -9,6 +10,8 @@ import type { RoadProfile } from '../../suspension/road.ts';
 /** Columns along the road: 2 cm apart over ±1.6 m. */
 const COLUMNS = 161;
 const HALF_LENGTH = 16;
+/** Spacing of the columns, scene units. */
+export const COLUMN_DZ = (2 * HALF_LENGTH) / (COLUMNS - 1);
 const PER_COLUMN = 6;
 /** Depth of the slab's sides, scene units. */
 const SKIRT = 0.6;
@@ -26,8 +29,12 @@ export interface RoadView {
 
 export class RoadStrip {
   readonly mesh: THREE.Mesh;
+  /** Scene Z of the first column; column i stands at firstZ + i·COLUMN_DZ. */
+  readonly firstZ: number;
   private readonly positions: Float32Array;
-  private readonly z0: number;
+  private readonly normals: Float32Array;
+  /** Height of each column's top, scene units, for the normals. */
+  private readonly heights = new Float64Array(COLUMNS);
   private readonly x0: number;
   private readonly width: [number, number];
   private lastX = Number.NaN;
@@ -39,12 +46,13 @@ export class RoadStrip {
    */
   constructor(material: THREE.MeshStandardMaterial, centreX: number, fromX: number, toX: number) {
     this.x0 = centreX;
-    this.z0 = centreX * 10;
+    this.firstZ = centreX * 10 - HALF_LENGTH;
     this.width = [fromX, toX];
     // Six vertices per column, so the top and the two sides keep their own normals: outer bottom, outer top (side),
     // outer top (top), inner top (top), inner top (side), inner bottom.
     const count = COLUMNS * PER_COLUMN;
     this.positions = new Float32Array(count * 3);
+    this.normals = new Float32Array(count * 3);
     const uvs = new Float32Array(count * 2);
     const index: number[] = [];
     for (let i = 0; i < COLUMNS; i++) {
@@ -60,12 +68,17 @@ export class RoadStrip {
     const geo = new THREE.BufferGeometry();
     geo.setIndex(index);
     geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
-    geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(count * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('normal', new THREE.BufferAttribute(this.normals, 3).setUsage(THREE.DynamicDrawUsage));
     geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     this.mesh = tag(new THREE.Mesh(geo, material), 'susp.road');
     this.mesh.receiveShadow = true;
     this.mesh.userData.noFit = true;
     this.mesh.frustumCulled = false;
+  }
+
+  /** Scene Z of column i. */
+  columnZ(i: number): number {
+    return this.firstZ + i * COLUMN_DZ;
   }
 
   /** Road height (m) at scene Z (model frame) for this view. */
@@ -81,10 +94,13 @@ export class RoadStrip {
     this.lastLift = view.lift;
     this.lastProfile = view.profile;
     const P = this.positions;
+    const N = this.normals;
+    const H = this.heights;
     const [xa, xb] = this.width;
     for (let i = 0; i < COLUMNS; i++) {
-      const z = this.z0 - HALF_LENGTH + (i / (COLUMNS - 1)) * 2 * HALF_LENGTH;
+      const z = this.columnZ(i);
       const y = this.heightAt(view, z) * 10;
+      H[i] = y;
       const k = i * PER_COLUMN * 3;
       for (let j = 0; j < PER_COLUMN; j++) {
         P[k + 3 * j] = j < 3 ? xb : xa;
@@ -92,9 +108,23 @@ export class RoadStrip {
         P[k + 3 * j + 2] = z;
       }
     }
+    // Normals written by hand (computeVertexNormals allocates): the sides face ±X, the top leans with the slope.
+    for (let i = 0; i < COLUMNS; i++) {
+      const a = Math.max(0, i - 1);
+      const b = Math.min(COLUMNS - 1, i + 1);
+      const slope = (H[b]! - H[a]!) / ((b - a) * COLUMN_DZ);
+      const len = Math.hypot(1, slope);
+      const k = i * PER_COLUMN * 3;
+      for (let j = 0; j < PER_COLUMN; j++) {
+        const top = j === 2 || j === 3;
+        N[k + 3 * j] = top ? 0 : j < 2 ? 1 : -1;
+        N[k + 3 * j + 1] = top ? 1 / len : 0;
+        N[k + 3 * j + 2] = top ? -slope / len : 0;
+      }
+    }
     const geo = this.mesh.geometry;
     geo.attributes.position!.needsUpdate = true;
-    geo.computeVertexNormals();
+    geo.attributes.normal!.needsUpdate = true;
   }
 
   dispose(): void {
