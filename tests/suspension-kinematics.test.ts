@@ -22,6 +22,9 @@ import {
   type PivotIntent,
 } from '../src/suspension/templates/pivot.ts';
 import { pivotAsLinks, pivotFrontViewCentre, PivotSolver } from '../src/suspension/solve-pivot.ts';
+import { solidAxle, SOLID_BUMP_STOP_TRAVEL_M, SOLID_TYPICAL, type SolidAxleIntent } from '../src/suspension/templates/solid-axle.ts';
+import { newSolidSample, SolidAxle, type SolidSample } from '../src/suspension/solid-kinematics.ts';
+import { LEAF_LINK_SHARE } from '../src/suspension/solve-axle.ts';
 
 const DEG = Math.PI / 180;
 
@@ -1041,5 +1044,136 @@ describe('buildAxleLite', () => {
     for (let i = 0; i < 20; i++) buildAxle(front.ml);
     const full = (performance.now() - t1) / 20;
     expect(lite).toBeLessThan(full / 3);
+  });
+});
+
+describe('solid axles: Panhard rod, Watt’s linkage, leaf springs, de Dion', () => {
+  const sample = (axle: SolidAxle, zL: number, zR: number, side: 'left' | 'right' = 'left'): SolidSample => {
+    const out = newSolidSample();
+    axle.measureAt(zL, zR, side, out);
+    return out;
+  };
+  /** Level trailing links: no roll steer, so the axle rolls about its lateral locator alone. */
+  const level = (intent: SolidAxleIntent) => new SolidAxle(solidAxle({ ...intent, linkAngleDeg: 0, upperAngleDeg: 0 }));
+
+  it('Panhard rod: the axle shifts sideways by about z²/(2L) in heave, within 5 % on ±50 mm', () => {
+    const axle = new SolidAxle(solidAxle(SOLID_TYPICAL.panhard));
+    const lat = axle.spec.linkage.lateral;
+    if (lat.kind !== 'panhard') throw new Error('expected a Panhard rod');
+    // The rod is level at design: its axle end swings on an arc of its length about the body end.
+    expect(lat.axle[2]).toBe(lat.body[2]);
+    const L = dist(lat.axle, lat.body);
+    for (const z of [-0.05, -0.03, 0.03, 0.05]) {
+      const shift = Math.abs(sample(axle, z, z).axleShiftY);
+      expect(Math.abs(shift / ((z * z) / (2 * L)) - 1), `${z * 1000} mm`).toBeLessThan(0.05);
+    }
+    // Toward the rod's body end (the right), whichever way the axle moves.
+    expect(sample(axle, 0.05, 0.05).axleShiftY).toBeLessThan(0);
+    expect(sample(axle, -0.05, -0.05).axleShiftY).toBeLessThan(0);
+  });
+
+  it('Watt’s linkage: its pivot strays less than 1 mm from a straight line on ±50 mm', () => {
+    const axle = new SolidAxle(solidAxle(SOLID_TYPICAL.watt));
+    const lat = axle.spec.linkage.lateral;
+    if (lat.kind !== 'watt') throw new Error('expected Watt’s linkage');
+    const pivot = [0, 0, 0];
+    for (let z = -0.05; z <= 0.05 + 1e-9; z += 0.01) {
+      const s = axle.rest();
+      axle.solve(s, z, z);
+      axle.solver.point(s, lat.spec.pivotOnAxle, pivot);
+      expect(Math.abs(pivot[1] - lat.spec.pivotOnAxle[1]), `${(z * 1000).toFixed(0)} mm`).toBeLessThan(1e-3);
+    }
+    // Ten times straighter than the Panhard rod over the same travel.
+    const panhard = Math.abs(sample(new SolidAxle(solidAxle(SOLID_TYPICAL.panhard)), 0.05, 0.05).axleShiftY);
+    expect(Math.abs(sample(axle, 0.05, 0.05).axleShiftY)).toBeLessThan(panhard / 10);
+  });
+
+  it('rolls about its lateral locator: the Panhard rod’s height, the Watt pivot, ±1 mm', () => {
+    for (const intent of [SOLID_TYPICAL.panhard, { ...SOLID_TYPICAL.panhard, links: 'three' }, SOLID_TYPICAL.watt] as const) {
+      const axle = level(intent);
+      expect(Math.abs(axle.rollCentre() - intent.lateralZM), intent.lateral).toBeLessThan(1e-3);
+      // Both wheels give the same roll centre.
+      expect(sample(axle, 0, 0, 'right').rcHeight).toBeCloseTo(axle.rollCentre(), 9);
+    }
+    // Raising the rod raises the roll centre by as much.
+    expect(level({ ...SOLID_TYPICAL.panhard, lateralZM: 0.5 }).rollCentre() - level(SOLID_TYPICAL.panhard).rollCentre()).toBeCloseTo(0.1, 3);
+    // With sloped links the axle also steers in roll, and a rod behind the axle then sits a little off its height.
+    const sloped = new SolidAxle(solidAxle(SOLID_TYPICAL.panhard));
+    const rollSteer = sample(sloped, 0.02, -0.02);
+    expect(rollSteer.axleSteer / rollSteer.axleRoll).toBeCloseTo(Math.tan(SOLID_TYPICAL.panhard.linkAngleDeg * DEG), 2);
+  });
+
+  it('keeps camber to the road whatever the body roll: the roll camber factor is 0 (Chalmers §2.3.4)', () => {
+    for (const intent of Object.values(SOLID_TYPICAL)) {
+      const axle = new SolidAxle(solidAxle(intent));
+      const half = axle.spec.wheelCentre[1];
+      const design = sample(axle, 0, 0);
+      expect(1 - (axle.spec.track / 2) * Math.abs(design.camberGain - design.camberGainCross), intent.lateral).toBeCloseTo(0, 9);
+      for (const phi of [1, 3, 5]) {
+        // Body rolled left side up by φ: the left wheel droops, the right one is pressed, the axle stays on the road.
+        const z = half * Math.sin(phi * DEG);
+        const l = sample(axle, -z, z, 'left');
+        const r = sample(axle, -z, z, 'right');
+        // The road under both wheels holds the car's x axis and the line through both wheel centres (both wheels are
+        // rigid to the axle). Camber to the road is the spin axis's tilt from that plane.
+        const n = cross([1, 0, 0], sub([l.wheelX, l.wheelY, l.wheelZ], [r.wheelX, r.wheelY, r.wheelZ]));
+        const len = Math.hypot(...n);
+        const spin = (w: SolidSample, my: number): Vec3 => [Math.cos(w.camber) * Math.sin(w.toe), my * Math.cos(w.camber) * Math.cos(w.toe), -Math.sin(w.camber)];
+        expect(-Math.asin(dot(spin(l, 1), n) / len), `${intent.lateral} ${phi}°`).toBeCloseTo(design.camber, 12);
+        expect(-Math.asin(dot(spin(r, -1), n) / len), `${intent.lateral} ${phi}°`).toBeCloseTo(design.camber, 12);
+        // To the body, the wheels lean with the axle (up to the second-order effect of its roll steer).
+        expect(l.camber).toBeCloseTo(phi * DEG, 4);
+        expect(l.axleRoll).toBeCloseTo(-phi * DEG, 4);
+      }
+      // One wheel alone tilts both: the axle turns about the other wheel, 1/t per metre.
+      expect(Math.abs(design.camberGain)).toBeCloseTo(1 / axle.spec.track, 9);
+    }
+  });
+
+  it('leaf springs: the axle rolls about the line through the eyes and steers as the front half swings', () => {
+    const intent = SOLID_TYPICAL.leaf;
+    const axle = new SolidAxle(solidAxle(intent));
+    const lat = axle.spec.linkage.lateral;
+    if (lat.kind !== 'leaf') throw new Error('expected leaf springs');
+    const leaf = lat.spec;
+    // Level eyes: both at seat height plus the arch. The three-link model's links turn about the axle's y axis at the
+    // clamp, so a rolling axle tilts them with it, and they stay put only if it rolls about the eyes.
+    expect(leaf.frontEye[2]).toBeCloseTo(leaf.rearEye[2], 12);
+    expect(Math.abs(axle.rollCentre() - leaf.frontEye[2])).toBeLessThan(1e-3);
+    // Roll steer: the clamp's front end swings about the front eye, so the side that rises moves by the link's slope.
+    const A: Vec3 = [
+      leaf.axleSeat[0] + (1 - LEAF_LINK_SHARE) * (leaf.frontEye[0] - leaf.axleSeat[0]),
+      0,
+      leaf.axleSeat[2] + (1 - LEAF_LINK_SHARE) * (leaf.frontEye[2] - leaf.axleSeat[2]),
+    ];
+    const slope = (leaf.frontEye[2] - A[2]) / (leaf.frontEye[0] - A[0]);
+    const s = sample(axle, 0.02, -0.02);
+    expect(Math.abs(s.axleSteer / s.axleRoll / slope - 1)).toBeLessThan(0.05);
+    // The leaves alone hold the axle: no rods, nothing binds, no sideways shift in heave.
+    expect(axle.spec.linkage.rods.length).toBe(0);
+    for (const z of [-0.08, 0.1]) {
+      const h = sample(axle, z, z);
+      expect(h.bind).toBe(0);
+      expect(Math.abs(h.axleShiftY)).toBeLessThan(1e-9);
+    }
+    // A leaf sloping down to the front steers the other way.
+    const down = new SolidAxle(solidAxle({ ...intent, leaf: { ...intent.leaf, archM: 0, slopeDeg: -5 } }));
+    const d = sample(down, 0.02, -0.02);
+    expect(Math.sign(d.axleSteer)).toBe(-Math.sign(s.axleSteer));
+  });
+
+  it('touches the bump stop 80 mm into bump, and refuses intents that cannot be built', () => {
+    for (const intent of Object.values(SOLID_TYPICAL)) {
+      const axle = new SolidAxle(solidAxle(intent));
+      const design = sample(axle, 0, 0).damperLen;
+      expect(design - sample(axle, SOLID_BUMP_STOP_TRAVEL_M, SOLID_BUMP_STOP_TRAVEL_M).damperLen).toBeCloseTo(axle.spec.bumpStop.gapM, 12);
+    }
+    const base = SOLID_TYPICAL.panhard;
+    expect(() => solidAxle({ ...base, trackM: Number.NaN })).toThrow(/trackM/);
+    expect(() => solidAxle({ ...base, lowerLinkM: 0.05 })).toThrow(/0\.1 m/);
+    expect(() => solidAxle({ ...base, linkAngleDeg: 40 })).toThrow(/30°/);
+    expect(() => solidAxle({ ...base, lateralZM: 2 })).toThrow(/lateral locator/);
+    expect(() => solidAxle({ ...SOLID_TYPICAL.leaf, leaf: { ...SOLID_TYPICAL.leaf.leaf, frontShare: 0.95 } })).toThrow(/seat/);
+    expect(() => solidAxle({ ...SOLID_TYPICAL.deDion, diffOutputYM: 0.7 })).toThrow(/differential output/);
   });
 });

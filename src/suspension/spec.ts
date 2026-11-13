@@ -84,6 +84,45 @@ export interface PivotLinkage { kind: 'pivot'; axisA: Vec3; axisB: Vec3; armPart
  *  on `kind`; plain AxleSpec is a corner of links, which is what most code handles. */
 export type AnyCornerLinkage = CornerLinkage | PivotLinkage;
 
+/**
+ * Watt's linkage on a solid axle: a rocker on the axle turning about the axle's x axis at `pivotOnAxle`, `centreLinkM`
+ * long and upright at design, and two rods from its ends to the body, the upper one to `upperBody` and the lower one to
+ * `lowerBody`, on opposite sides of the car. The pivot then runs nearly straight up and down.
+ */
+export interface WattSpec { pivotOnAxle: Vec3; upperBody: Vec3; lowerBody: Vec3; centreLinkM: number }
+
+/**
+ * Leaf spring of the left side (the right one is its mirror), as the SAE three-link model draws it (solve-axle.ts):
+ * the front eye on the body, the rear eye on a shackle that hangs `shackleM` from a body pivot straight above it at
+ * design, and the seat clamped to the axle. `rateNmm` is the vertical rate at the seat, N/mm.
+ */
+export interface LeafSpec { frontEye: Vec3; rearEye: Vec3; shackleM: number; axleSeat: Vec3; rateNmm: number }
+
+/** How a solid axle is held across the car: a Panhard rod (body end, axle end), Watt's linkage, or the leaf springs
+ *  themselves, which hold it every way. Rods angled in plan (a triangulated four-link) need none: 'rods'. */
+export type SolidLateral =
+  | { kind: 'panhard'; body: Vec3; axle: Vec3 }
+  | { kind: 'watt'; spec: WattSpec }
+  | { kind: 'leaf'; spec: LeafSpec }
+  | { kind: 'rods' };
+
+/**
+ * Solid axle (live axle or de Dion tube): both wheels on one rigid part, solved as a whole by weighted least squares
+ * (solve-axle.ts). Every rod is written out, both sides, because a solid axle need not be symmetric; a rod's `knuckle`
+ * end is a point of the axle.
+ */
+export interface SolidAxleLinkage {
+  kind: 'solid';
+  rods: Rod[];
+  lateral: SolidLateral;
+  /** Stiffness of each rod along its axis, N/m: a redundant set binds instead of failing. */
+  rodStiffness: number;
+  axlePart: string;
+}
+
+/** Both wheels on one part. */
+export type BeamLinkage = SolidAxleLinkage;
+
 export type SpringKind = 'coil' | 'torsion' | 'leaf' | 'air' | 'hydro';
 
 export interface SpringSpec {
@@ -141,8 +180,9 @@ export interface HalfshaftSpec {
   diameterM: number;
 }
 
-/** One axle of the car: an independent corner, given for the left side; the right one is its mirror. */
-export interface AxleSpec<L extends AnyCornerLinkage = CornerLinkage> {
+/** One axle of the car: an independent corner, given for the left side; the right one is its mirror. A beam axle
+ *  (BeamLinkage) is given the same way: its left wheel, spring and damper, mirrored for the right. */
+export interface AxleSpec<L extends AnyCornerLinkage | BeamLinkage = CornerLinkage> {
   layout: LayoutId;
   /** Track at design ride height, m. */
   track: number;
