@@ -82,7 +82,9 @@ export const stateName = (speed: number | 'R'): string => String(speed);
 export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
   const a = desc.centreMm;
   const alpha = desc.pressureAngle;
-  const hand = desc.counterHand === 'right' ? 1 : -1;
+  const sign = desc.counterHand === 'right' ? 1 : -1;
+  // A spur gear has no hand: plain 0, never −0, which toBe(0), toEqual and snapshots tell apart.
+  const hand = (beta: number): number => (beta === 0 ? 0 : sign * beta);
   const helixOf = (pair: PairDesc, what: string): number => {
     const shift = pair.shift ?? [0, 0];
     const beta = helixForCentre(a, pair.module, pair.teeth[0], pair.teeth[1], alpha, shift[0] + shift[1]);
@@ -96,6 +98,9 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
     for (const side of ['front', 'back'] as const) {
       const speed = s[side];
       if (speed === null) continue;
+      if (speed !== 'R' && !(Number.isInteger(speed) && speed >= 1 && speed <= desc.speeds.length)) {
+        throw new Error(`${desc.id}: sleeve ${s.id} engages speed ${speed}, but the box has speeds 1–${desc.speeds.length}`);
+      }
       if (sideOf.has(speed)) throw new Error(`${desc.id}: speed ${speed} sits on two sleeves`);
       sideOf.set(speed, { sleeve: s.id, side });
     }
@@ -103,6 +108,7 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
   const speedIds: Array<number | 'R'> = [...desc.speeds.map((_, i) => i + 1), ...(desc.reverse ? ['R' as const] : [])];
   for (const speed of speedIds) if (!sideOf.has(speed)) throw new Error(`${desc.id}: speed ${speed} has no sleeve`);
   const directIndex = desc.speeds.indexOf('direct');
+  if (desc.speeds.lastIndexOf('direct') !== directIndex) throw new Error(`${desc.id}: only one speed can lock the input to the output`);
   if (directIndex >= 0) {
     const s = sideOf.get(directIndex + 1)!;
     if (s.side !== 'front' || s.sleeve !== desc.sleeves[0]!.id) throw new Error(`${desc.id}: the direct speed must be the front of the first sleeve`);
@@ -132,8 +138,8 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
   const mainShift = desc.main.shift ?? [0, 0];
   const mainZ = place(desc.main.faceWidth);
   gears.push(
-    { id: 'input-main', member: 'input', teeth: desc.main.teeth[0], module: desc.main.module, helix: -hand * mainHelix, pressureAngle: alpha, shift: mainShift[0], faceWidth: desc.main.faceWidth, z: mainZ },
-    { id: 'counter-main', member: 'counter', teeth: desc.main.teeth[1], module: desc.main.module, helix: hand * mainHelix, pressureAngle: alpha, shift: mainShift[1], faceWidth: desc.main.faceWidth, z: mainZ },
+    { id: 'input-main', member: 'input', teeth: desc.main.teeth[0], module: desc.main.module, helix: hand(-mainHelix), pressureAngle: alpha, shift: mainShift[0], faceWidth: desc.main.faceWidth, z: mainZ },
+    { id: 'counter-main', member: 'counter', teeth: desc.main.teeth[1], module: desc.main.module, helix: hand(mainHelix), pressureAngle: alpha, shift: mainShift[1], faceWidth: desc.main.faceWidth, z: mainZ },
   );
   meshes.push({ a: 'input-main', b: 'counter-main' });
 
@@ -153,8 +159,8 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
     const gz = place(pair.faceWidth);
     members.push({ id: `gear-${speed}`, axis: 'main' });
     gears.push(
-      { id: `counter-${speed}`, member: 'counter', teeth: pair.teeth[0], module: pair.module, helix: hand * beta, pressureAngle: alpha, shift: shift[0], faceWidth: pair.faceWidth, z: gz },
-      { id: speedGearId(speed), member: `gear-${speed}`, teeth: pair.teeth[1], module: pair.module, helix: -hand * beta, pressureAngle: alpha, shift: shift[1], faceWidth: pair.faceWidth, z: gz },
+      { id: `counter-${speed}`, member: 'counter', teeth: pair.teeth[0], module: pair.module, helix: hand(beta), pressureAngle: alpha, shift: shift[0], faceWidth: pair.faceWidth, z: gz },
+      { id: speedGearId(speed), member: `gear-${speed}`, teeth: pair.teeth[1], module: pair.module, helix: hand(-beta), pressureAngle: alpha, shift: shift[1], faceWidth: pair.faceWidth, z: gz },
     );
     meshes.push({ a: `counter-${speed}`, b: speedGearId(speed) });
     elements.push({ id: elementId(speed), kind: 'synchro', a: `gear-${speed}`, b: 'output', actuator: sleeve });
@@ -178,9 +184,9 @@ export function layshaftSpec(desc: LayshaftDesc): GearboxSpec {
     const gz = place(r.faceWidth);
     members.push({ id: 'gear-R', axis: 'main' }, { id: 'idler', axis: 'idler' });
     gears.push(
-      { id: 'counter-R', member: 'counter', teeth: zc, module: r.module, helix: hand * r.helix, pressureAngle: alpha, shift: xc, faceWidth: r.faceWidth, z: gz },
-      { id: 'idler-R', member: 'idler', teeth: zi, module: r.module, helix: -hand * r.helix, pressureAngle: alpha, shift: xi, faceWidth: r.faceWidth, z: gz },
-      { id: speedGearId('R'), member: 'gear-R', teeth: zm, module: r.module, helix: hand * r.helix, pressureAngle: alpha, shift: xm, faceWidth: r.faceWidth, z: gz },
+      { id: 'counter-R', member: 'counter', teeth: zc, module: r.module, helix: hand(r.helix), pressureAngle: alpha, shift: xc, faceWidth: r.faceWidth, z: gz },
+      { id: 'idler-R', member: 'idler', teeth: zi, module: r.module, helix: hand(-r.helix), pressureAngle: alpha, shift: xi, faceWidth: r.faceWidth, z: gz },
+      { id: speedGearId('R'), member: 'gear-R', teeth: zm, module: r.module, helix: hand(r.helix), pressureAngle: alpha, shift: xm, faceWidth: r.faceWidth, z: gz },
     );
     meshes.push({ a: 'counter-R', b: 'idler-R' }, { a: 'idler-R', b: speedGearId('R') });
     elements.push({ id: elementId('R'), kind: r.engage === 'synchro' ? 'synchro' : 'dog', a: 'gear-R', b: 'output', actuator: sleeve });

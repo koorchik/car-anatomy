@@ -125,6 +125,12 @@ export function buildGearbox(spec: GearboxSpec): Gearbox {
     return axis;
   };
 
+  // A gear with 0 or 20.5 teeth would build: its mesh row just decouples the shafts or gives a ratio no gear has.
+  for (const g of spec.gears) {
+    if (!Number.isInteger(g.teeth) || g.teeth < 1) throw new Error(`${spec.id}: gear ${g.id} has ${g.teeth} teeth`);
+    if (!(g.module > 0) || !(g.faceWidth > 0)) throw new Error(`${spec.id}: gear ${g.id} needs a positive module and face width`);
+  }
+
   // 1. Inertias.
   const inertia = spec.members.map((m) => m.inertia ?? 0);
   for (const g of spec.gears) {

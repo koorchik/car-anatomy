@@ -3,6 +3,7 @@ import { ALL_GEARBOXES, gearboxById } from '../src/data/gearboxes.ts';
 import { DRIVE_CARS } from '../src/data/drive-cars.ts';
 import { gearboxSpec } from '../src/drivetrain/catalogue.ts';
 import { centreDistance, shiftSumForCentre } from '../src/drivetrain/gear-geometry.ts';
+import { layshaftSpec, type LayshaftDesc } from '../src/drivetrain/layouts/layshaft.ts';
 import { analyseState, buildGearbox, stateByName } from '../src/drivetrain/topology.ts';
 import type { GearboxSpec } from '../src/drivetrain/spec.ts';
 
@@ -17,8 +18,37 @@ describe('catalogue', () => {
     expect(() => buildGearbox(gearboxSpec(record))).not.toThrow();
   });
 
-  it('every drive car names a gearbox that exists', () => {
-    for (const car of Object.values(DRIVE_CARS)) expect(gearboxById(car.gearbox), car.car).toBeDefined();
+  it('every drive car names a gearbox that exists and names the car back', () => {
+    for (const [id, car] of Object.entries(DRIVE_CARS)) {
+      expect(car.car, id).toBe(id);
+      expect(gearboxById(car.gearbox)?.car, car.car).toBe(car.car);
+    }
+    for (const record of ALL_GEARBOXES.filter((g) => g.car !== null)) expect(DRIVE_CARS[record.car!]?.gearbox, record.id).toBe(record.id);
+  });
+
+  it('a spur gear has a plain zero helix, not −0', () => {
+    for (const record of ALL_GEARBOXES) {
+      for (const g of gearboxSpec(record).gears) if (g.helix === 0) expect(Object.is(g.helix, 0), `${record.id} ${g.id}`).toBe(true);
+    }
+  });
+});
+
+describe('descriptions that cannot be built are refused', () => {
+  const desc = e30Record.layout.desc as LayshaftDesc;
+  it('a sleeve engaging a speed the box does not have', () => {
+    expect(() => layshaftSpec({ ...desc, sleeves: [...desc.sleeves, { id: '6', front: 6, back: null }] })).toThrow(/speeds 1–5/);
+  });
+
+  it('two direct speeds', () => {
+    expect(() => layshaftSpec({ ...desc, speeds: [...desc.speeds.slice(0, 3), 'direct', 'direct'] })).toThrow(/only one speed/);
+  });
+
+  it('a gear with no teeth or a fraction of a tooth', () => {
+    for (const teeth of [0, 20.5, -20]) {
+      const spec = layshaftSpec(desc);
+      const broken: GearboxSpec = { ...spec, gears: spec.gears.map((g) => (g.id === 'counter-1' ? { ...g, teeth } : g)) };
+      expect(() => buildGearbox(broken), `${teeth}`).toThrow(/teeth/);
+    }
   });
 });
 
@@ -80,13 +110,18 @@ describe('state kinds', () => {
 });
 
 describe('sign', () => {
-  it('forward gears turn the output with the crank, reverse against it', () => {
-    for (const name of forward) expect(stateByName(e30, name).ratio!, name).toBeGreaterThan(0);
-    expect(stateByName(e30, 'R').ratio!).toBeLessThan(0);
-    expect(stateByName(mz6, '1').ratio!).toBeGreaterThan(0);
+  it('in every box forward gears turn the output with the crank, reverse against it', () => {
+    for (const record of ALL_GEARBOXES) {
+      const box = buildGearbox(gearboxSpec(record));
+      for (const s of box.states.filter((x) => x.kind === 'gear')) {
+        if (s.name === 'R') expect(s.ratio!, `${record.id} R`).toBeLessThan(0);
+        else expect(s.ratio!, `${record.id} ${s.name}`).toBeGreaterThan(0);
+      }
+    }
+    expect(stateByName(e30, 'R').kind).toBe('gear');
   });
 
-  it('the countershaft turns against the input, a loose gear in neutral with it', () => {
+  it('the countershaft turns against the input, a loose gear and the reverse idler with it', () => {
     const speeds = stateByName(e30, '1').speeds!;
     const at = (m: string) => speeds[e30.members.indexOf(m)]!;
     expect(at('counter')).toBeCloseTo(-23 / 45, 12);
