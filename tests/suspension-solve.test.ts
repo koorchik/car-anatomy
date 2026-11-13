@@ -613,11 +613,34 @@ describe('solid axle solver (weighted least squares)', () => {
       const axle = build(intent);
       const s = axle.rest();
       for (const [zL, zR] of grid) {
+        // A walk throws when a corrector lands on another assembly of the linkage.
         const res = axle.solve(s, zL, zR);
         expect(res.iterations, `${name} at ${zL}/${zR}`).toBeLessThanOrEqual(8);
-        expect(res.detSign).toBe(axle.detSign);
       }
+      // Still the design assembly at the end: the Watt rocker and the shackles hang within a quarter turn.
+      for (const e of [7, 8]) expect(Math.abs(s[e]), name).toBeLessThan(Math.PI / 4);
     }
+  });
+
+  it('refuses a step whose corrector lands on another assembly: a crossed Watt rocker', () => {
+    // The determinant of the least-squares KKT matrix keeps its sign on every assembly (JᵀW²J is never indefinite),
+    // so it cannot guard the branch; the corrector's distance from the prediction does.
+    const axle = build({ ...SOLID_TYPICAL.watt, links: 'three' });
+    // A warm start with the rocker turned 2 rad, past the line of its rods: the solve finds the crossed assembly,
+    // exactly and with no binding, so nothing in the solve itself tells it apart.
+    const crossed = axle.rest();
+    crossed[7] = 2;
+    const res = axle.solver.solve(crossed, 0, 0);
+    expect(res.ok).toBe(true);
+    expect(res.bind).toBeLessThan(1e-12);
+    expect(Math.abs(crossed[7])).toBeGreaterThan(Math.PI / 2);
+    const start = axle.rest();
+    start[7] = 2;
+    expect(() => axle.solve(start, 0.01, 0.01)).toThrow(/another assembly/);
+    // Walking from the design pose stays on it.
+    const s = axle.rest();
+    axle.solve(s, 0.01, 0.01);
+    expect(Math.abs(s[7])).toBeLessThan(0.1);
   });
 
   it('takes derivatives from the implicit function that match central differences to 1e-6, binding or not', () => {

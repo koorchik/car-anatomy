@@ -18,6 +18,9 @@
 // with Levenberg–Marquardt damping μ, raised when a step does not lower the exact merit ½Σ(w·r)² + ν·Σ|h| (ν at
 // least 0.1 m and above twice the largest multiplier λ seen) and dropped again after.
 // A set that can move exactly converges quadratically; a binding one linearly, and fast, as its stretch is small.
+// Unlike a corner's square Jacobian, this KKT matrix says nothing about the branch: JᵀW²J is never indefinite, so its
+// determinant keeps its sign on every assembly of the linkage (a crossed Watt rocker, a shackle past its dead point).
+// SolidAxle.solve guards the branch by how far the corrector moves from its first-order prediction instead.
 // Derivatives with respect to z_L and z_R come from the same system with the full Hessian of the Lagrangian:
 // [∇²L Aᵀ; A 0]·[dq; dλ] = [0; e_L or e_R]. Gauss–Newton's JᵀW²J is exact only where every row is met; a binding rod, and
 // a leaf's wind-up rows that are never met off design, need the terms Σ w²·r·∇²r + Σ λ·∇²h too (without them the cross
@@ -98,8 +101,6 @@ export interface AxleSolveResult {
   bind: number;
   /** The rod stretched most, '' without rods. */
   worst: string;
-  /** Sign of det of the KKT matrix at the solution: a change along a sweep means another branch. */
-  detSign: number;
 }
 
 /** Left and right leaf of a spec: (seat, eyes, shackle pivot, clamp ends A and B). */
@@ -127,7 +128,7 @@ export class SolidAxleSolver {
   readonly rows: readonly string[];
   private readonly list: Row[];
   private readonly m: number;
-  // Scratch, so a solve allocates nothing.
+  // Scratch: a solve allocates only its result, and the derivatives nothing.
   private readonly R = new Float64Array(9);
   private readonly r: Float64Array;
   private readonly G: Float64Array;
@@ -141,6 +142,9 @@ export class SolidAxleSolver {
   private readonly gPlus: Float64Array;
   private readonly gMinus: Float64Array;
   private readonly p = new Float64Array(3);
+  /** Largest rod stretch of the last worstRod() call and its row (−1 with no rods). */
+  private worstStretch = 0;
+  private worstAt = -1;
 
   constructor(spec: AxleSpec<SolidAxleLinkage>) {
     this.spec = spec;
@@ -482,8 +486,8 @@ export class SolidAxleSolver {
     for (let e = 6; e < this.n; e++) s[EXTRA + e - 6] += x[e] / scaleBy;
   }
 
-  /** Largest stretch of a rod at the last assembled state, and its index (−1 with no rods). */
-  private worstRod(): [number, number] {
+  /** Largest stretch of a rod at the last assembled state into this.worstStretch, its row into this.worstAt. */
+  private worstRod(): void {
     let worst = 0;
     let at = -1;
     for (let i = 0; i < this.m; i++) {
@@ -495,7 +499,8 @@ export class SolidAxleSolver {
         at = i;
       }
     }
-    return [worst, at];
+    this.worstStretch = worst;
+    this.worstAt = at;
   }
 
   /**
@@ -565,12 +570,9 @@ export class SolidAxleSolver {
       }
     }
     this.assemble(s, zL, zR);
-    this.kkt(0);
-    this.x.fill(0);
-    const detSign = solveLinear(this.K, this.x, n + 2);
-    const [bind, at] = this.worstRod();
+    this.worstRod();
     const residual = Math.max(Math.abs(this.h[0]), Math.abs(this.h[1]));
-    return { ok, iterations, residual, bind, worst: at >= 0 ? this.rows[at] : '', detSign };
+    return { ok, iterations, residual, bind: this.worstStretch, worst: this.worstAt >= 0 ? this.rows[this.worstAt] : '' };
   }
 
   /**
@@ -592,11 +594,12 @@ export class SolidAxleSolver {
     const H = this.H;
     const trial = this.trial;
     for (let k = 0; k < n; k++) {
-      for (const [sign, out] of [[1, this.gPlus], [-1, this.gMinus]] as const) {
-        trial.set(s);
-        this.nudge(trial, k, sign * HESSIAN_STEP);
-        this.lagrangianGradient(trial, out);
-      }
+      trial.set(s);
+      this.nudge(trial, k, HESSIAN_STEP);
+      this.lagrangianGradient(trial, this.gPlus);
+      trial.set(s);
+      this.nudge(trial, k, -HESSIAN_STEP);
+      this.lagrangianGradient(trial, this.gMinus);
       for (let c = 0; c < n; c++) H[n * c + k] = (this.gPlus[c] - this.gMinus[c]) / (2 * HESSIAN_STEP);
     }
     for (let a = 0; a < n; a++) {
@@ -608,7 +611,8 @@ export class SolidAxleSolver {
     }
     this.assemble(s, zL, zR);
     let sign = 0;
-    for (const [out, k] of [[dL, 0], [dR, 1]] as const) {
+    for (let k = 0; k < 2; k++) {
+      const out = k === 0 ? dL : dR;
       if (!out) continue;
       const K = this.K;
       K.fill(0);
@@ -655,7 +659,8 @@ export class SolidAxleSolver {
   /** Largest stretch of a rod at state `s`, m: the binding. */
   bind(s: Float64Array): number {
     this.assemble(s, 0, 0);
-    return this.worstRod()[0];
+    this.worstRod();
+    return this.worstStretch;
   }
 
   /** Whether row `i` is a rod, whose stretch is binding (a leaf's rows give as the leaf works). */

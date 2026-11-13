@@ -1501,5 +1501,8 @@ describe('solid axles: Panhard rod, Watt’s linkage, leaf springs, de Dion', ()
     expect(() => solidAxle({ ...base, lateralZM: 2 })).toThrow(/lateral locator/);
     expect(() => solidAxle({ ...SOLID_TYPICAL.leaf, leaf: { ...SOLID_TYPICAL.leaf.leaf, frontShare: 0.95 } })).toThrow(/seat/);
     expect(() => solidAxle({ ...SOLID_TYPICAL.deDion, diffOutputYM: 0.7 })).toThrow(/differential output/);
+    // A travel that is not a number is refused, not measured as the design pose.
+    const axle = new SolidAxle(solidAxle(base));
+    expect(() => axle.measureAt(Number.NaN, 0.05, 'left', newSolidSample())).toThrow(/numbers/);
   });
 });

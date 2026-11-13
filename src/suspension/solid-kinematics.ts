@@ -10,7 +10,9 @@
 // the car, the same on both sides.
 //
 // There is no table yet: the stage that animates the axle decides whether it needs one. A solve walks to the asked
-// travels in steps of at most STEP_M with a first-order predictor, so it stays on the design branch.
+// travels in steps of at most STEP_M with a first-order predictor, so it stays on the design branch: a corrector that
+// lands farther from the prediction than JUMP_M or JUMP_RAD has found another assembly of the linkage, and the walk
+// throws. (The least-squares KKT matrix cannot tell: its determinant keeps its sign on every assembly.)
 
 import type { AxleSpec, SolidAxleLinkage, Vec3 } from './spec.ts';
 import type { Side } from './kinematics.ts';
@@ -19,6 +21,14 @@ import { dist, mirrorY, rotateQuatBy } from './vec.ts';
 
 /** Largest step of a walk between two pairs of travels, m. */
 const STEP_M = 0.01;
+/** Largest move of the corrector from the prediction of one step: of the axle centre (m), of the axle's turn and of a
+ *  Watt rocker's or shackle's swing (rad). The templates' correctors move under 0.3 mm, 2 mrad and 8 mrad; another
+ *  assembly (a crossed Watt rocker, a shackle over its dead point) lies a good part of a radian away. */
+const JUMP_M = 0.005;
+const JUMP_RAD = 0.1;
+const X_AXIS: Vec3 = [1, 0, 0];
+
+const travelText = (zL: number, zR: number): string => `${(zL * 1000).toFixed(0)} / ${(zR * 1000).toFixed(0)} mm of travel`;
 
 /** One wheel of a solid axle at one pair of travels. Angles in radians, lengths in metres. */
 export interface SolidSample {
@@ -102,10 +112,13 @@ export class SolidAxle {
   readonly solver: SolidAxleSolver;
   /** Loaded radius at design: the contact point is this far below the wheel centre in the wheel plane. */
   readonly radius: number;
-  /** Sign of the KKT determinant at design: a solve that lands on another sign is on another branch. */
-  readonly detSign: number;
-  private readonly springWheel: Vec3;
-  private readonly damperWheel: Vec3;
+  /** Spring, damper and spin axis of each side: [left, right], the right one the mirror. */
+  private readonly springBody: readonly [Vec3, Vec3];
+  private readonly springWheel: readonly [Vec3, Vec3];
+  private readonly damperBody: readonly [Vec3, Vec3];
+  private readonly damperWheel: readonly [Vec3, Vec3];
+  private readonly spin: readonly [Vec3, Vec3];
+  private readonly outerJoint: readonly [Vec3, Vec3] | null;
   private readonly shaftLength: number;
   // Scratch
   private readonly dL: Float64Array;
@@ -114,6 +127,7 @@ export class SolidAxle {
   private readonly p = new Float64Array(3);
   private readonly q = new Float64Array(3);
   private readonly s = new Float64Array(3);
+  private readonly predicted = new Float64Array(AXLE_STATE_SIZE);
   private readonly slopes: Slopes = {
     tanBeta: 0, tanThetaCP: 0, tanThetaWC: 0, camberGain: 0, bumpSteer: 0, mrSpring: 0, mrDamper: 0,
   };
@@ -124,15 +138,19 @@ export class SolidAxle {
     this.radius = spec.wheelCentre[2];
     const { spring, damper } = spec;
     if (spring.wheel === 'strut' || damper.wheel === 'strut') throw new Error('A solid axle has no strut');
-    this.springWheel = spring.wheel;
-    this.damperWheel = damper.wheel;
+    const sides = (p: Vec3): readonly [Vec3, Vec3] => [p, mirrorY(p)];
+    this.springBody = sides(spring.body);
+    this.springWheel = sides(spring.wheel);
+    this.damperBody = sides(damper.body);
+    this.damperWheel = sides(damper.wheel);
+    this.spin = sides(spec.spinAxis);
     const shaft = spec.halfshaft;
+    this.outerJoint = shaft ? sides(shaft.outerJoint) : null;
     this.shaftLength = shaft ? dist(shaft.diffOutput, shaft.outerJoint) : 0;
     this.dL = new Float64Array(this.solver.n);
     this.dR = new Float64Array(this.solver.n);
     const res = this.solver.solve(SolidAxleSolver.rest(), 0, 0);
     if (!res.ok) throw new Error(`The solid axle does not assemble at design: ${res.worst}`);
-    this.detSign = res.detSign;
   }
 
   /** The design state. */
@@ -142,9 +160,11 @@ export class SolidAxle {
 
   /**
    * Walks `state` to the travels `zL`, `zR` in steps of at most 10 mm, each started by a first-order predictor; throws
-   * when a step does not solve or lands on another branch. Returns the last step's result: its iterations and binding.
+   * when a step does not solve or its corrector lands on another assembly of the linkage (farther from the prediction
+   * than JUMP_M or JUMP_RAD). Returns the last step's result: its iterations and binding.
    */
   solve(state: Float64Array, zL: number, zR: number): AxleSolveResult {
+    if (!Number.isFinite(zL) || !Number.isFinite(zR)) throw new Error(`The solid axle's travels must be numbers, not ${zL} / ${zR}`);
     const solver = this.solver;
     const from = this.dz;
     solver.travels(state, from);
@@ -158,14 +178,23 @@ export class SolidAxle {
       const toL = zL0 + ((zL - zL0) * k) / steps;
       const toR = zR0 + ((zR - zR0) * k) / steps;
       this.predict(state, atL, atR, toL - atL, toR - atR);
+      this.predicted.set(state);
       res = solver.solve(state, toL, toR);
-      const at = `${(toL * 1000).toFixed(0)} / ${(toR * 1000).toFixed(0)} mm of travel`;
-      if (!res.ok) throw new Error(`The solid axle does not solve at ${at} (${res.worst})`);
-      if (res.detSign !== this.detSign) throw new Error(`The solid axle jumps to another branch at ${at}`);
+      if (!res.ok) throw new Error(`The solid axle does not solve at ${travelText(toL, toR)} (${res.worst})`);
+      if (this.jumped(this.predicted, state)) throw new Error(`The solid axle jumps to another assembly at ${travelText(toL, toR)}`);
       atL = toL;
       atR = toR;
     }
     return res!;
+  }
+
+  /** Whether the corrector moved from the prediction `a` to the solution `b` farther than one branch allows. */
+  private jumped(a: Float64Array, b: Float64Array): boolean {
+    if (Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) > JUMP_M) return true;
+    const cos = Math.abs(a[3] * b[3] + a[4] * b[4] + a[5] * b[5] + a[6] * b[6]);
+    if (2 * Math.acos(Math.min(1, cos)) > JUMP_RAD) return true;
+    for (let e = 6; e < this.solver.n; e++) if (Math.abs(a[7 + e - 6] - b[7 + e - 6]) > JUMP_RAD) return true;
+    return false;
   }
 
   /** state ← state + dq/dz_L·ΔzL + dq/dz_R·ΔzR. */
@@ -211,7 +240,7 @@ export class SolidAxle {
     out.axleRoll = Math.atan2(p[2] - q[2], p[1] - q[1]);
     out.axleSteer = Math.atan2(q[0] - p[0], p[1] - q[1]);
     out.axleShiftY = (p[1] + q[1]) / 2;
-    solver.direction(state, [1, 0, 0], s);
+    solver.direction(state, X_AXIS, s);
     out.axlePitch = -Math.atan2(s[2], s[0]);
     out.bind = solver.bind(state);
 
@@ -229,8 +258,8 @@ export class SolidAxle {
     out.wheelX = Wx;
     out.wheelY = Wy;
     out.wheelZ = Wz;
-    const spin = this.spec.spinAxis;
-    solver.direction(state, left ? spin : mirrorY(spin), s);
+    const at = left ? 0 : 1;
+    solver.direction(state, this.spin[at], s);
     const sx = s[0];
     const sy = my * s[1];
     const sz = s[2];
@@ -249,10 +278,8 @@ export class SolidAxle {
     out.contactZ = Wz - r * uz;
 
     // Spring and damper of this side: lengths are mirror-blind, so they are measured in the car's frame.
-    const spring = this.spec.spring.body;
-    const damper = this.spec.damper.body;
-    out.springLen = this.length(state, left ? spring : mirrorY(spring), left ? this.springWheel : mirrorY(this.springWheel));
-    out.damperLen = this.length(state, left ? damper : mirrorY(damper), left ? this.damperWheel : mirrorY(this.damperWheel));
+    out.springLen = this.length(state, this.springBody[at], this.springWheel[at]);
+    out.damperLen = this.length(state, this.damperBody[at], this.damperWheel[at]);
 
     const k = this.slopes;
     this.along(state, own, armX, armY, armZ, my, sx, sy, sz, un, left, k);
@@ -275,8 +302,8 @@ export class SolidAxle {
 
     // De Dion half-shaft: straight between the two joint centres, seen as the left one.
     const shaft = this.spec.halfshaft;
-    if (shaft) {
-      solver.point(state, left ? shaft.outerJoint : mirrorY(shaft.outerJoint), p);
+    if (shaft && this.outerJoint) {
+      solver.point(state, this.outerJoint[at], p);
       const dx = p[0] - shaft.diffOutput[0];
       const dy = my * p[1] - shaft.diffOutput[1];
       const dz = p[2] - shaft.diffOutput[2];
@@ -345,10 +372,9 @@ export class SolidAxle {
     // γ = −asin(s_z), τ = atan2(s_x, s_y)
     out.camberGain = -dsz / Math.sqrt(Math.max(1e-300, 1 - sz * sz));
     out.bumpSteer = (sy * dsx - sx * dsy) / (sx * sx + sy * sy);
-    const spring = this.spec.spring.body;
-    const damper = this.spec.damper.body;
-    out.mrSpring = this.ratio(state, v, left ? spring : mirrorY(spring), left ? this.springWheel : mirrorY(this.springWheel));
-    out.mrDamper = this.ratio(state, v, left ? damper : mirrorY(damper), left ? this.damperWheel : mirrorY(this.damperWheel));
+    const side = left ? 0 : 1;
+    out.mrSpring = this.ratio(state, v, this.springBody[side], this.springWheel[side]);
+    out.mrDamper = this.ratio(state, v, this.damperBody[side], this.damperWheel[side]);
   }
 
   /** Motion ratio −dL/dq of the element from `body` to the axle point `wheel` along the state velocity `v`. */
