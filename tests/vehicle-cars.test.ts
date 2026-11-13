@@ -192,6 +192,7 @@ describe('road load', () => {
     'chevrolet-camaro-ss-gen6': { list: '16tstcar.csv', vehicle: '621GFE2116', etwLb: 4000, A: 36.88, B: 0.5551, C: 0.01826 },
     'chevrolet-corvette-z06-c8': { list: '23-testcar-2024-05-17_0.xlsx', vehicle: '551PYE2173', etwLb: 4000, A: 36.81, B: 0.728, C: 0.01761 },
     'civic-type-r-fk8': { list: '17tstcar-2018-05-30.xlsx', vehicle: 'EHBF1M', etwLb: 3375, A: 34.74, B: 0.2581, C: 0.02216 },
+    'porsche-911-carrera-t-992': { list: '23-testcar-2024-05-17_0.xlsx', vehicle: 'FE-992-MT-23', etwLb: 3750, A: 41.927, B: 0.58973, C: 0.015162 },
     'porsche-911-gt3-991-2': { list: '18tstcar-2018-10-24.xlsx', vehicle: 'FE-991IIGT3-MT-18', etwLb: 3625, A: 34.396, B: 0.43415, C: 0.016303 },
     'subaru-wrx-sti-va': { list: '15tstcar.csv', vehicle: 'FBE-UG74', etwLb: 3750, A: 41, B: 0.5674, C: 0.01874 },
   };
