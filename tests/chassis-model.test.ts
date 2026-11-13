@@ -47,6 +47,38 @@ const models = new Map(IDS.map((id) => [id, new ChassisModel(built.get(id)!)]));
 /** A scene point of the chassis (CG frame) in the record's front-axle frame. */
 const toCar = (car: CarRecord, v: THREE.Vector3): Vec3 => cgToCarFrame(car)([v.z / 10, v.x / 10, v.y / 10]);
 
+/** Every vertex of the meshes under `root` that are on show and pass `keep`, in the front-axle frame, as drawn. */
+function drawnPoints(car: CarRecord, root: THREE.Object3D, keep: (mesh: THREE.Mesh) => boolean, visit: (p: Vec3, part: string) => void): void {
+  root.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  const m = new THREE.Matrix4();
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !keep(mesh)) return;
+    for (let q: THREE.Object3D | null = o; q; q = q.parent) if (!q.visible) return;
+    const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const instanced = (mesh as THREE.InstancedMesh).isInstancedMesh ? (mesh as THREE.InstancedMesh) : null;
+    for (let k = 0; k < (instanced ? instanced.count : 1); k++) {
+      if (instanced) instanced.getMatrixAt(k, m);
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        if (instanced) v.applyMatrix4(m);
+        visit(toCar(car, mesh.localToWorld(v)), String(o.userData.part));
+      }
+    }
+  });
+}
+
+/** Height of a half-section's top (its first four points) at |y|; null beyond them. */
+function topOfSection(half: Array<[number, number]>, y: number): number | null {
+  for (let i = 1; i <= 3; i++) {
+    const [y0, z0] = half[i - 1]!;
+    const [y1, z1] = half[i]!;
+    if (y <= y1) return z0 + ((y - y0) / (y1 - y0)) * (z1 - z0);
+  }
+  return null;
+}
+
 const LAYOUTS: readonly LayoutId[] = ['macpherson', 'double-wishbone', 'multilink', 'pushrod', 'trailing-arm', 'semi-trailing', 'swing-axle', 'twist-beam', 'live-axle', 'de-dion'];
 
 describe('chassis records', () => {
@@ -164,6 +196,55 @@ describe.each(IDS)('%s', (id) => {
       const arch = shape.archAt(x)!;
       expect(arch).not.toBeNull();
       expect(arch.z + arch.radius).toBeGreaterThan(axle.sweep.topZ);
+    }
+  });
+
+  it('keeps the drawn tyres of all four wheels out of the body at the lock either way', () => {
+    // The 3D's own tyres, not the sweep the arches were sized from: the right side through its mirror, the rack's sign
+    // on each side and the tyre's real section are all checked by what is drawn.
+    const shape = model.shell!.shape;
+    const frame = chassisFrame();
+    try {
+      for (const k of [-1, 1]) {
+        frame.front.rack = k * model.lockRackM;
+        model.update(frame);
+        let n = 0;
+        const inside: string[] = [];
+        drawnPoints(car, model.group, (m) => /^susp\.(front|rear)\.tyre$/.test(String(m.userData.part)), (p, part) => {
+          n++;
+          if (inside.length < 3 && shape.contains(p)) inside.push(`${part} ${p.map((c) => c.toFixed(3)).join(', ')}`);
+        });
+        expect(n).toBeGreaterThan(4000);
+        expect(inside, `rack ${k}`).toEqual([]);
+      }
+    } finally {
+      frame.front.rack = 0;
+      model.update(frame);
+    }
+  });
+
+  it('keeps every part of the chassis under the body’s top, strut towers included, at the lock either way', () => {
+    // The JTEKT strut stands 0.47 m over the wheel centre: under the 911's low bonnet line its tower has to be covered.
+    const shape = model.shell!.shape;
+    const frame = chassisFrame();
+    try {
+      for (const k of [-1, 0, 1]) {
+        frame.front.rack = k * model.lockRackM;
+        model.update(frame);
+        let worst = -Infinity;
+        let where = '';
+        drawnPoints(car, model.group, (m) => !String(m.userData.part).startsWith('car.'), (p, part) => {
+          if (p[0] > shape.xFront || p[0] < shape.xRear) return;
+          const top = topOfSection(shape.section(p[0]), Math.abs(p[1]));
+          if (top === null || p[2] - top <= worst) return;
+          worst = p[2] - top;
+          where = `${part} ${p.map((c) => c.toFixed(3)).join(', ')}`;
+        });
+        expect(worst, where).toBeLessThan(-0.005);
+      }
+    } finally {
+      frame.front.rack = 0;
+      model.update(frame);
     }
   });
 

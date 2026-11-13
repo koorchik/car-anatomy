@@ -22,6 +22,15 @@ import type { PartInfo } from '../parts-info.ts';
 import type { CarRecord, Vec3 } from '../../vehicle/car.ts';
 import { BODY_PARTS } from './parts.ts';
 
+/** The top of the suspension's tower over a wheel (left side; the right is its mirror), front-axle frame, m. */
+export interface ArchTower {
+  x: number;
+  y: number;
+  /** Its highest point, and its radius in plan. */
+  z: number;
+  radius: number;
+}
+
 /** One pair of wheel arches (mirrored), front-axle frame. */
 export interface WheelArch {
   /** The wheel centre's x and height. */
@@ -31,17 +40,26 @@ export interface WheelArch {
   radius: number;
   /** The well's inner wall, m from the centre line. */
   innerY: number;
+  /** The tower the body holds over this wheel (a strut's top mount), which the top of the shell covers; null: none. */
+  tower: ArchTower | null;
 }
 
 /** Room left between the wheel's sweep and the arch or the well's inner wall, m: typical. */
 export const ARCH_CLEARANCE_M = 0.03;
 
-/** The arch round a wheel whose sweep reaches `reachM` from its centre and comes `innerY` from the centre line. */
-export const archFor = (x: number, z: number, reachM: number, innerY: number): WheelArch => ({
+/** Skin over the top of a suspension tower, m: typical. */
+export const TOWER_COVER_M = 0.02;
+
+/**
+ * The arch round a wheel whose sweep reaches `reachM` from its centre and comes `innerY` from the centre line, with the
+ * tower of its suspension, if any.
+ */
+export const archFor = (x: number, z: number, reachM: number, innerY: number, tower: ArchTower | null = null): WheelArch => ({
   x,
   z,
   radius: reachM + ARCH_CLEARANCE_M,
   innerY: innerY - ARCH_CLEARANCE_M,
+  tower,
 });
 
 /** Rear deck by body type: how far ahead of the tail it ends and its height, then the tail's top, in body heights. */
@@ -120,7 +138,7 @@ export interface BodyShape {
   arches: WheelArch[];
   lid: BayLid;
   bulkhead: Bulkhead;
-  /** Centre-line top and floor at x. */
+  /** Centre-line top and floor at x (the top as the section has it, over a tower too). */
   topZ(x: number): number;
   floorZ(x: number): number;
   /** Half the body's width at x. */
@@ -182,7 +200,7 @@ export function bodyShape(car: CarRecord, arches: WheelArch[]): BodyShape {
     return bayTop - 0.5 * out;
   };
   const top0 = smoothed((x) => Math.max(rawTop(x), bayFloor(x)), 0.08);
-  const topZ = (x: number): number => (x >= bay.min[0] && x <= bay.max[0] ? Math.max(top0(x), bayTop) : top0(x));
+  const lineTop = (x: number): number => (x >= bay.min[0] && x <= bay.max[0] ? Math.max(top0(x), bayTop) : top0(x));
 
   // ---- Floor: the ground clearance between the arches, rising toward the nose and the tail ----
   const front = arches.reduce((a, b) => (b.x > a.x ? b : a));
@@ -206,19 +224,43 @@ export function bodyShape(car: CarRecord, arches: WheelArch[]): BodyShape {
     [deckX, deckZ],
   ]);
   const archAt = (x: number): WheelArch | null => arches.find((a) => Math.abs(x - a.x) < a.radius) ?? null;
+  /** 1 along an arch, falling to 0 over 0.3 m beyond it. */
+  const overArch = (x: number, a: WheelArch): number => {
+    const dx = Math.abs(x - a.x);
+    const half = a.tower ? Math.max(a.radius, Math.abs(a.tower.x - a.x) + a.tower.radius) : a.radius;
+    return dx <= half ? 1 : dx < half + 0.3 ? 0.5 + 0.5 * Math.cos((Math.PI * (dx - half)) / 0.3) : 0;
+  };
   /** The crown each fender needs over its arch, faded out over 0.3 m beyond it. */
   const fenderLift = (x: number, shoulder: number): number => {
     let z = shoulder;
-    for (const a of arches) {
-      const dx = Math.abs(x - a.x);
-      const w = dx <= a.radius ? 1 : dx < a.radius + 0.3 ? 0.5 + 0.5 * Math.cos((Math.PI * (dx - a.radius)) / 0.3) : 0;
-      z += w * Math.max(0, a.z + a.radius + FENDER_ABOVE_ARCH_M - z);
-    }
+    for (const a of arches) z += overArch(x, a) * Math.max(0, a.z + a.radius + FENDER_ABOVE_ARCH_M - z);
     return z;
+  };
+  /**
+   * Lifts the top of a half-section (its first four points) over each tower: every point at an end of a top panel the
+   * tower is under rises to TOWER_COVER_M over the tower, so the panel, straight between them, covers it. The fender
+   * carries the lift along its arch and lets it go over 0.3 m beyond, as it does its crown.
+   */
+  const coverTowers = (x: number, half: Pt[]): void => {
+    for (const a of arches) {
+      const t = a.tower;
+      if (!t) continue;
+      const w = overArch(x, a);
+      if (w === 0) continue;
+      const need = t.z + TOWER_COVER_M;
+      let from = 3;
+      let to = 0;
+      for (let i = 0; i < 3; i++) {
+        if (half[i + 1]![0] < t.y - t.radius || half[i]![0] > t.y + t.radius) continue;
+        from = Math.min(from, i);
+        to = Math.max(to, i + 1);
+      }
+      for (let k = from; k <= to; k++) half[k]![1] += w * Math.max(0, need - half[k]![1]);
+    }
   };
 
   const section = (x: number): Pt[] => {
-    const top = topZ(x);
+    const top = lineTop(x);
     const floor = floorZ(x);
     const hw = halfWidth(x);
     const belt = x >= cx ? top : Math.min(top, beltLine(x));
@@ -231,7 +273,7 @@ export function bodyShape(car: CarRecord, arches: WheelArch[]): BodyShape {
     const arch = archAt(x);
     const archZ = arch ? arch.z + Math.sqrt(arch.radius ** 2 - (x - arch.x) ** 2) : floor;
     const wellY = arch ? Math.min(arch.innerY, hw) : hw;
-    return [
+    const half: Pt[] = [
       [0, top],
       [hwTop * 0.5, top - (top - edge) * 0.3],
       [hwTop, edge],
@@ -241,7 +283,10 @@ export function bodyShape(car: CarRecord, arches: WheelArch[]): BodyShape {
       [wellY, floor],
       [0, floor],
     ];
+    coverTowers(x, half);
+    return half;
   };
+  const topZ = (x: number): number => section(x)[0]![1];
 
   // ---- Lid and bulkhead from the bay ----
   const engineAhead = car.mount.position === 'front';

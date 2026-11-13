@@ -1,6 +1,7 @@
 // A real car's chassis in 3D (stage P7-geom): its two axles and the glass body shell, standing still. The axles come
 // from the suspension's CarChassis (src/suspension/car-chassis.ts) and the shell from the record (body-shell.ts),
-// with wheel arches sized by each wheel's sweep over the arches' bump and the whole steering lock.
+// with wheel arches sized by each wheel's sweep over the arches' bump and the whole steering lock, and a top that covers
+// each axle's towers (towerTop): the JTEKT strut stands taller than the 911's bonnet line.
 //
 // Frames. The group's origin is on the road under the centre of mass (the CG frame, ISO 8855), so the car overview
 // puts it into a car with a translation (suspensions plan, 3D). Records and the shell are in the front-axle frame;
@@ -16,7 +17,7 @@ import type { PartInfo } from '../parts-info.ts';
 import { factorySetup, resolveCorner } from '../../suspension/setup.ts';
 import type { CarChassis, ChassisAxle } from '../../suspension/car-chassis.ts';
 import { archFor, BodyShell } from '../car/body-shell.ts';
-import { axleFrame, IndependentAxleModel, type AxleFrame, type AxleModel } from './axle-model.ts';
+import { axleFrame, IndependentAxleModel, towerTop, type AxleFrame, type AxleModel } from './axle-model.ts';
 
 export interface ChassisFrame {
   front: AxleFrame;
@@ -61,7 +62,11 @@ export class ChassisModel {
     this.rear.group.position.set(0, 0, chassis.rear.xCg * 10);
     this.group.add(this.front.group, this.rear.group);
     if (options.body !== false) {
-      const arch = (axle: ChassisAxle, x: number) => archFor(x, axle.corner.axle.wheelCentre[2], axle.sweep.reachM, axle.sweep.innerY);
+      // Each arch round its wheel's sweep, with the tower over it, which the shell's top covers.
+      const arch = (axle: ChassisAxle, x: number) => {
+        const t = towerTop(axle.corner.axle);
+        return archFor(x, axle.corner.axle.wheelCentre[2], axle.sweep.reachM, axle.sweep.innerY, { ...t, x: t.x + x });
+      };
       this.shell = new BodyShell(car, [arch(chassis.front, 0), arch(chassis.rear, -car.body.wheelbaseM)]);
       // The shell is built in the front-axle frame: its origin goes where carFrameToCg takes the front axle's.
       const origin = chassis.toCg([0, 0, 0]);

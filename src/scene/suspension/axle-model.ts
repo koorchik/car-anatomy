@@ -19,7 +19,7 @@ import { merge } from '../geometry.ts';
 import { glassMaterial } from '../materials.ts';
 import type { PartInfo } from '../parts-info.ts';
 import type { ResolvedCorner } from '../../suspension/setup.ts';
-import type { Vec3 } from '../../suspension/spec.ts';
+import type { AxleSpec, Vec3 } from '../../suspension/spec.ts';
 import { CornerModel, cornerFrame, spacedKey, type CornerFrame, type CornerModelOptions } from './corner-model.ts';
 import { Bellows, boss, latheAlong, rodBetween, slab, toScene } from './geometry.ts';
 import { AXLE_PARTS } from './parts.ts';
@@ -101,7 +101,17 @@ const RACK = {
   pinionM: 0.13,
 };
 
-const TOWER = { radiusM: 0.095, belowM: 0.115, aboveM: 0.04 };
+/** The tower round a top mount: radius, how far its wall reaches below and above the mount, the dome over it, m. */
+const TOWER = { radiusM: 0.095, belowM: 0.115, aboveM: 0.04, domeM: 0.008 };
+
+/**
+ * The top of the body's tower round the left corner's top mount (a strut's, or a coilover's), axle frame, m. Nothing of
+ * the axle rises higher, so this is what the body shell must keep under its top (body-shell.ts).
+ */
+export function towerTop(spec: AxleSpec): { x: number; y: number; z: number; radius: number } {
+  const top = spec.linkage.strut ? spec.linkage.strut.top : spec.damper.body;
+  return { x: top[0], y: top[1], z: top[2] + TOWER.aboveM + TOWER.domeM, radius: TOWER.radiusM };
+}
 
 interface AxleMaterials {
   bar: THREE.MeshStandardMaterial;
@@ -277,8 +287,8 @@ export class IndependentAxleModel implements AxleModel {
       [
         [TOWER.radiusM * 10, -TOWER.belowM * 10],
         [TOWER.radiusM * 10, TOWER.aboveM * 10],
-        [TOWER.radiusM * 10 - 0.15, TOWER.aboveM * 10 + 0.08],
-        [0.0001, TOWER.aboveM * 10 + 0.08],
+        [TOWER.radiusM * 10 - 0.15, (TOWER.aboveM + TOWER.domeM) * 10],
+        [0.0001, (TOWER.aboveM + TOWER.domeM) * 10],
       ],
       toScene(top),
       UP,
