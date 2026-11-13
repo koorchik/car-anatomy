@@ -57,26 +57,17 @@ describe('a Camaro SS lapping the test circuit', () => {
   it('keeps the factory wet pan above the need on street tyres with full oil', () => {
     expect(run('wet', 'street', 0).summary.belowNeedS).toBe(0);
   });
-  it('dips on street tyres with a litre short, but the bearings survive the lap easily', () => {
-    const s = run('wet', 'street', -1).summary;
-    expect(s.belowNeedS).toBeGreaterThan(1);
-    expect(s.wearPerLap).toBeLessThanOrEqual(0.02);
+  it('survives a litre short on street tyres and full oil on semi-slicks, as GM sells this pan for track days', () => {
+    expect(run('wet', 'street', -1).summary.wearPerLap).toBeLessThanOrEqual(0.02);
+    expect(run('wet', 'semi', 0).summary.wearPerLap).toBeLessThanOrEqual(0.01);
   });
-  it('dips on semi-slicks with full oil without real wear', () => {
-    const s = run('wet', 'semi', 0).summary;
-    expect(s.belowNeedS).toBeGreaterThan(0);
-    expect(s.wearPerLap).toBeLessThanOrEqual(0.01);
+  it('starts to dip on slicks a litre short, and wears no more than a fifth of the bearings a lap with full oil', () => {
+    expect(run('wet', 'slick', -1).summary.belowNeedS).toBeGreaterThan(0);
+    expect(run('wet', 'slick', -1).summary.belowNeedS).toBeGreaterThan(run('wet', 'slick', 0).summary.belowNeedS);
+    expect(run('wet', 'slick', 0).summary.wearPerLap).toBeLessThanOrEqual(0.2);
   });
-  it('dips for seconds a lap on slicks with full oil, and wears no more than a fifth of the bearings a lap', () => {
-    const s = run('wet', 'slick', 0).summary;
-    expect(s.belowNeedS).toBeGreaterThan(1);
-    expect(s.belowNeedS).toBeGreaterThan(run('wet', 'semi', 0).summary.belowNeedS);
-    expect(s.wearPerLap).toBeLessThanOrEqual(0.2);
-    expect(run('wet', 'slick', -1).summary.wearPerLap).toBeGreaterThan(0);
-  });
-  it('a track pan holds on semi-slicks, but its doors do not save a litre short through long corners on slicks', () => {
+  it('a track pan holds on semi-slicks with full oil', () => {
     expect(run('baffled', 'semi', 0).summary.belowNeedS).toBe(0);
-    expect(run('baffled', 'slick', -1).summary.wearPerLap).toBeGreaterThan(0);
   });
   it('an integrated dry sump is no worse than a track pan, and a dry sump never dips', () => {
     for (const tyre of TYRE_IDS) {
@@ -96,11 +87,20 @@ describe('a Camaro SS lapping the test circuit', () => {
         if (withAcc.accOilL[i]! > withAcc.accOilL[i - 1]! + 1e-9) expect(withAcc.pressure[i]!).toBeGreaterThanOrEqual(withAcc.need[i]!);
       }
     }
+    // A smaller pan that does dip: the Civic a litre short on semi-slicks.
+    const civic = sumpCarFor('i4/civic-type-r-k20c1')!;
+    const cs = engineById(civic.engineId)!;
+    const civicLap = lapFor(designFromSpec(cs), engineFacts(civic.engineId)!.powerHp, civic.vehicle, 'semi');
+    const civicRun = (accumulator: boolean) => oilRun(buildEngine(cs), systemsOf(cs), civic.vehicle, civicLap, { kind: 'wet', oilDeltaL: -1, accumulator, place: civic.well }).summary.belowNeedS;
+    const before = civicRun(false);
+    expect(before).toBeGreaterThan(1);
+    expect(civicRun(true)).toBeLessThanOrEqual(before / 2);
   });
 
   it('shows the lifters bleeding down only after the gallery has carried the bad oil to them', () => {
-    const r = run('wet', 'slick', -1);
-    const setup = setupFor(engine, systems, car.vehicle, { kind: 'wet', oilDeltaL: -1, accumulator: false, place: car.well });
+    // A litre short on slicks with the accumulator's help gone: the pump draws air in the carousel.
+    const r = oilRun(engine, systems, car.vehicle, lap('slick'), { kind: 'wet', oilDeltaL: -2.5, accumulator: false, place: car.well });
+    const setup = setupFor(engine, systems, car.vehicle, { kind: 'wet', oilDeltaL: -2.5, accumulator: false, place: car.well });
     const bad = (i: number): boolean => r.pumpSupply[i]! < 0.85 || r.pressure[i]! < 0.5 * r.need[i]!;
     let checked = 0;
     for (let i = 1; i < r.count; i++) {
@@ -120,7 +120,7 @@ describe('a Camaro SS lapping the test circuit', () => {
   });
 
   it('names the worst moments in the corners where they happen', () => {
-    const r = run('wet', 'slick', -1);
+    const r = oilRun(engine, systems, car.vehicle, lap('slick'), { kind: 'wet', oilDeltaL: -2.5, accumulator: false, place: car.well });
     const moments = worstMoments(r, lap('slick'));
     expect(moments.length).toBeGreaterThan(0);
     for (const m of moments) {

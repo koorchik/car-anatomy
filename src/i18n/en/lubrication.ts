@@ -203,4 +203,10 @@ export const LUBRICATION_EN: Record<string, string> = {
   'Акумулятор віддає оливу': 'The accumulator gives oil',
   'Тиск оливи нижче потрібного': 'Oil pressure below the need',
   'Олива на треку: як картер тримає оливу в поворотах': 'Oil on track: how the sump keeps oil at the pickup in corners',
+  // The designer's track widget (src/ui/designer/track-widget.ts)
+  'На треку': 'On track',
+  'Перевірити на треку': 'Try it on track',
+  'тиск тримається': 'pressure holds',
+  'короткі провали до {s} с': 'short dips up to {s} s',
+  'голодування: вкладиші витримають {band}': 'starving: the bearings last {band}',
 };

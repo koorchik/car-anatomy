@@ -2876,3 +2876,45 @@ input[type='range']::-moz-range-thumb {
     display: none;
   }
 }
+
+/* The designer's "On track" widget. */
+.track-widget {
+  margin: 8px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.track-widget h4 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.track-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.track-row b {
+  font-weight: 500;
+}
+
+.track-row.ok span {
+  color: #8fd18a;
+}
+
+.track-row.warn span {
+  color: #f0c060;
+}
+
+.track-row.bad span {
+  color: #ff9a80;
+}
+
+.track-widget .btn {
+  align-self: flex-start;
+  text-decoration: none;
+}

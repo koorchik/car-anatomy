@@ -80,7 +80,7 @@ export interface ParamGroup {
   readouts?: (d: Design, perf: Performance) => Array<[string, string]>;
   applies?: (d: Design) => boolean;
   /** Extra widget rendered under the controls. */
-  widget?: 'crank' | 'pipes' | 'revs';
+  widget?: 'crank' | 'pipes' | 'revs' | 'track';
 }
 
 const notRotary = (d: Design): boolean => !isRotary(d);
@@ -330,6 +330,7 @@ export const PARAM_GROUPS: ParamGroup[] = [
     id: 'cooling',
     title: t('Охолодження і мащення'),
     intro: t('Як двигун позбувається тепла і як олива доходить до підшипників. Усе це видно в шарах оливи й охолодження в рентгені. На цифри двигуна впливають лише картер і кількість оливи.'),
+    widget: 'track',
     params: [
       { kind: 'choice', key: 'cooling', label: t('Охолодження'), only: 'looks', applies: notRotary, options: [['liquid', t('Рідина')], ['fan', t('Вентилятор')], ['ram', t('Набігаючий потік')]], shown: (d) => shownSystems(d).cooling, help: t('Рідина відводить тепло від сорочки в радіатор. Повітряний двигун має ребра на циліндрах і головках, і їх обдуває вентилятор або, як на мотоциклі, зустрічний потік. Видно в шарі охолодження.') },
       { kind: 'choice', key: 'oilCooler', label: t('Оливний радіатор'), only: 'looks', options: [['none', t('Немає')], ['coolant', t('У рідину')], ['air', t('У повітря')]], shown: (d) => shownSystems(d).oilCooler, help: t('Теплообмінник віддає тепло оливи охолоджувальній рідині, а радіатор у потоці повітря віддає його прямо повітрю. Двигунам з турбіною, дизелям і повітряним він потрібен найбільше. Видно в шарі оливи.') },

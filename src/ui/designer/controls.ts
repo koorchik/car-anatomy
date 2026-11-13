@@ -9,6 +9,7 @@ import type { Performance } from '../../designer/physics.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
 import { PARAM_GROUPS, type ChoiceParam, type ColorParam, type NumberParam, type Param, type ParamGroup, type ToggleParam } from './params.ts';
+import { TrackWidget } from './track-widget.ts';
 
 export type DesignPatch = Partial<Design>;
 
@@ -587,7 +588,7 @@ function exhaustSketch(d: Design): string {
 
 export class DesignerControls {
   readonly root = el('div', 'designer-controls');
-  private readonly groups: Array<{ group: ParamGroup; node: HTMLDetailsElement; controls: Control[]; readouts: HTMLElement; widget: CrankWidget | PipesWidget | RevsWidget | null }> = [];
+  private readonly groups: Array<{ group: ParamGroup; node: HTMLDetailsElement; controls: Control[]; readouts: HTMLElement; widget: CrankWidget | PipesWidget | RevsWidget | TrackWidget | null }> = [];
   private effectsNode: HTMLElement | null = null;
 
   constructor(onChange: (patch: DesignPatch) => void, onCommit: () => void) {
@@ -608,7 +609,7 @@ export class DesignerControls {
         node.append(control.root);
         return control;
       });
-      const widget = group.widget === 'crank' ? new CrankWidget(onChange, onCommit) : group.widget === 'pipes' ? new PipesWidget(onChange, onCommit) : group.widget === 'revs' ? new RevsWidget(onChange, onCommit) : null;
+      const widget = group.widget === 'crank' ? new CrankWidget(onChange, onCommit) : group.widget === 'pipes' ? new PipesWidget(onChange, onCommit) : group.widget === 'revs' ? new RevsWidget(onChange, onCommit) : group.widget === 'track' ? new TrackWidget() : null;
       if (widget) node.append(widget.root);
       const readouts = el('dl', 'readouts');
       node.append(readouts);

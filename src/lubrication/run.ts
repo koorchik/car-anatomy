@@ -11,7 +11,7 @@ import { newLapSample, sampleLap, type LapTrace } from '../vehicle/lap.ts';
 import { surfaceSlope } from '../vehicle/mount.ts';
 import { Accumulator } from './accumulator.ts';
 import { FilmReserve, pressureNeed } from './bearings.ts';
-import { DT, G, HEAD_FLOW_SHARE, REFILL_ABOVE, HEAD_TAU_S, HEAD_TAU_SCAVENGED_S, PRESSURE_TAU_S, SCAVENGE_TAU_S, T_OIL_TRACK, TANK_LOW_L, TANK_SPAN_L, WALL_TAU_S } from './constants.ts';
+import { DT, G, HEAD_FLOW_SHARE, REFILL_ABOVE, WELL_RAIN, HEAD_TAU_S, HEAD_TAU_SCAVENGED_S, PRESSURE_TAU_S, SCAVENGE_TAU_S, T_OIL_TRACK, TANK_LOW_L, TANK_SPAN_L, WALL_TAU_S } from './constants.ts';
 import { capacity, newLevelSolve, solveLevel, volumeUnder, wettedSize } from './pan.ts';
 import { SloshAxis, sloshOmega } from './slosh.ts';
 import type { LubeSetup } from './setup.ts';
@@ -113,6 +113,9 @@ export class LubeRunner {
   private reliefShare = 0;
   private headReturn = 0;
   private accumulatorCharge = 0;
+  private wallReturn = 0;
+  /** Share of the oil falling from the crank that lands in the compartment: its area over the well's. */
+  private readonly boxShare: number;
   private readonly boxCap: number;
   private readonly outCap: number;
 
@@ -126,6 +129,9 @@ export class LubeRunner {
     this.tube = new DelayLine(Math.max(1e-4, setup.tube.litres));
     this.gallery = new DelayLine(Math.max(1e-3, setup.galleryL));
     this.boxCap = capacity(setup.grid.box);
+    const box = setup.shape.box;
+    const well = setup.shape.well;
+    this.boxShare = box ? Math.min(1, ((box.x1 - box.x0) * (box.z1 - box.z0)) / ((well.x1 - well.x0) * (well.z1 - well.z0))) : 0;
     this.outCap = capacity(setup.grid.outside);
     const n = this.lapSteps;
     const f = (): Float32Array => new Float32Array(n);
@@ -241,8 +247,10 @@ export class LubeRunner {
       const tau = Math.max(1e-3, (eq > this.boxL ? k.kIn : k.kOut) * Math.min(3, Math.max(0.2, period)));
       const before = this.boxL;
       this.boxL = eq + (this.boxL - eq) * Math.exp(-DT / tau);
-      // Scavenged heads return straight to the deaerating pickup.
+      // Scavenged heads return straight to the deaerating pickup. The oil thrown off the crank rains down under it,
+      // into the well on a factory pan, through the screen onto the box of a track pan.
       if (k.headScavenge) this.boxL += this.headReturn * DT;
+      this.boxL += this.wallReturn * WELL_RAIN * this.boxShare * DT;
       this.boxL = Math.min(this.boxL, this.boxCap, pan);
       this.boxL = Math.max(this.boxL, pan - this.outCap, 0);
       boxFlow = (this.boxL - before) / DT;
@@ -314,6 +322,7 @@ export class LubeRunner {
       headsOut += out;
     }
     this.headReturn = k.headScavenge && s.kind !== 'dry' ? headsOut : 0;
+    this.wallReturn = s.kind !== 'dry' ? wallsOut : 0;
 
     let tank = 0;
     if (s.kind === 'dry') {

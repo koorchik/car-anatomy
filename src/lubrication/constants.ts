@@ -43,6 +43,8 @@ export const ATM_BAR = 1.013;
 export const HEAD_FLOW_SHARE = 0.35;
 /** Time the oil thrown off the bearings takes to run down the crankcase walls, s (estimate). */
 export const WALL_TAU_S = 0.4;
+/** Share of the oil thrown off the crank that falls straight into the well under it rather than down the walls (estimate). */
+export const WELL_RAIN = 0.5;
 /** Time oil takes to drain from a head by gravity, and when scavenged, s (estimates). */
 export const HEAD_TAU_S = 3;
 export const HEAD_TAU_SCAVENGED_S = 0.5;

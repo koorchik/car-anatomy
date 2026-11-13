@@ -75,6 +75,9 @@ export const SHELF_OIL = 0.15;
 /** Well length (longitudinal) or width (transverse, well to one side) as a share of the pan (estimate). */
 export const WELL_SHARE = 0.5;
 export const SIDE_WELL_SHARE = 0.6;
+/** Longest well, in bores, and deepest before it spreads over the shelves (estimates). */
+export const WELL_BORES = 2.6;
+export const WELL_DEPTH_BORES = 1.3;
 /** Track pan box round the pickup, as shares of the well, and how far its lid stands over the full level. */
 export const BOX_SHARE = { x: 0.7, z: 0.6 };
 export const BOX_LID = 15 * MM;
@@ -187,9 +190,11 @@ export function panShape(engine: Engine, systems: SystemsSpec, o: PanOptions = {
   const shelfOil = SHELF_OIL * b;
   // The well holds whatever the shelves don't, below the full level. Where that would make it deeper than a bore,
   // the well grows over the shelves instead, up to the whole pan, as a small engine's crankcase is.
-  let share = sideways ? SIDE_WELL_SHARE : WELL_SHARE;
+  // A long engine's well stays a compact sump rather than half its length (estimate: at most WELL_BORES bores).
+  let share = sideways ? SIDE_WELL_SHARE : Math.min(WELL_SHARE, (WELL_BORES * b) / L);
   const depthAt = (s: number): number => (panOilL - (1 - s) * area * shelfOil) / (s * area);
-  if (depthAt(share) > b) share = Math.min(1, Math.max(share, (panOilL - area * shelfOil) / (area * (b - shelfOil))));
+  const deepest = WELL_DEPTH_BORES * b;
+  if (depthAt(share) > deepest) share = Math.min(1, Math.max(share, (panOilL - area * shelfOil) / (area * (deepest - shelfOil))));
   const well = wellRect(share);
   const hWell = Math.max(0.6 * b, depthAt(share));
   const yShelf = yFull - shelfOil;
