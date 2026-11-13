@@ -12,6 +12,11 @@ import type { DifferentialDef } from './spec.ts';
  */
 export type CarPoint = readonly [number, number, number];
 
+/**
+ * A transaxle holds its final drive in its own case, and its spec has it (GearboxSpec.finalDrive): the gearbox's output
+ * is then the differential case and nothing applies this ratio a second time. The record still states the published
+ * figure, and tests hold the gearbox's teeth to it.
+ */
 export interface FinalDriveDesc {
   /** Pinion to wheels, as published. */
   ratio: number;

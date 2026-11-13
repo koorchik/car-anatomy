@@ -16,6 +16,11 @@ export interface AxisDef {
   id: string;
   x: number;
   y: number;
+  /**
+   * A crown wheel's axis runs across the shafts, along X, through (x, y) at this depth, mm behind the front face (like
+   * GearDef.z). A gear on it has its `z` along X from that crossing. Absent: the axis runs along Z.
+   */
+  across?: number;
 }
 
 /** Anything that turns as one body: a shaft with its fixed gears, a loose gear, a carrier, a drum. */
@@ -49,7 +54,7 @@ export interface GearDef {
   /** Bore through the gear body, mm: a loose gear's needle bearing seat. Absent: solid to the axis. */
   bore?: number;
   internal?: boolean;
-  /** Bevel or hypoid: cone angle, degrees. */
+  /** Bevel or hypoid: pitch cone angle, degrees. Its pair meshes across the shafts (AxisDef.across). */
   cone?: number;
 }
 
@@ -141,6 +146,24 @@ export interface GearboxSpec {
   meshEfficiency: number;
   /** Where the shift sleeves sit along their shaft, for the 3D and the shift lever. Layouts without sleeves leave it out. */
   sleeves?: SleevePlace[];
+  /**
+   * A transaxle's final drive inside the case: the pinion on the output shaft turns the differential case, which is
+   * then the spec's `output`, so the state ratios are overall (speed times final drive). Absent: the box ends at its
+   * output shaft and the final drive is the car's (DriveCar.finalDrive).
+   */
+  finalDrive?: FinalDriveDef;
+}
+
+export interface FinalDriveDef {
+  /** Gear ids: the pinion on the output shaft and the ring gear on the differential case. */
+  pinion: string;
+  ring: string;
+  /** The output shaft's member: a speed's own ratio is its speed over this member's. */
+  shaft: string;
+  /** 'helical': the case turns on an axis parallel to the shafts (transverse engine); 'bevel': across them. */
+  kind: 'helical' | 'bevel';
+  /** Bevel: the side of the pinion's axis along X the crown wheel sits on, +1 toward +X. */
+  side?: 1 | -1;
 }
 
 /** A shift sleeve on its shaft: its hub sits still at `z`, the sleeve slides toward the gear on either side. */
@@ -155,6 +178,8 @@ export interface SleevePlace {
   /** Element engaged by pushing the sleeve forward (toward the engine) and backward; null engages nothing. */
   front: string | null;
   back: string | null;
+  /** Member whose shaft carries the hub. Absent: the spec's output (a layshaft box's sleeves all sit on its output shaft). */
+  shaft?: string;
 }
 
 export type LaunchDef =
@@ -211,12 +236,13 @@ export interface SpinLossDef {
  * S = (T_high − T_low)/(T_high + T_low) on drive and on coast (BMW's "Sperrwert 25 %" is S = 0.25, a torque bias
  * ratio of (1 + S)/(1 − S)), plus the spring preload. Equal values make it 2-way, coast 0 makes it 1-way. The ramp
  * angles, plate count and radii that produce S are not published for any car in the catalogue, so they are not data.
- * An absent preload means it is not known; the solver stage decides how to treat it.
+ * An absent preload, locking value or torque bias ratio means it is not published; the solver stage decides how to
+ * treat it (Honda names the Civic's helical differential but no bias ratio, Porsche the 911's plate lock but no value).
  */
 export type DifferentialDef =
   | { kind: 'open' }
-  | { kind: 'plate'; lockDrive: number; lockCoast: number; preloadNm?: number }
-  | { kind: 'torsen' | 'helical'; tbr: number; preloadNm: number }
+  | { kind: 'plate'; lockDrive?: number; lockCoast?: number; preloadNm?: number }
+  | { kind: 'torsen' | 'helical'; tbr?: number; preloadNm?: number }
   | { kind: 'viscous'; nmPerRadS: number }
   | { kind: 'locked' }
   /** Haldex-type, only as a centre device. */
