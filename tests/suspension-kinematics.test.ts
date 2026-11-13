@@ -317,7 +317,10 @@ describe('derived quantities of the table', () => {
         const [u, d, c] = [sampleAt(a, z + h), sampleAt(a, z - h), sampleAt(a, z)];
         expect(Math.abs((u.camber - d.camber) / (2 * h) - c.camberGain)).toBeLessThan(1e-6);
         expect(Math.abs((u.toe - d.toe) / (2 * h) - c.bumpSteer)).toBeLessThan(1e-6);
-        expect(c.rcHeight).toBeCloseTo(c.contactY * c.tanBeta, 15);
+        // The roll centre rests on tanβ, the contact point's sideways path; tanθ on its fore-aft path.
+        expect(Math.abs((u.contactY - d.contactY) / (2 * h) - c.tanBeta)).toBeLessThan(1e-6);
+        expect(Math.abs((u.contactX - d.contactX) / (2 * h) - c.tanThetaCP)).toBeLessThan(1e-6);
+        expect(Math.abs((u.wheelX - d.wheelX) / (2 * h) - c.tanThetaWC)).toBeLessThan(1e-6);
         // The spring and damper motion ratios, wherever they sit (strut, lower arm, spring link).
         expect(Math.abs(-(u.springLen - d.springLen) / (2 * h) - c.mrSpring)).toBeLessThan(1e-6);
         expect(Math.abs(-(u.damperLen - d.damperLen) / (2 * h) - c.mrDamper)).toBeLessThan(1e-6);
