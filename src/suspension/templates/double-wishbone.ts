@@ -134,6 +134,7 @@ export function wishboneFrame(it: WishboneIntent): WishboneFrame {
     };
   };
   const lowerDz = it.lowerPivotZM - it.lowerBallZM;
+  if (!(it.lowerArmM > Math.abs(lowerDz))) throw new Error('The lower arm is shorter than the height between its ends');
   const lowerDy = Math.sqrt(it.lowerArmM ** 2 - lowerDz ** 2);
   const a = it.upperAngleDeg * DEG;
   const lower = arm('lower-arm', 'susp.lower-arm', lowerBall, lowerDy, lowerDz);
@@ -181,9 +182,13 @@ export function zeroBumpSteerInner(
   let z = frame.tieRodKnuckle[2];
   const t = (z - lowerInner[2]) / (upperInner[2] - lowerInner[2]);
   let y = lowerInner[1] + t * (upperInner[1] - lowerInner[1]);
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; ; i++) {
     const [f1, f2] = residual(y, z);
     if (Math.abs(f1) < 1e-11 && Math.abs(f2) < 1e-8) break;
+    // NaN when the corner does not assemble with this joint; a flat toe curve may also be out of reach.
+    if (i === 40 || !Number.isFinite(f1) || !Number.isFinite(f2)) {
+      throw new Error('No inner tie-rod joint gives this corner a flat toe curve');
+    }
     const e = 1e-6;
     const [a1, a2] = residual(y + e, z);
     const [b1, b2] = residual(y, z + e);
