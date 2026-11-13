@@ -27,6 +27,7 @@ import { t } from './i18n/t.ts';
 import { Tacho } from './ui/tacho.ts';
 import { SystemsView } from './ui/systems-view.ts';
 import { shownAdvance, type SystemsFrame } from './systems/sim.ts';
+import { liveScratch, liveTiming, type ValveState } from './engine/valve-control.ts';
 import type { SumpHost, SumpPage } from './ui/sump/sump-page.ts';
 import type { SystemLayer } from './scene/systems/layer.ts';
 
@@ -1103,6 +1104,25 @@ if (reducedMotion) stage.setOrbit(false);
 let lastFrame = performance.now();
 /** Reused every frame: the systems step allocates nothing. */
 const systemsFrame: SystemsFrame = { theta: 0, advance: 0, rpm: 0, load: 0, throttle: 0, boost: 0, running: false, cranking: false, fuelCut: true, live: false, dt: 0, timeScale: 1 };
+/** Valve events and firing cylinders for the systems layers, written in place each frame. */
+const systemsTiming = liveScratch();
+const systemsActive: boolean[] = [];
+
+/** Where the valve gear has moved the events and which cylinders rest, so the fuel and air layers follow it. */
+function systemsValves(sf: SystemsFrame, valves: ValveState | undefined): void {
+  const vvt = engine.spec.vvt;
+  if (!valves || !vvt) {
+    sf.timing = undefined;
+    sf.active = undefined;
+    return;
+  }
+  sf.timing = liveTiming(engine.timing, vvt, valves, systemsTiming).timing;
+  const cylinders = engine.cylinders;
+  systemsActive.length = cylinders.length;
+  // Resting cylinders get neither fuel nor a spark, whether their valves stay shut or only the fuel is cut.
+  for (let i = 0; i < cylinders.length; i++) systemsActive[i] = !valves.off.includes(cylinders[i]!.n);
+  sf.active = systemsActive;
+}
 let firingTextShown = '';
 let spectrumTextShown = '';
 
@@ -1193,6 +1213,7 @@ function frame(now: number): void {
   sf.demo = demoMode;
   sf.dt = dt;
   sf.timeScale = Math.min(1, shownSpeed / Math.max(systemsRpm * 6, 1));
+  systemsValves(sf, demoMode ? undefined : snap.valves);
   systems.frame(sf);
   dyno.frame(snap, theta, dt);
   stage.render(dt);

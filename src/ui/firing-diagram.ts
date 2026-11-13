@@ -49,6 +49,7 @@ export class FiringDiagram {
   private hover: { x: number; y: number } | null = null;
   /** Cylinders resting now, drawn grey. */
   private inactive = '';
+  private resting = new Set<number>();
   private readonly tooltip: HTMLElement;
   private markers: CycleMarkers | null = null;
 
@@ -88,6 +89,7 @@ export class FiringDiagram {
     const key = cylinders.join(',');
     if (key === this.inactive) return;
     this.inactive = key;
+    this.resting = new Set(cylinders);
     this.background = null;
   }
 
@@ -115,10 +117,9 @@ export class FiringDiagram {
     const gap = rowH > 7 ? 2 : 1;
     ctx.font = `${rowH < 10 ? 9 : 11}px "Fira Sans", sans-serif`;
     ctx.textBaseline = 'middle';
-    const resting = new Set(this.inactive ? this.inactive.split(',').map(Number) : []);
     this.rows.forEach((c, i) => {
       const y = t + i * rowH;
-      if (resting.has(c.n)) {
+      if (this.resting.has(c.n)) {
         ctx.fillStyle = '#3d4547';
         ctx.fillRect(l, y, plotW, rowH - gap);
         ctx.fillStyle = '#7d8a87';
@@ -221,6 +222,8 @@ export class FiringDiagram {
     const h = Math.max(2, rowH * 0.34);
     for (let i = 0; i < this.rows.length; i++) {
       const c = this.rows[i]!;
+      // A resting cylinder gets neither fuel nor a spark (the fuel layer skips it too).
+      if (this.resting.has(c.n)) continue;
       const y = t + i * rowH;
       ctx.fillStyle = '#ff5fae';
       if (m.inject) this.bar(engine, y + rowH * 0.62 - h / 2, h, c.fire + m.inject[0], c.fire + m.inject[1]);
