@@ -1178,7 +1178,7 @@ export class PistonEngineModel implements EngineModel {
     const e = this.engine;
     const nRpm = state.rpm / e.spec.redlineRpm;
     const targetHeat = state.running ? Math.pow(state.load * 0.6 + nRpm * 0.5, 1.4) : 0;
-    this.heat += (targetHeat - this.heat) * Math.min(1, state.dt * (targetHeat > this.heat ? 0.35 : 0.14));
+    this.heat = state.held ? targetHeat : this.heat + (targetHeat - this.heat) * Math.min(1, state.dt * (targetHeat > this.heat ? 0.35 : 0.14));
     const firing = state.running && !state.fuelCut;
     const resting = state.valves?.off ?? NONE_RESTING;
     for (const h of this.headers) {
@@ -1243,8 +1243,8 @@ export class PistonEngineModel implements EngineModel {
     const springK = 60;
     const damp = 7;
     const acc = (target - this.roll) * springK - this.rollVel * damp;
-    this.rollVel += acc * state.dt;
-    this.roll += this.rollVel * state.dt;
+    this.rollVel = state.held ? 0 : this.rollVel + acc * state.dt;
+    this.roll = state.held ? target : this.roll + this.rollVel * state.dt;
 
     this.group.position.x = x;
     this.group.position.y = y;

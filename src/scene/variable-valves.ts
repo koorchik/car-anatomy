@@ -340,7 +340,7 @@ export class VariableValveGear {
     this.resting.clear();
     if (vs && v.deactivation?.kind === 'valves') for (const n of vs.off) this.resting.add(n);
     const highCam = vs?.highCam ?? false;
-    const ease = Math.min(1, state.dt / SLIDE_SECONDS);
+    const ease = state.held ? 1 : Math.min(1, state.dt / SLIDE_SECONDS);
 
     for (const s of this.sleeves) {
       const wanted = this.resting.has(s.cyl.n) ? s.profiles.indexOf('zero') : s.profiles.includes('high') && highCam ? s.profiles.indexOf('high') : 0;
