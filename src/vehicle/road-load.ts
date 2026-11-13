@@ -32,7 +32,10 @@ export function coeffsFromDrag(massKg: number, cdA: number, crr: number): RoadLo
 /** Until stage A1b: the lap's stand-ins (C_dA 0.70 m², C_rr 0.015) on the mass the lap carries. */
 export const roadLoadCoeffs = (car: CarRecord): RoadLoadCoeffs => coeffsFromDrag(modelMassKg(car), LAP_STAND_IN.cdA, LAP_STAND_IN.crr);
 
-/** Force against the motion on a grade (radians, uphill positive), N. */
+/**
+ * Force against the motion, N. The grade is taken along the direction of travel (radians, uphill positive), so a car
+ * rolling backwards down a slope gets a negative grade; the a, b and c terms depend on |v| only.
+ */
 export const roadLoadN = (rl: RoadLoadCoeffs, v: number, gradeRad: number): number =>
   rl.a + rl.b * Math.abs(v) + rl.c * v * v + rl.massKg * G * Math.sin(gradeRad);
 

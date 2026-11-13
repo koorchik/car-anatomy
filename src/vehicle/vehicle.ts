@@ -22,9 +22,8 @@ export interface TyreSpec {
 
 /**
  * Peak friction. Street: summer UHP tyres 1.0-1.15, a Corvette E-Ray on the skidpad 1.01 g. Semi-slicks: Cup 2-type
- * tyres 1.15-1.3, a 991 GT3 RS on Michelin Cup tyres 1.24 g. Slicks without downforce: 1.4-1.8. Sources in
- * docs/lubrication-model.md. Classic: the tyres of a 1980s car, which the oil page does not offer; 0.8 is an
- * estimate (docs/vehicle-model.md).
+ * tyres 1.15-1.3, a 991 GT3 RS on Michelin Cup tyres 1.24 g. Slicks without downforce: 1.4-1.8. Classic: the tyres
+ * of a 1980s car, which the oil page does not offer; 0.8 is an estimate. Sources and status in docs/vehicle-model.md.
  */
 export const TYRES: Record<TyreId, TyreSpec> = {
   classic: { id: 'classic', name: TYRE_NAMES.classic, mu: 0.8 },
