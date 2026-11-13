@@ -42,7 +42,7 @@ export const CAR: CarRecord = {
   packaging: {
     // Timing end forward, just ahead of the front axle; the gearbox follows the flywheel back into the tunnel.
     crankFront: [0.17, 0, 0.38],
-    bay: { min: [-0.55, -0.5, 0.15], max: [0.6, 0.5, 0.71] },
+    bay: { min: [-0.55, -0.5, 0.15], max: [0.55, 0.5, 0.725] },
     exhaustExit: { at: [-3.5, -0.4, 0.25], side: 'right' },
     fuelTank: [-2.05, 0, 0.35],
     radiator: { at: [0.62, 0, 0.45], side: 'centre' },

@@ -55,7 +55,7 @@ export interface PlacedPart {
 
 /** Where things sit, front-axle frame (stage A1c). Estimates go to unverified. */
 export interface CarPackaging {
-  /** Front end of the crankshaft (the timing end). */
+  /** Front end of the crankshaft (the timing end): the crank pulley's outer face (packaging.ts, crankFrontZMm). */
   crankFront: Vec3;
   /** Engine bay as a box. The shell's bonnet region is built from it, so the fit check and the picture agree. */
   bay: { min: Vec3; max: Vec3 };

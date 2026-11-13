@@ -430,12 +430,13 @@ describe('dimensions and packaging', () => {
     }
   });
 
-  it('builds the core box from the crank, block, heads and pan, with the crank\'s front end at the origin', () => {
+  it('builds the core box back from the crank\'s front end, which is its origin', () => {
+    // Whether the box holds what the 3D model draws is tests/packaging-model.test.ts's question.
     const civic = buildEngine(engineById('i4/civic-type-r-k20c1')!);
     const box = engineCoreBox(civic);
     expect(box.max[2]).toBe(0);
-    // The crank as the 3D model draws it: the cylinders' span plus 0.3 bore at each end.
-    expect(-box.min[2]).toBeCloseTo((civic.zMax - civic.zMin + 0.6 * civic.spec.bore) / 1000, 9);
+    // Pulley in front of the row of cylinders, flywheel behind it.
+    expect(-box.min[2]).toBeGreaterThan((civic.zMax - civic.zMin + civic.spec.bore) / 1000);
     // An upright inline engine: symmetrical across, the head on top, the pan below.
     expect(box.min[0]).toBeCloseTo(-box.max[0], 12);
     expect(box.max[1]).toBeGreaterThan(civic.deck / 1000);
