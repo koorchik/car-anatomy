@@ -9,6 +9,7 @@ import { CLUTCH, CRANK, drivetrainCore, elementIndex, memberIndex } from '../src
 import { DISC_DAMPER, DRY_STRIBECK, dryClutch } from '../src/drivetrain/elements.ts';
 import { DrivetrainSolver, SLIP } from '../src/drivetrain/solver.ts';
 import { buildGearbox, stateByName } from '../src/drivetrain/topology.ts';
+import { buildCarDrive, carVehicle } from '../src/drivetrain/car-model.ts';
 
 describe('15. budget', () => {
   it('BMW M3 E30 without a car, clutch slipping on the falling Stribeck slope: under 10 µs per step', () => {
@@ -40,6 +41,37 @@ describe('15. budget', () => {
     // The state is the one the budget is about: slipping much of the time, on the falling part of μ(Δω).
     expect(slipping).toBeGreaterThan(0.3 * 30000);
     expect(maxSlip).toBeLessThan(4 * DRY_STRIBECK);
+    expect(us).toBeLessThan(10);
+  });
+});
+
+describe('15. budget with the car (stage K2b)', () => {
+  it('BMW M3 E30 on its axle, wheels, tyres and chassis, clutch slipping on the falling Stribeck slope: under 10 µs per step', () => {
+    // The car braked to a stand, first engaged, the engine held one Stribeck decay above it: the clutch slips where μ
+    // falls, and every step also runs the plate differential, the four tyres, the wheels and the chassis.
+    const cd = buildCarDrive('bmw-m3-e30');
+    const veh = carVehicle(cd);
+    const s = veh.solver;
+    const { core } = s;
+    const clutch = elementIndex(core, CLUTCH);
+    s.drive[memberIndex(core, CRANK)] = DRY_STRIBECK;
+    core.coords.forEach((id, k) => {
+      if (id === CRANK || id === 'disc') s.phiDot[k] = DRY_STRIBECK;
+    });
+    s.command[elementIndex(core, 'sync-1')] = 600;
+    s.command[clutch] = 0.4;
+    veh.bus.brakeNm.fill(5000);
+    const h = 1 / 3000;
+    for (let i = 0; i < 3000; i++) veh.step(h);
+    let slipping = 0;
+    const t0 = performance.now();
+    for (let i = 0; i < 30000; i++) {
+      veh.step(h);
+      if (s.state[clutch] === SLIP) slipping++;
+    }
+    const us = ((performance.now() - t0) / 30000) * 1000;
+    expect(slipping).toBeGreaterThan(0.3 * 30000);
+    expect(Math.abs(s.slip[clutch]!)).toBeLessThan(4 * DRY_STRIBECK);
     expect(us).toBeLessThan(10);
   });
 });
