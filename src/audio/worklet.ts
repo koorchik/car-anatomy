@@ -3,9 +3,10 @@
 
 import type { ValveState } from '../engine/valve-control.ts';
 import { EngineSynth, type ListenPosition, type SynthConfig } from './synth.ts';
-import type { LoadCommand, LoadSpec } from '../engine/load.ts';
+import type { AnyLoadReadings, LoadCommand, LoadSnapshot, LoadSpec } from '../engine/load.ts';
 import { LoadedCrank, type CrankReadings } from '../engine/loaded-crank.ts';
 import { createLoad } from '../engine/loads.ts';
+import type { EngineState } from '../engine/sim.ts';
 import type { EngineTorqueMap } from '../engine/torque-map.ts';
 
 declare const sampleRate: number;
@@ -26,7 +27,9 @@ export type WorkletCommand =
   | { type: 'bang' }
   | { type: 'torqueMap'; map: EngineTorqueMap | null }
   | { type: 'load'; spec: LoadSpec | null }
-  | { type: 'loadCommand'; command: LoadCommand };
+  | { type: 'loadCommand'; command: LoadCommand }
+  /** The load's state from the other copy (LoadSnapshot), with the state and speed of that copy's engine. */
+  | { type: 'loadRestore'; snapshot: LoadSnapshot; state: EngineState; rpm: number };
 
 export interface WorkletReport {
   angle: number;
@@ -37,7 +40,9 @@ export interface WorkletReport {
   fuelCut: boolean;
   boost: number;
   /** Averages from a load on the crank since the last report. */
-  crank: CrankReadings | null;
+  crank: CrankReadings<AnyLoadReadings> | null;
+  /** The load's whole state, for a load that hands it over (a car), so the main-thread copy can go on from it. */
+  loadSnapshot?: LoadSnapshot;
   /** Variable valve gear, only for engines that have it. */
   valves?: ValveState;
 }
@@ -102,6 +107,13 @@ class EngineProcessor extends AudioWorkletProcessor {
       case 'loadCommand':
         this.synth?.sim.crank?.load.command(cmd.command);
         break;
+      case 'loadRestore': {
+        const sim = this.synth?.sim;
+        if (!sim?.crank?.load.restore) break;
+        sim.crank.load.restore(cmd.snapshot);
+        sim.adopt(cmd.state, cmd.rpm);
+        break;
+      }
     }
   }
 
@@ -134,6 +146,7 @@ class EngineProcessor extends AudioWorkletProcessor {
         boost: sim.boost,
         crank: sim.crank ? sim.crank.readings() : null,
         valves: sim.valves.vvt ? { ...sim.valves.state } : undefined,
+        loadSnapshot: sim.crank?.load.snapshot?.(),
       };
       this.port.postMessage(report);
     }

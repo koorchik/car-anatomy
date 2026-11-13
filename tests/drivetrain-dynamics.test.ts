@@ -1,6 +1,7 @@
 // Drivetrain dynamics (gearbox plan, tests/drivetrain-dynamics: 1, 2 and 5 at stage K2a, 3, 4, 6, 9, 14 and 17 at
-// stage K2b; the elements). The step is 1/3000 s, as in tests/sim.test.ts, unless a test says otherwise. Tests that
-// only hold our defaults against published bands say "calibration" in their name, so they are not taken for physics.
+// stage K2b, 13 and 16 with the real engine at stage K2c; the elements). The step is 1/3000 s, as in tests/sim.test.ts,
+// unless a test says otherwise. Tests that only hold our defaults against published bands say "calibration" in their
+// name, so they are not taken for physics.
 import { describe, expect, it } from 'vitest';
 import { carById } from '../src/data/cars.ts';
 import { engineById } from '../src/data/engines.ts';
@@ -33,6 +34,13 @@ import { longitudinalPeakN } from '../src/vehicle/tyre.ts';
 import type { VehicleStep } from '../src/vehicle/vehicle-step.ts';
 import { FL, FR, RL, RR } from '../src/vehicle/wheel-bus.ts';
 import { wheelEnergy } from '../src/vehicle/wheel.ts';
+import { synthConfig } from '../src/audio/synth.ts';
+import { vehicleLoadSpec } from '../src/drivetrain/car-load.ts';
+import { buildEngine } from '../src/engine/kinematics.ts';
+import { LoadedCrank } from '../src/engine/loaded-crank.ts';
+import { EngineSim } from '../src/engine/sim.ts';
+import { peakTorque } from '../src/engine/torque-map.ts';
+import { VehicleLoad, type VehicleCommand } from '../src/vehicle/vehicle-load.ts';
 
 const STEPS = [1 / 3000, 16 / 44100, 32 / 48000, 0.001, 0.005];
 const box = buildGearbox(gearboxSpec(gearboxById('manual-rwd')!));
@@ -656,6 +664,120 @@ describe('14. engine braking', () => {
     const braked = decel(true);
     expect(coast).toBeGreaterThan(0);
     expect(braked).toBeGreaterThan(1.5 * coast);
+  });
+});
+
+/** The real engine (EngineSim on LoadedCrank) on the E30's drivetrain (VehicleLoad), stage K2c. */
+const e30Engine = synthConfig(buildEngine(engineById(carById('bmw-m3-e30')!.engine)!)).sim;
+const e30Car = buildCarDrive('bmw-m3-e30');
+const e30Load = vehicleLoadSpec(e30Car);
+function engineOnCar(): { sim: EngineSim; load: VehicleLoad; cmd: (c: VehicleCommand extends infer C ? (C extends unknown ? Omit<C, 'kind'> : never) : never) => void } {
+  const sim = new EngineSim(e30Engine);
+  const load = new VehicleLoad(e30Load);
+  sim.attach(new LoadedCrank(e30Car.map, load));
+  return { sim, load, cmd: (c) => load.command({ kind: 'vehicle', ...c } as VehicleCommand) };
+}
+const runFor = (sim: EngineSim, seconds: number, each?: (t: number) => void): void => {
+  for (let i = 0, n = Math.round(seconds / H); i < n; i++) {
+    each?.(i * H);
+    sim.step(H);
+  }
+};
+
+describe('13. stall', () => {
+  /** Idling, the driver's own clutch floored and first engaged, then the pedal comes up over releaseS (0: dumped). */
+  const release = (throttle: number, releaseS: number) => {
+    const { sim, load, cmd } = engineOnCar();
+    sim.start();
+    cmd({ action: 'autoClutch', on: false });
+    runFor(sim, 2);
+    cmd({ action: 'clutch', pedal: 1 });
+    runFor(sim, 0.3);
+    cmd({ action: 'gear', gear: '1' });
+    runFor(sim, 1);
+    expect(load.control.gearIn(load.vehicle.solver)).toBe('1');
+    expect(Math.abs(sim.rpm - e30Car.map.idleRpm)).toBeLessThan(60);
+    sim.pedal = throttle;
+    let stalledAt: number | null = null;
+    runFor(sim, 4, (t) => {
+      cmd({ action: 'clutch', pedal: releaseS === 0 ? 0 : Math.max(0, 1 - t / releaseS) });
+      if (stalledAt === null && sim.state !== 'running') stalledAt = t;
+    });
+    return { sim, load, stalledAt };
+  };
+
+  it('first gear, clutch dumped, throttle shut, a level road: the engine stalls', () => {
+    const { sim, load, stalledAt } = release(0, 0);
+    expect(stalledAt).not.toBeNull();
+    expect(stalledAt!).toBeLessThan(1);
+    expect(sim.state === 'stopping' || sim.state === 'off').toBe(true);
+    expect(load.chassis.v).toBeLessThan(1);
+  });
+
+  it('the same with the throttle at 0.4 and the clutch let up over 1.5 s: the car pulls away', () => {
+    const { sim, load, stalledAt } = release(0.4, 1.5);
+    expect(stalledAt).toBeNull();
+    expect(sim.state).toBe('running');
+    expect(load.vehicle.solver.state[load.control.spec.clutch]).toBe(LOCKED);
+    expect(load.chassis.v).toBeGreaterThan(3);
+  });
+});
+
+describe('16. state hand-over', () => {
+  // The car at 80 km/h in fourth on part throttle: a snapshot, then a new engine and a new load restored from it, as
+  // the worklet and the main-thread copy hand over (Drive's loadRestore with the engine's speed).
+  const fourth = e30Car.gears.find((g) => g.name === '4')!;
+  const rolling = () => {
+    const r = engineOnCar();
+    setRolling(e30Car, r.load.vehicle, 80 / 3.6, fourth);
+    const c = r.load.control;
+    c.target = c.sleeve = c.gearIndex('4')!;
+    r.sim.startImmediately();
+    r.sim.rpm = ((80 / 3.6 / e30Car.radius[e30Car.driven[0]]!) * e30Car.axle.ratio * fourth.ratio * 30) / Math.PI;
+    r.sim.pedal = 0.5;
+    runFor(r.sim, 1);
+    return r;
+  };
+
+  it('a second later the restored car is within 1 % of the speed of the one that went on, in the same gear, the clutch locked', () => {
+    const a = rolling();
+    const b = engineOnCar();
+    b.sim.startImmediately();
+    b.sim.rpm = a.sim.rpm;
+    b.sim.pedal = a.sim.pedal;
+    b.load.restore(structuredClone(a.load.snapshot()));
+    expect(b.load.chassis.v).toBe(a.load.chassis.v);
+    runFor(a.sim, 1);
+    runFor(b.sim, 1);
+    expect(a.load.chassis.v).toBeGreaterThan(80 / 3.6);
+    expect(Math.abs(b.load.chassis.v / a.load.chassis.v - 1)).toBeLessThan(0.01);
+    expect(b.load.control.gearIn(b.load.vehicle.solver)).toBe('4');
+    expect(b.load.vehicle.solver.state[b.load.control.spec.clutch]).toBe(a.load.vehicle.solver.state[a.load.control.spec.clutch]);
+    expect(b.load.vehicle.solver.state[b.load.control.spec.clutch]).toBe(LOCKED);
+  });
+
+  it('the copy that was not stepped meanwhile is still cranking from the start: it takes the engine\'s state too', () => {
+    // Drive's local copy starts with the audio thread and then waits; at the hand-over it adopts the reported engine.
+    const a = rolling();
+    const b = engineOnCar();
+    b.sim.start();
+    b.sim.pedal = a.sim.pedal;
+    b.load.restore(structuredClone(a.load.snapshot()));
+    b.sim.adopt(a.sim.state, a.sim.rpm);
+    expect(b.sim.state).toBe('running');
+    let damperPeak = 0;
+    const damper = b.load.vehicle.solver.core.springs.ids.indexOf('damper');
+    runFor(a.sim, 1);
+    runFor(b.sim, 1, () => (damperPeak = Math.max(damperPeak, Math.abs(b.load.vehicle.solver.springApplied[damper]!))));
+    expect(Math.abs(b.load.chassis.v / a.load.chassis.v - 1)).toBeLessThan(0.01);
+    // A starter dragging the crank would wind the damper far past the engine's own torque.
+    expect(damperPeak).toBeLessThan(peakTorque(e30Car.map).nm);
+  });
+
+  it('without the snapshot the new load starts from rest: the hand-over is what keeps the car going', () => {
+    const fresh = engineOnCar();
+    expect(fresh.load.chassis.v).toBe(0);
+    expect(fresh.load.control.gearIn(fresh.load.vehicle.solver)).toBe('N');
   });
 });
 

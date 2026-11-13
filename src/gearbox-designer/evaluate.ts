@@ -187,8 +187,8 @@ interface Model {
 
 /**
  * Full-load torque at input speed ω, N·m: the map's steady full load with the boost a turbo holds at that speed. The
- * engine stub of the whole model (engine-stub.ts) asks for an atmospheric charge until stage K2c, which is the same on
- * an engine without a turbo; turbo lag is not in a quasi-static run.
+ * engine stub the runs of runs.ts step with (engine-stub.ts) asks for an atmospheric charge, which is the same on an
+ * engine without a turbo; turbo lag is not in a quasi-static run.
  */
 const fullLoadTorque = (map: EngineTorqueMap, omega: number): number => mapValue(map, map.wotNm, Math.min(omega * RPM, map.limitRpm));
 

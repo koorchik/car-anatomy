@@ -84,3 +84,15 @@ export function tyreNormalForce(deflM: number, deflRate: number, kt: number, ct:
   const f = kt * deflM + ct * deflRate;
   return f > 0 ? f : 0;
 }
+
+/** Shear modulus of spring steel, Pa (suspensions plan; the textbook value of steel). */
+export const STEEL_SHEAR_MODULUS_PA = 79e9;
+
+/**
+ * Torsional rate of an anti-roll bar's twisting section, N·m/rad: K_θ = G·π·(d⁴ − d_i⁴)/(32·L) (OptimumG, «Bar
+ * Talk»), d_i = d − 2·wall for a tube.
+ */
+export function swayBarTorsionRate(diameterM: number, wallM: number | null, spanM: number): number {
+  const di = wallM === null ? 0 : Math.max(0, diameterM - 2 * wallM);
+  return (STEEL_SHEAR_MODULUS_PA * Math.PI * (diameterM ** 4 - di ** 4)) / (32 * spanM);
+}
