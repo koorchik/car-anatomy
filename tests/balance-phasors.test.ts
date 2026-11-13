@@ -502,7 +502,14 @@ describe('switches', () => {
     expect(ph.hasCounterweights('rotating')).toBe(true);
     expect(ph.hasShafts('rotating')).toBe(false);
     expect(ph.view('order2', WEIGHTS).elements).toEqual(ph.view('order2', BARE).elements);
+    // A switch the view has nothing for changes nothing and does not claim to be on.
+    expect(ph.view('order2', WEIGHTS)).toBe(ph.view('order2', BARE));
+    expect(ph.view('order2', WEIGHTS).options).toEqual(BARE);
+    expect(ph.view('rotating', ALL)).toBe(ph.view('rotating', WEIGHTS));
+    expect(ph.view('rotating', ALL).options).toEqual(WEIGHTS);
+    expect(ph.view('order2', ALL).options).toEqual({ counterweights: false, shafts: true });
     expect(phasors('i6').hasShafts('order1')).toBe(false);
+    expect(phasors('i6', 1).view('order1', ALL).options).toEqual(WEIGHTS);
     const rotary = phasors('r2');
     expect(rotary.hasCounterweights('rotating')).toBe(true);
     expect(rotary.hasCounterweights('order1')).toBe(false);

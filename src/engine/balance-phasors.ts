@@ -88,6 +88,7 @@ export interface PhasorView {
   view: BalanceView;
   /** Harmonic the view shows: 1 for once per crank turn, 2 for twice. */
   order: 1 | 2;
+  /** The switches that took effect: one the view has nothing for (counterweights in 'order2', say) reads false. */
   options: ViewOptions;
   /** In the order BalanceForces lists its arrows: pistons or turning masses by cylinder, counterweights by throw, then shafts. */
   elements: PhasorElement[];
@@ -292,10 +293,13 @@ export class BalancePhasors {
   }
 
   view(view: BalanceView, options: ViewOptions = NONE): PhasorView {
-    const key = `${view}${+options.counterweights}${+options.shafts}`;
+    // A switch with nothing to switch changes nothing, so it neither splits the cache nor shows in the view.
+    const counterweights = options.counterweights && this.hasCounterweights(view);
+    const shafts = options.shafts && this.hasShafts(view);
+    const key = `${view}${+counterweights}${+shafts}`;
     const cached = this.cache.get(key);
     if (cached) return cached;
-    const built = this.build(view, options);
+    const built = this.build(view, { counterweights, shafts });
     this.cache.set(key, built);
     return built;
   }
@@ -334,7 +338,7 @@ export class BalancePhasors {
           return;
         }
         case 'shaft': {
-          if (options.shafts && view !== 'rotating' && a.order === order) add(a, k, 1, { shaft: bf.shafts.findIndex((s) => s.weights.includes(a)) });
+          if (options.shafts && a.order === order) add(a, k, 1, { shaft: bf.shafts.findIndex((s) => s.weights.includes(a)) });
           return;
         }
       }
@@ -356,7 +360,7 @@ export class BalancePhasors {
     return {
       view,
       order,
-      options: { ...options },
+      options,
       elements,
       force: { ...force, locus: locusOf(force.plus, force.minus, bf.primary) },
       couple: { ...couple, locus: locusOf(couple.plus, couple.minus, bf.primary * bf.lever) },
