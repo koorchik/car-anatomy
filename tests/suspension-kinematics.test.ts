@@ -650,6 +650,31 @@ describe('derived quantities of the table', () => {
     }
   });
 
+  it('take tanθ_KP from the knuckle’s own point at the contact patch, which turns with the knuckle', () => {
+    // What outboard brakes react through. The wheel's lowest point (tanθ_CP) does not turn with the knuckle, so on a
+    // semi-trailing arm, whose wheel centre swings level with the pivot, it says 0 where the knuckle's point says −0.6.
+    const semi = pivotAxle(PIVOT_TYPICAL['semi-trailing']);
+    for (const spec of [macphersonJtekt({ wheelCentreZM: 0.3 }), front.dw, rear.ml, macphersonJtekt({ wheelCentreZM: 0.3, knuckle: 'revoknuckle' }), semi]) {
+      const a = buildAxle(spec);
+      const c = sampleAt(a, 0);
+      const patch: Vec3 = [c.contactX, c.contactY, c.contactZ];
+      const pose = new Float64Array(POSE_SIZE);
+      const p = new Float64Array(3);
+      const xAt = (z: number): number => {
+        a.solvePose(z, 0, null, pose);
+        a.solver.point(pose, patch, p);
+        return p[0];
+      };
+      const h = 1e-5;
+      expect(Math.abs((xAt(h) - xAt(-h)) / (2 * h) - c.tanThetaKP)).toBeLessThan(1e-6);
+      // In the side view the point turns about the knuckle's instant centre.
+      expect(c.tanThetaKP).toBeCloseTo((c.contactZ - c.icSideZ) / (c.icSideX - c.contactX), 3);
+    }
+    const s = sampleAt(buildAxle(semi), 0);
+    expect(Math.abs(s.tanThetaCP)).toBeLessThan(1e-3);
+    expect(s.tanThetaKP).toBeLessThan(-0.5);
+  });
+
   it('JTEKT: camber gain −17.1°/m, bump steer −9.2°/m, roll centre 126 mm, kingpin offset 68.6 mm at design', () => {
     const s = sampleAt(axle, 0);
     expect(s.camberGain / DEG).toBeCloseTo(-17.14, 1);
@@ -1175,6 +1200,9 @@ describe('twist beam: heave about the bushes, roll about the shear centre', () =
       expect(Math.abs(s.camber) + Math.abs(s.toe) + Math.abs(s.beamTwist)).toBeLessThan(1e-12);
       // The patch moves square to the road in heave: the two slopes cancel.
       expect(Math.abs(s.tanBeta + s.tanBetaCross)).toBeLessThan(1e-12);
+      // The arms' own point at the patch turns about the bushes with them: the line outboard brakes react through.
+      const bush = a.spec.linkage.bush;
+      expect(Math.abs(s.tanThetaKP + s.tanThetaKPCross - (s.contactZ - bush[2]) / (bush[0] - s.wheelX))).toBeLessThan(1e-9);
     }
     // Golf Mk3's torsion-beam alignment (−1°30′ camber, +10′ toe per wheel; real_car_data.md, recheck pending): the stub
     // is fixed to the arm, so in heave the spin axis turns about y by exactly the arm's angle. That is the only change.
@@ -1279,7 +1307,7 @@ describe('twist beam: heave about the bushes, roll about the shear centre', () =
       // Swapping the travels mirrors the axle.
       const l = at(a, zL, zR, 'left');
       const r = at(a, zR, zL, 'right');
-      for (const f of ['camber', 'toe', 'contactX', 'contactZ', 'springLen', 'mrSpring', 'bumpSteerCross'] as const) {
+      for (const f of ['camber', 'toe', 'contactX', 'contactZ', 'springLen', 'mrSpring', 'bumpSteerCross', 'tanThetaKP', 'tanThetaKPCross'] as const) {
         expect(Math.abs(l[f] - r[f])).toBeLessThan(1e-12);
       }
       for (const f of ['contactY', 'wheelY', 'tanBeta', 'tanBetaCross', 'beamTwist', 'twistRate'] as const) {
