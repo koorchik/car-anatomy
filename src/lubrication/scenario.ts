@@ -46,7 +46,7 @@ export function lapFor(design: Design, publishedHp: number | null, car: VehicleS
 
 export interface OilChoice {
   kind: SumpKind;
-  /** Litres over the full mark: 0 or -1. */
+  /** Litres over the full mark: 0, -1 (about the dipstick's minimum) or -2 (a litre under it). */
   oilDeltaL: number;
   accumulator: boolean;
   place: WellPlace;

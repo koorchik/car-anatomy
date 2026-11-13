@@ -25,7 +25,7 @@ for (const car of cars) {
     const lap = lapFor(design, facts?.powerHp ?? null, car.vehicle, tyre);
     const lapMs = performance.now() - t0;
     for (const kind of SUMP_KINDS) {
-      for (const delta of [0, -1]) {
+      for (const delta of [0, -1, -2]) {
         const t1 = performance.now();
         const run = oilRun(engine, systems, car.vehicle, lap, { kind, oilDeltaL: delta, accumulator: false, place: car.well });
         const ms = performance.now() - t1;

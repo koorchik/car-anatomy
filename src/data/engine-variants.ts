@@ -5025,7 +5025,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
     },
     variants: [{
       id: 'veyron-super-sport',
-      systems: { sump: 'dry' },
+      systems: { sump: 'dry', oilL: 16 },
       name: 'Bugatti Veyron 16.4 Super Sport',
       cars: ['Bugatti Veyron 16.4 Super Sport', 'Bugatti Veyron Grand Sport Vitesse'],
       years: '2010-2015',
@@ -5036,7 +5036,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 1500,
       torqueRpm: 3000,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'fuel', 'blockMaterial', 'directInjection', 'exhaust'],
+      unverified: ['oilL', 'firingOrder', 'fuel', 'blockMaterial', 'directInjection', 'exhaust'],
       sources: ['https://en.wikipedia.org/wiki/Bugatti_Veyron', 'https://en.wikipedia.org/wiki/Bugatti_W16_engine'],
       factory: {
         idleRpm: 670,
@@ -5070,7 +5070,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'chiron',
-      systems: { sump: 'dry' },
+      systems: { sump: 'dry', oilL: 16 },
       name: 'Bugatti Chiron / Divo 8.0 W16',
       cars: ['Bugatti Chiron', 'Bugatti Chiron Sport', 'Bugatti Chiron Pur Sport', 'Bugatti Divo'],
       years: '2016-2022',
@@ -5081,7 +5081,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 1600,
       torqueRpm: 2000,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'redline', 'fuel', 'blockMaterial', 'directInjection', 'exhaust'],
+      unverified: ['oilL', 'firingOrder', 'redline', 'fuel', 'blockMaterial', 'directInjection', 'exhaust'],
       sources: ['https://en.wikipedia.org/wiki/Bugatti_Chiron', 'https://newsroom.bugatti.com/api/en/press-releases/pdf/bugatti-w16-engine-the-last-of-its-kind', 'https://www.autocarindia.com/car-news/bugatti-divo-unveiled-409482'],
       factory: {
         idleRpm: 700,
@@ -5115,7 +5115,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'chiron-super-sport',
-      systems: { sump: 'dry' },
+      systems: { sump: 'dry', oilL: 16 },
       name: 'Bugatti Chiron Super Sport 8.0 W16 1600 к.с.',
       cars: ['Bugatti Chiron Super Sport', 'Bugatti Chiron Super Sport 300+', 'Bugatti Centodieci', 'Bugatti Mistral', 'Bugatti Bolide (серійний)'],
       years: '2019-2026',
@@ -5126,7 +5126,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 1600,
       torqueRpm: 2250,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'redline', 'torqueRpm', 'powerRpm', 'fuel', 'blockMaterial', 'directInjection', 'exhaust', 'years'],
+      unverified: ['oilL', 'firingOrder', 'redline', 'torqueRpm', 'powerRpm', 'fuel', 'blockMaterial', 'directInjection', 'exhaust', 'years'],
       sources: ['https://en.wikipedia.org/wiki/Bugatti_Chiron', 'https://en.wikipedia.org/wiki/Bugatti_Bolide', 'https://en.wikipedia.org/wiki/Bugatti_W16_engine'],
       factory: {
         idleRpm: 820,
@@ -5161,7 +5161,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
     }, {
       id: 'bolide-race',
-      systems: { sump: 'dry' },
+      systems: { sump: 'dry', oilL: 16 },
       name: 'Bugatti Bolide 8.0 W16 на гоночному пальному',
       cars: ['Bugatti Bolide (концепт)'],
       years: '2020',
@@ -5172,7 +5172,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 1850,
       torqueRpm: null,
       voiceEvidence: 'estimate',
-      unverified: ['firingOrder', 'torqueNm', 'fuel', 'redline', 'blockMaterial', 'directInjection', 'exhaust'],
+      unverified: ['oilL', 'firingOrder', 'torqueNm', 'fuel', 'redline', 'blockMaterial', 'directInjection', 'exhaust'],
       sources: ['https://en.wikipedia.org/wiki/Bugatti_Bolide', 'https://en.wikipedia.org/wiki/Bugatti_W16_engine'],
       factory: {
         idleRpm: 820,

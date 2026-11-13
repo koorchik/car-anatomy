@@ -66,8 +66,11 @@ export function withLayout(d: Design, layout: DesignLayout): Design {
 }
 
 const COSMETIC = new Set<keyof Design>(['name', 'coverColor']);
-/** Hardware only the systems layers draw. The power model never reads it, so the factory figures stay. */
-const SYSTEM_FACTS = new Set<keyof Design>(SYSTEM_KEYS);
+/**
+ * Hardware only the systems layers draw, and the oil an engine holds, which only shapes its pan and the lap on track.
+ * The power model never reads them, so the factory figures stay.
+ */
+const SYSTEM_FACTS = new Set<keyof Design>([...SYSTEM_KEYS, 'oilL']);
 
 /** One edit from the panel, with what that edit implies for the fields that depended on the old value. */
 export function editDesign(d: Design, patch: Partial<Design>): Design {

@@ -84,6 +84,13 @@ export const BOX_LID = 15 * MM;
 /** Gap between screen and floor: "the target gap is about 3/8 inch" (EngineLabs). */
 export const PICKUP_GAP = 9.5 * MM;
 export const PICKUP_BELL = 15 * MM;
+/**
+ * Half width of a boxer's wet pan, in crankcase radii (estimate). Wider pans would sit the engine lower, but the well
+ * spans the pan, so a wider one is shallower and gives the oil up sooner in a corner: 1.5 radii takes the EJ257's floor
+ * from 213 to 171 mm under the crank and has it starve a litre short on street tyres. A narrow sump in a wide pan, as
+ * real boxers have, is beyond the schematic pan.
+ */
+export const BOXER_PAN_SPREAD = 1;
 /** A dry sump's pan floor under the full level. */
 const DRY_FLOOR = 30 * MM;
 
@@ -132,8 +139,8 @@ export function panShape(engine: Engine, systems: SystemsSpec, o: PanOptions = {
   const crankcaseR = r + b * 0.55;
   const flat = isFlat(engine);
   const dry = kind === 'dry';
-  // A boxer's flange sits low between the banks; its wet pan is as wide as the crankcase to hold the oil.
-  const halfW = flat ? crankcaseR * (dry ? 0.6 : 0.85) : crankcaseR * 0.93;
+  // A boxer's flange sits low between the banks. Its wet pan spreads under the cylinders, clear of the heads.
+  const halfW = flat ? (dry ? crankcaseR * 0.6 : Math.min(BOXER_PAN_SPREAD * crankcaseR, engine.deck * MM - 0.5 * crankcaseR)) : crankcaseR * 0.93;
   const top = flat ? -crankcaseR * 0.86 : -crankcaseR * 0.42;
   const length = (engine.zMax - engine.zMin) * MM + b * 0.2;
   const zMid = ((engine.zMax + engine.zMin) / 2) * MM;

@@ -49,8 +49,8 @@ export const SYSTEMS_EN: Record<string, string> = {
   'Розжарені стрижні в камерах допомагають холодному дизелю запуститися, поки стиснення ще не гріє повітря досить. Видно в шарі палива. У моделі потужності не враховано.':
     'Glowing rods in the chambers help a cold diesel start while compression does not yet heat the air enough. Shown in the fuel layer. Not part of the power model.',
   'Охолодження і мащення': 'Cooling and lubrication',
-  'Як двигун позбувається тепла і як олива доходить до підшипників. Усе це видно в шарах оливи й охолодження в рентгені. На цифри двигуна впливають лише картер і кількість оливи.':
-    'How the engine gets rid of its heat and how oil reaches the bearings. All of it shows in the oil and cooling layers of the X-ray. Only the sump and the amount of oil change the engine’s figures.',
+  'Як двигун позбувається тепла і як олива доходить до підшипників. Усе це видно в шарах оливи й охолодження в рентгені. На цифри двигуна впливає лише картер, а кількість оливи змінює глибину піддона й те, як він тримає оливу на треку.':
+    'How the engine gets rid of its heat and how oil reaches the bearings. All of it shows in the oil and cooling layers of the X-ray. Only the sump changes the engine’s figures; the amount of oil changes how deep the pan is and how well it keeps oil at the pickup on track.',
   'Рідина': 'Liquid',
   'Вентилятор': 'Fan',
   'Набігаючий потік': 'Ram air',

@@ -26,7 +26,18 @@ const run = (kind: SumpKind, tyre: TyreId, oilDeltaL: number, accumulator = fals
   }
   return r;
 };
-const wear = (kind: SumpKind, tyre: TyreId, oil: number): number => run(kind, tyre, oil).summary.wearPerLap;
+/** Any car of the page with its own well, cached the same way. */
+const pageRun = (id: string, kind: SumpKind, tyre: TyreId, oilDeltaL: number, accumulator = false): LubeRun => {
+  const key = `${id} ${kind} ${tyre} ${oilDeltaL} ${accumulator}`;
+  let r = cache.get(key);
+  if (!r) {
+    const c = sumpCarFor(id)!;
+    const s = engineById(id)!;
+    r = oilRun(buildEngine(s), systemsOf(s), c.vehicle, lapFor(designFromSpec(s), engineFacts(id)?.powerHp ?? null, c.vehicle, tyre), { kind, oilDeltaL, accumulator, place: c.well });
+    cache.set(key, r);
+  }
+  return r;
+};
 
 describe('a Camaro SS lapping the test circuit', () => {
   it('works in slices exactly as in one go', () => {
@@ -37,19 +48,6 @@ describe('a Camaro SS lapping the test circuit', () => {
     for (const key of ['pressure', 'levelBox', 'wearRate', 'accOilL'] as const) {
       expect(Buffer.from(runner.run[key].buffer).equals(Buffer.from(whole[key].buffer)), key).toBe(true);
     }
-  });
-
-  it('orders the sumps: each kind keeps at least as much oil at the pickup as the one before', () => {
-    for (const tyre of TYRE_IDS) {
-      for (const oil of [0, -1]) {
-        const w = SUMP_KINDS.map((kind) => wear(kind, tyre, oil));
-        for (let i = 1; i < w.length; i++) expect(w[i]!, `${SUMP_KINDS[i]} ${tyre} ${oil}`).toBeLessThanOrEqual(w[i - 1]! + 1e-9);
-      }
-    }
-    // More grip and less oil never help a wet pan.
-    expect(wear('wet', 'semi', -1)).toBeGreaterThanOrEqual(wear('wet', 'street', -1));
-    expect(wear('wet', 'slick', -1)).toBeGreaterThanOrEqual(wear('wet', 'semi', -1));
-    for (const tyre of TYRE_IDS) expect(wear('wet', tyre, -1)).toBeGreaterThanOrEqual(wear('wet', tyre, 0));
   });
 
   // Calibration targets, not laws of physics: agreement with sources, met by global constants alone
@@ -69,32 +67,17 @@ describe('a Camaro SS lapping the test circuit', () => {
   it('a track pan holds on semi-slicks with full oil', () => {
     expect(run('baffled', 'semi', 0).summary.belowNeedS).toBe(0);
   });
-  it('an integrated dry sump is no worse than a track pan, and a dry sump never dips', () => {
-    for (const tyre of TYRE_IDS) {
-      for (const oil of [0, -1]) {
-        expect(wear('integrated-dry', tyre, oil)).toBeLessThanOrEqual(wear('baffled', tyre, oil));
-        expect(run('dry', tyre, oil).summary.belowNeedS).toBe(0);
-      }
-    }
-  });
-
   it('halves the time below the need with an accumulator, and refilling it never pushes the pressure below the need', () => {
-    for (const oil of [0, -1]) {
-      const without = run('wet', 'semi', oil).summary.belowNeedS;
-      const withAcc = run('wet', 'semi', oil, true);
-      expect(withAcc.summary.belowNeedS).toBeLessThanOrEqual(without / 2 + 1e-9);
+    // Settings that do dip: two litres short here, a litre short in the smaller pans of the Civic and the STI.
+    const cases: Array<[LubeRun, LubeRun]> = [[run('wet', 'semi', -2), run('wet', 'semi', -2, true)]];
+    for (const id of ['i4/civic-type-r-k20c1', 'b4']) cases.push([pageRun(id, 'wet', 'semi', -1), pageRun(id, 'wet', 'semi', -1, true)]);
+    for (const [without, withAcc] of cases) {
+      expect(without.summary.belowNeedS).toBeGreaterThan(1);
+      expect(withAcc.summary.belowNeedS).toBeLessThanOrEqual(without.summary.belowNeedS / 2);
       for (let i = 1; i < withAcc.count; i++) {
         if (withAcc.accOilL[i]! > withAcc.accOilL[i - 1]! + 1e-9) expect(withAcc.pressure[i]!).toBeGreaterThanOrEqual(withAcc.need[i]!);
       }
     }
-    // A smaller pan that does dip: the Civic a litre short on semi-slicks.
-    const civic = sumpCarFor('i4/civic-type-r-k20c1')!;
-    const cs = engineById(civic.engineId)!;
-    const civicLap = lapFor(designFromSpec(cs), engineFacts(civic.engineId)!.powerHp, civic.vehicle, 'semi');
-    const civicRun = (accumulator: boolean) => oilRun(buildEngine(cs), systemsOf(cs), civic.vehicle, civicLap, { kind: 'wet', oilDeltaL: -1, accumulator, place: civic.well }).summary.belowNeedS;
-    const before = civicRun(false);
-    expect(before).toBeGreaterThan(1);
-    expect(civicRun(true)).toBeLessThanOrEqual(before / 2);
   });
 
   it('shows the lifters bleeding down only after the gallery has carried the bad oil to them', () => {
@@ -135,6 +118,63 @@ describe('a Camaro SS lapping the test circuit', () => {
     runLubrication(setupFor(engine, systems, car.vehicle, { kind: 'baffled', oilDeltaL: 0, accumulator: false, place: 'middle' }), lap('semi'));
     expect(performance.now() - t0).toBeLessThan(1500);
   });
+});
+
+describe('the four sumps on the same lap', () => {
+  // Settings where the oil runs short, so the order is tested on numbers that are not all zero.
+  const SHORT: Array<[string, TyreId, number]> = [
+    ['b4', 'semi', -1], ['b4', 'slick', -1], ['b4', 'semi', -2], ['b4', 'slick', -2],
+    ['i4/civic-type-r-k20c1', 'semi', -1], ['i4/civic-type-r-k20c1', 'slick', -1], ['i4/civic-type-r-k20c1', 'semi', -2], ['i4/civic-type-r-k20c1', 'slick', -2],
+  ];
+
+  it('orders them: each kind keeps at least as much oil at the pickup as the one before', () => {
+    for (const [id, tyre, oil] of SHORT) {
+      const w = SUMP_KINDS.map((kind) => pageRun(id, kind, tyre, oil).summary.wearPerLap);
+      const below = SUMP_KINDS.map((kind) => pageRun(id, kind, tyre, oil).summary.belowNeedS);
+      expect(below[0], `${id} ${tyre} ${oil}: the wet pan must dip for the order to mean anything`).toBeGreaterThan(1);
+      for (let i = 1; i < w.length; i++) {
+        expect(w[i]!, `${SUMP_KINDS[i]} ${id} ${tyre} ${oil}`).toBeLessThanOrEqual(w[i - 1]! + 1e-9);
+        expect(below[i]!, `${SUMP_KINDS[i]} ${id} ${tyre} ${oil}`).toBeLessThanOrEqual(below[i - 1]! + 1e-9);
+      }
+      // A track pan holds oil round the pickup that a factory well lets go, and a dry sump never dips.
+      expect(below[1]!).toBeLessThan(below[0]!);
+      expect(below[3]).toBe(0);
+    }
+  });
+
+  it('does not collapse: with two litres short on slicks the STI tells all four apart, worst to best', () => {
+    // The page offers this setting. Wet, baffled, integrated dry and dry, strictly in that order of time below the need.
+    const below = SUMP_KINDS.map((kind) => pageRun('b4', kind, 'slick', -2).summary.belowNeedS);
+    expect(below[3]).toBe(0);
+    for (let i = 1; i < below.length; i++) expect(below[i]!, SUMP_KINDS[i]).toBeLessThan(below[i - 1]!);
+    expect(below[2]).toBeGreaterThan(1);
+  });
+
+  it('never lets more grip or less oil help a factory wet pan', () => {
+    for (const id of ['b4', 'i4/civic-type-r-k20c1']) {
+      const w = (tyre: TyreId, oil: number): number => pageRun(id, 'wet', tyre, oil).summary.wearPerLap;
+      // Wear per lap at the dipstick's minimum; with less oil the shorter lap on slicks can wear less per lap.
+      expect(w('semi', -1), id).toBeGreaterThanOrEqual(w('street', -1));
+      expect(w('slick', -1), id).toBeGreaterThanOrEqual(w('semi', -1));
+      for (const tyre of TYRE_IDS) {
+        expect(w(tyre, -1), `${id} ${tyre}`).toBeGreaterThanOrEqual(w(tyre, 0));
+        expect(w(tyre, -2), `${id} ${tyre}`).toBeGreaterThanOrEqual(w(tyre, -1));
+      }
+    }
+  });
+
+  it('keeps an integrated dry sump no worse than a track pan and a dry sump above the need, on every car', () => {
+    for (const c of SUMP_CARS) {
+      for (const tyre of TYRE_IDS) {
+        for (const oil of [0, -1, -2]) {
+          const baffled = pageRun(c.engineId, 'baffled', tyre, oil).summary;
+          const integrated = pageRun(c.engineId, 'integrated-dry', tyre, oil).summary;
+          expect(integrated.wearPerLap, `${c.engineId} ${tyre} ${oil}`).toBeLessThanOrEqual(baffled.wearPerLap + 1e-9);
+          expect(pageRun(c.engineId, 'dry', tyre, oil).summary.belowNeedS, `${c.engineId} ${tyre} ${oil}`).toBe(0);
+        }
+      }
+    }
+  }, 60_000);
 });
 
 describe('every car of the page', () => {

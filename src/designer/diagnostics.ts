@@ -12,7 +12,7 @@ import { lubricationFigures } from './lubrication-figures.ts';
 
 export type Severity = 'fatal' | 'warning' | 'note';
 
-/** Crank axis over the pan's floor beyond which the engine can't sit low in a car (estimate: catalogue pans stay under 225 mm). */
+/** Crank axis over the pan's floor beyond which the engine can't sit low in a car (estimate: the deepest catalogue pan, the V2's, has 241 mm). */
 export const DEEP_PAN_MM = 250;
 /** Oil over the pickup's bell at the limiter on a level road below which a pan is short of oil (estimate). */
 export const LOW_OIL_MM = 20;

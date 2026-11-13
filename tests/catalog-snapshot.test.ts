@@ -3,6 +3,8 @@ import { synthConfig } from '../src/audio/synth.ts';
 import { ENGINES } from '../src/data/engines.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import type { EngineSpec } from '../src/engine/spec.ts';
+import { systemsOf } from '../src/engine/systems-spec.ts';
+import { panShape } from '../src/systems/sump.ts';
 
 /** Everything rendering and sound read, rounded so that it only moves when the engine really changes. */
 const round = (value: unknown): unknown => {
@@ -26,6 +28,8 @@ const fingerprint = (text: string): string => {
 
 const describeEngine = (spec: EngineSpec): unknown => {
   const e = buildEngine(spec);
+  // The pan the 3D draws: how low the engine sits and how wide its pan is.
+  const pan = panShape(e, systemsOf(spec));
   return round({
     id: spec.id,
     family: spec.family,
@@ -62,6 +66,7 @@ const describeEngine = (spec: EngineSpec): unknown => {
     systems: spec.systems,
     engine: { r: e.r, l: e.l, deck: e.deck, cycle: e.cycle, zMin: e.zMin, zMax: e.zMax, cc: e.displacementCc, intervals: e.intervals, cylinders: e.cylinders, banks: e.banks, throws: e.throws, rotary: e.isRotary },
     sound: synthConfig(e),
+    pan: { crankHeightMm: pan.crankHeightMm, halfW: pan.halfW },
   });
 };
 

@@ -111,11 +111,10 @@ export class LubeRunner {
   private dryPanL = 0;
   private pressure = 0;
   private reliefShare = 0;
-  private headReturn = 0;
   private accumulatorCharge = 0;
   private wallReturn = 0;
-  /** Share of the oil falling from the crank that lands in the compartment: its area over the well's. */
-  private readonly boxShare: number;
+  /** Where the returning oil comes from: the counterweights' orbit across, the crank's length along, how far drops fall, the pan's side walls. */
+  private readonly crank: { x0: number; x1: number; z0: number; z1: number; drop: number; wallL: number; wallR: number };
   private readonly boxCap: number;
   private readonly outCap: number;
 
@@ -129,9 +128,10 @@ export class LubeRunner {
     this.tube = new DelayLine(Math.max(1e-4, setup.tube.litres));
     this.gallery = new DelayLine(Math.max(1e-3, setup.galleryL));
     this.boxCap = capacity(setup.grid.box);
-    const box = setup.shape.box;
-    const well = setup.shape.well;
-    this.boxShare = box ? Math.min(1, ((box.x1 - box.x0) * (box.z1 - box.z0)) / ((well.x1 - well.x0) * (well.z1 - well.z0))) : 0;
+    const e = setup.engine;
+    const orbit = (e.r + 0.3 * e.spec.bore) * 0.01;
+    const sh = setup.shape;
+    this.crank = { x0: -orbit, x1: orbit, z0: e.zMin * 0.01, z1: e.zMax * 0.01, drop: Math.max(0, -sh.yFull), wallL: -sh.halfW, wallR: sh.halfW };
     this.outCap = capacity(setup.grid.outside);
     const n = this.lapSteps;
     const f = (): Float32Array => new Float32Array(n);
@@ -187,6 +187,27 @@ export class LubeRunner {
       this.boxL = Math.min(pan, volumeUnder(s.grid.box, this.hEq, this.sx.slope, this.sz.slope));
       wettedSize(s.grid.all, this.hEq, this.sx.slope, this.sz.slope, this.size, s.grid.dx, s.grid.dz);
     }
+  }
+
+  /**
+   * Share of the oil coming back from the crankcase that lands in the compartment round the pickup. The main bearing
+   * bulkheads keep it in the bays it was thrown in, so along the crank only the bays over the compartment count. Of
+   * that, WELL_RAIN drips off the crank and falls along felt gravity, moving across by sx times the drop: in a long
+   * corner it lands by the outer wall rather than in a track pan's box. The rest runs down the side walls and reaches
+   * the pan at its edges, gathering on the outer wall under side load: inside a factory well that spans the pan, outside
+   * a track pan's box, which only its doors can refill.
+   */
+  private returnShare(sx: number): number {
+    const box = this.setup.shape.box;
+    if (!box) return 0;
+    const r = this.crank;
+    const bays = Math.max(0, Math.min(r.z1, box.z1) - Math.max(r.z0, box.z0)) / (r.z1 - r.z0);
+    const shift = sx * r.drop;
+    const drops = Math.max(0, Math.min(r.x1 + shift, box.x1) - Math.max(r.x0 + shift, box.x0)) / (r.x1 - r.x0);
+    const outer = Math.min(1, Math.max(-1, sx));
+    const edge = (x: number): number => (x >= box.x0 - 1e-6 && x <= box.x1 + 1e-6 ? 1 : 0);
+    const walls = 0.5 * (1 - outer) * edge(r.wallL) + 0.5 * (1 + outer) * edge(r.wallR);
+    return bays * (WELL_RAIN * drops + (1 - WELL_RAIN) * walls);
   }
 
   private deliveredOf(o: { mains: number; head: number; chain: number; turbo: number; jets: number }): number {
@@ -247,10 +268,9 @@ export class LubeRunner {
       const tau = Math.max(1e-3, (eq > this.boxL ? k.kIn : k.kOut) * Math.min(3, Math.max(0.2, period)));
       const before = this.boxL;
       this.boxL = eq + (this.boxL - eq) * Math.exp(-DT / tau);
-      // Scavenged heads return straight to the deaerating pickup. The oil thrown off the crank rains down under it,
-      // into the well on a factory pan, through the screen onto the box of a track pan.
-      if (k.headScavenge) this.boxL += this.headReturn * DT;
-      this.boxL += this.wallReturn * WELL_RAIN * this.boxShare * DT;
+      // What comes down from the crankcase into the compartment joins it at once; the rest joins the pan as a whole,
+      // and so does the oil an integrated dry sump scavenges from its heads (where its pumps discharge is not known).
+      this.boxL += this.wallReturn * this.returnShare(this.slope.x) * DT;
       this.boxL = Math.min(this.boxL, this.boxCap, pan);
       this.boxL = Math.max(this.boxL, pan - this.outCap, 0);
       boxFlow = (this.boxL - before) / DT;
@@ -260,6 +280,8 @@ export class LubeRunner {
       this.hOut = this.solve.h;
       const p = shape.pickup!;
       level = this.hBox + sx * p.x + sz * p.z;
+      // The plane of a full or steeply tilted compartment can stand above its lid; over the pickup the oil cannot.
+      if (shape.box) level = Math.min(level, shape.box.top);
       immersion = level - (p.y + p.bell) - p.radius * Math.hypot(sx, sz);
       atScreen = pickupOil(immersion, p.bell);
     } else {
@@ -321,7 +343,6 @@ export class LubeRunner {
       this.headL[i] = Math.max(0, next);
       headsOut += out;
     }
-    this.headReturn = k.headScavenge && s.kind !== 'dry' ? headsOut : 0;
     this.wallReturn = s.kind !== 'dry' ? wallsOut : 0;
 
     let tank = 0;

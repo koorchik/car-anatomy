@@ -48,7 +48,8 @@ describe('editDesign and withLayout', () => {
     const factory = designFromSpec(engineById('v8-cross')!);
     expect(factory.factory).not.toBeNull();
     expect(editDesign(factory, { sump: 'baffled' }).factory).toBeNull();
-    expect(editDesign(factory, { oilL: 7 }).factory).toBeNull();
+    // The oil's amount only shapes the pan and the lap: the factory idle, rev time and sound stay.
+    expect(editDesign(factory, { oilL: 7 }).factory).toEqual(factory.factory);
   });
 });
 

@@ -165,8 +165,8 @@ export function buildTrack(def: TrackDef, ds = 1): Track {
 /**
  * The test circuit: one of each event that starves a wet sump. A long straight into a hairpin (hard braking), a
  * chicane, a slalom that reverses the load near the pan's slosh frequency (about 0.75 Hz on street tyres), a fast
- * sweeper, a crest that unloads the car, a 210° carousel (eight seconds of steady cornering) and a right-hander,
- * because wet pans are not symmetric.
+ * sweeper, a crest that unloads the car, a 180° carousel (about eight seconds of steady cornering on street tyres, six
+ * on slicks) and a right-hander, because wet pans are not symmetric.
  */
 export const TEST_CIRCUIT: TrackDef = {
   id: 'test',

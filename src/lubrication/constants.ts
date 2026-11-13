@@ -10,6 +10,11 @@ export interface SumpKindConstants {
    * 0.50 s to refill after braking with the stock pan, 0.03 s with a hinged baffle; τ = t/3 for an exponential.
    */
   kIn: number;
+  /**
+   * The same for oil leaving it. A factory well spills over its low step: a broad-crested weir, Q ≈ 1.7·b·H^1.5, gives
+   * about 0.9 L/s over a 0.19 m step under 20 mm of head, so a litre or two of surplus takes 1-2 s, about 2 T₁. Trap
+   * doors open only inwards, so a track box leaks through its gaps alone (estimate).
+   */
   kOut: number;
   /** Damping ratio of the first slosh mode: baffles, the windage screen and the crank take energy out (estimate). */
   zeta: number;
@@ -43,7 +48,10 @@ export const ATM_BAR = 1.013;
 export const HEAD_FLOW_SHARE = 0.35;
 /** Time the oil thrown off the bearings takes to run down the crankcase walls, s (estimate). */
 export const WALL_TAU_S = 0.4;
-/** Share of the oil thrown off the crank that falls straight into the well under it rather than down the walls (estimate). */
+/**
+ * Share of the oil coming back from the crankcase that drips off the crank rather than running down the side walls
+ * (estimate). Drops fall along felt gravity; wall oil reaches the pan at its edges (run.ts, returnShare).
+ */
 export const WELL_RAIN = 0.5;
 /** Time oil takes to drain from a head by gravity, and when scavenged, s (estimates). */
 export const HEAD_TAU_S = 3;
