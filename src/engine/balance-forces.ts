@@ -11,7 +11,9 @@
 // (the classic 50% balance factor). Balance shafts then take out what is left of their order.
 
 import type { EngineSpec } from './spec.ts';
-import { pistonAcceleration, pistonPin, type Engine } from './kinematics.ts';
+import { harmonic, pistonAcceleration, pistonPin, type Complex, type Engine } from './kinematics.ts';
+
+export { harmonic, type Complex };
 
 const DEG = Math.PI / 180;
 
@@ -92,12 +94,10 @@ export interface OrderResidual {
   couple2: number;
 }
 
-interface Complex {
-  re: number;
-  im: number;
-}
-
 const STEPS = 360;
+
+/** Share of each piston's first order a counterweight balances: the half that turns with the crank. */
+export const BALANCE_FACTOR = 0.5;
 
 /**
  * How far past the outer rotor faces RotaryEngineModel.buildShaftAndEnds puts the pulley and the flywheel, mm:
@@ -105,20 +105,6 @@ const STEPS = 360;
  */
 const ROTARY_PULLEY_MM = 40;
 const ROTARY_FLYWHEEL_MM = 45;
-
-/** A force as a complex number w = Fy + i Fx, which turns as e^(i theta) when it turns with the crank. */
-const harmonic = (samples: Complex[], order: number): Complex => {
-  let re = 0;
-  let im = 0;
-  samples.forEach((s, i) => {
-    const a = (-2 * Math.PI * order * i) / samples.length;
-    const c = Math.cos(a);
-    const d = Math.sin(a);
-    re += s.re * c - s.im * d;
-    im += s.re * d + s.im * c;
-  });
-  return { re: re / samples.length, im: im / samples.length };
-};
 
 const size = (c: Complex): number => Math.hypot(c.re, c.im);
 
@@ -292,6 +278,11 @@ export class BalanceForces {
     this.weights.push({ shaft, front, rear });
   }
 
+  /** Crank angle the arrows were last put at, degrees. */
+  get angle(): number {
+    return this.theta;
+  }
+
   /** Puts every arrow at crank angle theta, degrees. */
   at(theta: number): this {
     if (theta === this.theta) return this;
@@ -334,7 +325,7 @@ export class BalanceForces {
       const px = Math.sin((theta + t.angle) * DEG);
       const py = Math.cos((theta + t.angle) * DEG);
       // Each of the two webs takes half of what turns on its pin.
-      const counter = (t.cylinders.length * (m.rotatingKg + m.reciprocatingKg / 2) * r) / 2000;
+      const counter = (t.cylinders.length * (m.rotatingKg + m.reciprocatingKg * BALANCE_FACTOR) * r) / 2000;
       for (let side = 0; side < 2; side++) {
         const weight = this.arrows[k++]!;
         weight.x = -cw * px;

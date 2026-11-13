@@ -1,0 +1,328 @@
+:root {
+  --petrol-deep: #0e2a33;
+  --petrol: #143642;
+  --petrol-up: #1c4957;
+  --bone: #ece6d6;
+  --bone-dim: #b4c0bb;
+  --ignition: #ff7a1a;
+  --warn: #ffb35c;
+  --rule: rgba(236, 230, 214, 0.14);
+  --panel-w: 300px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--petrol-deep);
+  color: var(--bone);
+  font-family: 'Fira Sans', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--petrol);
+}
+
+.bar h1 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pick-model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--bone-dim);
+}
+
+select,
+button {
+  font: inherit;
+  color: var(--bone);
+  background: var(--petrol-up);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+select {
+  max-width: 100%;
+  padding: 4px 6px;
+}
+
+button {
+  padding: 4px 9px;
+  cursor: pointer;
+}
+
+button[aria-pressed='true'] {
+  color: #2b1200;
+  background: var(--bone);
+}
+
+/* The studio of the site: a pool of light on a seamless backdrop. */
+.view {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse 62% 58% at 50% 68%, #33707f 0%, #1f4f5d 38%, #143642 66%, var(--petrol-deep) 100%);
+}
+
+.view canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.message {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--ignition);
+  background: rgba(14, 42, 51, 0.85);
+}
+
+.scale-bar {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  font-size: 13px;
+  color: var(--bone-dim);
+  pointer-events: none;
+}
+
+.scale-line {
+  display: block;
+  height: 6px;
+  border: 1px solid var(--bone-dim);
+  border-top: 0;
+}
+
+.stats {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  font-size: 12px;
+  color: var(--bone-dim);
+  pointer-events: none;
+}
+
+.tip {
+  position: absolute;
+  z-index: 3;
+  padding: 3px 8px;
+  border-radius: 2px;
+  font-size: 13px;
+  background: rgba(14, 42, 51, 0.9);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.tip.missing,
+.parts.missing,
+.card.missing h2 {
+  color: var(--warn);
+}
+
+.card {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  left: 16px;
+  width: min(340px, calc(100% - 32px));
+  padding: 10px 14px 12px;
+  border-left: 3px solid var(--ignition);
+  background: rgba(14, 42, 51, 0.9);
+}
+
+.card h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.card p {
+  margin: 0 0 6px;
+}
+
+.card code {
+  font-size: 12px;
+  color: var(--bone-dim);
+}
+
+.panel {
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--rule);
+  background: var(--petrol);
+}
+
+.panel-toggle {
+  display: none;
+}
+
+.panel-body {
+  padding: 4px 14px 14px;
+}
+
+.group {
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.group legend {
+  padding: 8px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bone-dim);
+}
+
+.control {
+  margin: 8px 0 0;
+}
+
+.control-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.control-label output {
+  color: var(--bone-dim);
+}
+
+.control input[type='range'] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--ignition);
+}
+
+.control select {
+  width: 100%;
+}
+
+.control input[type='checkbox'] {
+  accent-color: var(--ignition);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.parts {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--bone-dim);
+}
+
+/* A clean shot: the model, the floor and the ruler. */
+body.no-ui {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+body.no-ui .bar,
+body.no-ui .panel,
+body.no-ui .stats {
+  display: none;
+}
+
+/* On a phone the panel is a sheet under the model, and folds down to its button. */
+@media (max-width: 700px) {
+  body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .bar {
+    padding: 6px 16px;
+  }
+
+  .bar h1 {
+    display: none;
+  }
+
+  .pick-model,
+  .pick-model select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .panel {
+    grid-column: 1;
+    grid-row: 3;
+    max-height: 42vh;
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .panel-toggle {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    text-align: left;
+    padding: 8px 16px;
+  }
+
+  .panel-body {
+    padding: 0 16px 14px;
+  }
+
+  body.panel-closed .panel-body {
+    display: none;
+  }
+
+  .stats {
+    display: none;
+  }
+}
