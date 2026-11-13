@@ -1,14 +1,14 @@
 // A circuit as straights and constant-radius arcs, sampled every metre. Two straights ("closers") are stretched or
 // shortened so the lap closes exactly: their lengths enter the end point linearly, so a 2x2 solve finds them.
-// Plan frame: x east, y north, heading counter-clockwise from +x, left turns positive. No DOM; the whole-car section
+// Plan frame: x east, y north, heading counter-clockwise from +x, left turns positive. No DOM and no text: pieces
+// carry sector ids, and pages show them through SECTOR_NAMES (src/data/vehicle-names.ts). The whole-car section
 // reuses it.
-
-import { t } from '../i18n/t.ts';
 
 export type TrackPiece =
   | {
       kind: 'straight';
       length: number;
+      /** Sector id; consecutive pieces with the same id make one sector. */
       name?: string;
       /** One of the two straights whose length is solved so the lap closes. */
       closer?: 'a' | 'b';
@@ -20,16 +20,24 @@ export type TrackPiece =
       radius: number;
       /** Degrees, positive to the left. */
       angle: number;
+      /** Sector id, as on a straight. */
       name?: string;
     };
 
 export interface TrackDef {
   id: string;
+  /** An id too; TRACK_NAMES (src/data/vehicle-names.ts) has the circuit's name. */
   name: string;
   pieces: TrackPiece[];
 }
 
 export interface Sector {
+  /** The pieces' sector id. */
+  id: string;
+  /**
+   * @deprecated Until stage O2a: the display name when buildTrack got names, else the id. Pages translate `id` with
+   * SECTOR_NAMES themselves.
+   */
   name: string;
   s0: number;
   s1: number;
@@ -97,7 +105,8 @@ function solveClosers(def: TrackDef): { a: number; b: number } {
   return { a, b };
 }
 
-export function buildTrack(def: TrackDef, ds = 1): Track {
+/** `names` maps sector ids to display names, for the oil page until stage O2a translates ids itself. */
+export function buildTrack(def: TrackDef, ds = 1, names?: Readonly<Record<string, string>>): Track {
   const turn = def.pieces.reduce((sum, p) => sum + (p.kind === 'arc' ? p.angle : 0), 0);
   if (Math.abs(turn - 360) > 1e-9) throw new Error(`Track ${def.id} turns ${turn}°, not 360°`);
   const closers = solveClosers(def);
@@ -127,8 +136,8 @@ export function buildTrack(def: TrackDef, ds = 1): Track {
     if (p.name) {
       // Pieces of one named corner (a chicane, a slalom) make one sector.
       const last = sectors[sectors.length - 1];
-      if (last && last.name === p.name && Math.abs(last.s1 - ss) < 1e-9) last.s1 = ss + lengths[i]!;
-      else sectors.push({ name: p.name, s0: ss, s1: ss + lengths[i]! });
+      if (last && last.id === p.name && Math.abs(last.s1 - ss) < 1e-9) last.s1 = ss + lengths[i]!;
+      else sectors.push({ id: p.name, name: names?.[p.name] ?? p.name, s0: ss, s1: ss + lengths[i]! });
     }
     ss += lengths[i]!;
   });
@@ -157,10 +166,14 @@ export function buildTrack(def: TrackDef, ds = 1): Track {
       heading[i] = h;
       kappa[i] = k;
     }
-    if (p.name) sector[i] = sectors.findIndex((sec) => sec.name === p.name && s >= sec.s0 - 1e-9 && s < sec.s1 + 1e-9);
+    if (p.name) sector[i] = sectors.findIndex((sec) => sec.id === p.name && s >= sec.s0 - 1e-9 && s < sec.s1 + 1e-9);
   }
   return { def, length: total, ds: step, n, x, y, heading, kappa, kappaV, sector, sectors, closers };
 }
+
+/** Sector ids of the test circuit, in lap order. */
+export const TEST_SECTORS = ['start-finish', 'hairpin', 'chicane', 'slalom', 'fast-sweeper', 'back-straight', 'carousel', 'right-hander'] as const;
+export type TestSectorId = (typeof TEST_SECTORS)[number];
 
 /**
  * The test circuit: one of each event that starves a wet sump. A long straight into a hairpin (hard braking), a
@@ -170,26 +183,26 @@ export function buildTrack(def: TrackDef, ds = 1): Track {
  */
 export const TEST_CIRCUIT: TrackDef = {
   id: 'test',
-  name: t('Тестове коло'),
+  name: 'test',
   pieces: [
-    { kind: 'straight', length: 560, name: t('Пряма старт-фініш'), closer: 'a' },
-    { kind: 'arc', radius: 20, angle: 180, name: t('Шпилька') },
+    { kind: 'straight', length: 560, name: 'start-finish', closer: 'a' },
+    { kind: 'arc', radius: 20, angle: 180, name: 'hairpin' },
     { kind: 'straight', length: 300 },
-    { kind: 'arc', radius: 50, angle: -45, name: t('Шикана') },
-    { kind: 'straight', length: 25, name: t('Шикана') },
-    { kind: 'arc', radius: 50, angle: 45, name: t('Шикана') },
+    { kind: 'arc', radius: 50, angle: -45, name: 'chicane' },
+    { kind: 'straight', length: 25, name: 'chicane' },
+    { kind: 'arc', radius: 50, angle: 45, name: 'chicane' },
     { kind: 'straight', length: 110 },
-    { kind: 'arc', radius: 25, angle: 12, name: t('Слалом') },
-    { kind: 'arc', radius: 25, angle: -24, name: t('Слалом') },
-    { kind: 'arc', radius: 25, angle: 24, name: t('Слалом') },
-    { kind: 'arc', radius: 25, angle: -24, name: t('Слалом') },
-    { kind: 'arc', radius: 25, angle: 24, name: t('Слалом') },
-    { kind: 'arc', radius: 25, angle: -12, name: t('Слалом') },
+    { kind: 'arc', radius: 25, angle: 12, name: 'slalom' },
+    { kind: 'arc', radius: 25, angle: -24, name: 'slalom' },
+    { kind: 'arc', radius: 25, angle: 24, name: 'slalom' },
+    { kind: 'arc', radius: 25, angle: -24, name: 'slalom' },
+    { kind: 'arc', radius: 25, angle: 24, name: 'slalom' },
+    { kind: 'arc', radius: 25, angle: -12, name: 'slalom' },
     { kind: 'straight', length: 60 },
-    { kind: 'arc', radius: 120, angle: 90, name: t('Швидка дуга') },
-    { kind: 'straight', length: 250, name: t('Задня пряма з горбом'), closer: 'b', crest: { at: 125, length: 60, radius: 700 } },
-    { kind: 'arc', radius: 60, angle: 180, name: t('Карусель') },
+    { kind: 'arc', radius: 120, angle: 90, name: 'fast-sweeper' },
+    { kind: 'straight', length: 250, name: 'back-straight', closer: 'b', crest: { at: 125, length: 60, radius: 700 } },
+    { kind: 'arc', radius: 60, angle: 180, name: 'carousel' },
     { kind: 'straight', length: 200 },
-    { kind: 'arc', radius: 80, angle: -90, name: t('Правий') },
+    { kind: 'arc', radius: 80, angle: -90, name: 'right-hander' },
   ],
 };
