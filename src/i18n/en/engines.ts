@@ -83,7 +83,7 @@ export const ENGINE_TEXT_EN: Record<string, PageTextEn> = {
       sound: 'There are two firing events per revolution, so at 6000 rpm the fundamental is 200 Hz. All the components fall on even orders, so a four sounds simple, with no bass rumble. When VTEC switches to the aggressive cam lobe, cylinder filling improves and the intake sound turns sharp and high. That transition made this engine a cult favorite.',
       pros: ['Simple, compact, cheap', 'One cylinder head, easier to mount transversely', 'High specific output'],
       cons: ['Second-order vibration grows with displacement', 'Less smooth than an I6 or V12', 'Limited displacement'],
-      cars: ['Honda Civic Type R', 'Toyota Corolla', 'BMW M3 E30'],
+      cars: ['Honda Civic Type R', 'Toyota Corolla', 'BMW M3 E30', 'ZAZ-1102 Tavria'],
     },
   },
   i4d: {
