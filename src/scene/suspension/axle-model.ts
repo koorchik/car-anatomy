@@ -22,6 +22,7 @@ import type { ResolvedCorner } from '../../suspension/setup.ts';
 import type { AxleSpec, Vec3 } from '../../suspension/spec.ts';
 import { CornerModel, cornerFrame, spacedKey, type CornerFrame, type CornerModelOptions } from './corner-model.ts';
 import { Bellows, boss, latheAlong, rodBetween, slab, toScene } from './geometry.ts';
+import type { RodView } from './link-builder.ts';
 import { AXLE_PARTS } from './parts.ts';
 
 /** What an axle shows this frame. */
@@ -212,6 +213,8 @@ export class IndependentAxleModel implements AxleModel {
     bar: THREE.Mesh;
     boots: [Bellows, Bellows];
     bootMeshes: THREE.Mesh[];
+    /** The left and the right corner's tie rods, found once so update() allocates nothing. */
+    ties: [RodView | null, RodView | null];
     /** Scene x of the housing's ends and of the inner joints at design; the rack's y and z. */
     housingEnd: number;
     inner: number;
@@ -334,7 +337,9 @@ export class IndependentAxleModel implements AxleModel {
       const group = new THREE.Group();
       group.add(housing, bar, ...bootMeshes);
       this.group.add(group);
-      this.rack = { group, housing, bar, boots, bootMeshes, housingEnd, inner: inner.x, y: inner.y, z: inner.z };
+      const tie = (c: CornerModel): RodView | null => c.linkSet.rods.find((rod) => rod.tie) ?? null;
+      const ties: [RodView | null, RodView | null] = [tie(this.left), tie(this.right)];
+      this.rack = { group, housing, bar, boots, bootMeshes, ties, housingEnd, inner: inner.x, y: inner.y, z: inner.z };
     } else {
       this.rack = null;
     }
@@ -346,6 +351,8 @@ export class IndependentAxleModel implements AxleModel {
       delete this.parts[key('susp.anti-roll-bar')];
       delete this.parts[key('susp.bar-link')];
     }
+    // An axle that does not steer has no rack, and no card for one.
+    if (!this.rack) delete this.parts[key('susp.rack')];
 
     this.group.traverse((o) => {
       if (this.orders.has(o)) return;
@@ -517,9 +524,8 @@ export class IndependentAxleModel implements AxleModel {
       r.bar.scale.set(2 * r.inner, 1, 1);
       r.group.position.set(0, -e * 1.2, e * 1.5);
       for (let i = 0; i < 2; i++) {
-        const corner = i === 0 ? this.left : this.right;
         const s = i === 0 ? 1 : -1;
-        const tie = corner.linkSet.rods.find((rod) => rod.tie);
+        const tie = r.ties[i];
         if (!tie) continue;
         // The tie rod in the axle's frame: the right corner's mirrored back.
         const a = this.v1.copy(tie.bodyEnd);

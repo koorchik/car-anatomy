@@ -317,6 +317,8 @@ describe.each(IDS)('%s', (id) => {
     for (const k of keys) expect(k, k).toMatch(/^(susp\.(front|rear)\.|car\.)/);
     expect(model.parts['susp.front.anti-roll-bar']).toBeDefined();
     expect(model.parts['susp.front.rack']!.text).not.toBe(model.parts['susp.rear.toe-link']?.text);
+    // And no card for a part that is not there: the rear axle does not steer.
+    expect(model.parts['susp.rear.rack']).toBeUndefined();
   });
 
   it('keeps its draw calls within the chassis budget of the whole-car plan', () => {
