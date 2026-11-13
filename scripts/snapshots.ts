@@ -24,6 +24,8 @@ const REPO = resolve(import.meta.dirname, '..');
 /** Share of the canvas allowed to differ, and by how much a pixel may differ before it counts. */
 const CANVAS_SHARE = 0.0005;
 const DELTA_E = 2;
+/** The site's own language, so the shots do not depend on the browser's. */
+const LANG = 'uk';
 
 // ---------------------------------------------------------------------------------------------------------------
 // The pages
@@ -550,11 +552,13 @@ async function main(): Promise<void> {
     console.log(`Building ${source.label} (${source.commit.slice(0, 12)}${source.dirty ? ' with uncommitted changes' : ''})`);
     await buildSite(source.root, buildDir);
     server = await serve(buildDir);
-    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+    // The language comes from the address: without it the page follows the browser's, which follows the machine's
+    // environment, and the oil page's readiness check reads Ukrainian text.
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/?lang=${LANG}`;
     chrome = await launchChrome(options.chrome, profile);
     rmSync(shotsDir, { recursive: true, force: true });
     mkdirSync(shotsDir, { recursive: true });
-    const meta = { label: source.label, commit: source.commit, dirty: source.dirty, takenAt: new Date().toISOString(), sizes: options.sizes, pages: options.pages.map((p) => p.id), freeze: SNAPSHOT_FREEZE };
+    const meta = { label: source.label, commit: source.commit, dirty: source.dirty, takenAt: new Date().toISOString(), sizes: options.sizes, pages: options.pages.map((p) => p.id), lang: LANG, freeze: SNAPSHOT_FREEZE };
     writeFileSync(join(shotsDir, 'meta.json'), `${JSON.stringify(meta, null, 2)}\n`);
     const reference = options.mode === 'compare' ? (JSON.parse(readFileSync(join(referenceDir, 'meta.json'), 'utf8')) as typeof meta) : null;
     if (reference) console.log(`Reference: ${reference.label} (${reference.commit.slice(0, 12)}${reference.dirty ? ' with uncommitted changes' : ''}), taken ${reference.takenAt}`);
