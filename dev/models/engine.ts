@@ -34,6 +34,19 @@ export default defineModel({
       value: 'i4',
       options: CATALOGUE.flatMap((entry) => pageChoices(entry.id)).map((c) => ({ value: c.id, label: `${c.id} · ${c.name}` })),
     },
+    {
+      key: 'shafts',
+      label: 'Балансирні вали',
+      kind: 'choice',
+      rebuild: true,
+      value: 'spec',
+      options: [
+        { value: 'spec', label: 'Як у двигуна' },
+        { value: '0', label: 'Немає' },
+        { value: '1', label: '1: проти 1-го порядку' },
+        { value: '2', label: '2: проти обох порядків' },
+      ],
+    },
     { key: 'theta', label: 'Кут колінвала, °', kind: 'range', min: 0, max: 720, step: 1, value: 30 },
     { key: 'spin', label: 'Крутити колінвал', kind: 'toggle', value: false },
     { key: 'running', label: 'Працює (спалахи й гази)', kind: 'toggle', value: false },
@@ -46,7 +59,9 @@ export default defineModel({
     const spec = engineById(values.engine as string)!;
     const engine = buildEngine(spec);
     const model: EngineModel = engine.isRotary ? new RotaryEngineModel(engine) : new PistonEngineModel(engine);
-    const overlay = new BalanceOverlay(new BalanceForces(engine, massesOf(spec)), pageArrowScale(spec.id), layersOf(values));
+    // No catalogue engine has balance shafts yet: the designer's choice, tried on any of them.
+    const masses = values.shafts === 'spec' ? massesOf(spec) : { ...massesOf(spec), shafts: Number(values.shafts) as 0 | 1 | 2 };
+    const overlay = new BalanceOverlay(new BalanceForces(engine, masses), pageArrowScale(spec.id), layersOf(values));
     model.mounted.add(overlay.group);
     overlay.group.visible = values.forces as boolean;
     return {
