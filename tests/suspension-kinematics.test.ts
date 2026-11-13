@@ -3,10 +3,10 @@ import { fromJtekt, jtektCorner, jtektKingpinOffsetM, JTEKT_TABLE1, macphersonJt
 import { doubleWishbone, wishboneDefaults } from '../src/suspension/templates/double-wishbone.ts';
 import { multilink, multilinkDefaults } from '../src/suspension/templates/multilink.ts';
 import { buildAxle, newCornerSample } from '../src/suspension/kinematics.ts';
-import { buildAxleLite } from '../src/suspension/axle-lite.ts';
+import { buildAxleLite, rolledRollCentre } from '../src/suspension/axle-lite.ts';
 import { POSE_SIZE } from '../src/suspension/solve.ts';
 import type { AxleSpec, Vec3 } from '../src/suspension/spec.ts';
-import { cross, dot, sub, svd } from '../src/suspension/vec.ts';
+import { cross, dot, rotateInto, sub, svd } from '../src/suspension/vec.ts';
 import { clampSetup, factorySetup, resolveCorner, SETUP_RANGES, type CornerSetup } from '../src/suspension/setup.ts';
 import { dist } from '../src/suspension/vec.ts';
 import { CornerSolver } from '../src/suspension/solve.ts';
@@ -631,32 +631,94 @@ describe('buildAxleLite', () => {
     }
   });
 
-  it('measures the rising rate and where the roll centre goes in a 3° roll', () => {
-    // Geometric roll centre of two force lines from the contact points, outer wheel `dz` into bump, inner as far out.
-    const crossing = (a: ReturnType<typeof buildAxle>, dz: number): { heightM: number; lateralM: number } => {
-      const [o, i] = [sampleAt(a, dz), sampleAt(a, -dz)];
-      const T = o.contactY + i.contactY;
-      return { heightM: (T * o.tanBeta * i.tanBeta) / (o.tanBeta + i.tanBeta), lateralM: ((T / 2) * (o.tanBeta - i.tanBeta)) / (o.tanBeta + i.tanBeta) };
-    };
+  it('measures the rising rate of the motion ratio', () => {
     for (const s of all) {
-      const lite = buildAxleLite(s);
       const a = buildAxle(s);
       const h = 0.002;
-      expect(lite.mrSpringSlope).toBeCloseTo((sampleAt(a, h).mrSpring - sampleAt(a, -h).mrSpring) / (2 * h), 9);
-      const dz = (s.track / 2) * Math.sin(3 * DEG);
-      const rolled = crossing(a, dz);
-      expect(lite.rolled.heightM).toBeCloseTo(rolled.heightM, 9);
-      expect(lite.rolled.lateralM).toBeCloseTo(rolled.lateralM, 9);
-      // With no roll the two lines meet on the centre line at y_C·tanβ.
-      const still = crossing(a, 1e-6);
-      expect(Math.abs(still.heightM - lite.design.rcHeight)).toBeLessThan(1e-6);
-      expect(Math.abs(still.lateralM)).toBeLessThan(1e-3);
-      // In roll the geometric centre runs off toward the inner wheel and drops, as on all these layouts.
-      expect(lite.rolled.lateralM).toBeLessThan(-0.3);
-      expect(lite.rolled.heightM).toBeLessThan(lite.design.rcHeight);
+      expect(buildAxleLite(s).mrSpringSlope).toBeCloseTo((sampleAt(a, h).mrSpring - sampleAt(a, -h).mrSpring) / (2 * h), 9);
     }
     // The strut's rising rate: its mr grows in bump.
     expect(buildAxleLite(spec).mrSpringSlope).toBeGreaterThan(0);
+  });
+
+  // The force line of a left corner at travel q, drawn without the solver's derivatives: through the contact point,
+  // square to the velocity (central difference of exact solves) of the knuckle point that sits under the contact patch.
+  const forceLine = (a: ReturnType<typeof buildAxle>, q: number): { y: number; z: number; slope: number } => {
+    const pose = new Float64Array(POSE_SIZE);
+    a.solvePose(q, 0, null, pose);
+    const c = newCornerSample();
+    a.measure(pose, q, 0, c);
+    // The knuckle point at design that the pose carries to the contact point: c0 + R⁻¹·(C − c0 − t).
+    const c0 = a.solver.c0;
+    const back = [0, 0, 0];
+    rotateInto([-pose[3], -pose[4], -pose[5], pose[6]], 0, c.contactX - c0[0] - pose[0], c.contactY - c0[1] - pose[1], c.contactZ - c0[2] - pose[2], back, 0);
+    const k: Vec3 = [c0[0] + back[0], c0[1] + back[1], c0[2] + back[2]];
+    const h = 1e-5;
+    const [up, down] = [new Float64Array(POSE_SIZE), new Float64Array(POSE_SIZE)];
+    const [pu, pd] = [[0, 0, 0], [0, 0, 0]];
+    up.set(pose);
+    down.set(pose);
+    a.solver.solve(up, q + h, 0, 30);
+    a.solver.solve(down, q - h, 0, 30);
+    a.solver.point(up, k, pu);
+    a.solver.point(down, k, pd);
+    return { y: c.contactY, z: c.contactZ, slope: (pu[1] - pd[1]) / (pu[2] - pd[2]) };
+  };
+
+  it('finds the roll centre of a 3° roll where the force lines cross, measured from the rolled road', () => {
+    // A swing axle built from two wishbones whose pivot axes share one line along x, 250 mm up on the centre line, and
+    // a toe link from that line: the knuckle can only turn about it, so both force lines pass through the pivot at any
+    // roll, and the roll centre is the pivot seen from the road through the two contact points.
+    const pivotZ = 0.25;
+    const arm = (id: string, ball: Vec3, spread: number) => ({ id, front: [spread, 0, pivotZ] as Vec3, rear: [-spread, 0, pivotZ] as Vec3, ball, part: 'susp.lower-arm' });
+    const swing: AxleSpec = {
+      ...front.dw,
+      track: 1.5,
+      wheelCentre: [0, 0.75, 0.3],
+      linkage: {
+        kind: 'links',
+        wishbones: [arm('lower-arm', [0, 0.7, 0.12], 0.2), arm('upper-arm', [0, 0.68, 0.48], 0.15)],
+        rods: [{ id: 'toe-link', body: [-0.15, 0, pivotZ], knuckle: [-0.15, 0.68, 0.3], part: 'susp.toe-link' }],
+      },
+    };
+    const lite = buildAxleLite(swing);
+    expect(lite.design.rcHeight).toBeCloseTo(pivotZ, 12);
+    const a = buildAxle(swing);
+    const dz = 0.75 * Math.sin(3 * DEG);
+    const [o, i] = [sampleAt(a, dz), sampleAt(a, -dz)];
+    const road = [o.contactY + i.contactY, o.contactZ - i.contactZ];
+    const len = Math.hypot(road[0], road[1]);
+    const my = 0 - (o.contactY - i.contactY) / 2;
+    const mz = pivotZ - (o.contactZ + i.contactZ) / 2;
+    expect(lite.rolled.heightM).toBeCloseTo((road[0] * mz - road[1] * my) / len, 9);
+    expect(lite.rolled.lateralM).toBeCloseTo((road[0] * my + road[1] * mz) / len, 9);
+
+    for (const s of all) {
+      const a = buildAxle(s);
+      const lite = buildAxleLite(s);
+      const dz = (s.track / 2) * Math.sin(3 * DEG);
+      // The same crossing from force lines drawn by finite differences, in the body frame, where the outer contact
+      // point sits about dz higher and the inner one (the mirrored right corner) as much lower.
+      const out = forceLine(a, dz);
+      const inn = forceLine(a, -dz);
+      const [yo, zo, bo] = [out.y, out.z, out.slope];
+      const [yi, zi, bi] = [-inn.y, inn.z, inn.slope];
+      const y = (zo - zi + bo * yo + bi * yi) / (bo + bi);
+      const z = zo + bo * (yo - y);
+      const [ry, rz] = [yo - yi, zo - zi];
+      const len = Math.hypot(ry, rz);
+      const [dy, dzz] = [y - (yo + yi) / 2, z - (zo + zi) / 2];
+      expect(Math.abs(lite.rolled.heightM - (ry * dzz - rz * dy) / len), s.layout).toBeLessThan(2e-5);
+      expect(Math.abs(lite.rolled.lateralM - (ry * dy + rz * dzz) / len), s.layout).toBeLessThan(2e-5);
+      // With no roll the two lines meet on the centre line at y_C·tanβ.
+      const still = rolledRollCentre(sampleAt(a, 1e-7), sampleAt(a, -1e-7));
+      expect(Math.abs(still.heightM - lite.design.rcHeight)).toBeLessThan(1e-6);
+      expect(Math.abs(still.lateralM)).toBeLessThan(1e-4);
+      // On all these templates the centre drops in roll and runs off toward the inner wheel (typical geometry, not a
+      // law: the swing axle above keeps it at its pivot).
+      expect(lite.rolled.heightM).toBeLessThan(lite.design.rcHeight);
+      expect(lite.rolled.lateralM).toBeLessThan(-0.15);
+    }
   });
 
   it('is cheaper than the grid', () => {

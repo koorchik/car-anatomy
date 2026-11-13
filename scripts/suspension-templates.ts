@@ -32,7 +32,7 @@ const templates: Array<[string, AxleSpec]> = [
 const dir = '.tmp/suspension-templates';
 mkdirSync(dir, { recursive: true });
 const rows: string[][] = [
-  ['template', 'RC mm', 'gain °/m', 'RCF', 'steer °/m', 'tanθ CP', 'KPI °', 'caster °', 'scrub mm', 'offset mm', 'mr spring', 'rolled RC mm'],
+  ['template', 'RC mm', 'gain °/m', 'RCF', 'steer °/m', 'tanθ CP', 'KPI °', 'caster °', 'scrub mm', 'offset mm', 'mr spring', 'RC 3° mm', 'RC 3° shift mm'],
 ];
 for (const [name, spec] of templates) {
   const lite = buildAxleLite(spec);
@@ -50,6 +50,7 @@ for (const [name, spec] of templates) {
     (c.kingpinOffset * 1000).toFixed(1),
     c.mrSpring.toFixed(3),
     (lite.rolled.heightM * 1000).toFixed(0),
+    (lite.rolled.lateralM * 1000).toFixed(0),
   ]);
   const axle = buildAxle(spec);
   const s = newCornerSample();

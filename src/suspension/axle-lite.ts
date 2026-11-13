@@ -27,13 +27,56 @@ export interface AxleLite {
   /** d(camber gain)/dq, rad/m². */
   camberGainSlope: number;
   /** Geometric roll centre with the body rolled by LITE_ROLL_RAD: the outer wheel `(t/2)·sin φ` into bump, the inner as
-   *  far into droop; height above the road and its lateral shift toward the outer wheel, m. */
-  rolled: { heightM: number; lateralM: number };
+   *  far into droop (rolledRollCentre); m. */
+  rolled: RolledRollCentre;
   /** Toe change of the left wheel per metre of rack moving left (+y) at design, rad/m; NaN when the axle does not
    *  steer. */
   steerPerRack: number;
   /** Exact solves it took. */
   solves: number;
+}
+
+export interface RolledRollCentre {
+  /** Height above the road under the rolled body, m. */
+  heightM: number;
+  /** Shift along the road from the middle between the two contact points toward the outer wheel, m. */
+  lateralM: number;
+}
+
+/** Slope of a left corner's force line, rising inboard: from the contact point through the front-view instant centre,
+ *  square to the knuckle's motion there; tanβ when the knuckle only translates (instant centre at infinity). */
+function forceLineSlope(c: CornerSample): number {
+  return Number.isNaN(c.icFrontY) ? c.tanBeta : (c.icFrontZ - c.contactZ) / (c.contactY - c.icFrontY);
+}
+
+/**
+ * Geometric roll centre of a rolled axle: where the force lines of the two wheels cross. `outer` is the left corner at
+ * its travel (into bump), `inner` the left corner at the inner wheel's travel; the right corner is its mirror. Each line
+ * runs from its contact point through its instant centre, in the body frame, where the contact points are not level:
+ * the outer one sits about its travel higher, the inner one lower, and the road under the rolled body is the line
+ * through the two. The research's closed form (z = T·tanβ_o·tanβ_i/(tanβ_o + tanβ_i)) puts both contact points on one
+ * level, which holds for slopes measured from the road; with the body's slopes it drops a swing axle's roll centre
+ * below its pivot and moves it sideways. At design the slope equals tanβ, so with no roll this is y_C·tanβ. NaN when
+ * the lines are parallel.
+ */
+export function rolledRollCentre(outer: CornerSample, inner: CornerSample): RolledRollCentre {
+  const yo = outer.contactY;
+  const zo = outer.contactZ;
+  const yi = -inner.contactY;
+  const zi = inner.contactZ;
+  const bo = forceLineSlope(outer);
+  // The mirrored inner line rises inboard, toward +y, with the inner corner's slope.
+  const bi = forceLineSlope(inner);
+  // z = zo + bo·(yo − y) and z = zi + bi·(y − yi)
+  const y = (zo - zi + bo * yo + bi * yi) / (bo + bi);
+  const z = zo + bo * (yo - y);
+  // The road: from the inner contact point to the outer one, measured from its middle.
+  const ry = yo - yi;
+  const rz = zo - zi;
+  const len = Math.hypot(ry, rz);
+  const my = y - (yo + yi) / 2;
+  const mz = z - (zo + zi) / 2;
+  return { heightM: (ry * mz - rz * my) / len, lateralM: (ry * my + rz * mz) / len };
 }
 
 /** Static kinematics of an axle from about ten exact solves (see the header). */
@@ -70,13 +113,7 @@ export function buildAxleLite(spec: AxleSpec): AxleLite {
   const up = at(h);
   const down = at(-h);
   const dz = (spec.track / 2) * Math.sin(LITE_ROLL_RAD);
-  const outer = at(dz);
-  const inner = at(-dz);
-  // Force lines of both wheels rising inboard with slopes tanβ from their contact points; where they cross.
-  const T = outer.contactY + inner.contactY;
-  const bo = outer.tanBeta;
-  const bi = inner.tanBeta;
-  const rolled = { heightM: (T * bo * bi) / (bo + bi), lateralM: ((T / 2) * (bo - bi)) / (bo + bi) };
+  const rolled = rolledRollCentre(at(dz), at(-dz));
 
   let steerPerRack = NaN;
   if (solver.steerRow() >= 0) {
