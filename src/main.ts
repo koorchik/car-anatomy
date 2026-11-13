@@ -552,6 +552,11 @@ function setSumpMode(on: boolean): void {
     dyno.setActive(false);
     forcesBefore = balancePanel.isOn;
     balancePanel.show(false);
+    // The lap works the pedal and lets it go on leaving: a held pedal would come back showing a throttle the engine no longer gets.
+    latched = false;
+    pedalHeld = 0;
+    $('latch').setAttribute('aria-pressed', 'false');
+    applyPedal();
     drive.stop();
     viewBefore = view;
     explodeBefore = explode;
