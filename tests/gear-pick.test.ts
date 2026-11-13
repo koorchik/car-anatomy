@@ -24,18 +24,48 @@ describe('pickPair', () => {
     expect(pick.coprime).toBe(true);
   });
 
-  it('lands within half a step of the grid, with coprime teeth and the helix in range', () => {
+  it('picks the nearest of every coprime pair whose helix closes the centre distance, within half the grid step', () => {
+    // The grid built here independently: a pair without profile shift spans a = m·(z1 + z2)/(2 cos β).
+    const a = 76;
+    const cosLimits = [Math.cos((35 * Math.PI) / 180), Math.cos((15 * Math.PI) / 180)];
     for (const ratio of [0.62, 0.81, 1, 1.27, 1.9, 2.4, 3.1]) {
       for (const module of [1.75, 2, 2.5, 3]) {
-        const pick = pickPair({ ratio, centreMm: 76, module, helixRange: [15, 35] });
-        if (!pick) continue;
-        expect(Math.abs(pick.error), `${ratio} m${module}`).toBeLessThanOrEqual(pick.step / 2 + 1e-12);
-        expect(gcd(pick.teeth[0], pick.teeth[1])).toBe(1);
-        expect(pick.helix).toBeGreaterThanOrEqual(15);
-        expect(pick.helix).toBeLessThanOrEqual(35);
-        expect(centreDistance(module, pick.teeth[0], pick.teeth[1], pick.helix, 20)).toBeCloseTo(76, 9);
+        const grid: number[] = [];
+        for (let z1 = 12; z1 <= 120; z1++) {
+          for (let z2 = 12; z2 <= 120; z2++) {
+            const c = (module * (z1 + z2)) / (2 * a);
+            if (c >= cosLimits[0]! && c <= cosLimits[1]! && gcd(z1, z2) === 1) grid.push(z2 / z1);
+          }
+        }
+        const pick = pickPair({ ratio, centreMm: a, module, helixRange: [15, 35] });
+        if (!grid.length) {
+          expect(pick, `${ratio} m${module}`).toBeNull();
+          continue;
+        }
+        const nearest = Math.min(...grid.map((r) => Math.abs(r - ratio)));
+        expect(Math.abs(pick!.error), `${ratio} m${module}`).toBeCloseTo(nearest, 12);
+        const below = Math.max(...grid.filter((r) => r < ratio));
+        const above = Math.min(...grid.filter((r) => r > ratio));
+        if (Number.isFinite(below) && Number.isFinite(above)) expect(Math.abs(pick!.error)).toBeLessThanOrEqual((above - below) / 2 + 1e-12);
+        expect(gcd(pick!.teeth[0], pick!.teeth[1])).toBe(1);
+        expect(pick!.helix).toBeGreaterThanOrEqual(15);
+        expect(pick!.helix).toBeLessThanOrEqual(35);
+        expect(centreDistance(module, pick!.teeth[0], pick!.teeth[1], pick!.helix, 20)).toBeCloseTo(a, 9);
       }
     }
+  });
+
+  it('a ratio the teeth give exactly keeps the step of the grid around it, not zero', () => {
+    // The panel asks with the ratio of the teeth it already has.
+    const [z1, z2] = desc.main.teeth;
+    const pick = pickPair({ ratio: z2 / z1, centreMm: desc.centreMm, module: desc.main.module, helixRange: [15, 35] })!;
+    expect(pick.teeth).toEqual([z1, z2]);
+    expect(pick.error).toBe(0);
+    const others = pairCandidates({ ratio: z2 / z1, centreMm: desc.centreMm, module: desc.main.module, helixRange: [15, 35] }).map((p) => p.ratio);
+    const below = Math.max(...others.filter((r) => r < z2 / z1));
+    const above = Math.min(...others.filter((r) => r > z2 / z1));
+    expect(pick.step).toBeCloseTo((above - below) / 2, 12);
+    expect(pick.step).toBeGreaterThan(0);
   });
 
   it('a finer module makes the grid finer', () => {

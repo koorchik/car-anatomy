@@ -39,9 +39,15 @@ export interface PairPick {
   /** Helix angle that closes the centre distance, degrees. */
   helix: number;
   coprime: boolean;
-  /** Distance between the nearest reachable ratios below and above the wanted one; Infinity outside the grid. */
+  /**
+   * Distance between the nearest reachable ratios below and above the wanted one; when the wanted ratio is itself
+   * reachable, the mean of the gaps on its two sides. Infinity outside the grid.
+   */
   step: number;
 }
+
+/** Ratios closer than this count as the same: far below any tooth-count difference, far above rounding. */
+const EXACT = 1e-12;
 
 export const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
 
@@ -71,9 +77,13 @@ export function pairCandidates(req: PairRequest): PairPick[] {
       found.push({ teeth: [z1, z2], ratio, error: ratio - req.ratio, helix, coprime });
     }
   }
-  const below = Math.max(...found.filter((p) => p.ratio <= req.ratio).map((p) => p.ratio));
-  const above = Math.min(...found.filter((p) => p.ratio >= req.ratio).map((p) => p.ratio));
-  const step = Number.isFinite(below) && Number.isFinite(above) ? above - below : Infinity;
+  // The grid around the target. A ratio the teeth give exactly is not its own neighbour: the panel asks with the ratio
+  // of the current teeth, and a step of 0 there would claim an endless grid. Then the step is the mean of the gaps on
+  // its two sides.
+  const exact = found.some((p) => Math.abs(p.error) <= EXACT);
+  const below = Math.max(...found.filter((p) => p.error < -EXACT).map((p) => p.ratio));
+  const above = Math.min(...found.filter((p) => p.error > EXACT).map((p) => p.ratio));
+  const step = Number.isFinite(below) && Number.isFinite(above) ? (above - below) / (exact ? 2 : 1) : Infinity;
   return found
     .sort((p, q) => Math.abs(p.error) - Math.abs(q.error) || Math.abs(p.helix - middle) - Math.abs(q.helix - middle))
     .map((p) => ({ ...p, step }));
