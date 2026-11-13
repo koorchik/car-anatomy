@@ -146,7 +146,11 @@ export interface TimeControl {
   set(mode: TimeMode, factor?: number): boolean;
   /** Called after every accepted set(). Gives back the function that removes the listener. */
   onChange(listener: (mode: TimeMode) => void): () => void;
-  /** Asks the page for its capabilities again, after something they depend on changed (the dyno went on). */
+  /**
+   * Asks the page for its capabilities again, after something they depend on changed (the dyno went on). The shell
+   * asks too when it shows another section. A mode no longer offered gives way to 'readable', 'real' or the page's
+   * first mode, through set(), so `mode` is always one the page has.
+   */
   refresh(): void;
   /** The simulated time shown beside the slow-down, seconds; null hides it. */
   clock(seconds: number | null): void;

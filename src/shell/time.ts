@@ -16,6 +16,14 @@ export function readableDegreesPerSecond(rpm: number, idleRpm: number, redlineRp
   return (rpm < idleRpm ? (shownRpm * rpm) / idleRpm : shownRpm) * 6;
 }
 
+/** Where a visitor goes on from a mode the page does not offer, in this order. */
+const FALLBACK: readonly TimeMode[] = ['readable', 'real'];
+
+/** Whether the page offers `mode` and it can be chosen now. */
+function choosable(offered: TimeCapabilities, mode: TimeMode): boolean {
+  return offered.modes.includes(mode) && offered.unavailable?.[mode] === undefined;
+}
+
 export class ShellTime implements TimeControl {
   mode: TimeMode = 'readable';
   factor = 1;
@@ -33,7 +41,7 @@ export class ShellTime implements TimeControl {
 
   set(mode: TimeMode, factor?: number): boolean {
     const offered = this.capabilities();
-    if (!offered.modes.includes(mode) || offered.unavailable?.[mode] !== undefined) return false;
+    if (!choosable(offered, mode)) return false;
     this.mode = mode;
     this.factor = mode === 'slowdown' ? (factor ?? offered.slowdown?.[0] ?? 1) : 1;
     setSegment(this.group, mode);
@@ -53,6 +61,11 @@ export class ShellTime implements TimeControl {
       button.hidden = !offered.modes.includes(mode);
       button.disabled = offered.unavailable?.[mode] !== undefined;
     }
+    // A page never runs in a mode it does not offer, such as the readable mode carried over from another section,
+    // or slow motion once the dyno is on: the visitor goes on in the readable or the real mode, else the page's first.
+    if (choosable(offered, this.mode)) return;
+    const next = FALLBACK.find((mode) => choosable(offered, mode)) ?? offered.modes.find((mode) => choosable(offered, mode));
+    if (next) this.set(next);
   }
 
   clock(_seconds: number | null): void {
