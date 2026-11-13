@@ -1,0 +1,1330 @@
+[
+ {
+  "name": "shell",
+  "slug": "shell",
+  "stages": [
+   {
+    "id": "O1a",
+    "title": "Snapshots, routes and URL writes",
+    "ui": true,
+    "plan_ref": "build-order doc «Етапи» → O1a; docs/superpowers/plans/2026-11-12-whole-car.md «Дорожня карта» → «Оболонка» → О1a, «Як переносити main.ts» steps 0–2, «Роутер», «Налагодження», «Знімки до й після»",
+    "deps": [],
+    "brief": "Implement whole-car stage О1a as written: freeze() in window.__engine; scripts/snapshots.ts and reference shots of the eight engine pages (1440x900, 390x844); src/shell/routes.ts with tests/routes.test.ts; router.replace/router.push in src/shell/router.ts, with every existing URL write moved onto them (DesignerPage.scheduleUrl, copyLink, next engine, oil page); designFromRoute(route). Amendment: the snapshot script must retake the reference on the current code with one command, because lanes data and others may change engine pages while the shell runs. No moving of main.ts code yet. Acceptance: routes test green; the snapshot script run twice in a row gives matching shots; the designer URL code is unchanged after several edits; catalogue snapshot unchanged; tsc, npm test and build green."
+   },
+   {
+    "id": "O1b",
+    "title": "Move main.ts into the shell without behaviour change",
+    "ui": true,
+    "plan_ref": "build-order doc → O1b, rule «Контракт розділу до О3»; whole-car plan «Дорожня карта» → О1b, «Як переносити main.ts» steps 3–6, «Слоти розмітки», «Контракт розділу», «Клавіші», «Час»",
+    "deps": [],
+    "brief": "Implement whole-car stage О1b: src/shell/app.ts skeleton with the same ids, slots, layout and frame loop; engine code into src/ui/engines/ (catalogue, designer host, sump host, dyno, systems, forces, valve readout); shared widgets into src/ui/widgets/; window.__engine kept. Define the Section contract (src/shell/section.ts) and SectionContext in full, including the KeyMap and TimeControl interfaces with minimal implementations that keep today's keys and speed modes, so sections mounted between O2b and O3 (K1b, P1b, E2) are written against the final interfaces and O3 only replaces the internals. No lazy chunks, no new menu, no Stage changes. Amendment: take the 'before' reference on this stage's own base of next, and retake it after rebasing if next changed engine pages in the meantime (build-order rule «Знімки оболонки»). Acceptance: the eight pages match the reference at both widths (DOM exact, canvas at most 0.05% of pixels with ΔE over 2); catalogue snapshot and all tests unchanged; src/main.ts at most 80 lines."
+   },
+   {
+    "id": "O2a",
+    "title": "Lazy chunks and dictionaries",
+    "ui": true,
+    "plan_ref": "build-order doc → O2a; whole-car plan «Дорожня карта» → О2a, «Ліниве завантаження», «Переклад», «Бюджет швидкодії»; «Правки…» → «Картер на треку» item 6",
+    "deps": [
+     "A1a"
+    ],
+    "brief": "Implement whole-car stage О2a: a main.ts loader that fetches the main chunk and the section chunk in parallel; engines split into the catalogue plus lazy designer, dyno, systems, valve and forces chunks; oil-on-track as its own chunk; registerDictionary and src/i18n/dictionaries.ts; DESIGNER_EN in the designer chunk; split style.css by section; scripts/bundle-report.ts (records P_Д6, measured on next before this stage, in docs/vehicle-model.md, which A1a created; worklet Cyrillic and size check). Switch the oil page to translating the tyre and sector names from src/data/vehicle-names.ts (A1a) during display and remove A1a's compatibility export. Acceptance as in the plan: same snapshots as O1b; main chunk at most 200 KB gzip; budget thresholds; every engine feature opens from a direct URL and after a reload."
+   },
+   {
+    "id": "O2b",
+    "title": "Shared stage and shell services",
+    "ui": true,
+    "plan_ref": "build-order doc → O2b, rule «Моделі до О2b»; whole-car plan «Дорожня карта» → О2b, «Stage для всіх розділів», «Звук: один Drive», «Час», «Візуальна мова» → «Кольори»",
+    "deps": [
+     "E1a"
+    ],
+    "brief": "Implement whole-car stage О2b: parts registry (registerParts, tests/parts-registry.test.ts); the SceneModel<F> type in model-types.ts with setHighlight/setGhost/setRenderBand; the Stage changes from the plan table (setModel with an options object, setGround, camera transitions, pick with system, reversible quality, scale bar in the shell); src/scene/palette.ts holding every colour value, including the balance-force colours that E1a moved into src/scene/arrows.ts, which then imports them from the palette; IdleQueue, RunStore, AudioHost. Amendment: models already merged without a page (K1b-3d, K6a-3d, P1c, P4-3d, P7-geom, whichever are in next) must type-check as SceneModel; fix any mismatch in the model or the type and note the decision. Acceptance as in the plan: snapshots as O1b; quality steady while frozen and raised a step after 10 s of fast frames; dyno runs survive switching engines and back."
+   },
+   {
+    "id": "O3",
+    "title": "Menu, keys and time",
+    "ui": true,
+    "plan_ref": "build-order doc → O3, rule «Контракт розділу до О3»; whole-car plan «Дорожня карта» → О3, «Навігація», «Клавіші», «Схема адрес»",
+    "deps": [],
+    "brief": "Implement whole-car stage О3: top section menu with «готуємо» markers, sub-tabs, the «Розділи» sheet on the phone, the «Такої сторінки немає» card; KeyMap and the ? help and TimeControl, filling the interfaces O1b defined without changing them; ?m=dyno and ?l= addresses; car= and ret= context keys kept by router.replace, plus «← До авто»; window.__app with freeze; a «Оболонка» section in CLAUDE.md. Amendment: the menu builds each section item from the section registry: «Коробки передач» and «Підвіски» show «готуємо» until their section registers a visible page (K1b, P1d), and if K1b merged before O3 its item is already a link. Tests: tests/keys.test.ts; routes with the new keys. Acceptance: every engine page reachable from the menu at 360x740; all engine keys work as before; #/engines/i4?m=dyno survives a reload; #/designer?car=civic-type-r-fk8 keeps «← До авто» after design edits; an unknown URL shows the card."
+   }
+  ]
+ },
+ {
+  "name": "viewer",
+  "slug": "viewer",
+  "stages": [
+   {
+    "id": "E1a",
+    "title": "Shared arrow primitive and model viewer",
+    "ui": false,
+    "plan_ref": "build-order doc «Правила для всіх етапів» → «Стенд моделей», «Етапи» → E1a; whole-car plan «Візуальна мова» → «Стрілки сил»; src/scene/balance-arrows.ts",
+    "deps": [],
+    "brief": "Non-ui. (1) src/scene/arrows.ts: the arrow and arc primitives moved out of src/scene/balance-arrows.ts with an identical picture; P1c, E2 and the suspension force arrows build on it. (2) Dev-only model viewer dev/models.html + dev/models.ts: own WebGLRenderer, orbit camera, Stage-like light, floor, scale bar, ?m=<id>, sliders a model registers. Each model registers from its own file dev/models/<id>.ts picked up with import.meta.glob, so the parallel 3D stages (K1b-3d, K6a-3d, P1c, P4-3d, P7-geom) never edit one shared list. It must not import src/main.ts, src/ui or src/scene/stage.ts. Add dev to the tsconfig include and keep it out of vite build. First model: a catalogue engine with today's force overlay. Acceptance: take a viewer shot of that engine with forces first, move the primitives, and the shot is the same; npm run build output contains nothing from dev/; existing balance tests unchanged."
+   }
+  ]
+ },
+ {
+  "name": "engines",
+  "slug": "engines",
+  "stages": [
+   {
+    "id": "E1b",
+    "title": "Balance phasors in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc «А4» (items 2, 5, 6 and the module paragraph) and «Етапи» → E1b; docs/superpowers/plans/2026-11-12-balance.md «Що вже є і чи воно правильне», «Фізика стрілок»; src/engine/balance-forces.ts",
+    "deps": [],
+    "brief": "Non-ui. src/engine/balance-phasors.ts, pure, on top of src/engine/balance-forces.ts (export or share its harmonic(), do not copy the maths). Views: 'order1' (the pistons' first order), 'order2' (the pistons' second order) and 'rotating' (big ends, crankpins, rotors), each with a counterweights flag and, where the engine has them, a shafts flag. Split each throw's counterweight into the share that cancels that throw's rotating masses (shown in 'rotating') and the share that cancels the half of each piston's first order turning with the crank, the 50% balance factor balance-forces.ts uses (shown in 'order1'); together they are today's counterweight arrow. For each element of a view compute the complex amplitudes of the +n (with the crank) and -n (against it) harmonics over a turn, its position z along the crank, the sums F+, F- and couples C+, C- weighted by z from the crank middle, polygon points at angle theta, and the net-force tip locus over a turn with its shape (point, line, circle with or against the crank, ellipse), axis and semi-axes |F+|+|F-| and ||F+|-|F-||. Tests in tests/balance-phasors.test.ts: 'order1' plus 'rotating' with counterweights equals the BalanceForces/vibrationTable order-1 residual and 'order2' with shafts the order-2 residual, for every catalogue engine; loci: I4 order2 a vertical line of 4·A2; flat-plane V8 order2 a horizontal line of 4√2·A2; cross-plane V8 order1 couple a circle turning with the crank without counterweights and a point with them, and the same in 'rotating'; 90° V6 with shared pins an order-2 couple of √6·A2; boxer 4 an order-2 couple line of 2·A2·h; I6 a point in every view with and without counterweights; single cylinder 'order1' a line along the cylinder axis of amplitude m·r without counterweights and a circle of radius m·r/2 against the crank with them. Polygon end equals the sum for any theta. Piston-only views of inline engines have |F+| = |F-|. Existing balance tests unchanged."
+   },
+   {
+    "id": "E2",
+    "title": "Balance forces: one view at a time in 3D",
+    "ui": true,
+    "plan_ref": "build-order doc «А4» items 1–3, 7 and «Етапи» → E2",
+    "deps": [
+     "O2b",
+     "E1a"
+    ],
+    "brief": "Redesign the force overlay on engine pages on src/scene/arrows.ts (E1a) and src/engine/balance-phasors.ts (E1b). Replace the three toggles with one selector: «1-й порядок», «2-й порядок», «Обертові маси», «Вимкнено», plus a «Противаги» switch (on by default) in the first-order and rotating views and «Вали» when the engine has balance shafts. Show thin per-element arrows of the chosen view, one big resultant arrow at the crank centre and the curved couple arc. Arrows follow the displayed angle (visualTheta in «Наочно», locked rpm in «Повільно»). The model goes to X-ray by default while forces show. Numbers shrink to one small line (now and at the rev limit). Add translations. Test: in each view the shown arrows sum to the E1b sum. Acceptance: on I4 2nd order, four in-phase arrows and a vertical sum; on I6 the sum and arc are zero in every view; on cross-plane V8 the first-order and rotating views show a turning couple with «Противаги» off and none with it on; on the single cylinder the first-order sum turns against the crank with counterweights; shots at 1440x900 and 390x844 in «Повільно» and «Наочно». The card keeps clear of the engine name, buttons and valve labels as CLAUDE.md requires."
+   },
+   {
+    "id": "E3",
+    "title": "Balance forces: force polygon and locus beside the model",
+    "ui": true,
+    "plan_ref": "build-order doc «А4» items 4–8 and «Етапи» → E3",
+    "deps": [
+     "O2b"
+    ],
+    "brief": "Add a 2D diagram (SVG or canvas) to the force card that turns with the same angle as the 3D. It draws each element force of the chosen view as a vector, head to tail. Inline engines get one polygon; V, VR, W and boxer get two, labelled «з валом» and «назустріч валу»; the label says what cancels each: in the first order the counterweights cancel «з валом» and only a counter-rotating shaft the other, in the second order only Lanchester shafts at twice crank speed cancel either. Show the closing resultant arrow, a small couple polygon weighted by cylinder position, and the trace of the net-force tip over the last turn. Under the force diagram goes one word from the locus shape: «Врівноважено», «Хитає вгору-вниз», «Хитає вбік», «Хитає навскіс», «Крутиться з валом», «Крутиться назустріч валу», «Хитає й крутиться»; the couple diagram gets its own word with «Гойдає». On the phone the diagram is about 120 px and a tap opens it as a sheet. Add an aria-label in words. Test: a pure function of diagram points ends at the E1b sum for every engine in «А4», and the word matches the locus shape. Acceptance in the browser on I4, I6, cross- and flat-plane V8, 90° V6, boxer 4 and the single cylinder: the polygon closes or not exactly as its word says, in «Повільно» and «Наочно» at 1440x900, 390x844 and 360x740. Point the article's «Вібрації» sentence at the diagram. Update CLAUDE.md and docs/engine-designer-model.md."
+   }
+  ]
+ },
+ {
+  "name": "data",
+  "slug": "data",
+  "stages": [
+   {
+    "id": "D1",
+    "title": "Remove the VAZ-2101 and any Russian car from visitor text",
+    "ui": false,
+    "plan_ref": "build-order doc «А5», «Етапи» → D1; CLAUDE.md «Як додати реальний двигун на сторінку компоновки»",
+    "deps": [],
+    "brief": "Remove the engine variant id vaz-2101 from src/data/engine-variants.ts and its English text from src/i18n/en/variants.ts. Remove «ВАЗ-2101» / 'VAZ-2101' from the i4 page cars list in src/data/engines.ts and src/i18n/en/engines.ts. Re-run node scripts/calibrate.ts (never hand-edit loudness-trim.ts) and update the variants and catalogue snapshots. Search all visitor-facing text under src/ (data, dictionaries, articles, part cards, hints) for other Russian or Soviet-Russian cars and brands (ВАЗ, Lada, Жигулі, Нива, Волга, ГАЗ, УАЗ, Москвич, ЗІЛ, КамАЗ and so on) and remove them. Do not touch src/ui or src/main.ts. Acceptance: npm test green, and the snapshot diff is exactly the removal of i4/vaz-2101; grep finds no Russian car names in src/; the old URL #/engines/i4/vaz-2101 still opens i4 like any unknown variant."
+   },
+   {
+    "id": "D2",
+    "title": "Ukrainian MeMZ-245 variant if its figures check out",
+    "ui": false,
+    "plan_ref": "build-order doc «А1», «А5», «Етапи» → D2; CLAUDE.md «Як додати реальний двигун на сторінку компоновки»",
+    "deps": [],
+    "brief": "Check bore, stroke, displacement, compression, power and torque with rpm of the MeMZ-245 (ZAZ-1102 Tavria) against a primary source: the ZAZ-1102 owner's or workshop manual, or MeMZ data. Secondary data from uk.wikipedia: 1091 cc, 51 hp at 5400, 78.5 Nm at 3000–3500, SOHC 8 valves, carburettor. If they check out, add variant i4/zaz-1102-memz-245 with factory figures, voiceEvidence 'estimate', quiet whistle/pops, the rest in unverified, and its English text in src/i18n/en/variants.ts. Add «ЗАЗ-1102 «Таврія»» / 'ZAZ-1102 Tavria' to the i4 cars list in both languages and run node scripts/calibrate.ts. tests/variants.test.ts must pass without changing its bounds and with no fatal diagnosis. If the figures do not check out, add nothing and write what is missing into the «Що відкладено» table of the build-order doc. No src/ui edits."
+   }
+  ]
+ },
+ {
+  "name": "shared-car",
+  "slug": "shared-car",
+  "stages": [
+   {
+    "id": "A1a",
+    "title": "Car record types and move without behaviour change",
+    "ui": false,
+    "plan_ref": "build-order doc «А1», rule «Паралельні смуги в спільних файлах», «Етапи» → A1a; whole-car plan «Дорожня карта» → «Спільне авто» → А1a, «Спільне ядро авто», «Запис авто»",
+    "deps": [],
+    "brief": "Implement whole-car stage А1a. src/vehicle/car.ts holds types, the front-axle frame, carFrameToCg, cgPoint, vehicleSpec, bodyOf and drivingMassKg. Each car record lives in its own file src/data/cars/<id>.ts and src/data/cars.ts is a registry with one line per car, because a dozen later lanes add cars. Records: the six oil-page cars with today's numbers, plus the BMW M3 E30 instead of the VAZ-2101 with id 'bmw-m3-e30', engine 'i4/bmw-m3-e30-s14', gearbox null (K2b links it once the gearbox data exist), suspension null, tyre 'classic', and mass, tyres and v_max in unverified as the «А1» table says. Also add tyre-size.ts, RoadLoadCoeffs and roadLoadN that still reproduce the oil constants, 'classic' in TyreId, SumpCar.car with a derived vehicle field, links.ts and docs/vehicle-model.md. Move tyre and sector names to src/data/vehicle-names.ts, but keep a compatible export so src/ui/sump stays untouched until O2a. Tests: vehicle-cars without EPA (gearbox and suspension links may be null); oil tests green. Acceptance: scripts/sump-table.ts prints exactly the same numbers; every record number has a source or is in unverified."
+   },
+   {
+    "id": "A1b",
+    "title": "Road load, tyre radii and checked masses",
+    "ui": false,
+    "plan_ref": "build-order doc → A1b; whole-car plan «Дорожня карта» → А1b, «Опір руху»; gearboxes plan decision 13",
+    "deps": [],
+    "brief": "Implement whole-car stage А1b. Add road-load-trim.ts and scripts/calibrate-road-load.ts. The k_EPA list needs at least four cars with an EPA row and brochure Cd and A, including the 911 and the MX-5. Add roadLoadCoeffs(car) with the C_dA rule, the tyre radius from size, and the six masses checked against maker data. The lap uses roadLoadN, so the canonical lap becomes L1; re-run scripts/sump-table.ts. For the M3 E30, solve C_dA from the published v_max (no limiter) if v_max is checked, else use brochure Cd 0.33 × area × k_EPA, marked. Tests: vehicle-cars (EPA within 1 N; the same forces from vehicleSpec and roadLoadCoeffs); oil tests green. Acceptance: the lap changes only through drag, radius and mass; the factory wet sump on road tyres never starves; k_EPA within 1.0–1.4."
+   },
+   {
+    "id": "A1c",
+    "title": "Dimensions and packaging of Civic FK8, M3 E30 and 911 Carrera T",
+    "ui": false,
+    "plan_ref": "build-order doc «А1», «Етапи» → A1c; whole-car plan «Дорожня карта» → А1c, «Запис авто», «Авто огляду» (911 Carrera T specs)",
+    "deps": [],
+    "brief": "Implement whole-car stage А1c for three cars: Honda Civic Type R FK8, BMW M3 E30 (instead of the VAZ-2101) and Porsche 911 Carrera T (992). The 911 record 'porsche-911-carrera-t-992' is created here (moved from C1d because P7-geom builds its axles), with gearbox null for K6a-3d to link. Each gets dimensions with a side profile, overhangs and ground clearance, and packaging: engine, bay, exhaust exit, tank, radiator, intercooler. Use maker data and put estimates in unverified. Add tyre.sizeRear for the 911 (245/35 ZR20 and 305/30 ZR21; 911 facts from the Porsche US spec sheet in the whole-car plan sources). Tests: vehicle-cars (points round-trip through carFrameToCg, the CG maps to (0,0,h_cg), crankFront inside bay). Acceptance: every number has a source or is unverified; the Civic bay fits its engine (by the kinematics.ts envelope until C4 adds engineEnvelope)."
+   }
+  ]
+ },
+ {
+  "name": "gbx-core",
+  "slug": "gbx-core",
+  "stages": [
+   {
+    "id": "K1a",
+    "title": "BMW M3 E30 gearbox data and derivation",
+    "ui": false,
+    "plan_ref": "build-order doc «А1», «А3», rule «Паралельні смуги в спільних файлах», «Етапи» → K1a; gearboxes plan «Етапи» → «Етап 1a», «Обчислювальне ядро» → «Умовності», «Типи даних», «Виведення»; docs/research/gearboxes.md §2, §3.1, §3.3",
+    "deps": [],
+    "brief": "Implement gearbox stage 1a with the BMW M3 E30 Getrag 265/5 dogleg instead of the VAZ-2101. Core files: spec.ts, topology.ts, gear-geometry.ts and layouts/layshaft.ts with a module per pair. New src/drivetrain/gear-pick.ts picks coprime teeth for a ratio at a shared centre distance, module and helix range; it reconstructs the E30 teeth and is reused by the K1b panel and the K9a designer. Put the data in src/data/gearboxes/manual-rwd.ts: ratios 3.717/2.404/1.766/1.264/1.000 [secondary], with teeth, modules and centre distance in verifyNote and reverse from a source or as an unverified estimate. First search for a primary source (BMW brochure or workshop manual) and record what was found. Add a TR-6060 MZ6 calibration record (29/38, 19/43, 580 Nm) with no page. Add a minimal DriveCar type (src/drivetrain/drive-car.ts: gearbox, final drive 3.25, diff type, driveline geometry with diffOutputs and propshaft points) and the E30 record keyed by the shared car id 'bmw-m3-e30' in src/data/drive-cars/bmw-m3-e30.ts, with src/data/drive-cars.ts as a one-line-per-car registry. Add scripts/gearbox-table.ts. Tests: drivetrain-topology 1–4 and 9 (E30 ratios from teeth within rounding, MZ6 2.9655 from real teeth, reverse idler shared); gear-geometry 1, 3, 4; gear-pick. Acceptance: node scripts/gearbox-table.ts bmw-m3-e30 prints the ratios and reverse from teeth, each state's kind and the loaded meshes; helix angles 15–35°."
+   },
+   {
+    "id": "K2a",
+    "title": "Drivetrain solver, elements and synchro formulas",
+    "ui": false,
+    "plan_ref": "build-order doc → K2a; gearboxes plan «Етап 2a», «Динаміка», «Інтегрування і бюджет реального часу», the synchronizer section",
+    "deps": [],
+    "brief": "Implement gearbox stage 2a on the E30 box with a brake stub on the output. Build core.ts (DrivetrainCore), solver.ts (KKT with per-step factorisation, Karnopp, projection, linear-implicit damping), friction elements with Stribeck, dogs, one-way clutch, an 'ideal' synchroniser, and a clutch with pedal, damper (disc, dual-mass, 'stiff disc') and disc heat. Amendment: also add pure src/drivetrain/synchro-math.ts for the blocking inequality, sync time J·Δω·i/(T_C ± i·T_drag) and energy and power per cone area. K4, K9a and K9b use it, so none of them waits for another. Tests: drivetrain-dynamics 1, 2, 5; budget 15 for the E30 without a car; drivetrain-topology 10; synchro formulas against the research §4 examples. Acceptance: scripts/gearbox-table.ts prints the E30 natural frequencies with disc and dual-mass damper."
+   },
+   {
+    "id": "K2b",
+    "title": "Final drive, wheels, longitudinal chassis",
+    "ui": false,
+    "plan_ref": "build-order doc → K2b; gearboxes plan «Етап 2b», «Дані авто»; whole-car plan «Правки до планів розділів» → «Коробки передач» items 1–5, 16, «Ланцюг сили: від колінвала до кузова», «Опір руху»",
+    "deps": [
+     "A1b",
+     "P2"
+    ],
+    "brief": "Implement gearbox stage 2b with the whole-car amendments. Add the final drive, open and clutch-type diffs (the E30 factory LSD as clutch-type), half-shafts and a propshaft with a flex coupling. This stage owns src/vehicle/wheel-bus.ts, wheel.ts, ChassisPort and longitudinal.ts. Take the tyre from src/vehicle/tyre.ts (P2) via longitudinalOf; do not write a second tyre. Road load comes from roadLoadCoeffs (A1b), so the v_max acceptance calibrates on the same coefficients the lap uses. Add the dynamic DriveCar fields for the E30 (clutch, propshaft, half-shafts; estimates unverified) and set the E30 CarRecord.gearbox to 'manual-rwd'. Extend scripts/gearbox-table.ts with C_dA, v_max, 0–100 and shunt frequencies. Tests: drivetrain-dynamics 3, 4, 6, 9, 14, 17; drivetrain-vehicle 1–8 for the E30; vehicle-cars. Acceptance: E30 v_max equals the published one (calibration), 0–100 within ±25% of published; with one wheel on ice the open diff crawls at the computed acceleration and stands on the limit grade plus 2 points."
+   },
+   {
+    "id": "K2c",
+    "title": "Engine on the drivetrain",
+    "ui": false,
+    "plan_ref": "build-order doc → K2c; gearboxes plan «Етап 2c», «Зв'язок із двигуном»; whole-car plan «Правки…» → «Коробки передач» item 2, «Передача стану між потоками»",
+    "deps": [],
+    "brief": "Implement gearbox stage 2c with whole-car amendment 2. Add VehicleLoad in src/vehicle/vehicle-load.ts (instead of DrivelineLoad) with snapshot/restore, a 'vehicle' kind in LoadSpec, VehicleStep, maxStepS, the loadRestore command and control/manual.ts with auto-clutch. Add a drive scenario to scripts/render-audio.ts producing .tmp/audio/bmw-m3-e30-drive.wav (idle, pull-away, 1→5, braking). Tests: drivetrain-dynamics 13, 16; vehicle-step (step size does not matter; snapshot and restore); tests/dyno.test.ts unchanged; LoadedCrank with VehicleLoad in Node at 1/3000 and 0.001 s. Acceptance: the spectrogram (showspectrumpic) of the WAV shows a pull-away and four upshifts with rpm drops to the computed values."
+   }
+  ]
+ },
+ {
+  "name": "gbx-3d",
+  "slug": "gbx-3d",
+  "stages": [
+   {
+    "id": "K1b-3d",
+    "title": "3D layshaft gearbox on the model viewer",
+    "ui": false,
+    "plan_ref": "build-order doc «Правила» → «Стенд моделей», «Моделі до О2b», «Етапи» → K1b-3d; gearboxes plan «Етап 1b», «3D»; research §2, §19",
+    "deps": [
+     "K1a",
+     "E1a"
+    ],
+    "brief": "Non-ui. Build gear-mesh.ts: involute helical teeth with mesh phases from the formulas. Build a parametric gearbox-model.ts for any number of pairs (4–6): shafts, gears, simplified synchronisers (hub and sleeve), reverse idler, and a case with bellhousing, ribs, shifter tower and extension. Add power-flow glow, three views and a gbx- parts dictionary. Rebuilding after a teeth change goes through a geometry cache. Implement the SceneModel contract methods structurally without editing model-types.ts or stage.ts (if O2b is already merged, declare implements SceneModel). Register the E30 box on the viewer in its own file dev/models/gearbox-e30.ts with N, 1–5, R table kinematics. Tests: gear-geometry 1 (no interference at 12 positions for the E30 pairs); mesh count within budget; models with 4, 5 and 6 pairs build. Acceptance on the viewer: the gears turn consistently, first gear lights two pairs and the direct fifth none, close-ups show no interference, shots in three views."
+   },
+   {
+    "id": "K6a-3d",
+    "title": "Civic FK8 and 992 transaxles in numbers and 3D",
+    "ui": false,
+    "plan_ref": "build-order doc → K6a-3d, rule «Паралельні смуги в спільних файлах»; whole-car plan «Правки…» → «Коробки передач» items 5, 15; gearboxes plan «Етап 6a», «Каталог»; research §3.4",
+    "deps": [
+     "A1c"
+    ],
+    "brief": "Non-ui. Add layouts/transaxle.ts (topology, ratios from teeth, power flow per gear). Data in src/data/gearboxes/manual-transaxle.ts: Honda Civic Type R FK8 (6 speeds, final 4.111, teeth reconstructed) and Porsche 911 Carrera T (992) 7MT (3.91/2.29/1.58/1.18/0.94/0.79/0.62, R 3.55, final 3.56 [primary]). Add DriveCar records, one file each, for the Civic and the 911, with diffOutputs in the front-axle frame computed from the A1c records; set CarRecord.gearbox of the Civic to 'manual-transaxle' and of the 911 to 'manual-transaxle/porsche-911-carrera-t-992'. Build a 3D two-shaft transaxle with the final-drive pair, helical LSD housing, stub half-shafts and a bellhousing anchor, structurally implementing the SceneModel methods (declare implements SceneModel if O2b is merged). Register both on the viewer in their own dev/models files. Tests: drivetrain-topology 1 and gear-geometry 1 for both; vehicle-cars gearbox links. Acceptance: both boxes on the viewer in three views; ratios from teeth equal the published ones; stub half-shaft ends sit on diffOutputs."
+   }
+  ]
+ },
+ {
+  "name": "gbx-pages",
+  "slug": "gbx-pages",
+  "stages": [
+   {
+    "id": "K1b",
+    "title": "BMW M3 E30 gearbox on the table with a settings panel (first visible)",
+    "ui": true,
+    "plan_ref": "build-order doc «А3», rule «Контракт розділу до О3», «Етапи» → K1b; gearboxes plan «Етап 1b», «Що бачить і робить відвідувач» (entry, two modes, views, demo 1); whole-car plan «Правки…» → «Коробки передач» items 6–12",
+    "deps": [
+     "K1b-3d",
+     "A1a",
+     "O2b"
+    ],
+    "brief": "Mount GearboxSection on the Section contract at #/gearboxes/manual-rwd with the K1b-3d model. «На столі» mode: the E30 engine on its free path turns the input shaft, with N, 1–5 and R buttons and sleeves moving in 0.2 s. Add «Наочно», «Реально», «Повільно», three views, part cards and demo 1 with E30 numbers (idle 880, direct fifth). Article with verifyNote, translation via registerDictionary, and a «Коробка» row in the S14 engine article through carsWithEngine. Register the section's visible page so the «Коробки передач» menu item becomes a link (O3's menu reads the registry; if O3 is not merged yet the item turns on when it is). No new keys: they come with K3a through KeyMap. Settings panel from «А3»: per-gear ratio slider or teeth steppers (re-toothed by gear-pick at the same centre distance), 4/5/6 gears, final drive 2.0–5.5, «Заводські». It has an immediate effect on gear sizes in 3D, output shaft speed, ratio labels, a km/h per 1000 rpm and at-redline table (radius from tyre-size.ts and the E30 record) and the rpm-drop ladder. Panel state is not in the URL yet. Tests: i18n, gearbox-snapshot for manual-rwd (own snapshot file); changing a pair keeps the centre distance; «Заводські» restores the snapshot. Acceptance: three views; the first-gear caption computes 3.717; editing second gear instantly changes the 3D gears and the table; 4 and 6 gears build; phone and three widths without overlaps."
+   },
+   {
+    "id": "K3a",
+    "title": "Driving in the browser, smallest version",
+    "ui": true,
+    "plan_ref": "build-order doc → K3a, rule «Телефон»; gearboxes plan «Етап 3a»; whole-car plan «Бюджет реального часу», «Клавіші», «Правки…» → «Коробки передач» item 17",
+    "deps": [
+     "K2c",
+     "O3",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 3a on the E30. The drivetrain runs in the worklet via AudioHost and Drive (DrivetrainCore as transferable), with base angles continued on the main thread and state handed between threads. Add the process() timer with a 32-sample fallback, checking the timing method in Chrome, Firefox and Safari and recording it in drive.snapshot(). Add «В авто» mode with a minimal dash (speedometer, gear, N, 1–5, R, throttle, brake B), keys through KeyMap, auto-clutch and the «Колесо й дорога» inset. Tests: drivetrain-sound 7 for the E30; dash readings match drive.snapshot(). Acceptance: start, pull away, drive 1→5 to 180 km/h and brake; mute and unmute mid-drive with no speed jump; 60 s of driving under Chromium CPU throttling ×4 without crackle, with the process() share and timing method in the snapshot (the real-phone check goes on the owner's list at Q3); shots at four widths."
+   },
+   {
+    "id": "K3b",
+    "title": "Full dash and first demonstrations",
+    "ui": true,
+    "plan_ref": "build-order doc → K3b; gearboxes plan «Етап 3b», «Приладова панель», «Демонстрації» 2–3; whole-car plan «Правки…» → «Коробки передач» item 12",
+    "deps": [
+     "O3",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 3b on the E30. H-gate with dragging through neutral in the Getrag 265 dogleg pattern (first left-down). Clutch pedal C; helpers (auto-clutch off, rev-matching, shift hints); grade and surface; disc energy and temperature; «Тяга» chart drawing the last dyno run from RunStore when the engine matches, and the 10 s strip; tooth blur in «Реально»; exploded view; «З двигуном» view; demos 2 and 3. In demo 3, 1→2 at 6750 rpm drops to 6750·2.404/3.717 ≈ 4366. Tests: the dash energy counter equals the core's; no key conflicts (KeyMap). Acceptance: stall on purpose, pull away up a 15% grade, shift with and without blip, see the engine in front of the box; shots at four widths."
+   },
+   {
+    "id": "K4",
+    "title": "Synchroniser",
+    "ui": true,
+    "plan_ref": "build-order doc → K4; gearboxes plan «Етап 4», «Демонстрації» 4",
+    "deps": [
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 4: synchro.ts in driving and the lab, using src/drivetrain/synchro-math.ts from K2a. Add a detailed 3D synchroniser (hub, splined sleeve with chamfers, cone rings, dog ring, struts), and a lab with time and speed sliders («Уповільнення ×k» from TimeControl), inequality bars, force, angles and cold oil (demo 4). Add a minimal gear-voice.ts with crunch and clunk only. Tests: drivetrain-dynamics 8; drivetrain-sound 6. Acceptance: all six phases visible in 3D in the lab; a 100° roof angle crunches with a falling pitch; in driving, a shift without clutch and without blip crunches and one with a blip goes through."
+   },
+   {
+    "id": "K5",
+    "title": "Gear sound",
+    "ui": true,
+    "plan_ref": "build-order doc → K5; gearboxes plan «Етап 5», «Звук»; research §18",
+    "deps": [
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 5: whine by the c(ε_α, ε_β) law with sidebands and case resonances, reverse whine, a mix by listener position, «Лише коробка», scripts/calibrate-gears.ts and src/audio/gear-trim.ts, gear orders in scripts/orders.ts, and the spur/helical switch for demo 5. Tests: drivetrain-sound 1–5. Acceptance: the spectrogram of a 2nd-gear run shows sloped whine lines at z·n/60; the E30 direct fifth has none; reverse whine is audible with «Лише коробка»; the switch in demo 5 gives at least 9 dB."
+   },
+   {
+    "id": "K8",
+    "title": "Tooth lab",
+    "ui": true,
+    "plan_ref": "build-order doc → K8; gearboxes plan «Етап 8», «Демонстрації» 7",
+    "deps": [
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 8, demo 7: 2D figures in the article (string and involute, line of action, pairs-in-contact counter), a 3D pair on stage, z, x and β sliders, phase error, and the pair's sound via gear-voice.ts. Tests: gear-geometry 2. Acceptance: undercut visible at 12 teeth and gone with profile shift; half a pitch of error highlights interference; the pair counter matches ε_γ."
+   }
+  ]
+ },
+ {
+  "name": "gbx-transaxle",
+  "slug": "gbx-transaxle",
+  "stages": [
+   {
+    "id": "K6a-geom",
+    "title": "manual-transaxle page on the table",
+    "ui": true,
+    "plan_ref": "build-order doc → K6a-geom; whole-car plan «Правки…» → «Коробки передач» item 15",
+    "deps": [
+     "K6a-3d",
+     "K1b",
+     "O2b"
+    ],
+    "brief": "Add the manual-transaxle page with the Civic Type R FK8 (base) and the 911 Carrera T 992 (variant) from K6a-3d in «На столі» mode (kinematic, like K1b). Reuse the K1b «Налаштувати» panel component (up to 7 gears), and add the article, translation via registerDictionary and a per-page gearbox-snapshot file. Acceptance: both boxes open from a direct URL; each gear lights one mesh plus the final pair; panel edits update 3D and numbers instantly; phone and three widths."
+   },
+   {
+    "id": "K6a",
+    "title": "Transaxle dynamics and limited-slip diffs",
+    "ui": true,
+    "plan_ref": "build-order doc → K6a; gearboxes plan «Етап 6a»",
+    "deps": [
+     "K3b",
+     "A1b",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 6a minus what K6a-3d and K6a-geom already did. Add LSDs in the core (clutch-type, helical/Torsen, viscous, locked), Rev-Match, «В авто» for the Civic and the 911, car record facts from primary sources, and EPA for the Civic. Tests: drivetrain-dynamics 9 (LSDs); drivetrain-vehicle 1–3 for the Civic and the 911. Acceptance: the Civic reaches its v_max by rule 13; downshifts with Rev-Match do not jerk."
+   },
+   {
+    "id": "K7",
+    "title": "Gearbox on the lap",
+    "ui": true,
+    "plan_ref": "build-order doc → K7; gearboxes plan «Етап 7», «Зв'язок із колом»; whole-car plan «Правки…» → «Коробки передач» item 13",
+    "deps": [
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 7: src/drivetrain/powertrain.ts (drivetrainPowertrain, implementing the Powertrain interface of src/vehicle/powertrain.ts) gives the Civic FK8's real gearbox on the oil-page lap (level L1); idealGearbox stays for the others. Tests: maxDrive equals the dynamic model's steady force within 1%; the Civic lap with the real gearbox differs from the ideal one and scripts/gearbox-table.ts prints the difference; tests/vehicle-consistency.test.ts (v_max and 0–100 equal on the oil page and the gearbox page). Acceptance: the oil page shows the Civic's real gears on the lap."
+   }
+  ]
+ },
+ {
+  "name": "gbx-diff",
+  "slug": "gbx-diff",
+  "stages": [
+   {
+    "id": "K6b",
+    "title": "Differential page and propshaft on the BMW M3 E30",
+    "ui": true,
+    "plan_ref": "build-order doc «А1», «Етапи» → K6b; gearboxes plan «Етап 6b», «Демонстрації» 6 and 17",
+    "deps": [
+     "K6a",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 6b with the BMW M3 E30 rear axle instead of the VAZ. Show the final drive 3.25 with the factory clutch-type LSD and a device switch (open, clutch, helical, locked) on the same axle, with wheels. Build the E30 propshaft in 3D: flex coupling, centre bearing and joints from checked data (parts catalogue or BMW manual; else unverified). Add the turn, left and right surfaces, wheel in the air, and the limit grade computed by the scene. Demos 6 and 17 use E30 numbers from the model. Tests: drivetrain-dynamics 9 (full) and 17. Acceptance: every step of demo 6 shows model numbers and the limit grade matches the test; spider gears turn in the turn; a single U-joint at 30° visibly jerks the output and a second in phase removes it."
+   }
+  ]
+ },
+ {
+  "name": "gbx-designer",
+  "slug": "gbx-designer",
+  "stages": [
+   {
+    "id": "K9a",
+    "title": "Gearbox designer model: design, teeth and performance",
+    "ui": false,
+    "plan_ref": "build-order doc «А3», «Етапи» → K9a; gearboxes plan «Етап 9», «Конструктор коробки» → «Параметри», «Виведене», «Обмеження геометрії», «Модель» (up to strength)",
+    "deps": [
+     "K2b",
+     "K6a-3d"
+    ],
+    "brief": "Non-ui. First half of gearbox stage 9 (the whole stage is nine modules, as large as the engine designer) for two types, layshaft and transaxle; DCT and dog box come in K10b. Build src/gearbox-designer/ design.ts, constraints.ts with idempotent resolveGearboxDesign that checks every field as if from a foreign link, tooth selection via gear-pick.ts (module per pair, shared gears such as the reverse idler as one unknown), to-spec.ts, codec.ts, presets.ts (catalogue copies and the plan's odd ones), and evaluate.ts for ratios, steps, traction per gear, v_max, rpm drops, start grade, quasi-static 0–100 and 0–400 m with synchroniser time from synchro-math.ts, and efficiency. Tests: gearbox-designer 1, 2 and 7 (evaluate under 15 ms on the heaviest box of the two types); drivetrain-vehicle 7. Acceptance: scripts/gearbox-table.ts --designer prints ratios and quasi-static performance for the E30, Civic and 911."
+   },
+   {
+    "id": "K9b",
+    "title": "Gearbox designer model: strength, synchronisers and verdicts",
+    "ui": false,
+    "plan_ref": "build-order doc → K9b; gearboxes plan «Етап 9», «Конструктор коробки» → «Модель» (strength, synchronisers, clutch, sound, mass), «Надійність і діагнози», «Чесність і зв'язок»",
+    "deps": [],
+    "brief": "Non-ui. Second half of gearbox stage 9 on K9a's model: tooth bending and contact with one bending constant calibrated on the TR-6060 MZ6 pair record from K1a; synchroniser times, energy and power per cone area from synchro-math.ts; clutch margin and launch energy; mesh frequencies; mass; reliability.ts (loads 0–1 and verdict), diagnostics.ts (the plan's list), sensitivity.ts and Design.factory reset on the first engineering change. Tests: gearbox-designer 3, 4, 6 and 'no control is dead' for both types. Acceptance: scripts/gearbox-table.ts --designer prints strength, sync times and diagnoses; the MZ6 pair loads 1.0 at 580 Nm; no factory box is fatal."
+   },
+   {
+    "id": "K10",
+    "title": "Gearbox designer: page",
+    "ui": true,
+    "plan_ref": "build-order doc → K10; gearboxes plan «Етап 10»",
+    "deps": [
+     "K3a",
+     "K6a-geom",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 10 at #/gearboxes/designer: parameter and result panels in the engine-designer style, traction chart, comparison with a pinned variant, 3D rebuilt on geometryKey, sound after a pause, «Проїхати» (full dynamic run with chart and sound), link codec, and entries from catalogue pages and from the engine designer. The «Налаштувати» panel of K1b and K6a-geom gets «Відкрити в конструкторі» carrying its edits. Acceptance on four widths: change first gear and see new teeth, traction, strength and diagnosis without slider lag; «Проїхати» 0–100 within 3% of the panel figure; the link reproduces the design."
+   },
+   {
+    "id": "K10b",
+    "title": "DCT and dog box in the gearbox designer",
+    "ui": true,
+    "plan_ref": "build-order doc → K10b; gearboxes plan «Конструктор коробки» (types, synchronisers and dogs)",
+    "deps": [
+     "K13",
+     "K17a",
+     "O2b"
+    ],
+    "brief": "Add the DCT type (on layouts/dct.ts from K13) and the dog-box type (on layouts/sequential.ts from K17a) to the designer model and page, with their presets. Tests: gearbox-designer 5 ('no control is dead' on all four types) and 7 (evaluate of an 8-speed DCT under 15 ms average). Acceptance: both types editable on the page with immediate numbers and 3D."
+   }
+  ]
+ },
+ {
+  "name": "gbx-auto",
+  "slug": "gbx-auto",
+  "stages": [
+   {
+    "id": "K11",
+    "title": "Planetary sets: the 8HP matrix",
+    "ui": true,
+    "plan_ref": "build-order doc «А2», «Етапи» → K11; gearboxes plan «Етап 11», «Демонстрації» 8; research §10",
+    "deps": [
+     "K1b",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 11 with only the 8HP51 (Supra A90) on the automatic page (A2). The 8HP45, 8HP50 and 8HP70 tooth sets stay as derivation test data with no page. Build layouts/planetary.ts, 3D sets (suns, instanced planets, carriers, rings with drums, clutch and brake packs), a 2D lever nomogram, and on-table A–E clicking (demo 8). Pick the planet count by the assembly condition and note it in verifyNote. Tests: drivetrain-topology 1, 2, 5, 6, 7, 8 for 8HP; gear-geometry 1 for planets. Acceptance: all nine gears, the two-element neutrals and A+C+E show correctly; planets do not intersect sun or ring; the nomogram matches the ratio."
+   },
+   {
+    "id": "K12a",
+    "title": "Torque converter",
+    "ui": true,
+    "plan_ref": "build-order doc → K12a; gearboxes plan «Етап 12a», «Демонстрації» 9; whole-car plan «Час»",
+    "deps": [
+     "K2a",
+     "O3",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 12a: converter.ts with a lock-up clutch as a friction element; a stall test lab (demo 9) with «Уповільнення ×k» from TimeControl; 3D converter with the vortex in X-ray; check the 8HP K_stall. Tests: drivetrain-dynamics 7; budget 15 for 8HP with a slipping converter. Acceptance: stall rpm at the computed value; pull-away in the lab shows SR and TR; the stator freewheels past the coupling point."
+   },
+   {
+    "id": "K12b",
+    "title": "Automatic shifting",
+    "ui": true,
+    "plan_ref": "build-order doc → K12b; gearboxes plan «Етап 12b», «Демонстрації» 10",
+    "deps": [
+     "K3b",
+     "K2c",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 12b: control/automatic.ts with a shift map from the torque map, the Supra in the car with a P R N D M selector, kickdown, and the shift-quality lab (demo 10). Check the Supra final drive; Supra record with EPA and vmaxLimited. The shift-quality lab lives in shared modules src/drivetrain/lab/shift-quality.ts and src/ui/gearbox/shift-quality-lab.ts: whichever of K12b and K13 merges first creates them, the other adds its case. Tests: drivetrain-dynamics 12 (automatic); drivetrain-vehicle 2–3 (Supra). Acceptance: upshifts without flare or a dip beyond the torque phase; kickdown at full throttle in 4th; the Supra holds its limiter; lab shots."
+   }
+  ]
+ },
+ {
+  "name": "gbx-dct",
+  "slug": "gbx-dct",
+  "stages": [
+   {
+    "id": "K13",
+    "title": "Dual-clutch gearbox",
+    "ui": true,
+    "plan_ref": "build-order doc «А2», «Етапи» → K13; gearboxes plan «Етап 13», «Демонстрації» 10–11",
+    "deps": [
+     "K6a-geom",
+     "K4",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 13 with one box (A2): VW DQ250 (Golf GTD, i4d/vw-20-tdi-ea288) if its ratios are checked against ETKA or service data, else the Porsche PDK 992 with primary data. Build layouts/dct.ts, two input and two output shafts, the reverse shaft, shared gears, pre-selection, odd/even side colours from the palette, the 'brap' and demo 11. Add the DCT case to the shared shift-quality lab (see K12b). Tests: drivetrain-topology 1, 9; drivetrain-dynamics 12 (DCT). Acceptance: in 2nd the 3rd synchro is already engaged; upshift with no zero-torque moment; kickdown to an unprepared gear takes longer; reverse on the correct side."
+   }
+  ]
+ },
+ {
+  "name": "gbx-cvt",
+  "slug": "gbx-cvt",
+  "stages": [
+   {
+    "id": "K14",
+    "title": "CVT",
+    "ui": true,
+    "plan_ref": "build-order doc «А2», «Етапи» → K14; gearboxes plan «Етап 14», «Демонстрації» 12",
+    "deps": [
+     "K3b",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 14 with only the Subaru TR580 chain CVT (Forester SJ, b4/subaru-fb25); the Corolla push belt, JF016E and Extroid are deferred (A2). Build variator.ts and control/cvt.ts, the cvt page, 3D pulleys and chain, and demo 12 including the '7 steps' mode. Use a Forester EPA row if one exists, else decision 13. Tests: drivetrain-dynamics 10; drivetrain-vehicle 1–3 for the Forester. Acceptance: at full throttle rpm holds while speed rises, the sheaves move and chain length stays constant."
+   }
+  ]
+ },
+ {
+  "name": "gbx-hybrid",
+  "slug": "gbx-hybrid",
+  "stages": [
+   {
+    "id": "K15a",
+    "title": "Prius power-split hybrid in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc «А2», «Етапи» → K15a; gearboxes plan «Етап 15»; CLAUDE.md «Як додати реальний двигун на сторінку компоновки»",
+    "deps": [
+     "K11",
+     "K2c"
+    ],
+    "brief": "Non-ui. Core of gearbox stage 15 with only the Prius 3 (P410): layouts/power-split.ts on the planetary layout from K11, MG1, MG2 and battery, control/ths.ts, and ignition in EngineRequest, LoadedCrank and sim.ts (start by motor without a starter; the existing cutFuel stays as it is). Add new engine variant i4/prius-2zr-fxe per CLAUDE.md (sources, node scripts/calibrate.ts, tests/variants.test.ts without changing bounds) and the Prius car record with EPA for the 2010–2015 Prius and vmaxLimited. Split from the page because it changes the engine core and adds an engine variant. Tests: drivetrain-topology 1, 6; drivetrain-dynamics 11; drivetrain-vehicle 2–4; dyno regression for ignition (start, crank and stop unchanged without ignition). Acceptance: scripts/gearbox-table.ts prints where MG1 changes direction and it matches the analytic value."
+   },
+   {
+    "id": "K15b",
+    "title": "Power-split page",
+    "ui": true,
+    "plan_ref": "build-order doc → K15b; gearboxes plan «Етап 15», «Демонстрації» 13",
+    "deps": [
+     "K3b",
+     "O2b"
+    ],
+    "brief": "Add the power-split page with the Prius 3 from K15a: the nomogram (demo 13), the planetary 3D from K11 with MG1 and MG2, «В авто» with electric pull-away, the article and translation via registerDictionary. Acceptance: electric pull-away with the engine stopped; engine start by MG1; MG1 changes direction at the computed speed and the nomogram shows it; shots at four widths."
+   }
+  ]
+ },
+ {
+  "name": "gbx-awd",
+  "slug": "gbx-awd",
+  "stages": [
+   {
+    "id": "K16a",
+    "title": "All-wheel drive in the core",
+    "ui": false,
+    "plan_ref": "build-order doc «А1», «А2», «Етапи» → K16a; gearboxes plan «Етап 16a»; research §13, §14",
+    "deps": [
+     "K6a"
+    ],
+    "brief": "Non-ui. Add four driven wheels in longitudinal.ts; centre devices (open with lock, Torsen, DCCD, Haldex-type coupling); a transfer case with low range. Records: Subaru WRX STI, Toyota GR Yaris (after checking) and Toyota Land Cruiser 100 with 1HD-FTE instead of the Niva (A1): permanent AWD, centre diff with lock, low range about 2.49 [unverified], manual gearbox and final drive. Check them against Toyota documents and put the rest in unverified. Tests: drivetrain-dynamics 18, where the Land Cruiser low range multiplies wheel force by its own ratio; torque split by TBR and lock; coupling delay. Acceptance: scripts/gearbox-table.ts prints the STI limit grade with the front axle on ice, matching the test."
+   },
+   {
+    "id": "K16b",
+    "title": "All-wheel-drive page",
+    "ui": true,
+    "plan_ref": "build-order doc → K16b; gearboxes plan «Етап 16b», «Демонстрації» 14",
+    "deps": [
+     "K6b",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 16b: the awd page with WRX STI (base), GR Yaris and Land Cruiser 100; 3D axles, propshaft and transfer case; demo 14 with all five steps, step 5 (low range on the same hill) on the Land Cruiser with its ratio and a note if unverified. Tests: drivetrain-topology 1 and drivetrain-vehicle 1–3 for the new cars. Acceptance: demo 14 reproduces all five steps with model numbers."
+   }
+  ]
+ },
+ {
+  "name": "gbx-seq",
+  "slug": "gbx-seq",
+  "stages": [
+   {
+    "id": "K17a",
+    "title": "Dog box: Honda CG125 sequential page",
+    "ui": true,
+    "plan_ref": "build-order doc «А2», «Етапи» → K17a; gearboxes plan «Етап 17», «Демонстрації» 15 (dogs)",
+    "deps": [
+     "K4",
+     "O2b"
+    ],
+    "brief": "Dog-box half of gearbox stage 17 (the stage holds two independent mechanisms with different pages). First check the Honda CG125 (4 speeds, ratios, primary and chain drives) against the Honda service manual, unverified otherwise. Build layouts/sequential.ts and the sequential page with the CG125 (engine i1/honda-cg125, one driven wheel, primary drive and chain), drum and forks in 3D, and flat-shift with ignition cut through the existing EngineRequest.cutFuel; E/Q for up and down through KeyMap. Tests: the drum moves only ±1; clunk energy ½J·Δω². Acceptance: the bike accelerates with a cut on every shift; shots at four widths."
+   }
+  ]
+ },
+ {
+  "name": "gbx-amt",
+  "slug": "gbx-amt",
+  "stages": [
+   {
+    "id": "K17b",
+    "title": "Automated manual: SMG II on manual-rwd",
+    "ui": true,
+    "plan_ref": "build-order doc «А2», «Етапи» → K17b; gearboxes plan «Етап 17», «Керування перемиканням», «Демонстрації» 15",
+    "deps": [
+     "K4",
+     "O2b"
+    ],
+    "brief": "Automated-manual half of gearbox stage 17: control/amt.ts and a Getrag S6S420G + SMG II variant on manual-rwd (BMW M3 E46, engine i6/bmw-m3-e46-s54) as one record with two controls, with its car and DriveCar records in their own files, and demo 15 comparing SMG and manual on the same box on a chart. Tests: the AMT torque gap equals the sum of actuator phases and rpm after it is synchronous with the new gear. Acceptance: SMG and manual shifts on the same box compared on a chart; shots at four widths."
+   }
+  ]
+ },
+ {
+  "name": "gbx-dmf",
+  "slug": "gbx-dmf",
+  "stages": [
+   {
+    "id": "K18a",
+    "title": "Crank torque ripple and dual-mass flywheel",
+    "ui": true,
+    "plan_ref": "build-order doc → K18a; gearboxes plan «Етап 18a»",
+    "deps": [
+     "K3b",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 18a: src/engine/torque-ripple.ts (gas and inertia torque over the cycle from the spec, with the balance-forces masses; Wiebe-burn polytrope scaled so the mean equals map torque plus friction); optional ripple in LoadedCrank via wantsRipple; demo «Навіщо двомасовий маховик» without rattle. Tests: ripple mean equals map torque; dominant order I4 2, even V8 4; petrol I4 idle irregularity 0.3–2°; DMF cuts input-shaft irregularity by at least 90%; dyno tests pass. Acceptance: input-shaft rpm chart with and without DMF in the browser."
+   },
+   {
+    "id": "K18b",
+    "title": "Rattle, lash and shunt",
+    "ui": true,
+    "plan_ref": "build-order doc → K18b; gearboxes plan «Етап 18b», «Демонстрації» 16",
+    "deps": [
+     "K5",
+     "O2b"
+    ],
+    "brief": "Implement gearbox stage 18b: rattle in gear-voice.ts, Lagerberg lash in half-shafts and propshaft, demo «Відчути ривок». Tests: rattle impacts present with the disc damper and gone with the DMF at idle; shunt 2–12 Hz; lash gives a clunk before the shunt. Acceptance: demo 16 fully works in the browser."
+   }
+  ]
+ },
+ {
+  "name": "susp-core",
+  "slug": "susp-core",
+  "stages": [
+   {
+    "id": "P1a",
+    "title": "MacPherson corner in numbers with setup",
+    "ui": false,
+    "plan_ref": "build-order doc «А3», «Етапи» → P1a; suspensions plan «Етап 1a», «Обчислювальне ядро» (coordinates, types, solver, tables, forces, quarter car)",
+    "deps": [],
+    "brief": "Implement suspension stage 1a as written: vec.ts, spec.ts, templates/macpherson.ts with JTEKT points, solve.ts, kinematics.ts with half-shaft, forces.ts, quarter.ts, road.ts, vertical tyre data in src/vehicle/tyre-data.ts, and scripts/suspension-sweep.ts. Amendment A3: add CornerSetup for the P1d panel: spring rate, damper preset or ζ, ride height (spring perch, so the static point moves on the kinematic curves), static camber (strut top shift), static toe (tie-rod length), tyre pressure with a linear k_t(p) law (moved here from stage 11). Tests: suspension-solve (corner), suspension-kinematics, suspension-quarter, suspension-road, plus static camber and toe from setup within 0.01°, ride height shifting the static point, and k_t linear in pressure. Acceptance: JTEKT reproduces the published tie-rod length, axis inclination and caster; the quarter car on a 50 mm × 0.5 m bump at 30 km/h matches RK4 within 3%; step budgets met."
+   },
+   {
+    "id": "P4-core",
+    "title": "Double wishbone, multilink and knuckle variants in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc → P4-core; suspensions plan «Етап 4» (core), «Шаблони компоновок»; whole-car plan «Правки…» → «Підвіски» item 17",
+    "deps": [],
+    "brief": "Non-ui. Add templates double-wishbone.ts and multilink.ts with target camber-gain ranges, and MacPherson knuckle variants (plain, Honda dual-axis, RevoKnuckle) in template and solver. Derive roll centre, instant centres, camber gain, bump steer, caster, inclination, scrub and offset. Add SVD and null space, and buildAxleLite. Tests: remaining suspension-solve and suspension-kinematics for independent types. Acceptance: JTEKT MacPherson camber reverses within travel; the five-link passes full travel without branch jumps."
+   }
+  ]
+ },
+ {
+  "name": "susp-3d",
+  "slug": "susp-3d",
+  "stages": [
+   {
+    "id": "P1c",
+    "title": "Full MacPherson corner in 3D on the model viewer",
+    "ui": false,
+    "plan_ref": "build-order doc «Правила» → «Стенд моделей», «Моделі до О2b», «Етапи» → P1c; suspensions plan «Етап 1c», «3D»; whole-car plan «Правки…» → «Підвіски» item 12",
+    "deps": [
+     "E1a",
+     "P1a"
+    ],
+    "brief": "Non-ui. Build the full MacPherson CornerModel as in suspension stage 1c: knuckle with boss and arms, lower arm with bushes and ball joint, strut with spring, damper, bump stop and top mount, tie rod with rack piece, hub, disc, caliper, wheel, a tyre flattened on the road plane, half-shaft with tripod and ball CV joint, a glass body piece and a road strip. Add views, explode, SUSPENSION_PARTS, force arrows on src/scene/arrows.ts (E1a) and a camber laser line. Implement the SceneModel methods structurally (declare implements SceneModel if O2b is merged). Register on the viewer in its own file dev/models/corner-macpherson.ts with travel and CornerSetup sliders. Tests: suspension-scene (full corner, non-convex knuckle, tyre uniforms); links never stretch over travel. Acceptance on the viewer: every part has a card, X-ray shows the damper piston and tripod rollers, the tyre does not pass through the bump."
+   },
+   {
+    "id": "P4-3d",
+    "title": "3D double wishbone, multilink and dual-axis knuckle",
+    "ui": false,
+    "plan_ref": "build-order doc → P4-3d; suspensions plan «Етап 4» (3D), «3D»",
+    "deps": [
+     "P4-core"
+    ],
+    "brief": "Non-ui. Add a generic link builder for any links set, plus corner models for double wishbone, five-link and MacPherson with dual-axis and RevoKnuckle knuckles, with part cards, reusing P1c's hub, brake, wheel, tyre and half-shaft parts. Implement the SceneModel methods structurally (declare implements SceneModel if O2b is merged). Register each on the viewer in its own dev/models file. Test: link lengths in 3D equal solver lengths (1e-6) over travel. Acceptance: viewer shots of the three corner types in three views."
+   },
+   {
+    "id": "P7-geom",
+    "title": "Civic FK8 and 911 Carrera T chassis as a static model",
+    "ui": false,
+    "plan_ref": "build-order doc → P7-geom; whole-car plan «Правки…» → «Підвіски» items 4, 5, 14, «3D: як збирається авто» (body shell, transparency)",
+    "deps": [
+     "A1c",
+     "K6a-3d"
+    ],
+    "brief": "Non-ui. Build ChassisModel: two axles, a steering rack between the corners' inner tie-rod joints, and the body shell src/scene/car/body-shell.ts built from CarRecord.dimensions and packaging.bay, including the bonnet over the bay. Introduce the AxleModel type for an independent axle (two mirrored corners, anti-roll bar, subframe, rack); the twist beam (P6a) and solid axles (P6b) later build on it. Axles: Civic FK8 (dual-axis strut front, multilink rear) and 911 Carrera T (strut front, multilink rear), with the half-shafts' inner joints at DriveCar.driveline.diffOutputs from K6a-3d, so they meet the gearbox stubs. Set CarRecord.suspension for both cars. Place them via carFrameToCg; bodies from bodyOf (A1a). Implement setHighlight, setGhost and setRenderBand (declare implements SceneModel if O2b is merged). Register on the viewer in its own dev/models files. Tests: wheels sit on the record's wheelbase and tracks; VehicleBody agrees with the record; half-shaft inner joints equal diffOutputs. Acceptance: both chassis on the viewer; the body does not cut the wheels at full lock."
+   }
+  ]
+ },
+ {
+  "name": "susp-dyn",
+  "slug": "susp-dyn",
+  "stages": [
+   {
+    "id": "P7-core",
+    "title": "Chassis in prescribed mode, anti-roll bars, statics",
+    "ui": false,
+    "plan_ref": "build-order doc → P7-core; suspensions plan «Етап 7» (core), «Авто: кузов і чотири колеса»",
+    "deps": [
+     "P4-core",
+     "P6b-core",
+     "P2",
+     "A1a"
+    ],
+    "brief": "Non-ui. Add ChassisSim in prescribed mode, SprungBody from VehicleBody, anti-roll bars and statics.ts, for independent axles and the solid axles of P6b-core; the understeer caption uses the MF tyre's load sensitivity (P2). Tests: suspension-chassis lateral part, including the laws from the plan's stage 7 acceptance: a stiff rear bar lifts the inner rear at 0.9 g and a thick front one does not; JTEKT strut camber gain changes sign within travel and double wishbones do not; on a solid axle camber to road does not change with body roll."
+   },
+   {
+    "id": "P9-core",
+    "title": "Braking and acceleration in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc → P9-core; suspensions plan «Етап 9» (core); whole-car plan «Правки…» → «Підвіски» item 6",
+    "deps": [
+     "A1b"
+    ],
+    "brief": "Non-ui. Add anti-geometry in ChassisSim, inboard and outboard brakes, drive force by layout, aero drag on the body at h_a from aeroDragN(roadLoadCoeffs(car), v), M_prop only for diff 'axle' (checked on a P6b-core live axle), and wheel-limit redistribution. Tests: suspension-chassis longitudinal part (anti-dive changes pitch but not transfer; 100% anti on both axles gives pitch under 0.02°; on the live axle the right rear unloads under throttle and on an independent rear it does not)."
+   },
+   {
+    "id": "P8a",
+    "title": "Suspension designer model: design and catalogue",
+    "ui": false,
+    "plan_ref": "build-order doc «А3», rule «Каталог підвісок і конструктор», «Етапи» → P8a; suspensions plan «Етап 8», «Конструктор» → «Ланцюг», «Параметри», «Геометричні обмеження», «Пресети й посилання»",
+    "deps": [
+     "P5-core",
+     "P6a-core"
+    ],
+    "brief": "Non-ui. First half of suspension stage 8 (the stage is a design chain, a dozen results, seventeen diagnoses, a shared sensitivity core and a page: too much for one session). Build src/suspension-designer/ design.ts with the plan's parameter groups for every axle type whose core exists (MacPherson with knuckle variants, double wishbone, multilink, pivot axis, twist beam, solid axles), idempotent resolveChassis that withstands hostile input from links, chassisToSpec, catalogueChassis, codec (diff from default, base64url, tolerant parse) and presets (catalogue cars, the plan's typical and odd ones, leaving out those that need P13-core or P14-core). Convert the catalogue pages already in next to designs through catalogueChassis while keeping the spec shape pages import from src/data/suspensions/, so no src/ui file changes; pages merged later write designs themselves. Tests: suspension-designer (resolve idempotent and hostile input; codec round trip; 500 random designs never throw and assemble; every catalogue car opens in the designer and gives the same spec; buildChassis under 30 ms); engine designer tests unchanged."
+   },
+   {
+    "id": "P8b",
+    "title": "Suspension designer model: evaluation, diagnoses, sensitivity",
+    "ui": false,
+    "plan_ref": "build-order doc → P8b; suspensions plan «Етап 8», «Конструктор» → «Інженерні діагнози», «Результати»; «Швидкі оцінки для конструктора»",
+    "deps": [
+     "P3-core"
+    ],
+    "brief": "Non-ui. Second half of suspension stage 8 on P8a's chain: evaluateChassis via buildAxleLite (body frequencies and ζ, comfort and bad-road grip from comfort.ts, roll per g, front transfer share, understeer per g, skidpad limit, 100–0 braking distance, pitch per g, roll-centre migration, FRF), diagnostics.ts with the plan's table, the «Комфорт — Зчеплення — Контроль кузова» verdict, sensitivity through a new src/shared/sensitivity-core.ts (engine designer texts must not change), and 'no control is dead' over every P8a control. The steering group arrives with P13-core, spring types and damper control with P14-core. Tests: the rest of suspension-designer (evaluateChassis under 5 ms and equal to the full grid within 0.5%; no factory car fatal; no control is dead); engine designer tests unchanged. Acceptance: a full sensitivity pass under 150 ms; odd presets get their diagnoses."
+   },
+   {
+    "id": "P14-core",
+    "title": "Spring types and active systems in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc → P14-core; suspensions plan «Етап 14» (core), «Конструктор» → «Параметри» (springs, dampers)",
+    "deps": [],
+    "brief": "Non-ui. Core of suspension stage 14: air and hydropneumatic springs in forces.ts, damper control (skyhook, ABC up to 5 Hz, preview), templates/pushrod.ts with rocker and third spring; add spring types, damper types (passive, adaptive, MagneRide, active) and the pushrod layout to the suspension designer model (P8a, P8b). Tests: levelled air spring frequency nearly constant, hydropneumatic ∝ m^0.36 within 5%, skyhook on the shaker, the rocker motion ratio against finite differences; suspension-designer 'no control is dead' with the new controls."
+   }
+  ]
+ },
+ {
+  "name": "susp-layouts",
+  "slug": "susp-layouts",
+  "stages": [
+   {
+    "id": "P5-core",
+    "title": "Single pivot axis in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc → P5-core; suspensions plan «Етап 5» (core)",
+    "deps": [
+     "P1a"
+    ],
+    "brief": "Non-ui. Add templates/pivot.ts in closed form for trailing arm, semi-trailing arm and swing axle, and a swing-axle half-shaft with no plunge. Tests: those three in suspension-kinematics (roll centre rises from zero to pivot height as the axis angle goes 0→90°)."
+   },
+   {
+    "id": "P6a-core",
+    "title": "Twist beam in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc → P6a-core; suspensions plan «Етап 6a» (core)",
+    "deps": [],
+    "brief": "Non-ui. Add templates/twist-beam.ts: closed form with two axes and 2 DOF. Test: twist beam in suspension-kinematics (roll centre moves from trailing-arm to beam height with beamPos)."
+   },
+   {
+    "id": "P5",
+    "title": "Pivot-axis pages",
+    "ui": true,
+    "plan_ref": "build-order doc → P5, rule «Каталог підвісок і конструктор»; suspensions plan «Етап 5», «Сцени» → «Хід колеса» step 9",
+    "deps": [
+     "P4",
+     "O2b"
+    ],
+    "brief": "Add pages trailing-arm, semi-trailing and swing-axle, with a pivot-angle slider 0–90° in «Хід колеса», a body-jacking arrow for the swing axle and real cars (2CV, BMW 325i E30, 944, Corvair, Beetle, Tatra 11) with sources and unverified fields. If P8a is merged, write the pages' cars as designs through catalogueChassis. Acceptance: the slider morphs one layout into the next and the roll centre rises from zero to pivot height; the swing-axle article explains the Corvair with the NHTSA numbers."
+   },
+   {
+    "id": "P6a",
+    "title": "Twist-beam page",
+    "ui": true,
+    "plan_ref": "build-order doc «А1», rule «Каталог підвісок і конструктор», «Етапи» → P6a; suspensions plan «Етап 6a»",
+    "deps": [
+     "P7-geom",
+     "O2b"
+    ],
+    "brief": "Implement suspension stage 6a: a twist-beam AxleModel on the AxleModel type from P7-geom (beam and integrated bar with visible twist, two non-steered corners), the twist-beam page, and «Хід колеса» showing a one-wheel bump twisting the beam. Real cars: Golf 7 light axle, Golf 3, and ZAZ-1102 Tavria (A1): MacPherson front, semi-independent beam rear, wheelbase 2320, tracks 1314/1306, 745 kg, 155/70 R13 [secondary, uk.wikipedia], typical geometry, the rest unverified. If P7 is merged, add the twist beam to the «Крен» scene; if P8a is merged, write the page's cars as designs. Acceptance: the beam visibly twists; the roll centre moves with beamPos."
+   }
+  ]
+ },
+ {
+  "name": "susp-axles",
+  "slug": "susp-axles",
+  "stages": [
+   {
+    "id": "P6b-core",
+    "title": "Solid axles in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc → P6b-core; suspensions plan «Етап 6b» (core)",
+    "deps": [
+     "P4-core"
+    ],
+    "brief": "Non-ui. Add an axle solver with weighted least squares and solid-axle.ts (Panhard, Watt, leaf spring), binding of redundant links, and de Dion with plunging half-shafts. Tests: axle part of suspension-solve, Panhard and Watt in suspension-kinematics; parallel four-link plus Panhard reports binding."
+   },
+   {
+    "id": "P6b",
+    "title": "Solid-axle pages",
+    "ui": true,
+    "plan_ref": "build-order doc «А1», rule «Каталог підвісок і конструктор», «Етапи» → P6b; suspensions plan «Етап 6b»",
+    "deps": [
+     "P4",
+     "P7-geom",
+     "O2b"
+    ],
+    "brief": "Implement suspension stage 6b without the VAZ-2101 (A1): AxleModel on P7-geom's type for solid axles (leaf spring with deflection, Panhard rod, Watt linkage, de Dion with the diff on the body), pages live-axle and de-dion, and real cars Mustang GT 2005–2014, Wrangler YJ rear, Alfa 75, Smart, Astra J. If P7 is already merged, add solid axles to the «Крен» scene here; if P8a is merged, write the pages' cars as designs. Acceptance: parallel four links with Panhard show binding by number and bush highlight; on a solid axle the camber to road does not change with body roll."
+   }
+  ]
+ },
+ {
+  "name": "susp-pages",
+  "slug": "susp-pages",
+  "stages": [
+   {
+    "id": "P1b",
+    "title": "Suspension section at a hidden address",
+    "ui": true,
+    "plan_ref": "build-order doc → P1b, rule «Контракт розділу до О3»; suspensions plan «Етап 1b»; whole-car plan «Правки…» → «Підвіски» items 9–11, 15",
+    "deps": [
+     "P1c",
+     "O2b"
+    ],
+    "brief": "Mount SuspensionSection on the Section contract at a hidden #/suspensions (no menu item). Show the full corner from P1c in three views with a travel slider, cards via the parts registry, and audio.suspend() on entry. Keys come with P1d through KeyMap. Acceptance: links never stretch; engine page snapshots unchanged; engine catalogue snapshot unchanged; all tests green."
+   },
+   {
+    "id": "P1d",
+    "title": "«Перешкода» with a settings panel (first visible)",
+    "ui": true,
+    "plan_ref": "build-order doc «А3», rules «Каталог підвісок і конструктор» and «Телефон», «Етапи» → P1d; suspensions plan «Етап 1d», «Сцени» → «Перешкода», «Інтерфейс»",
+    "deps": [
+     "O3",
+     "O2b"
+    ],
+    "brief": "Build the «Перешкода» scene, steps 1–8: strip chart, numbers, «Уповільнення ×k» with a clock via TimeControl, keys V and ↑/↓ through KeyMap, the «Підвіски» menu item on (register the visible page), the page article in Ukrainian and English via registerDictionary. Settings panel from «А3» on CornerSetup: spring rate, damper preset or ζ, ride height ±40 mm, static camber, static toe, tyre pressure. Each change is visible at once on the arrows, laser lines, tyre and numbers. If P8a is merged, write the page's cars as designs. Acceptance as in the plan: peak body acceleration within 10% of RK4 at ×1; at rest the green arrow equals static load × motion ratio and the blue is zero; a worn damper shows repeated hops and a track one none; usable at 360 px; frame under 2 ms CPU on a mid laptop, and the phone figure measured under Chromium CPU throttling ×4 and marked so in docs/suspension-model.md (the real phone goes on the owner's list at Q3)."
+   },
+   {
+    "id": "P4",
+    "title": "«Хід колеса»: double wishbone and multilink pages",
+    "ui": true,
+    "plan_ref": "build-order doc → P4, rule «Каталог підвісок і конструктор»; suspensions plan «Етап 4» (pages and scene), «Сцени» → «Хід колеса»",
+    "deps": [
+     "P4-3d",
+     "O2b"
+    ],
+    "brief": "Add pages double-wishbone and multilink and the «Усі підвіски» table with computed glyphs. The «Хід колеса» scene covers all independent types: overlaid curves, «Занизити на 40 мм», the tie-rod height pad, «П'ять тяг, один рух» and CV numbers. Real cars: MX-5 ND, GT3 992, Corvette C8, BRZ, W201, Supra, Golf 7. Put the Civic FK8 with the dual-axis knuckle on the macpherson page and add a «Підвіска» row to these cars' engine articles. If P8a is merged, write the pages' cars as designs. Tests: suspension-catalog-snapshot (per-page files). Acceptance: MacPherson camber reversal visible on chart and laser; double wishbone gains camber over full travel; a 10 mm inner tie-rod shift visibly tilts the toe curve."
+   },
+   {
+    "id": "P7",
+    "title": "«Крен» (roll)",
+    "ui": true,
+    "plan_ref": "build-order doc → P7; suspensions plan «Етап 7», «Сцени» → «Крен»",
+    "deps": [
+     "P7-core",
+     "P7-geom",
+     "O2b"
+    ],
+    "brief": "Build the «Крен» scene, steps 1–6, for independent axles: AxleModel with a body section, load bars with three shares, moving roll and instant centres, body jacking, and the whole chassis from P7-geom as a scene view. The twist beam (P6a) and solid axles (P6b) join when they exist: connect them here if already merged, otherwise those stages connect themselves. Real cars get VehicleBody (NHTSA where available, else estimate). Acceptance as in the plan: without bars roll grows and the understeer caption changes; a hot-hatch stiff rear bar lifts the inner rear at 0.9 g and a thick front one does not; the article shows the Chrysler measurement beside the model."
+   },
+   {
+    "id": "P9",
+    "title": "«Гальмування й розгін»",
+    "ui": true,
+    "plan_ref": "build-order doc «А1», «Етапи» → P9; suspensions plan «Етап 9», «Сцени» → «Гальмування й розгін»",
+    "deps": [
+     "P9-core",
+     "P6b",
+     "O2b"
+    ],
+    "brief": "Build the scene, steps 1–7: side view, side instant centres with lines from the patch and wheel centre, and moment arrows on body and beam. At the start, compare the Mustang GT on its live axle (the live-axle page from P6b) with the Camaro SS (independent rear) instead of the VAZ (A1). Acceptance: changing anti-dive changes pitch but not transfer; on the live axle the right rear unloads under throttle and on the independent rear it does not."
+   }
+  ]
+ },
+ {
+  "name": "susp-road",
+  "slug": "susp-road",
+  "stages": [
+   {
+    "id": "P3-core",
+    "title": "Rough road and comfort in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc → P3-core; suspensions plan «Етап 3» (core), «Дорога», «Комфорт і зчеплення», «Швидкі оцінки для конструктора»",
+    "deps": [
+     "P1a",
+     "P2"
+    ],
+    "brief": "Non-ui. Add ISO 8608 segments in road.ts; comfort.ts (Wk, Wd, DLC, available grip from the MF tyre); quarter-car frequency estimates in evaluate.ts; the stepped sine. Tests: suspension-road (ISO 8608), suspension-comfort, remaining suspension-quarter. Acceptance: same settings and seed give the same numbers; analytic and simulated points agree within 3%."
+   },
+   {
+    "id": "P3",
+    "title": "«Погана дорога» and «Стенд»",
+    "ui": true,
+    "plan_ref": "build-order doc → P3; suspensions plan «Етап 3», «Сцени» → «Погана дорога», «Стенд»",
+    "deps": [
+     "P1d",
+     "O2b"
+    ],
+    "brief": "Build the «Погана дорога» scene, steps 1–5: triangle bars, ζ vs comfort and grip curve, «Запам'ятати як A». Build «Стенд»: analytic FRF with stepped-sine points, the invariant point and a tyre damping switch. Add the article «Як міряють ефективність підвіски». Acceptance: the triangle bars move in opposite directions as ζ changes; simulated points sit on the analytic curves within 3%; without tyre damping the curves for three ζ cross at one point within 2% and with it within 7%, and the caption explains this; the same settings and seed give the same numbers."
+   },
+   {
+    "id": "P14",
+    "title": "Spring and active-suspension scenes, pushrod page",
+    "ui": true,
+    "plan_ref": "build-order doc → P14, rule «Каталог підвісок і конструктор»; suspensions plan «Етап 14», «Сцени» → «Пружини», «Активна підвіска»",
+    "deps": [
+     "P14-core",
+     "O2b"
+    ],
+    "brief": "Build the scenes «Пружини» and «Активна підвіска» and the pushrod page with the third spring and the F1 2022 rules on P14-core; real systems in articles (Citroën DS, Mercedes ABC and E-ABC, Audi A8, MagneRide). Write the page's cars as designs through catalogueChassis. Acceptance: the frequency-vs-load chart shows three behaviours; skyhook reduces body motion while the invariant point stays; the third spring changes heave but not roll stiffness."
+   }
+  ]
+ },
+ {
+  "name": "tyre",
+  "slug": "tyre",
+  "stages": [
+   {
+    "id": "P2",
+    "title": "Tyre",
+    "ui": false,
+    "plan_ref": "build-order doc → P2; suspensions plan «Етап 2», «Шина»; whole-car plan «Правки…» → «Підвіски» items 2, 8 and «Конфлікти й прогалини» rows 3, 7",
+    "deps": [
+     "A1a"
+    ],
+    "brief": "Non-ui. Build src/vehicle/tyre.ts: MF PAC2002 pure and combined slip (Fx, Fy, Mz, load sensitivity, camber terms, E_y clamp, mirrored right tyre, relaxation, low speed) plus the brush form and longitudinalOf for the drivetrain. Full sets go in tyre-data.ts (Chrono Sedan_Pac02Tire, mf_185_80R14, illustrative semi and slick). Fit LFZO and LMUY per car; put 'classic' in the shared TyreId. wheel-bus.ts and wheel.ts belong to K2b, not here. Extend scripts/suspension-sweep.ts with tyre curves. Tests: suspension-tyre. Acceptance: curves match the research numbers with the same coefficients; μ at static load of each of the six oil-page cars equals the lap μ; brush vs MF test green."
+   },
+   {
+    "id": "P11",
+    "title": "«Шина» (tyre scene)",
+    "ui": true,
+    "plan_ref": "build-order doc → P11; suspensions plan «Етап 11», «Сцени» → «Шина»",
+    "deps": [
+     "P1d",
+     "O2b"
+    ],
+    "brief": "Implement suspension stage 11 without the pressure law, which is already in P1a: a brush picture of the contact patch, a sidewall code decoder, a cutaway tyre with layers and cards, a radial/bias switch, scene steps 1–8 and the article «Чи є сенс від розвалу й сходження» with model numbers. Tests: suspension-tyre additions (decoder). Acceptance: lateral force on four loads shows sensitivity; the slip zone grows with angle; the sidewall code gives correct 3D wheel size; the article carries evidence marks."
+   }
+  ]
+ },
+ {
+  "name": "susp-lap",
+  "slug": "susp-lap",
+  "stages": [
+   {
+    "id": "P10-core",
+    "title": "Lap with weight transfer in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc → P10-core; suspensions plan «Етап 10» (core); whole-car plan «Правки…» → «Підвіски» item 7, «Картер на треку» items 3–4",
+    "deps": [
+     "P2",
+     "P9-core",
+     "A1b"
+    ],
+    "brief": "Non-ui. Add src/suspension/lap.ts, axleGripLimit, GripModel, the grip field in the existing LapOptions of simulateLap, and timeAtDistance. The L2 lap is computed but becomes canonical only at C3a. Tests: suspension-lap (the point lap has the same time as the oil page; the L2 lap never overfills the limiting axle's friction circle; at rest the friction circles match lap μ)."
+   },
+   {
+    "id": "P10",
+    "title": "«Коло» (lap scene)",
+    "ui": true,
+    "plan_ref": "build-order doc → P10; suspensions plan «Етап 10», «Сцени» → «Коло»",
+    "deps": [
+     "P7",
+     "O2b"
+    ],
+    "brief": "Build the «Коло» scene, steps 1–6: the six oil-page cars, minimap, g-g, friction circles, two laps and their time difference, «Найбільше перенесення», and a link to the oil page carrying ls= and t= (the oil page starts reading ls= at C3a). Acceptance: the lap computes without visible frame hitches; the point lap time equals the oil page; red friction circles appear only on the point trace."
+   }
+  ]
+ },
+ {
+  "name": "susp-designer",
+  "slug": "susp-designer",
+  "stages": [
+   {
+    "id": "P8c",
+    "title": "Suspension designer: page",
+    "ui": true,
+    "plan_ref": "build-order doc «А3», «Етапи» → P8c; suspensions plan «Етап 8», «Конструктор», «Інтерфейс»",
+    "deps": [
+     "P8b",
+     "P7-geom",
+     "P4",
+     "O2b"
+    ],
+    "brief": "Build the #/suspensions/designer[/<code>] page on P8a and P8b: grouped controls, results with graphs (camber and toe vs travel, roll-centre migration, FRF, steer vs lateral g, wheel loads, understeer breakdown), diagnoses, «Що це змінює» and localStorage via try/catch. The P1d «Налаштувати» panel gets «Відкрити в конструкторі». Acceptance: every change updates numbers at once; 3D rebuilds at most every 130 ms and only on geometry change; the link reopens the same design; odd presets get their diagnoses and no factory car is fatal; four widths."
+   }
+  ]
+ },
+ {
+  "name": "steering",
+  "slug": "steering",
+  "stages": [
+   {
+    "id": "P13-core",
+    "title": "Steering gears in numbers",
+    "ui": false,
+    "plan_ref": "build-order doc «А1», «Етапи» → P13-core; suspensions plan «Етап 13» (core), decision 20, «Конструктор» → «Параметри» (steering group)",
+    "deps": [
+     "P6b-core",
+     "P7-core",
+     "P8b"
+    ],
+    "brief": "Non-ui. Add wheel angles from the gear, Ackermann, nose lift from axis inclination, steering torque and assist, split-mu pull, and spindle-offset torque. steering.ts covers rack, variable ratio, worm-and-roller and recirculating ball with pitman arm, and a steered solid axle with drag link. The independent front axle with steering box, pitman and idler arm is the Mercedes-Benz 190 (W201) instead of the VAZ (A1), after checking its gear type in Mercedes documentation, else unverified. Add the steering group (mechanism, ratio, variable ratio, assist, Ackermann share, drag-link angle) to the suspension designer model. Tests: suspension-solve (steered axle, pitman), suspension-kinematics (Ackermann, camber from steer), suspension-chassis (split-mu pull), suspension-designer ('no control is dead' with the steering group)."
+   },
+   {
+    "id": "P13",
+    "title": "«Кермо» (steering scene)",
+    "ui": true,
+    "plan_ref": "build-order doc «А1», «Етапи» → P13; suspensions plan «Етап 13», «Сцени» → «Кермо»",
+    "deps": [
+     "P6b",
+     "P1d",
+     "O2b"
+    ],
+    "brief": "Build the «Кермо» scene, steps 1–8: 3D steering gears and assists with cards, the Wrangler YJ steered axle, and the W201 front axle with box and idler arm (or only the Wrangler if W201 is unverified). Compare knuckles (plain, RevoKnuckle, dual-axis) on the macpherson page by number (60–80 mm vs 20–30 mm; Honda's own figure unverified). Acceptance: turning circles match wheel angles; the scrub sign flips the pull side on split mu; the ratio comes from the gear; on the steered axle the arc mismatch of drag link and track bar gives bump steer that vanishes when they are parallel; no rack on W201 or Wrangler."
+   }
+  ]
+ },
+ {
+  "name": "susp-handling",
+  "slug": "susp-handling",
+  "stages": [
+   {
+    "id": "P12a",
+    "title": "Free car and driver",
+    "ui": true,
+    "plan_ref": "build-order doc → P12a; suspensions plan «Етап 12a», «Вільне авто»",
+    "deps": [
+     "P7",
+     "P9-core",
+     "K2b",
+     "P2",
+     "O2b"
+    ],
+    "brief": "Implement suspension stage 12a: free-mode ChassisSim on WheelBus and wheel.ts from K2b, compliance, driver.ts (speed controller, pure pursuit), skidpad, understeer gradient and limit, ChassisModel moving on the plane, and the «Поворот на швидкості» scene steps 1–2 and 4. Tests: suspension-handling (linear limit, skidpad), suspension-cars (skidpad). Acceptance: skidpad gives gradient and limit; the linear limit matches the bicycle model; 1/3000 vs 1/1000 s differ under 1%."
+   },
+   {
+    "id": "P12b",
+    "title": "Manoeuvres, ghost and breakdown",
+    "ui": true,
+    "plan_ref": "build-order doc → P12b; suspensions plan «Етап 12b»",
+    "deps": [
+     "O2b"
+    ],
+    "brief": "Implement suspension stage 12b: ISO 7401 step steer, ISO 3888-2 moose test, braking in a turn, understeer breakdown by switching terms off, illustrative compliance calibrated to the GM do Brasil shares, ISO cones, ghost of setup A, scene steps 3, 5, 6 with visible driver parameters. Tests: remaining suspension-handling, suspension-cars (braking). Acceptance: the breakdown sums to the total with each term's sign from its source; the moose test shows only A vs B with the same driver; the ghost follows bit-identically with equal settings."
+   }
+  ]
+ },
+ {
+  "name": "car",
+  "slug": "car",
+  "stages": [
+   {
+    "id": "C1a",
+    "title": "Car assembly at a hidden address",
+    "ui": true,
+    "plan_ref": "build-order doc → C1a; whole-car plan «Дорожня карта» → «Ціле авто» → Ц1a, «3D: як збирається авто»",
+    "deps": [
+     "O3",
+     "A1c",
+     "K6a-3d",
+     "P7-geom",
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц1a with the gearbox model from K6a-3d and the chassis and body shell from P7-geom. Build src/scene/car/: CarAssembly, exhaust line by packaging, radiator, intercooler and tank with pipes to the systems layers' anchors; cut-outs and renderOrder bands on P7-geom's body-shell.ts with its bonnet from the bay. Add mountMatrix, flywheel and bellhousing anchors with attachGearbox, and the page #/car/civic-type-r-fk8 with no menu item (3D, views, click per system). Tests: car-assembly, car-snapshot, routes. Acceptance: the engine is the same size on the engine page and in the overview at the same camera distance; the bonnet clears the Civic engine and an oversize engine cuts it exactly where the diagnosis says; the exhaust ends at the exit point."
+   },
+   {
+    "id": "C1b",
+    "title": "Overview: focus and drill-down",
+    "ui": true,
+    "plan_ref": "build-order doc → C1b; whole-car plan «Ц1b», «Оглядова сторінка» → «Що бачить відвідувач», «Навігація» («На авто», «Повернення»)",
+    "deps": [
+     "P4",
+     "K6a-geom",
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц1b: src/ui/car/ (car list, «Усі авто», article, system chips, highlight and ghost via setHighlight/setGhost, focus with ?focus=, system cards with section numbers including the dual-axis card, drill-down with car= and return via «← До авто», the «На авто» row on section pages of this car), plus the car. dictionary and English text. Tests: routes (every drill-down and return); i18n. Acceptance: every system is clickable and leads into its section with this car; Back and «← До авто» restore the focus even after changes on the section page; overview from eight orbit angles without sorting glitches."
+   },
+   {
+    "id": "C1c",
+    "title": "Detail levels, budgets, menu item",
+    "ui": true,
+    "plan_ref": "build-order doc → C1c; whole-car plan «Ц1c», «Бюджет швидкодії»",
+    "deps": [
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц1c: detail levels for gearbox and chassis in the overview, merged static axle parts, castShadow only on big bodies, no shadows on phones, the «Авто» menu item (not the home page) and a «Авто цілком» section in CLAUDE.md. Acceptance: draw-call budget after a full frame held on desktop (450 meshes, 600 calls with shadows) and phone (250 calls); shots at five widths; touch on phone."
+   },
+   {
+    "id": "C1d",
+    "title": "Second overview car: Porsche 911 Carrera T (992)",
+    "ui": true,
+    "plan_ref": "build-order doc → C1d; whole-car plan «Ц1d», «Авто огляду»; «Правки…» → «Картер на треку» item 13",
+    "deps": [
+     "K6a-geom",
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц1d. The 911 record is already in A1c, its gearbox in K6a-3d and its axles in P7-geom. Add the overview with the engine behind the rear axle, make the 911 the seventh car of the oil-on-track set with the integrated dry sump, and add «Як ще буває» rows in both cars' articles. Tests: vehicle-cars, car-assembly, car-snapshot for the 911; oil tests for the new car. Acceptance: Civic and 911 opened one after the other appear at true size; the «Олива» focus leads to the oil page with the 911; its factory integrated dry sump on road tyres does not starve."
+   },
+   {
+    "id": "C7",
+    "title": "Home page",
+    "ui": true,
+    "plan_ref": "build-order doc → C7; whole-car plan «Ц7»",
+    "deps": [
+     "C3b",
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц7 behind a flag: the empty address opens the overview, the site name in the menu leads home, meta description and README.md cover the whole site. The root switch itself waits for the owner's decision; prepare it behind a flag and show it at Q6. Acceptance: all old links open their pages; the home path is at most 450 KB gzip."
+   }
+  ]
+ },
+ {
+  "name": "car-lift",
+  "slug": "car-lift",
+  "stages": [
+   {
+    "id": "C2",
+    "title": "«На підйомнику» (on the lift)",
+    "ui": true,
+    "plan_ref": "build-order doc → C2; whole-car plan «Ц2», «Оглядова сторінка» → «На підйомнику»",
+    "deps": [
+     "C1c",
+     "K3a",
+     "K6a",
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц2: src/vehicle/lift.ts, VehicleLoad with a 'lift' chassis, power-flow glow in the overview, gear selector, single-wheel brake and diff demo on the Civic. Tests: vehicle-step (lift): steady wheel speed n/(i·i_fd); open diff ω_l + ω_r = 2ω_c; helical without preload with one braked wheel behaves as open, with preload it passes exactly the preload torque; snapshot and restore on mute and unmute. Acceptance: the lift scenario in the browser with sound; mute mid-scenario and the wheels keep turning without a jump."
+   },
+   {
+    "id": "C6a",
+    "title": "Full chassis in the worklet on a straight",
+    "ui": true,
+    "plan_ref": "build-order doc → C6a; whole-car plan «Ц6a», «Їзда наживо»",
+    "deps": [
+     "P12a",
+     "K3b",
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц6a: ChassisSim as ChassisPort in VehicleLoad, chassisCore transfer into the worklet, ?m=drive with the «Пряма» track (launch, shifts, braking, 0–100 and 100–0), steering held by an auto driver. Tests: vehicle-step (1/3000 vs 1/1000 s over 10 s under 1%; microsecond budget in Node; snapshot and restore with the full chassis). Acceptance: 0–100 on the straight within 5% of the quasi-static figure; mute mid-launch and the car continues from the same speed."
+   },
+   {
+    "id": "C6b",
+    "title": "Driver on the lap and live oil",
+    "ui": true,
+    "plan_ref": "build-order doc → C6b; whole-car plan «Ц6b»",
+    "deps": [
+     "P10-core",
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц6b: lap driver at 70–100% of the L2 profile from P10-core; visitor pedals and gears over the driver; LubeRunner.stepLive every 10 ms from live accelerations; body roll in the engine systems' gravity. Tests: the body-roll correction is small; stepLive on a recorded trace equals the offline run within 1%. Acceptance: the driver at 90% laps without leaving the track; sump oil reacts to live accelerations."
+   },
+   {
+    "id": "C6c",
+    "title": "Ladder for weak devices and time breakdown",
+    "ui": true,
+    "plan_ref": "build-order doc → C6c, rule «Телефон»; whole-car plan «Ц6c»",
+    "deps": [
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц6c: a whole-car-step ladder for weak devices using the K3a timing method, and a breakdown of the difference from L2 (shifts, driver off the limit, chassis and tyre dynamics) per «Їзда наживо». Tests: shares sum to the time difference within 0.05 s; the ladder enables steps 1–3 in order under synthetic load. Acceptance: 60 s driving under Chromium CPU throttling ×4 without crackle, process() share and timing method in the snapshot; the real-phone check goes to the workflow's final check."
+   }
+  ]
+ },
+ {
+  "name": "car-lap",
+  "slug": "car-lap",
+  "stages": [
+   {
+    "id": "C3a",
+    "title": "Canonical L2 lap, ls= and boosted lap sound",
+    "ui": true,
+    "plan_ref": "build-order doc → C3a; whole-car plan «Ц3a», «Коло: рівні моделі»",
+    "deps": [
+     "P10",
+     "K7",
+     "O3",
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц3a: the canonical lap becomes L2 on all pages together, with a re-run of scripts/sump-table.ts. Using timeAtDistance from P10-core, make the oil page and the suspension «Коло» scene read ls= (with t=). Add the lap-trace load (src/vehicle/lap-trace-load.ts on the dyno hold regulator) and move the oil page's soundLap from lock onto it. Tests: vehicle-consistency, lap-trace-load, routes; tests/dyno.test.ts unchanged. Acceptance: scripts/orders.ts and a WAV spectrogram of the Civic lap show turbine whistle at full throttle; a link from the oil page to the «Коло» scene on semi-slicks opens the same corner."
+   },
+   {
+    "id": "C3b",
+    "title": "Car lap replay",
+    "ui": true,
+    "plan_ref": "build-order doc → C3b; whole-car plan «Ц3b»",
+    "deps": [
+     "C1c",
+     "P7",
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц3b: ?m=lap replay with ChassisSim in prescribed mode, a combined «Найгірші моменти» list and ls= links both ways. Tests: vehicle-consistency (same lap time as the two other pages); deterministic lap; the impossible-samples counter is at most 3% and 0.1 s per event, and is shown in «Що модель не знає». Acceptance: replay without frame hitches; sound follows lap rpm within 0.3 s with the turbine; muted at ×¼; «Відкрити на сторінці оливи» opens the same track spot."
+   }
+  ]
+ },
+ {
+  "name": "car-designer",
+  "slug": "car-designer",
+  "stages": [
+   {
+    "id": "C4",
+    "title": "Car builder: model",
+    "ui": false,
+    "plan_ref": "build-order doc «А1», «Етапи» → C4; whole-car plan «Ц4», «Конструктор авто»",
+    "deps": [
+     "A1b",
+     "P10-core",
+     "K9b",
+     "P8b"
+    ],
+    "brief": "Non-ui. Implement whole-car stage Ц4: src/car-designer/ (donor car, engine, gearbox and suspension from catalogues or section designers; all numbers from section models), engineEnvelope(engine) in src/engine/, scripts/car-table.ts. Odd presets contain no Russian car: «BMW M3 E30 з двигуном Civic Type R» replaces the plan's VAZ preset. Tests: car-build (factory builds give calibrated v_max, 0–100 within ±15%, exact canonical lap time; codec round trip; idempotent resolveBuild; broken links do not break; no control is dead); vehicle-consistency additions. Acceptance: node scripts/car-table.ts prints each donor against published figures and diagnoses for odd presets; the «Що це змінює» pass never blocks over 50 ms."
+   },
+   {
+    "id": "C5",
+    "title": "Car builder: page",
+    "ui": true,
+    "plan_ref": "build-order doc → C5; whole-car plan «Ц5»",
+    "deps": [
+     "C1c",
+     "K10",
+     "P8c",
+     "O2b"
+    ],
+    "brief": "Implement whole-car stage Ц5: #/car/designer with parameter and result panels, CarAssembly rebuilt by geometryKey, «Зафіксувати як A», jumps into the engine, gearbox (K10) and suspension (P8c) designers and back via ret=car and «Поставити в авто». Tests: routes (several engine-designer edits keep ret=car; «Поставити в авто» returns the build with the new engine from memory and localStorage). Acceptance on four widths: put the W16 into the Civic, see it through the glass bonnet with diagnoses, new 0–100, v_max and lap time; change the engine in the engine designer and return with «Поставити в авто»; the link reproduces the build and a broken link opens the nearest valid build."
+   }
+  ]
+ },
+ {
+  "name": "car-more",
+  "slug": "car-more",
+  "stages": [
+   {
+    "id": "C8c",
+    "title": "Porsche Cayman S 981: mid engine",
+    "ui": true,
+    "plan_ref": "build-order doc «А6», «Етапи» → C8c; whole-car plan «Ц8», «Авто огляду»",
+    "deps": [
+     "C1c",
+     "K6a-geom",
+     "P7-geom",
+     "O2b"
+    ],
+    "brief": "Add the Cayman S 981 to the overview. Its gearbox record goes on manual-transaxle as a variant: ratios from Porsche technical specifications [primary], teeth reconstructed. Add 981 dimensions and packaging, strut axles front and rear in ChassisModel, the overview with the engine between cabin and rear axle, and the integrated dry sump in the «Олива» focus. Tests: vehicle-cars, car-assembly and car-snapshot for the 981; drivetrain-topology 1 for its gearbox. Acceptance: the overview from eight angles without sorting glitches; drill-down into gearbox, engine, suspension and oil works."
+   },
+   {
+    "id": "C8d",
+    "title": "Fuel line",
+    "ui": true,
+    "plan_ref": "build-order doc → C8d; whole-car plan «Ц8», «Оглядова сторінка» (radiator, intercooler, tank)",
+    "deps": [
+     "O2b"
+    ],
+    "brief": "Add a fuel line from tank to engine for every overview car merged so far (Civic, 911, Cayman), with fuel-layer dashes when the engine is in focus; C8a and C8b add theirs the same way. Tests: car-assembly (the line starts at the tank and ends at the engine's fuel anchor). Acceptance: visible in X-ray on all overview cars without z-fighting; card text in both languages."
+   },
+   {
+    "id": "C8a",
+    "title": "BMW M3 E30: front longitudinal engine, propshaft",
+    "ui": true,
+    "plan_ref": "build-order doc «А1», «Етапи» → C8a; whole-car plan «Ц8»",
+    "deps": [
+     "K6b",
+     "P5",
+     "O2b"
+    ],
+    "brief": "Add the BMW M3 E30 to the overview instead of the VAZ-2101 (A1): S14 engine, Getrag 265 (K1b-3d model), propshaft and rear axle from K6b, MacPherson front and semi-trailing rear (P5) in ChassisModel, body from A1c dimensions, and a fuel line as C8d does. M3 mass and inertia are marked, since NHTSA measured a 325i. Add drill-down into sections and «Як ще буває» rows in all overview car articles. Tests: vehicle-cars, car-assembly and car-snapshot for the E30. Acceptance: the propshaft joins the gearbox flange to the final-drive pinion and clears the floor; Civic, 911 and E30 shown at true size."
+   },
+   {
+    "id": "C8b",
+    "title": "Subaru WRX STI: all-wheel drive",
+    "ui": true,
+    "plan_ref": "build-order doc → C8b; whole-car plan «Ц8»",
+    "deps": [
+     "K16b",
+     "P4",
+     "O2b"
+    ],
+    "brief": "Add the WRX STI to the overview: three differentials and centre split visible, dimensions and packaging, strut front and double-wishbone rear axles, a fuel line as C8d does, and drill-down into the awd page and the b4 engine. Tests: vehicle-cars, car-assembly and car-snapshot for the STI. Acceptance: front and rear propshaft and diffs connect correctly; the overview from eight angles without sorting glitches."
+   }
+  ]
+ },
+ {
+  "name": "qa-shell",
+  "slug": "qa-shell",
+  "stages": [
+   {
+    "id": "Q2",
+    "title": "Release В2 check: shell and illustrative forces",
+    "ui": true,
+    "plan_ref": "build-order doc «Етапи» → Q2; whole-car plan «Тести» → «Перевірка в браузері»",
+    "deps": [
+     "O3",
+     "E3",
+     "D2",
+     "O2b"
+    ],
+    "brief": "Walk release В2 in a real browser at 1440x900, 1920x1080, 390x844 and 360x740. Check the new menu and phone «Розділи» sheet, every engine page from the menu, ?m=dyno and ?l=, keys and ? help, the «Такої сторінки немає» card, and old links (#/engines/v8-cross, #/engines/b6/porsche-cayman-981-3-4, #/designer/from/i4, a designer code, #/engines/i4/vaz-2101). Check balance forces in all three views with and without counterweights, and the polygon and its word, on I4, I6, both V8s, 90° V6, boxer 4 and single cylinder in «Повільно» and «Наочно». Confirm no VAZ in the catalogue and the Tavria if D2 added it. Fix small bugs in separate commits; report big ones with repro steps and shots in .tmp/."
+   }
+  ]
+ },
+ {
+  "name": "qa-sections",
+  "slug": "qa-sections",
+  "stages": [
+   {
+    "id": "Q3",
+    "title": "Release В3 check: first gearbox and first suspension",
+    "ui": true,
+    "plan_ref": "build-order doc «Етапи» → Q3, rule «Телефон»; whole-car plan «Тести» → «Перевірка в браузері»",
+    "deps": [
+     "K1b",
+     "K3a",
+     "P1d",
+     "O2b"
+    ],
+    "brief": "Walk release В3 at desktop and phone widths. Check the BMW M3 E30 gearbox on the table with the settings panel (ratio, teeth, gear count, final drive with instant 3D and numbers) and in the car: start, pull away, 1→5, brake, mute and unmute mid-drive. Check «Перешкода» with all eight steps and the settings panel (spring, damper, ride height, camber, toe, pressure) and the «Коробки передач» and «Підвіски» menu items. Fix small bugs; report big ones with repro and shots in .tmp/. The report ends with the owner's real-phone list: 60 s of driving without crackle and «Перешкода» frame time."
+   }
+  ]
+ },
+ {
+  "name": "qa",
+  "slug": "qa",
+  "stages": [
+   {
+    "id": "Q4",
+    "title": "Release В4 check: Civic Type R overview",
+    "ui": true,
+    "plan_ref": "build-order doc «Етапи» → Q4; whole-car plan «Тести» → «Перевірка в браузері»",
+    "deps": [
+     "C1c",
+     "O2b"
+    ],
+    "brief": "Walk release В4: the Civic overview in X-ray from eight orbit angles, hover, focus, drill-down into each section and «← До авто», draw-call budget on desktop and phone, touch on phone, five widths. Fix small bugs; report big ones."
+   },
+   {
+    "id": "Q5",
+    "title": "Release В5 check: second overview car",
+    "ui": true,
+    "plan_ref": "build-order doc «Етапи» → Q5; whole-car plan «Тести» → «Перевірка в браузері»",
+    "deps": [
+     "C1d",
+     "O2b"
+    ],
+    "brief": "Walk release В5: the 911 Carrera T in the overview and on the oil page, Civic and 911 at true size one after another, the «Олива» focus, widths and phone. Fix small bugs; report big ones."
+   },
+   {
+    "id": "Q6",
+    "title": "Release В6 check: car lap and home page",
+    "ui": true,
+    "plan_ref": "build-order doc «Етапи» → Q6; whole-car plan «Тести» → «Перевірка в браузері»",
+    "deps": [
+     "C3b",
+     "C7",
+     "O2b"
+    ],
+    "brief": "Walk release В6: the car lap with sound and turbine; ls= jumps between the oil page, the suspension «Коло» scene and the car lap all landing on the same track spot; the home page behind its flag; every old link. Desktop and phone widths. Fix small bugs; report big ones and what the owner must decide (the root switch)."
+   }
+  ]
+ }
+]
