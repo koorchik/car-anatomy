@@ -49,13 +49,18 @@ interface PagePath {
 const SHELL = 'src/shell/app.ts';
 const ENGINES = 'src/ui/engines/section.ts';
 
+const VALVES = 'src/ui/valve-readout.ts';
+const LAYERS = 'src/scene/systems/index.ts';
+
+// A page needs what it asks for as it opens: an engine with variable valve gear shows the valve gear's labels at once,
+// and the oil on track switches the oil layer on.
 const PAGES: PagePath[] = [
-  { id: 'catalogue', label: 'каталог двигуна', exists: ENGINES, modules: [ENGINES], limit: 0.8 * P_D6, limitText: '0,8 · P_Д6' },
+  { id: 'catalogue', label: 'каталог двигуна', exists: ENGINES, modules: [ENGINES, VALVES], limit: 0.8 * P_D6, limitText: '0,8 · P_Д6' },
   { id: 'designer', label: 'конструктор', exists: ENGINES, modules: [ENGINES, 'src/ui/engines/designer-host.ts'], limit: P_D6, limitText: 'P_Д6' },
   { id: 'dyno', label: 'стенд', exists: ENGINES, modules: [ENGINES, 'src/ui/dyno/dyno-panel.ts'], limit: P_D6, limitText: 'P_Д6' },
-  { id: 'systems', label: 'шари систем', exists: ENGINES, modules: [ENGINES, 'src/ui/systems-view.ts', 'src/scene/systems/index.ts'], limit: P_D6, limitText: 'P_Д6' },
-  { id: 'forces', label: 'сили й фази', exists: ENGINES, modules: [ENGINES, 'src/ui/balance-panel.ts', 'src/ui/valve-readout.ts'], limit: P_D6, limitText: 'P_Д6' },
-  { id: 'sump', label: 'олива на треку', exists: ENGINES, modules: [ENGINES, 'src/ui/sump/sump-page.ts'], limit: P_D6, limitText: 'P_Д6' },
+  { id: 'systems', label: 'шари систем', exists: ENGINES, modules: [ENGINES, LAYERS], limit: P_D6, limitText: 'P_Д6' },
+  { id: 'forces', label: 'сили й фази', exists: ENGINES, modules: [ENGINES, 'src/ui/balance-panel.ts', VALVES], limit: P_D6, limitText: 'P_Д6' },
+  { id: 'sump', label: 'олива на треку', exists: ENGINES, modules: [ENGINES, 'src/ui/sump/sump-page.ts', LAYERS], limit: P_D6, limitText: 'P_Д6' },
   { id: 'gearbox', label: 'коробка', exists: 'src/ui/gearboxes/section.ts', modules: ['src/ui/gearboxes/section.ts'], limit: 400, limitText: '400' },
   { id: 'suspension', label: 'підвіска', exists: 'src/ui/suspensions/section.ts', modules: ['src/ui/suspensions/section.ts'], limit: 400, limitText: '400' },
   { id: 'overview', label: 'огляд авто', exists: 'src/ui/car/section.ts', modules: ['src/ui/car/section.ts'], limit: 450, limitText: '450' },
