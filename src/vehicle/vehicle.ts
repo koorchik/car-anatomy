@@ -1,29 +1,39 @@
 // The car as a point mass for the lap: tyres, mass, drag, which wheels drive, and how the engine sits in it.
 // The whole-car section extends these types (weight transfer, load-sensitive tyres, a real gearbox); the oil sump only
-// reads the lap's accelerations, so new optional fields cost it nothing.
+// reads the lap's accelerations, so new optional fields cost it nothing. A real car's VehicleSpec is derived from its
+// record by vehicleSpec() in car.ts.
 
-import { t } from '../i18n/t.ts';
+import { AIR_DENSITY, G } from './constants.ts';
+// Compatibility until stage O2a: the oil page still reads TYRES[id].name. Then pages translate ids with TYRE_NAMES
+// themselves, and this import, the only one that gives src/vehicle text, goes.
+import { TYRE_NAMES } from '../data/vehicle-names.ts';
 
-export type TyreId = 'street' | 'semi' | 'slick';
+export { AIR_DENSITY, G };
+
+export type TyreId = 'classic' | 'street' | 'semi' | 'slick';
 
 export interface TyreSpec {
   id: TyreId;
+  /** @deprecated Until stage O2a; pages translate the id with TYRE_NAMES (src/data/vehicle-names.ts). */
   name: string;
   /** Peak friction, the same along and across, independent of load. */
   mu: number;
 }
 
 /**
- * Peak friction of the three choices. Street: summer UHP tyres 1.0-1.15, a Corvette E-Ray on the skidpad 1.01 g.
- * Semi-slicks: Cup 2-type tyres 1.15-1.3, a 991 GT3 RS on Michelin Cup tyres 1.24 g. Slicks without downforce:
- * 1.4-1.8. Sources in docs/lubrication-model.md.
+ * Peak friction. Street: summer UHP tyres 1.0-1.15, a Corvette E-Ray on the skidpad 1.01 g. Semi-slicks: Cup 2-type
+ * tyres 1.15-1.3, a 991 GT3 RS on Michelin Cup tyres 1.24 g. Slicks without downforce: 1.4-1.8. Sources in
+ * docs/lubrication-model.md. Classic: the tyres of a 1980s car, which the oil page does not offer; 0.8 is an
+ * estimate (docs/vehicle-model.md).
  */
 export const TYRES: Record<TyreId, TyreSpec> = {
-  street: { id: 'street', name: t('Дорожні'), mu: 1.0 },
-  semi: { id: 'semi', name: t('Напівсліки'), mu: 1.25 },
-  slick: { id: 'slick', name: t('Сліки'), mu: 1.6 },
+  classic: { id: 'classic', name: TYRE_NAMES.classic, mu: 0.8 },
+  street: { id: 'street', name: TYRE_NAMES.street, mu: 1.0 },
+  semi: { id: 'semi', name: TYRE_NAMES.semi, mu: 1.25 },
+  slick: { id: 'slick', name: TYRE_NAMES.slick, mu: 1.6 },
 };
 
+/** The tyres the oil page offers. */
 export const TYRE_IDS: readonly TyreId[] = ['street', 'semi', 'slick'];
 
 export interface EngineMount {
@@ -55,9 +65,6 @@ export interface VehicleSpec {
   /** Share of weight on the front axle at rest. */
   frontShare?: number;
 }
-
-export const G = 9.81;
-export const AIR_DENSITY = 1.2;
 
 /** Rolling and aerodynamic drag at a speed, newtons. */
 export const dragForce = (car: VehicleSpec, v: number): number => 0.5 * AIR_DENSITY * car.cdA * v * v + car.crr * car.massKg * G;
