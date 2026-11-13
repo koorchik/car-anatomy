@@ -3,6 +3,7 @@
 // exactly the road that is drawn, so a bump never passes through it.
 
 import * as THREE from 'three';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { describe, expect, it, vi } from 'vitest';
 import { factorySetup, resolveCorner } from '../src/suspension/setup.ts';
 import { QuarterSim } from '../src/suspension/quarter.ts';
@@ -87,6 +88,24 @@ function drawCalls(root: THREE.Object3D): { main: number; shadow: number } {
     expect(materials.some((m) => m.transparent && m.side === THREE.DoubleSide), 'a two-pass material').toBe(false);
   });
   return { main, shadow };
+}
+
+/** Volume enclosed by a closed mesh, by the divergence theorem over its triangles (outward winding positive). */
+function volume(geometry: THREE.BufferGeometry): number {
+  const position = geometry.getAttribute('position');
+  const index = geometry.getIndex();
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const n = index ? index.count : position.count;
+  let v = 0;
+  for (let i = 0; i < n; i += 3) {
+    a.fromBufferAttribute(position, index ? index.getX(i) : i);
+    b.fromBufferAttribute(position, index ? index.getX(i + 1) : i + 1);
+    c.fromBufferAttribute(position, index ? index.getX(i + 2) : i + 2);
+    v += a.dot(b.cross(c)) / 6;
+  }
+  return v;
 }
 
 const FULL_CORNER = [
@@ -185,6 +204,15 @@ describe('MacPherson corner in 3D', () => {
       ray.set(end, new THREE.Vector3(0, 1, 0));
       expect(ray.intersectObject(solid, false).length, 'an end outside the casting').toBeGreaterThan(0);
     }
+    // The plan's measure: the casting takes at least 40 % less room than the convex hull of its points. Its parts
+    // overlap where the arms meet, so the sum of their volumes is more than the casting's: the check errs safe.
+    const points: THREE.Vector3[] = [];
+    const position = knuckle.geometry.getAttribute('position');
+    for (let i = 0; i < position.count; i++) points.push(new THREE.Vector3().fromBufferAttribute(position, i));
+    const cast = volume(knuckle.geometry);
+    const hub = Math.PI * 0.6 ** 2 * 0.6; // the hub boss alone, scene units³: the parts' volumes do not cancel
+    expect(cast).toBeGreaterThan(hub);
+    expect(cast / volume(new ConvexGeometry(points))).toBeLessThan(0.6);
     model.dispose();
   });
 
