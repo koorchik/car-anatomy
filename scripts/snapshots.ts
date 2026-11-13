@@ -130,7 +130,8 @@ function sourceFor(options: Options): Source {
   const root = join(options.out, `at-${commit.slice(0, 12)}`);
   rmSync(root, { recursive: true, force: true });
   mkdirSync(root, { recursive: true });
-  const r = spawnSync('sh', ['-c', 'git archive --format=tar "$1" | tar -x -C "$2"', 'sh', commit, root], { cwd: REPO, encoding: 'utf8' });
+  // Without its tests: the export sits inside the working tree, where vitest would find them.
+  const r = spawnSync('sh', ['-c', 'git archive --format=tar "$1" -- . ":(exclude)tests" | tar -x -C "$2"', 'sh', commit, root], { cwd: REPO, encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`Could not export ${options.at}: ${r.stderr}`);
   if (readFileSync(join(root, 'package-lock.json'), 'utf8') !== readFileSync(join(REPO, 'package-lock.json'), 'utf8')) {
     console.warn(`! ${options.at} has another package-lock.json: it is built with the working tree's node_modules.`);
