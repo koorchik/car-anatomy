@@ -1,6 +1,7 @@
 // One engine in one car on the test circuit: the lap, the oil model's setup, and the run. Shared by the page, the
 // comparison table, the designer's track widget, the tests and scripts/sump-table.ts, so all of them agree.
 
+import { SECTOR_NAMES } from '../data/vehicle-names.ts';
 import type { Design } from '../designer/design.ts';
 import { evaluate } from '../designer/physics.ts';
 import type { Engine } from '../engine/kinematics.ts';
@@ -18,7 +19,8 @@ import { lapTorqueCurve } from './torque.ts';
 export const DRIVELINE = { efficiency: 0.85, gears: 6, spread: 4.3 };
 
 let track: Track | null = null;
-export const testTrack = (): Track => (track ??= buildTrack(TEST_CIRCUIT));
+// Sector names ride on the track until stage O2a, when the oil page translates sector ids itself.
+export const testTrack = (): Track => (track ??= buildTrack(TEST_CIRCUIT, 1, SECTOR_NAMES));
 
 const laps = new Map<string, LapTrace>();
 

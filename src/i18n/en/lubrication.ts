@@ -1,6 +1,6 @@
 // English for the oil sump page, the lap and the lubrication controls: Ukrainian source text to English.
 export const LUBRICATION_EN: Record<string, string> = {
-  // The test circuit (src/vehicle/track.ts)
+  // The test circuit (src/data/vehicle-names.ts)
   'Тестове коло': 'Test circuit',
   'Пряма старт-фініш': 'Start-finish straight',
   'Шпилька': 'Hairpin',
@@ -10,7 +10,8 @@ export const LUBRICATION_EN: Record<string, string> = {
   'Задня пряма з горбом': 'Back straight with a crest',
   'Карусель': 'Carousel',
   'Правий': 'Right-hander',
-  // Tyres (src/vehicle/vehicle.ts)
+  // Tyres (src/data/vehicle-names.ts)
+  'Класичні': 'Classic',
   'Дорожні': 'Street',
   'Напівсліки': 'Semi-slicks',
   'Сліки': 'Slicks',
