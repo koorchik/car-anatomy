@@ -328,6 +328,8 @@ export class Drive {
     if (!r) return;
     if (r.loadSnapshot) this.local.crank?.load.restore?.(r.loadSnapshot);
     this.local.adopt(r.state as EngineState, r.rpm);
+    // The crank goes on from where the picture showed it, not from where the local copy stopped.
+    this.local.angle = this.shownAngle;
     if (!this.wanted) this.local.stop();
   }
 
