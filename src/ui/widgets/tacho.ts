@@ -1,6 +1,6 @@
 // Round tachometer. Scale and red zone come from the engine.
 
-import { t } from '../i18n/t.ts';
+import { t } from '../../i18n/t.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const SWEEP_START = -135;
