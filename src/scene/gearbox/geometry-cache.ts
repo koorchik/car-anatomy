@@ -40,11 +40,15 @@ export function acquireGeometry(key: string, build: () => THREE.BufferGeometry):
   return entry.geometry;
 }
 
-/** Gives back a geometry from acquireGeometry(). Returns false for one the cache does not hold. */
+/**
+ * Gives back a geometry from acquireGeometry(). Returns false for one the cache does not hold. A release with no
+ * user left changes nothing: queued twice, the key would later evict the geometry while a new user still draws it.
+ */
 export function releaseGeometry(geometry: THREE.BufferGeometry): boolean {
   const entry = byGeometry.get(geometry);
   if (!entry) return false;
-  entry.users = Math.max(0, entry.users - 1);
+  if (entry.users === 0) return true;
+  entry.users--;
   if (entry.users > 0) return true;
   idle.push(entry.key);
   while (idle.length > IDLE_LIMIT) {

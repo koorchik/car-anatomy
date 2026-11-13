@@ -11,7 +11,7 @@ import { poseAt } from '../src/drivetrain/table-drive.ts';
 import { buildGearbox, type Gearbox } from '../src/drivetrain/topology.ts';
 import { buildGearGeometry, DETAIL, faceTwist, drawnGear, layerCount, type GearLayer } from '../src/scene/gearbox/gear-mesh.ts';
 import { GearboxModel } from '../src/scene/gearbox/gearbox-model.ts';
-import { geometryCacheStats } from '../src/scene/gearbox/geometry-cache.ts';
+import { acquireGeometry, geometryCacheStats, releaseGeometry } from '../src/scene/gearbox/geometry-cache.ts';
 import { GEARBOX_PARTS } from '../src/scene/gearbox/parts.ts';
 
 // The cast aluminium's bump map is drawn on a canvas, which nothing here looks at.
@@ -321,6 +321,32 @@ describe('the model', () => {
     expect(geometryCacheStats.built - built).toBe(2);
     expect(geometryCacheStats.reused - reused).toBe(e30.spec.gears.length - 2);
     model.dispose();
+  });
+
+  it('a geometry released twice is not evicted once it is in use again', () => {
+    const geometry = acquireGeometry('test-twice', () => new THREE.BufferGeometry());
+    let evicted = false;
+    geometry.addEventListener('dispose', () => (evicted = true));
+    releaseGeometry(geometry);
+    releaseGeometry(geometry);
+    expect(acquireGeometry('test-twice', () => new THREE.BufferGeometry())).toBe(geometry);
+    // More idle keys than the cache keeps, so a stale key queued by the second release would come out now.
+    for (let i = 0; i < 120; i++) releaseGeometry(acquireGeometry(`test-churn-a${i}`, () => new THREE.BufferGeometry()));
+    expect(evicted).toBe(false);
+    releaseGeometry(geometry);
+  });
+
+  it('a model disposed twice gives its geometry back once', () => {
+    // Phone quality: every other model of that quality in this file is disposed, so these users are ours alone.
+    const first = new GearboxModel(e30, { quality: 'low' });
+    const second = new GearboxModel(e30, { quality: 'low' });
+    first.dispose();
+    first.dispose();
+    const evicted: string[] = [];
+    for (const g of e30.spec.gears) second.gearMesh(g.id)!.geometry.addEventListener('dispose', () => evicted.push(g.id));
+    for (let i = 0; i < 120; i++) releaseGeometry(acquireGeometry(`test-churn-b${i}`, () => new THREE.BufferGeometry()));
+    expect(evicted).toEqual([]);
+    second.dispose();
   });
 
   it('tags every part with a key that has a card', () => {

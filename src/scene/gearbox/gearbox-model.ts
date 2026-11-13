@@ -130,6 +130,9 @@ export class GearboxModel {
   private readonly glow = new Map<THREE.MeshStandardMaterial, number>();
   private readonly damaged = new Set<THREE.MeshStandardMaterial>();
   private readonly points: Record<string, THREE.Vector3> = {};
+  /** Gear geometry taken from the cache, once per acquire: dispose() gives back exactly these. */
+  private readonly acquired: THREE.BufferGeometry[] = [];
+  private disposed = false;
   private highlighted = false;
   private view: ViewMode = 'xray';
 
@@ -171,10 +174,16 @@ export class GearboxModel {
       this.members.push({ id: m.id, index, x: p.x, y: p.y, shaft, frame, spin });
     });
 
-    this.buildGears();
-    this.buildShafts(o);
-    this.buildSynchros();
-    this.buildCase(o);
+    try {
+      this.buildGears();
+      this.buildShafts(o);
+      this.buildSynchros();
+      this.buildCase(o);
+    } catch (error) {
+      // A box that cannot be drawn gives back what it took from the cache.
+      this.dispose();
+      throw error;
+    }
 
     // Stand it on the floor, centred along its length, the input axis at x = 0.
     this.mounted.updateMatrixWorld(true);
@@ -242,6 +251,7 @@ export class GearboxModel {
       const drawn = drawnGear({ ...def, boreRadius: 0, tipShortening });
       const boreRadius = m.shaft ? 0 : this.looseBore(m, drawn.rf);
       const geometry = acquireGearGeometry({ ...def, boreRadius, tipShortening }, this.quality);
+      this.acquired.push(geometry);
       const material = this.own(new THREE.MeshStandardMaterial({ color: '#b9bdc1', metalness: 1, roughness: 0.28 }));
       const mesh = tag(new THREE.Mesh(geometry, material), this.partOfGear(m));
       mesh.userData.gear = def.id;
@@ -672,12 +682,17 @@ export class GearboxModel {
   }
 
   dispose(): void {
-    const seen = new Set<THREE.BufferGeometry>();
+    if (this.disposed) return;
+    this.disposed = true;
+    // Cached geometry goes back to the cache, never disposed here; the rest belongs to this model alone.
+    const seen = new Set<THREE.BufferGeometry>(this.acquired);
+    for (const geometry of this.acquired) releaseGeometry(geometry);
+    this.acquired.length = 0;
     this.group.traverse((o) => {
       const geometry = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
       if (!geometry || seen.has(geometry)) return;
       seen.add(geometry);
-      if (!releaseGeometry(geometry)) geometry.dispose();
+      geometry.dispose();
     });
     for (const m of this.materials) m.dispose();
   }
