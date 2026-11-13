@@ -1,7 +1,7 @@
 // The systems of the engine on screen, worked out once per frame on the main thread from what Drive reports.
 // No DOM, no Web Audio: tests and scripts run it in Node. One instance per page; nothing is allocated per frame.
 
-import type { Engine } from '../engine/kinematics.ts';
+import { mod, type Engine } from '../engine/kinematics.ts';
 import type { ValveTiming } from '../engine/spec.ts';
 import { systemsOf, type SystemsSpec } from '../engine/systems-spec.ts';
 import { airParams, airStep, newAirState, type AirInput, type AirParams, type AirState } from './air.ts';
@@ -36,6 +36,16 @@ export interface SystemsFrame {
   active?: ArrayLike<boolean>;
 }
 
+/**
+ * Unwrapped crank degrees the shown angle moved since the last frame: the step between the two wrapped angles, plus the
+ * whole cycles the nominal speed says went by. A step backwards, when Drive pulls the shown angle back, counts as none.
+ */
+export function shownAdvance(previous: number, theta: number, nominal: number, cycle: number): number {
+  const step = mod(theta - previous + cycle / 2, cycle) - cycle / 2;
+  const turns = Math.round((Math.max(0, nominal) - step) / cycle);
+  return Math.max(0, step + turns * cycle);
+}
+
 export interface SystemsState {
   oil: OilState;
   thermal: ThermalState;
@@ -43,7 +53,9 @@ export interface SystemsState {
   fuel: FuelState;
   /** The frame this state was worked out for. */
   rpm: number;
+  load: number;
   throttle: number;
+  cranking: boolean;
   theta: number;
   /** Valve events now: feature/vvt's when it moves them, else null for the engine's own. */
   timing: ValveTiming | null;
@@ -57,12 +69,14 @@ export class SystemsSim {
   systems: SystemsSpec | null = null;
   /** Share of oil in what the pump draws. feature/oil-sump sets it from the slosh in the pan. */
   oilSupply = 1;
-  readonly state: SystemsState = { oil: newOilState(), thermal: null as unknown as ThermalState, air: newAirState(), fuel: null as unknown as FuelState, rpm: 0, throttle: 0, theta: 0, timing: null, live: false, running: false, timeScale: 1 };
+  /** Share of oil in what the scavenge stages draw. feature/oil-sump sets it too. */
+  scavengeSupply = 1;
+  readonly state: SystemsState = { oil: newOilState(), thermal: null as unknown as ThermalState, air: newAirState(), fuel: null as unknown as FuelState, rpm: 0, load: 0, throttle: 0, cranking: false, theta: 0, timing: null, live: false, running: false, timeScale: 1 };
   private fuel: FuelModel | null = null;
   // Inputs reused every frame, so stepping allocates nothing.
-  private readonly airIn: AirInput = { rpm: 0, load: 0, boost: 0, fuelCut: true };
-  private readonly thermalIn: ThermalInput = { dt: 0, rpm: 0, load: 0, running: false, fuelKw: 0 };
-  private readonly oilIn: OilInput = { rpm: 0, tempC: 90, supply: 1, running: false, live: false };
+  private readonly airIn: AirInput = { rpm: 0, load: 0, boost: 0, fuelCut: true, cranking: false };
+  private readonly thermalIn: ThermalInput = { dt: 0, rpm: 0, load: 0, running: false, fuelKw: 0, pressureRatio: 1 };
+  private readonly oilIn: OilInput = { rpm: 0, tempC: 90, supply: 1, scavengeSupply: 1, running: false, live: false };
   private readonly fuelIn: FuelInput = { theta: 0, advance: 0, rpm: 0, load: 0, pressureRatio: 1, fuelGs: 0, fuelCut: true, running: false, cranking: false, engineC: 90, sinceStart: 0 };
   private oilParams: OilParams | null = null;
   private airParams: AirParams | null = null;
@@ -78,7 +92,7 @@ export class SystemsSim {
     this.airParams = airParams(engine, s);
     // The radiator is sized for the heat at the limiter, full throttle and full boost.
     airStep(this.airParams, { rpm: engine.spec.redlineRpm, load: 1, boost: 1, fuelCut: false }, this.peakAir);
-    const params = thermalParams(engine, s, this.peakAir.fuelKw);
+    const params = thermalParams(engine, s, this.peakAir.fuelKw, this.peakAir.pressureRatio);
     if (this.thermal) {
       this.thermal.params = params;
       if (params.cooling !== 'liquid') this.thermal.state.thermostat = 0;
@@ -100,7 +114,9 @@ export class SystemsSim {
     if (!this.engine || !this.oilParams || !this.airParams || !this.thermal || !this.fuel) return st;
     const rpm = Math.max(0, frame.rpm);
     st.rpm = rpm;
+    st.load = frame.load;
     st.throttle = frame.throttle;
+    st.cranking = frame.cranking;
     st.theta = frame.theta;
     st.timing = frame.timing ?? null;
     st.live = frame.live;
@@ -108,9 +124,11 @@ export class SystemsSim {
     st.timeScale = frame.timeScale;
     const air = this.airIn;
     air.rpm = rpm;
-    air.load = frame.running ? frame.load : 0;
+    // Cranking injects and sparks as well, so the engine has something to catch on.
+    air.load = frame.running || frame.cranking ? frame.load : 0;
     air.boost = frame.boost;
-    air.fuelCut = frame.fuelCut || !frame.running;
+    air.cranking = frame.cranking;
+    air.fuelCut = frame.cranking ? false : frame.fuelCut || !frame.running;
     airStep(this.airParams, air, st.air);
     const heat = this.thermalIn;
     heat.dt = frame.dt;
@@ -118,11 +136,13 @@ export class SystemsSim {
     heat.load = frame.load;
     heat.running = frame.running;
     heat.fuelKw = st.air.fuelKw;
+    heat.pressureRatio = st.air.pressureRatio;
     this.thermal.step(heat, frame.live);
     const oil = this.oilIn;
     oil.rpm = rpm;
     oil.tempC = st.thermal.oilC;
     oil.supply = this.oilSupply;
+    oil.scavengeSupply = this.scavengeSupply;
     oil.running = frame.running;
     oil.live = frame.live;
     oilStep(this.oilParams, oil, st.oil);

@@ -7,7 +7,7 @@ import { designToSpec } from '../src/designer/to-spec.ts';
 import { buildEngine, type Engine } from '../src/engine/kinematics.ts';
 import { systemsOf } from '../src/engine/systems-spec.ts';
 import { AMBIENT_C } from '../src/systems/air.ts';
-import { JET_OPEN_BAR, JET_SPAN_BAR, newOilState, oilParams, oilStep, type OilState } from '../src/systems/oil.ts';
+import { JET_OPEN_BAR, JET_SPAN_BAR, SCAVENGE_RATIO, newOilState, oilParams, oilStep, type OilState } from '../src/systems/oil.ts';
 import { viscosity, viscosityRatio } from '../src/systems/viscosity.ts';
 
 const design = (over: Partial<Design>): Engine => {
@@ -55,7 +55,9 @@ describe('oil pressure', () => {
     expect(cold.reliefOpen).toBe(true);
   });
 
-  it('meets the figures of real engines not used to calibrate it', () => {
+  it('its global constants meet figures of real engines that were not used to set them', () => {
+    // G100 gives every engine the calibration pressure at its calibration speed, so the size of the engine cancels out:
+    // these check only the calibration pressure, the linear law, the viscosity and the relief valve, not the engine.
     // Saab 9-2X manual, EJ205 at 80 C: at least 98 kPa at 600 rpm and 294 kPa at 5000 rpm.
     expect(at(ej205, 600, 80).pressure).toBeGreaterThanOrEqual(0.98);
     expect(at(ej205, 5000, 80).pressure).toBeGreaterThanOrEqual(2.94);
@@ -124,6 +126,18 @@ describe('oil pressure', () => {
     const starved = at(plain, 1500, 100, { supply: 0 });
     expect(starved.pressure).toBe(0);
     expect(starved.warning).toBe(true);
+  });
+
+  it('a wet sump has no scavenge stages; a dry one returns what its stages can draw', () => {
+    const wet = oilParams(plain, systemsOf(plain.spec));
+    expect(wet.scavengeLitresPerRev).toBe(0);
+    expect(at(plain, 3000, 100).scavenge).toBe(0);
+    const dry = { ...wet, scavengeLitresPerRev: SCAVENGE_RATIO * wet.pumpLitresPerRev };
+    const out = newOilState();
+    oilStep(dry, { rpm: 3000, tempC: 100, supply: 1, scavengeSupply: 0.6, running: true, live: true }, out);
+    expect(out.scavenge).toBeCloseTo(0.6 * SCAVENGE_RATIO * out.pumpFlow, 9);
+    oilStep(dry, { rpm: 3000, tempC: 100, supply: 1, running: true, live: true }, out);
+    expect(out.scavenge).toBeCloseTo(SCAVENGE_RATIO * out.pumpFlow, 9);
   });
 
   it('warns only about an engine the visitor is running', () => {

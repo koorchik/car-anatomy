@@ -22,12 +22,18 @@ export interface FuelState {
   /** Spark advance, crank degrees before TDC. On a rotary, the leading plug's. */
   advance: number;
   trailingAdvance: number;
-  /** Main injection window, cycle degrees from firing TDC. Zero length when the system is continuous or cut. */
+  /**
+   * Windows in cycle degrees from firing TDC, zero length when unused. Each belongs to a piece of hardware, so the
+   * layer lights the injector that really sprays. inject: the port injectors, or the injector in the chamber where
+   * there are none. pilot: a diesel's pilot shot, or the direct injectors of a dual system. second: the cold
+   * catalyst-heating shot of a direct injector, in whichever slot that injector has.
+   */
   injectStart: number;
   injectEnd: number;
-  /** A second short window: a diesel's pilot, or the cold catalyst-heating shot of direct injection. */
   pilotStart: number;
   pilotEnd: number;
+  secondStart: number;
+  secondEnd: number;
   /** Share of fuel through the port injectors on a dual system. */
   portShare: number;
   pulseMs: number;
@@ -38,7 +44,7 @@ export interface FuelState {
   glow: boolean;
   /** High-pressure pump plunger lift, 0..1. */
   plunger: number;
-  /** Per chamber (engine.cylinders order): its main injection overlaps this frame, 0 or 1. */
+  /** Per chamber (engine.cylinders order): the injector of its inject slot (or of its pilot slot) sprays this frame, 0 or 1. */
   injecting: Float32Array;
   piloting: Float32Array;
   /** Per plug slot: fired this frame. Piston: one slot per cylinder. Rotary: leading and trailing per rotor. */
@@ -95,6 +101,8 @@ export class FuelModel {
       injectEnd: 0,
       pilotStart: 0,
       pilotEnd: 0,
+      secondStart: 0,
+      secondEnd: 0,
       portShare: 1,
       pulseMs: 0,
       railBar: null,
@@ -127,7 +135,8 @@ export class FuelModel {
     const spec = e.spec;
     const cycle = e.cycle;
     const rpm = Math.max(input.rpm, 1);
-    const fuelling = input.running && !input.fuelCut;
+    // The starter's turns inject and spark too: that is how the engine catches. EngineSim cuts only its sound then.
+    const fuelling = (input.running && !input.fuelCut) || input.cranking;
     const system = s.fuelSystem;
     const diesel = isDieselSystem(system);
     const timing = input.timing ?? e.timing;
@@ -144,7 +153,7 @@ export class FuelModel {
     const mass = fuelling ? this.perCycle(input.fuelGs, rpm) : 0;
     const share = mass / Math.max(this.maxPerCycle, 1e-9);
     const degPerSecond = rpm * 6;
-    st.injectStart = st.injectEnd = st.pilotStart = st.pilotEnd = 0;
+    st.injectStart = st.injectEnd = st.pilotStart = st.pilotEnd = st.secondStart = st.secondEnd = 0;
     st.pulseMs = 0;
     st.continuous = 0;
     st.railBar = null;
@@ -168,21 +177,23 @@ export class FuelModel {
         }
         if (st.portShare < 1) {
           const pw = (mass * (1 - st.portShare)) / directRate + DEAD_TIME / 2;
-          // On dual injection the direct shot goes in the pilot slot when the port injectors carry part of the fuel.
+          // A dual system's direct injectors have the pilot slots, so the port injectors keep the inject ones.
           const start = DIRECT_START;
           const end = Math.min(start + pw * degPerSecond, intakeClose);
-          if (st.portShare > 0) {
+          if (system === 'dual') {
             st.pilotStart = start;
             st.pilotEnd = end;
           } else {
             st.injectStart = start;
             st.injectEnd = end;
+          }
+          if (st.portShare === 0) {
             st.pulseMs = pw * 1000;
             // A cold engine splits off a second shot before compression TDC to heat the catalyst (VW).
             if (input.engineC < 40) {
               const second = 0.15 * pw * degPerSecond;
-              st.pilotEnd = cycle - 20;
-              st.pilotStart = st.pilotEnd - Math.max(second, 2);
+              st.secondEnd = cycle - 20;
+              st.secondStart = st.secondEnd - Math.max(second, 2);
             }
           }
         }
@@ -231,14 +242,17 @@ export class FuelModel {
     this.theta = mod(input.theta, e.cycle);
     this.turned = input.advance;
     st.sparks.fill(0);
-    const sparking = input.running && !input.fuelCut && !diesel && this.systems.sparkPlugs > 0;
+    const sparking = ((input.running && !input.fuelCut) || input.cranking) && !diesel && this.systems.sparkPlugs > 0;
     const wasted = this.systems.ignition === 'wasted-spark';
+    // The direct injector fires the cold second shot: it has the pilot slots on a dual system, the inject ones otherwise.
+    const secondInPilot = this.systems.fuelSystem === 'dual';
     for (let i = 0; i < e.cylinders.length; i++) {
       const c = e.cylinders[i]!;
       const on = !input.active || input.active[i] !== false;
       const fire = c.fire;
-      st.injecting[i] = fuelling && on && this.overlaps(fire + st.injectStart, fire + st.injectEnd) ? 1 : 0;
-      st.piloting[i] = fuelling && on && this.overlaps(fire + st.pilotStart, fire + st.pilotEnd) ? 1 : 0;
+      const second = fuelling && on && this.overlaps(fire + st.secondStart, fire + st.secondEnd);
+      st.injecting[i] = (fuelling && on && this.overlaps(fire + st.injectStart, fire + st.injectEnd)) || (second && !secondInPilot) ? 1 : 0;
+      st.piloting[i] = (fuelling && on && this.overlaps(fire + st.pilotStart, fire + st.pilotEnd)) || (second && secondInPilot) ? 1 : 0;
       if (!sparking || !on) continue;
       if (e.isRotary) {
         if (this.crossed(fire - st.advance)) st.sparks[c.bank * 2] = 1;

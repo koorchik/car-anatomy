@@ -8,6 +8,7 @@ import { buildEngine, mod, type Engine } from '../src/engine/kinematics.ts';
 import { systemsOf } from '../src/engine/systems-spec.ts';
 import { airParams, airStep, newAirState } from '../src/systems/air.ts';
 import { FuelModel, sparkAdvance, TRAILING_LAG, type FuelInput } from '../src/systems/fuel.ts';
+import { shownAdvance, SystemsSim } from '../src/systems/sim.ts';
 
 const design = (over: Partial<Design>): Engine => {
   const d = resolveDesign({ ...DEFAULT_DESIGN, throws: [], ...over });
@@ -22,15 +23,22 @@ const input = (engine: Engine, over: Partial<FuelInput> = {}): FuelInput => {
   return { theta: 0, advance: 0, rpm, load, pressureRatio: 1, fuelGs: air.fuelGs, fuelCut: false, running: true, cranking: false, engineC: 90, sinceStart: 1e6, ...over };
 };
 
-/** Turns the crank through a cycle a degree at a time and lists the angles each slot fired at. */
-const sweep = (model: FuelModel, base: FuelInput, field: 'sparks' | 'injecting'): number[][] => {
+/** Turns the crank through a cycle a degree at a time and lists the angles each spark fired or each injection began at. */
+const sweep = (model: FuelModel, base: FuelInput, field: 'sparks' | 'injecting' | 'piloting'): number[][] => {
   const e = model.engine;
   const n = field === 'sparks' ? model.state.sparks.length : e.cylinders.length;
   const hits: number[][] = Array.from({ length: n }, () => []);
+  const before = new Array<boolean>(n).fill(false);
+  model.step({ ...base, theta: 0, advance: 0 });
+  for (let i = 0; i < n; i++) before[i] = model.state[field][i]! > 0;
   for (let deg = 1; deg <= e.cycle; deg++) {
     model.step({ ...base, theta: deg, advance: 1 });
     const arr = model.state[field];
-    for (let i = 0; i < n; i++) if (arr[i]! > 0 && (field === 'sparks' || !hits[i]!.includes(deg - 1))) hits[i]!.push(deg);
+    for (let i = 0; i < n; i++) {
+      const on = arr[i]! > 0;
+      if (on && (field === 'sparks' || !before[i])) hits[i]!.push(deg);
+      before[i] = on;
+    }
   }
   return hits;
 };
@@ -131,9 +139,49 @@ describe('injection', () => {
     expect(warm.injectStart).toBeGreaterThanOrEqual(420);
     expect(warm.injectEnd).toBeLessThanOrEqual(direct.timing.intakeClose);
     expect(warm.pilotEnd - warm.pilotStart).toBe(0);
+    expect(warm.secondEnd - warm.secondStart).toBe(0);
     const cold = model.step(input(direct, { rpm: 1500, load: 0.3, engineC: 25 }));
-    expect(cold.pilotEnd).toBeCloseTo(700, 6);
-    expect(cold.pilotStart).toBeLessThan(cold.pilotEnd);
+    expect(cold.secondEnd).toBeCloseTo(700, 6);
+    expect(cold.secondStart).toBeLessThan(cold.secondEnd);
+    // Both shots come from the one injector in the chamber, so both light its slot.
+    const shots = sweep(model, input(direct, { rpm: 1500, load: 0.3, engineC: 25 }), 'injecting');
+    const c = direct.cylinders[0]!;
+    const began = shots[0]!.map((deg) => mod(deg - c.fire, 720));
+    expect(began.length).toBe(2);
+    [cold.injectStart, cold.secondStart].forEach((start, k) => {
+      expect(began[k]!).toBeGreaterThanOrEqual(start - 1e-9);
+      expect(began[k]!).toBeLessThan(start + 1);
+    });
+    expect(sweep(model, input(direct, { rpm: 1500, load: 0.3, engineC: 25 }), 'piloting')[0]).toEqual([]);
+  });
+
+  it('dual injection lights the injectors that spray: port at light load, both in between, direct at full load', () => {
+    const i3 = buildEngine(engineById('i3')!);
+    const s = systemsOf(i3.spec);
+    expect(s.fuelSystem).toBe('dual');
+    const model = new FuelModel(i3, s);
+    const shots = (load: number, engineC = 90): { port: number; direct: number; st: ReturnType<FuelModel['step']> } => {
+      const base = input(i3, { rpm: 3000, load, engineC });
+      const port = sweep(model, base, 'injecting')[0]!.length;
+      const direct = sweep(model, base, 'piloting')[0]!.length;
+      return { port, direct, st: model.step(base) };
+    };
+    const light = shots(0.2);
+    expect(light.st.portShare).toBe(1);
+    expect([light.port, light.direct]).toEqual([1, 0]);
+    const mid = shots(0.5);
+    expect(mid.st.portShare).toBeGreaterThan(0);
+    expect(mid.st.portShare).toBeLessThan(1);
+    expect([mid.port, mid.direct]).toEqual([1, 1]);
+    const full = shots(1);
+    expect(full.st.portShare).toBe(0);
+    expect([full.port, full.direct]).toEqual([0, 1]);
+    expect(full.st.pilotStart).toBeGreaterThanOrEqual(420);
+    expect(full.st.pilotEnd).toBeLessThanOrEqual(i3.timing.intakeClose);
+    expect(full.st.injectEnd - full.st.injectStart).toBe(0);
+    // Cold, the second shot also comes from the direct injector.
+    const cold = shots(1, 25);
+    expect([cold.port, cold.direct]).toEqual([0, 2]);
   });
 
   it('a diesel injects near TDC, with a pilot before it on common rail and none from a mechanical pump', () => {
@@ -191,11 +239,41 @@ describe('events between frames', () => {
     expect([...back.sparks].every((x) => x === 0)).toBe(true);
   });
 
+  it('takes the advance from how far the shown angle moved, not from the nominal speed', () => {
+    // Drive nudges the shown angle: a frame that moved 9 degrees at a nominal 12 advances 9.
+    expect(shownAdvance(100, 109, 12, 720)).toBeCloseTo(9, 9);
+    expect(shownAdvance(715, 4, 12, 720)).toBeCloseTo(9, 9);
+    // Pulled back, nothing happened; a dropped frame at speed keeps its whole cycles.
+    expect(shownAdvance(100, 97, 12, 720)).toBe(0);
+    expect(shownAdvance(100, 100 + 4200 - 5 * 720, 4200, 720)).toBeCloseTo(4200, 9);
+    expect(shownAdvance(100, 100 + 4100 - 5 * 720, 4200, 720)).toBeCloseTo(4100, 9);
+  });
+
   it('keeps its crank-degree windows in slow motion, where the systems run at idle', () => {
     const atIdle = model.step(input(plain, { rpm: plain.spec.idleRpm }));
     const width = mod(atIdle.injectEnd - atIdle.injectStart, 720);
     expect(width).toBeCloseTo(atIdle.pulseMs * 1e-3 * plain.spec.idleRpm * 6, 6);
     expect(width).toBeGreaterThan(10);
+  });
+});
+
+describe('starting', () => {
+  it('injects and sparks while the starter turns the engine, though EngineSim cuts the fuel sound', () => {
+    for (const e of [plain, direct, buildEngine(engineById('i4d')!)]) {
+      const sim = new SystemsSim();
+      sim.configure(e);
+      let sparks = 0;
+      let shots = 0;
+      for (let deg = 1; deg <= e.cycle; deg++) {
+        const st = sim.step({ theta: deg, advance: 1, rpm: 240, load: 0.04, throttle: 0, boost: 0, running: false, cranking: true, fuelCut: true, live: true, dt: 1 / 1440, timeScale: 1 });
+        sparks += [...st.fuel.sparks].reduce((a, b) => a + b, 0);
+        shots += st.fuel.injecting[0]!;
+      }
+      const diesel = e.spec.fuel === 'diesel';
+      expect(sparks, e.spec.id).toBe(diesel ? 0 : e.cylinders.length);
+      expect(shots, e.spec.id).toBeGreaterThan(0);
+      expect(sim.state.air.fuelGs, e.spec.id).toBeGreaterThan(0);
+    }
   });
 });
 

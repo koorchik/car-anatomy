@@ -10,6 +10,8 @@ const P_ATM = 101325;
 const R_AIR = 287;
 /** Volumetric efficiency of the layers (estimate). The designer's model has its own only after the first change. */
 export const VE = 0.85;
+/** Fuel per cycle while the starter turns the engine, times the running amount (estimate: the start enrichment). */
+export const CRANK_ENRICHMENT = 2;
 /** The outside air, C: the designer's 298 K. */
 export const AMBIENT_C = T_ATM - 273;
 
@@ -50,6 +52,8 @@ export interface AirInput {
   boost: number;
   /** No fuel is injected on the limiter or on a closed-throttle overrun. */
   fuelCut: boolean;
+  /** The starter turns the engine: it gets a richer start charge. */
+  cranking?: boolean;
 }
 
 export interface AirState {
@@ -98,6 +102,10 @@ export function airStep(p: AirParams, input: AirInput, out: AirState): void {
   } else {
     lambda = load <= 0.8 ? 1 : 1 + (p.lambda - 1) * ((load - 0.8) / 0.2);
     fuelGs = airGs / (p.afr * lambda);
+  }
+  if (input.cranking) {
+    fuelGs *= CRANK_ENRICHMENT;
+    lambda /= CRANK_ENRICHMENT;
   }
   if (input.fuelCut) fuelGs = 0;
   out.airGs = airGs;

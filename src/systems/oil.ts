@@ -25,6 +25,11 @@ export const HEAD_SHARE = 0.35;
 export const CHAIN_SHARE = 0.05;
 /** Low-pressure lamp of a running engine, bar. Subaru's switch works at 14.7 kPa. */
 export const WARNING_BAR = 0.15;
+/**
+ * Scavenge stages of a dry sump displace this many times the pressure stage: they return foamy oil and must keep the
+ * pan empty (estimate, to be checked by feature/oil-sump).
+ */
+export const SCAVENGE_RATIO = 2.5;
 
 export interface OilParams {
   /** Litres per crank turn. */
@@ -40,6 +45,8 @@ export interface OilParams {
    * the pump's whole flow at the limiter for a 10 % rise over its opening pressure, as a real valve is sized.
    */
   reliefG: number;
+  /** All scavenge stages together, litres per crank turn. Zero on a wet sump. */
+  scavengeLitresPerRev: number;
 }
 
 export function oilParams(engine: Engine, s: SystemsSpec): OilParams {
@@ -55,7 +62,8 @@ export function oilParams(engine: Engine, s: SystemsSpec): OilParams {
   const g100 = (pumpLitresPerRev * nCal) / (CALIBRATION_BAR * (1 + turboShare + jetsAtCal));
   const boosted = spec.aspiration !== 'na' || spec.fuel === 'diesel';
   const reliefBar = boosted ? RELIEF_BAR_HEAVY : RELIEF_BAR;
-  return { pumpLitresPerRev, g100, turboShare, jets: s.pistonJets, reliefBar, reliefG: (pumpLitresPerRev * spec.redlineRpm) / (0.1 * reliefBar) };
+  const scavengeLitresPerRev = s.sump === 'wet' ? 0 : SCAVENGE_RATIO * pumpLitresPerRev;
+  return { pumpLitresPerRev, g100, turboShare, jets: s.pistonJets, reliefBar, reliefG: (pumpLitresPerRev * spec.redlineRpm) / (0.1 * reliefBar), scavengeLitresPerRev };
 }
 
 export interface OilInput {
@@ -63,6 +71,8 @@ export interface OilInput {
   tempC: number;
   /** Share of oil in what the pump draws, 0..1. Always 1 on a wet sump at rest; feature/oil-sump drives it. */
   supply: number;
+  /** Share of oil in what the scavenge stages draw, 0..1; the rest is air. Feature/oil-sump drives it. */
+  scavengeSupply?: number;
   running: boolean;
   /** The visitor's engine at its true speed. The warning only shows then. */
   live: boolean;
@@ -73,6 +83,8 @@ export interface OilState {
   pressure: number;
   /** All flows in L/min. */
   pumpFlow: number;
+  /** Oil the scavenge stages return to the tank. Zero on a wet sump. */
+  scavenge: number;
   reliefFlow: number;
   mains: number;
   head: number;
@@ -89,6 +101,7 @@ export interface OilState {
 export const newOilState = (): OilState => ({
   pressure: 0,
   pumpFlow: 0,
+  scavenge: 0,
   reliefFlow: 0,
   mains: 0,
   head: 0,
@@ -122,6 +135,7 @@ export function oilStep(p: OilParams, input: OilInput, out: OilState): void {
   const pressure = (lo + hi) / 2;
   out.pressure = pressure;
   out.pumpFlow = q;
+  out.scavenge = Math.max(0, p.scavengeLitresPerRev * input.rpm * Math.min(1, Math.max(0, input.scavengeSupply ?? 1)));
   out.mains = pressure * g * MAIN_SHARE;
   out.head = pressure * g * HEAD_SHARE;
   out.chain = pressure * g * CHAIN_SHARE;

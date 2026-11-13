@@ -3,10 +3,13 @@ import { resolveDesign } from '../src/designer/constraints.ts';
 import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
 import { evaluate } from '../src/designer/physics.ts';
 import { designToSpec } from '../src/designer/to-spec.ts';
+import { ENGINES, engineById, pageChoices } from '../src/data/engines.ts';
 import { buildEngine, type Engine } from '../src/engine/kinematics.ts';
+import { systemsOf } from '../src/engine/systems-spec.ts';
 import { AMBIENT_C } from '../src/systems/air.ts';
+import { WARNING_BAR } from '../src/systems/oil.ts';
 import { SystemsSim, type SystemsFrame } from '../src/systems/sim.ts';
-import { THERMOSTAT_FULL_C, THERMOSTAT_OPEN_C, WARMUP_SPEED, thermostatTarget } from '../src/systems/thermal.ts';
+import { THERMOSTAT_FULL_C, THERMOSTAT_OPEN_C, WARMUP_SPEED, airFlowShare, thermostatTarget } from '../src/systems/thermal.ts';
 
 const design = (over: Partial<Design>): Engine => {
   const d = resolveDesign({ ...DEFAULT_DESIGN, throws: [], ...over });
@@ -53,6 +56,8 @@ const run = (sim: SystemsSim, f: SystemsFrame, minutes: number, each?: (modelSec
 const plain = design({});
 const withCooler = design({ oilCooler: 'coolant' });
 const airCooled = design({ layout: 'boxer', cylinders: 4, bore: 85.5, stroke: 69, rodLength: 137, cooling: 'fan', compression: 7.5, rpmLimit: 4600 });
+const rideCooled = design({ cylinders: 1, bore: 84, stroke: 90, rodLength: 165, valvetrain: 'ohv', cooling: 'ram', compression: 8.5, rpmLimit: 5500 });
+const catalogue = ENGINES.flatMap((page) => pageChoices(page.id).map((c) => buildEngine(engineById(c.id)!)));
 
 describe('coolant pump and thermostat', () => {
   it('a centrifugal pump flows in proportion to its speed', () => {
@@ -131,13 +136,27 @@ describe('warm-up', () => {
     expect(cooled.state.thermal.oilC).toBeLessThanOrEqual(cooled.state.thermal.engineC + 20);
   });
 
-  it('an air-cooled engine has no thermostat, and its oil stays in bounds at full power', () => {
-    const sim = simFor(airCooled, 'warm');
-    run(sim, frame(airCooled, { rpm: airCooled.spec.redlineRpm, load: 1 }), 40);
+  it.each([['a fan', airCooled], ['the riding', rideCooled]] as const)('an engine cooled by %s has no thermostat, and its oil stays in bounds at full power', (_, engine) => {
+    const sim = simFor(engine, 'warm');
+    run(sim, frame(engine, { rpm: engine.spec.redlineRpm, load: 1 }), 40);
     expect(sim.state.thermal.thermostat).toBe(0);
     expect(sim.state.thermal.coolantFlow).toBe(0);
     expect(sim.state.thermal.oilC).toBeGreaterThan(90);
     expect(sim.state.thermal.oilC).toBeLessThan(140);
+  });
+
+  it('ram air stands still at idle and blows hardest at full speed, as the motorcycle it stands for', () => {
+    const { redlineRpm, idleRpm } = rideCooled.spec;
+    expect(airFlowShare('ram', idleRpm, redlineRpm, idleRpm, true)).toBeCloseTo(airFlowShare('ram', 0, redlineRpm, idleRpm, false), 9);
+    expect(airFlowShare('ram', redlineRpm, redlineRpm, idleRpm, true)).toBe(1);
+    expect(airFlowShare('fan', redlineRpm, redlineRpm, idleRpm, true)).toBe(1);
+    // Standing at idle it runs hotter than riding along at part throttle.
+    const idle = simFor(rideCooled, 'warm');
+    run(idle, frame(rideCooled), 60);
+    const riding = simFor(rideCooled, 'warm');
+    run(riding, frame(rideCooled, { rpm: 0.6 * redlineRpm, load: 0.4 }), 60);
+    expect(idle.state.thermal.oilC).toBeGreaterThan(riding.state.thermal.oilC);
+    expect(idle.state.thermal.oilC).toBeLessThan(140);
   });
 
   it('a stopped engine cools steadily, with nothing through the heater', () => {
@@ -157,5 +176,39 @@ describe('warm-up', () => {
     run(sim, frame(plain, { live: false, load: 0.6, rpm: 3000 }), 30);
     expect(sim.state.thermal.engineC).toBe(AMBIENT_C);
     expect(sim.state.thermal.oilC).toBe(AMBIENT_C);
+  });
+});
+
+/** Model minutes in coarse steps: the warm-up runs ten model seconds per step, the same equations. */
+const settle = (engine: Engine, f: Partial<SystemsFrame>, minutes: number): SystemsSim => {
+  const sim = simFor(engine, 'warm');
+  const fr = frame(engine, { dt: 0.5, ...f });
+  for (let i = 0; i < (minutes * 60) / (fr.dt * WARMUP_SPEED); i++) sim.step(fr);
+  return sim;
+};
+
+describe('every engine of the catalogue', () => {
+  it('stays in bounds held at the limiter on full throttle and full boost, whatever cools it', () => {
+    const kinds = new Set<string>();
+    for (const e of catalogue) {
+      kinds.add(systemsOf(e.spec).cooling);
+      const s = settle(e, { rpm: e.spec.redlineRpm, load: 1, throttle: 1, boost: 1 }, 120).state;
+      // Motor oil flashes at about 230 C; finned metal of an air-cooled head is sized for 180 C here.
+      expect(s.thermal.oilC, `${e.spec.id} oil`).toBeLessThan(150);
+      expect(s.thermal.engineC, `${e.spec.id} metal`).toBeLessThan(220);
+      expect(s.oil.pressure, `${e.spec.id} oil pressure`).toBeGreaterThan(WARNING_BAR);
+      // Garrett asks 40-45 psi of the turbo's feed; the hot oil still gives it 2.8 bar.
+      if (e.spec.aspiration.includes('turbo')) expect(s.oil.pressure, `${e.spec.id} turbo feed`).toBeGreaterThanOrEqual(2.8);
+    }
+    expect([...kinds].sort()).toEqual(['fan', 'liquid', 'ram']);
+  });
+
+  it('a warm liquid-cooled engine left idling keeps its thermostat at the opening point', () => {
+    for (const e of catalogue) {
+      if (systemsOf(e.spec).cooling !== 'liquid') continue;
+      // Three minutes on screen, and then long enough to settle.
+      expect(settle(e, {}, 60).state.thermal.engineC, `${e.spec.id} after 3 min`).toBeGreaterThanOrEqual(85);
+      expect(settle(e, {}, 300).state.thermal.engineC, `${e.spec.id} settled`).toBeGreaterThanOrEqual(85);
+    }
   });
 });
