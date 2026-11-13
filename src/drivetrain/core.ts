@@ -296,6 +296,10 @@ export function buildCore(draft: CoreDraft): DrivetrainCore {
     elements.slipInertia[j] = 1 / rmr;
     switch (e.kind) {
       case 'friction':
+        // A zero decay makes μ(0) = 0/0 on the audio thread; μ_s below μ_k would let go at a torque it then exceeds.
+        if (!(e.friction.stribeck > 0) || !(e.friction.muKinetic > 0) || !(e.friction.muStatic >= e.friction.muKinetic)) {
+          throw new Error(`drivetrain: element ${e.id} needs μ_s ≥ μ_k > 0 and a positive Stribeck decay`);
+        }
         elements.kind[j] = FRICTION;
         elements.scale[j] = clampTorque(e.friction);
         elements.muStatic[j] = e.friction.muStatic;

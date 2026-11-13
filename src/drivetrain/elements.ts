@@ -30,15 +30,24 @@ export const clampTorque = (f: FrictionDef): number => f.clampN * meanRadius(f) 
 /** Static capacity at full clamp, N·m: μ_s·F·r_m·z. */
 export const staticCapacity = (f: FrictionDef): number => f.muStatic * clampTorque(f);
 
-/** Friction coefficient at this slip, μ(Δω) = μ_k + (μ_s − μ_k)·e^{−|Δω|/ω_s}. Continuous at zero with μ_s. */
-export function frictionMu(f: Pick<FrictionDef, 'muStatic' | 'muKinetic' | 'stribeck'>, slip: number): number {
-  return f.muKinetic + (f.muStatic - f.muKinetic) * Math.exp(-Math.abs(slip) / f.stribeck);
-}
+/**
+ * The Stribeck law in plain numbers, for the solver's flat arrays: μ(Δω) = μ_k + (μ_s − μ_k)·e^{−|Δω|/ω_s},
+ * continuous at zero with μ_s.
+ */
+export const stribeckMu = (muStatic: number, muKinetic: number, stribeck: number, slip: number): number =>
+  muKinetic + (muStatic - muKinetic) * Math.exp(-Math.abs(slip) / stribeck);
 
-/** dμ/d|Δω|: negative on the whole decay, steepest at zero slip. This slope is what lets a clutch judder. */
-export function frictionSlope(f: Pick<FrictionDef, 'muStatic' | 'muKinetic' | 'stribeck'>, slip: number): number {
-  return (-(f.muStatic - f.muKinetic) / f.stribeck) * Math.exp(-Math.abs(slip) / f.stribeck);
-}
+/** dμ/d|Δω| of stribeckMu: negative on the whole decay, steepest at zero slip. This slope is what lets a clutch judder. */
+export const stribeckSlope = (muStatic: number, muKinetic: number, stribeck: number, slip: number): number =>
+  (-(muStatic - muKinetic) / stribeck) * Math.exp(-Math.abs(slip) / stribeck);
+
+/** Friction coefficient of a facing at this slip (stribeckMu). */
+export const frictionMu = (f: Pick<FrictionDef, 'muStatic' | 'muKinetic' | 'stribeck'>, slip: number): number =>
+  stribeckMu(f.muStatic, f.muKinetic, f.stribeck, slip);
+
+/** dμ/d|Δω| of a facing at this slip (stribeckSlope). */
+export const frictionSlope = (f: Pick<FrictionDef, 'muStatic' | 'muKinetic' | 'stribeck'>, slip: number): number =>
+  stribeckSlope(f.muStatic, f.muKinetic, f.stribeck, slip);
 
 const smoothstep = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));

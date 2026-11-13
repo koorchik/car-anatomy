@@ -158,6 +158,12 @@ describe('2. the lock law', () => {
     expect(Math.abs(s.slip[1]!)).toBeLessThan(1e-9);
   });
 
+  it('friction data that would give 0/0 or let go below its kinetic torque does not build', () => {
+    for (const bad of [{ stribeck: 0 }, { muStatic: 0.2, muKinetic: 0.27 }, { muKinetic: 0 }]) {
+      expect(() => twoBodies(0.1, 0.1, { id: 'c', kind: 'friction', a: 'a', b: 'b', friction: friction(100, bad) })).toThrow(/μ_s ≥ μ_k > 0/);
+    }
+  });
+
   it('the projection never adds energy in a geared box either: closing first with the clutch locked', () => {
     const core = e30();
     const s = new DrivetrainSolver(core);

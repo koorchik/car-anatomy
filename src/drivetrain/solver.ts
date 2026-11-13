@@ -22,7 +22,7 @@
 // dozen coordinates, a handful of rows).
 
 import { DOG, type DrivetrainCore, FRICTION, ONEWAY, SYNCHRO } from './core.ts';
-import { BELL_HOUSING_C, DISC_COOLING_S, LOCK_SLIP, SPIN_LOSS_FADE, SYNC_WINDOW } from './elements.ts';
+import { BELL_HOUSING_C, DISC_COOLING_S, LOCK_SLIP, SPIN_LOSS_FADE, SYNC_WINDOW, stribeckMu, stribeckSlope } from './elements.ts';
 
 /** Element states, as reported. */
 export const OPEN = 0;
@@ -304,8 +304,7 @@ export class DrivetrainSolver {
     const dir = this.released[e] || Math.abs(dw) <= 1e-9 ? this.slipDir[e]! : Math.sign(dw);
     const cmd = this.command[e]!;
     if (E.kind[e] === SYNCHRO) return -dir * E.scale[e]! * cmd;
-    const mu = E.muKinetic[e]! + (E.muStatic[e]! - E.muKinetic[e]!) * Math.exp(-Math.abs(dw) / E.stribeck[e]!);
-    return -dir * mu * E.scale[e]! * cmd;
+    return -dir * stribeckMu(E.muStatic[e]!, E.muKinetic[e]!, E.stribeck[e]!, dw) * E.scale[e]! * cmd;
   }
 
   /** Builds M + h·C, the force vector and the constraint rows for the present classification. */
@@ -344,8 +343,7 @@ export class DrivetrainSolver {
       this.slope[e] = 0;
       if (cls[e] !== SLIP || E.kind[e] !== FRICTION) continue;
       const dw = this.dotRow(E.rows, e, v);
-      const excess = E.muStatic[e]! - E.muKinetic[e]!;
-      this.slope[e] = ((-excess * E.scale[e]! * this.command[e]!) / E.stribeck[e]!) * Math.exp(-Math.abs(dw) / E.stribeck[e]!);
+      this.slope[e] = stribeckSlope(E.muStatic[e]!, E.muKinetic[e]!, E.stribeck[e]!, dw) * E.scale[e]! * this.command[e]!;
       if (this.slope[e]! < 0) falling++;
     }
     for (let e = 0; e < ne; e++) {
