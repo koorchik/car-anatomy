@@ -26,6 +26,7 @@ import { elementIndex, memberIndex } from './core.ts';
 import { stribeckMu } from './elements.ts';
 import { fullLoadTorque, stubTorque } from './engine-stub.ts';
 import { DIFF_CASE, PINION, PROP_FRONT, SIDE_LEFT, SIDE_RIGHT } from './final-drive.ts';
+import { stableStep } from './modes.ts';
 import { LOCKED } from './solver.ts';
 
 const RPM = 30 / Math.PI;
@@ -51,6 +52,12 @@ export const RUN = {
   /** Time constant of the acceleration the dynamic driver feels, s. */
   feelS: 0.05,
 };
+
+/**
+ * Step of the whole core, s: its stable step, at most 1 ms (gearbox-model.md, the step). The halfshafts swinging the
+ * side gears against the wheels put it below 1 ms on the E30.
+ */
+export const driveStep = (cd: CarDrive): number => Math.min(0.001, stableStep(cd.core));
 
 /** Engine speed of the launch, rad/s. */
 export const launchOmega = (cd: CarDrive): number => Math.min(peakTorque(cd.map).rpm, RUN.launchShare * cd.map.limitRpm) / RPM;
@@ -313,7 +320,7 @@ export function dynamicRun(cd: CarDrive, o: RunOptions = {}): RunResult {
   const s = veh.solver;
   const { core } = s;
   const ch = veh.chassis as LongitudinalChassis;
-  const dt = o.dt ?? 0.001;
+  const dt = o.dt ?? driveStep(cd);
   const rec = new Recorder(o.sampleS ?? 0.1);
   const masses = runMasses(cd);
   const crank = memberIndex(core, CRANK);
@@ -401,7 +408,7 @@ export function dynamicRun(cd: CarDrive, o: RunOptions = {}): RunResult {
 }
 
 /** Top speed of the whole core: rolling at v0 in gear `g` at full load for `seconds`, the speed it ends at, m/s. */
-export function dynamicTopSpeed(cd: CarDrive, g: CarGear, v0: number, seconds: number, dt = 0.001): { v: number; drift: number } {
+export function dynamicTopSpeed(cd: CarDrive, g: CarGear, v0: number, seconds: number, dt = driveStep(cd)): { v: number; drift: number } {
   const veh = carVehicle(cd);
   const s = veh.solver;
   const ch = veh.chassis as LongitudinalChassis;

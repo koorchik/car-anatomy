@@ -36,7 +36,7 @@ describe('1. calibration of v_max', () => {
     const steady = steadyTopSpeed(cd);
     const g = cd.gears.find((x) => x.name === steady.gear)!;
     const v0 = (0.98 * car.published.vmaxKmh) / KMH;
-    const { v, drift } = dynamicTopSpeed(cd, g, v0, 60, 0.001);
+    const { v, drift } = dynamicTopSpeed(cd, g, v0, 60);
     expect(Math.abs(drift)).toBeLessThan(0.05);
     expect(Math.abs((v * KMH) / car.published.vmaxKmh - 1)).toBeLessThan(0.02);
   });
