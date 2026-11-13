@@ -1488,6 +1488,16 @@ describe('solid axles: Panhard rod, Watt’s linkage, leaf springs, de Dion', ()
     expect(Math.sign(d.axleSteer)).toBe(-Math.sign(s.axleSteer));
   });
 
+  it('lays each trailing link at its side-view slope and length, also one angled in plan', () => {
+    const intent: SolidAxleIntent = { ...SOLID_TYPICAL.triangulated, linkAngleDeg: 6, upperAngleDeg: -9 };
+    for (const r of solidAxle(intent).linkage.rods) {
+      const upper = r.id.startsWith('upper');
+      const slope = Math.atan2(r.body[2] - r.knuckle[2], r.body[0] - r.knuckle[0]) / DEG;
+      expect(slope, r.id).toBeCloseTo(upper ? intent.upperAngleDeg : intent.linkAngleDeg, 9);
+      expect(dist(r.body, r.knuckle), r.id).toBeCloseTo(upper ? intent.upperLinkM : intent.lowerLinkM, 12);
+    }
+  });
+
   it('anti-squat lines: in heave the axle’s point at the contact patch moves square to the line to where the link lines meet, seen from the side', () => {
     // With the drive or brake torque taken by the axle, the force from the road acts on the axle at the contact patch,
     // so the anti line runs from the patch to the axle's side-view instant centre, where the side-view lines of the

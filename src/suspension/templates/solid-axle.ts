@@ -31,7 +31,8 @@ export interface SolidAxleIntent {
   /** Lengths of the lower and upper trailing links, m. */
   lowerLinkM: number;
   upperLinkM: number;
-  /** Side-view slope of the lower and upper links, degrees, positive when the link rises toward the front. */
+  /** Side-view slope of the lower and upper links, degrees, positive when the link rises toward the front (exact in
+   *  the side view also for a link angled in plan). */
   linkAngleDeg: number;
   upperAngleDeg: number;
   /** Height of the Panhard rod (level at design) or of the Watt pivot, m above the road. */
@@ -157,9 +158,10 @@ export function solidAxle(intent: SolidAxleIntent): AxleSpec<SolidAxleLinkage> {
   const link = (id: string, part: string, axle: Vec3, length: number, angleDeg: number, bodyY = axle[1]): Rod => {
     const a = angleDeg * DEG;
     const dy = bodyY - axle[1];
-    const run = Math.sqrt(length * length * Math.cos(a) ** 2 - dy * dy);
+    // length² = run² + dy² + (run·tan a)²: the side view shows the slope a whatever the link's angle in plan.
+    const run = Math.cos(a) * Math.sqrt(length * length - dy * dy);
     if (!(run > 0)) throw new Error(`The ${id} link is too short for its run across the car`);
-    return { id, body: [run, bodyY, axle[2] + length * Math.sin(a)], knuckle: axle, part };
+    return { id, body: [run, bodyY, axle[2] + run * Math.tan(a)], knuckle: axle, part };
   };
   const rods: Rod[] = [];
   let lateral: SolidLateral;
