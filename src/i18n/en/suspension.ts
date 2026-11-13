@@ -76,4 +76,48 @@ export const SUSPENSION_EN: Record<string, string> = {
     'A frame that carries the control arms and often the steering rack. It is usually mounted to the body through rubber, so less noise reaches the cabin.',
   'Дорога': 'Road',
   'Смуга дороги під колесом з нерівностями сцени.': 'A strip of road under the wheel, with the scene’s bumps on it.',
+  'Верхній важіль': 'Upper control arm',
+  'Тримає верх кулака. Він коротший за нижній, тож на стиску тягне верх колеса всередину, і в повороті зовнішнє колесо менше завалюється разом із кузовом. Хитається на двох сайлентблоках, а з кулаком з’єднаний кульовою опорою.':
+    'Holds the top of the knuckle. It is shorter than the lower arm, so in bump it pulls the top of the wheel inward, and in a turn the outside wheel leans less with the body. It pivots on two bushings and joins the knuckle through a ball joint.',
+  'Тяга сходження': 'Toe link',
+  'Тримає задню частину кулака, щоб колесо не поверталося від бічних і гальмівних сил. Її довжиною виставляють сходження заднього колеса, а висотою внутрішнього шарніра задають, як воно змінюється на ходу.':
+    'Holds the back of the knuckle so side and braking forces cannot steer the wheel. Its length sets the rear wheel’s toe, and the height of its inner joint sets how the toe changes with suspension travel.',
+  'Нижня тяга': 'Lower link',
+  'Одна з двох нижніх тяг. Кожна тримає кулак лише вздовж себе, а пара разом працює як нижній важіль з уявною кульовою опорою там, де сходяться їхні лінії. Тому й вісь повороту колеса тут уявна й рухається на ходу.':
+    'One of the two lower links. Each holds the knuckle only along itself, and together the pair works as a lower arm with a virtual ball joint where their lines meet. That is why the steering axis is virtual here too and moves with suspension travel.',
+  'Верхня тяга': 'Upper link',
+  'Одна з двох верхніх тяг. Разом вони працюють як верхній важіль з уявною кульовою опорою за межами кулака. П’ять тяг лишають кулаку один рух, хід колеса, а їхні довжини й кути задають, як колесо змінює розвал і сходження на ходу.':
+    'One of the two upper links. Together they work as an upper arm with a virtual ball joint outside the knuckle. Five links leave the knuckle a single motion, the wheel’s travel, and their lengths and angles set how camber and toe change along it.',
+  'Носій стійки': 'Strut carrier',
+  'Литий носій, жорстко з’єднаний зі стійкою, стоїть на нижньому важелі. Колісний кулак повертається в ньому навколо власної осі, ближчої до колеса, тож сама стійка з кермом не повертається. Вісь повороту підходить до середини колеса, і момент на ведених колесах менше смикає кермо.':
+    'A cast carrier fixed rigidly to the strut, standing on the lower control arm. The steering knuckle turns in it about its own axis, closer to the wheel, so the strut itself does not steer. The steering axis comes nearer the middle of the wheel, and torque at the driven wheels tugs at the steering wheel less.',
+  'Колісний кулак': 'Steering knuckle',
+  'Несе маточину й гальмо, а з кермом повертається в носії стійки на двох опорах, зверху й знизу. Лінія через них і є віссю повороту колеса. Рульова тяга тягне саме цей кулак.':
+    'Carries the hub and the brake, and turns with the steering in the strut carrier on two bearings, one above and one below. The line through them is the steering axis. The tie rod pulls on this knuckle.',
+  'Амортизатор': 'Shock absorber',
+  'Корпус з оливою й поршнем, на який навито пружину. Нижнім вушком стоїть на важелі чи тязі, верхнім кінцем кріпиться до кузова. Ланкою він не працює: кулак тримають важелі, тож бічні сили шток не згинають.':
+    'A body with oil and a piston, the coil spring wound around it. Its lower eye sits on an arm or a link, its top end is fixed to the body. It is not a link: the arms hold the knuckle, so side forces do not bend the piston rod.',
+  'Литий кулак з маточиною. Його тримають дві кульові опори, верхня й нижня, і рульова тяга чи тяга сходження. Лінія через дві кульові опори і є віссю повороту колеса.':
+    'A cast knuckle with the hub. Two ball joints, upper and lower, and a tie rod or toe link hold it. The line through the two ball joints is the steering axis.',
+  'Шарнір між важелем і кулаком: кулька в обоймі дає кулаку і хитатися разом із важелем, і повертатися з кермом. Верхня й нижня кульові опори разом задають вісь повороту колеса.':
+    'The joint between the arm and the knuckle: a ball in a socket lets the knuckle both swing with the arm and turn with the steering. The upper and lower ball joints together set the steering axis.',
+  'Литий кулак з маточиною. Його тримають п’ять тяг, кожна на своєму шарнірі. Кульових опор, через які йде вісь повороту, тут немає: вісь проходить через точки, де сходяться лінії пар тяг.':
+    'A cast knuckle with the hub. Five links hold it, each on its own joint. There are no ball joints for the steering axis to run through: it passes through the points where the lines of each pair of links meet.',
+  'Тримає вагу авто й приймає удари від дороги. Від її жорсткості залежать висота кузова й частота його коливань. Тут вона стоїть на важелі ближче до кузова, ніж колесо, тож стискається менше, ніж піднімається колесо, і мусить бути жорсткішою.':
+    'Carries the car’s weight and takes the blows from the road. Its stiffness sets the ride height and how fast the body bounces. Here it sits on the arm nearer the body than the wheel, so it compresses less than the wheel rises and has to be stiffer.',
+  'Кріпить шток амортизатора до кузова через гуму, яка гасить шум і дає амортизатору трохи хитатися разом із важелем.':
+    'Fixes the shock absorber’s piston rod to the body through rubber, which damps noise and lets the shock absorber tilt a little with the arm.',
+  'Опора амортизатора, лонжерон і кронштейн, на якому хитаються верхні ланки. Сюди приходять сили від колеса, а вагу авто пружина передає через верхню опору амортизатора.':
+    'The shock absorber’s tower, the frame rail and the bracket the upper links pivot on. The forces from the wheel end up here, and the spring passes the car’s weight on through the shock absorber’s upper mount.',
+  'Корпус амортизатора, жорстко з’єднаний з носієм. Як у звичайній стійці Макферсона, він працює ланкою: його вісь тримає верх носія, тому шток згинають бічні сили від колеса.':
+    'The shock absorber body, fixed rigidly to the carrier. As in a plain MacPherson strut it is a link itself: its axis holds the top of the carrier, so the wheel’s side forces bend the piston rod.',
+  'Кріпить шток до чашки кузова через гуму, яка гасить шум. Стійка тут з кермом не повертається: повертається лише колісний кулак у носії.':
+    'Fixes the piston rod to the strut tower through rubber, which damps noise. The strut does not steer here: only the steering knuckle turns in the carrier.',
+  'Шарнір носія': 'Carrier joint',
+  'З’єднує нижній важіль з носієм стійки. Носій з кермом не повертається, тож шарнір лише дає йому хитатися разом із важелем. У RevoKnuckle тут втулка.':
+    'Joins the lower control arm to the strut carrier. The carrier does not steer, so the joint only lets it swing with the arm. On the RevoKnuckle it is a sleeve joint.',
+  'Тримає низ носія стійки й передає на кузов поздовжні й бічні сили від колеса. Хитається на двох сайлентблоках.':
+    'Holds the bottom of the strut carrier and passes the wheel’s fore-aft and side forces to the body. It pivots on two bushings.',
+  'Обертається на підшипнику в кулаці. До її фланця кріпляться гальмівний диск і колесо. Це колесо не ведуче, тож піввісі до маточини немає.':
+    'Turns on a bearing in the knuckle. The brake rotor and the wheel bolt to its flange. This wheel is not driven, so no halfshaft comes to the hub.',
 };
