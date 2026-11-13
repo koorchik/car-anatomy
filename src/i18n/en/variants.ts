@@ -4,6 +4,8 @@ export interface FactsTextEn {
   note: string;
   cars: string[];
   years: string;
+  /** Only where the source language writes the code in Cyrillic. */
+  engineCode?: string;
   sumpNote?: string;
 }
 
@@ -186,6 +188,13 @@ export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
     note: 'A cast-iron block, a large 93.4 mm bore, and an individual throttle plate for each cylinder. The peak is lower than the K20A at 225 firing events per second, but the individual throttles add a sharp intake noise, and each firing pulse is stronger because of the larger 2302 cc displacement.',
     cars: ['BMW M3 E30'],
     years: '1986-1989',
+  },
+  'i4/zaz-1102-memz-245': {
+    name: 'ZAZ-1102 Tavria (MeMZ-245)',
+    note: 'The Ukrainian engine of the Tavria, built in Melitopol, and the smallest on this page: 1091 cc, a single camshaft with rocker arms, and a two-barrel carburetor. The maker quotes 51 hp at 5300–5500 rpm and 78.5 N·m at 3000–3500 rpm, and its 5600 rpm limit is the lowest here. At peak power there are about 180 firing events per second versus 267 for the K20A, so the sound is lower and simpler.',
+    cars: ['ZAZ-1102 Tavria'],
+    years: '1988-1997',
+    engineCode: 'MeMZ-245',
   },
   'i4/civic-type-r-k20c1': {
     name: 'Honda Civic Type R FK8',
