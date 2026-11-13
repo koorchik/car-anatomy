@@ -1,9 +1,13 @@
 // What a visitor may change on a corner without opening the designer (the Setup panel of a scene): spring, damper, ride
 // height, static camber and toe, tyre pressure. resolveCorner turns a corner and a setup into everything the quarter
 // car and the 3D read, the way a workshop would do it:
-//   - ride height moves the spring perch, so the static point slides along the kinematic curves (travel −Δh);
-//   - static camber is set at that static point by sliding the strut top mount (camber plates), static toe by the
-//     tie-rod length; both are solved to 1e-9 rad, so the numbers the visitor typed are what the corner has;
+//   - ride height moves the spring perch, so the static point slides along the kinematic curves (travel −Δh): with
+//     the factory alignment a lowered strut leans its wheel in and toes it out, as on the real car;
+//   - a static camber the visitor types is set at that static point by sliding the strut top mount (camber plates), a
+//     static toe by the tie-rod length; both are solved to 1e-10 rad, so the numbers typed are what the corner has.
+//     Moving the top mount turns the knuckle against the tie rod (−1.5° of camber drags the JTEKT toe by −1.45°), so a
+//     camber change re-sets the toe the way a shop does after camber plates: to the value asked, or to the factory
+//     toe at this ride height;
 //   - the spring is one of the chosen rate made for this car, and the perch carries it to the chosen height;
 //   - a damper preset or ζ becomes coefficients by the OptimumG baseline at the corner's ride frequency;
 //   - pressure changes only the tyre's vertical stiffness.
@@ -27,10 +31,16 @@ export interface CornerSetup {
   damper: 'factory' | DamperPreset | number;
   /** Body height over the corner relative to design, m, positive up. */
   rideHeightM: number;
-  /** Static camber relative to the body, degrees, negative when the top leans in. */
-  camberDeg: number;
-  /** Static toe of this wheel, degrees, positive toe-in. */
-  toeDeg: number;
+  /**
+   * Static camber at rest relative to the body, degrees, negative when the top leans in, set with the strut top mount;
+   * or 'factory': the top mount stays where the drawing has it, so the camber at rest is the curve's at the static point.
+   */
+  camberDeg: 'factory' | number;
+  /**
+   * Static toe of this wheel at rest, degrees, positive toe-in, set with the tie rod; or 'factory': the toe the drawn
+   * hardware gives at this ride height (the rod as drawn, re-set only when a camber change would drag the toe along).
+   */
+  toeDeg: 'factory' | number;
   /** Cold gauge tyre pressure, bar. */
   pressureBar: number;
 }
@@ -48,19 +58,21 @@ export const SETUP_RANGES = {
 const clamp = (v: number, [lo, hi]: readonly [number, number], fallback: number): number =>
   Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback;
 
-/** The corner as it left the factory: its spring and damper, design height, design camber and toe, nominal pressure. */
+/** The corner as it left the factory: its spring and damper, design height, the alignment as drawn, nominal pressure. */
 export function factorySetup(corner: CornerSpec): CornerSetup {
-  const axle = corner.axle;
-  const s = axle.spinAxis;
   return {
-    springNmm: axle.spring.rate / 1000,
+    springNmm: corner.axle.spring.rate / 1000,
     damper: 'factory',
     rideHeightM: 0,
-    camberDeg: (-Math.atan2(s[2], Math.hypot(s[0], s[1])) * 180) / Math.PI,
-    toeDeg: (Math.atan2(s[0], s[1]) * 180) / Math.PI,
+    camberDeg: 'factory',
+    toeDeg: 'factory',
     pressureBar: tyreVertical(corner.tyre).nominalBar,
   };
 }
+
+/** An alignment angle from a link: a finite number inside the range, or the factory alignment. */
+const angle = (v: unknown, range: readonly [number, number]): 'factory' | number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.min(range[1], Math.max(range[0], v)) : 'factory';
 
 /** A setup with every field finite and inside SETUP_RANGES (a link from elsewhere may carry anything). */
 export function clampSetup(setup: CornerSetup, factory: CornerSetup): CornerSetup {
@@ -75,8 +87,8 @@ export function clampSetup(setup: CornerSetup, factory: CornerSetup): CornerSetu
     springNmm: clamp(setup.springNmm, SETUP_RANGES.springNmm, factory.springNmm),
     damper,
     rideHeightM: clamp(setup.rideHeightM, SETUP_RANGES.rideHeightM, 0),
-    camberDeg: clamp(setup.camberDeg, SETUP_RANGES.camberDeg, factory.camberDeg),
-    toeDeg: clamp(setup.toeDeg, SETUP_RANGES.toeDeg, factory.toeDeg),
+    camberDeg: angle(setup.camberDeg, SETUP_RANGES.camberDeg),
+    toeDeg: angle(setup.toeDeg, SETUP_RANGES.toeDeg),
     pressureBar: clamp(setup.pressureBar, SETUP_RANGES.pressureBar, factory.pressureBar),
   };
 }
@@ -91,7 +103,8 @@ export interface ResolvedCorner {
   /** Tie-rod length that gives the toe, m, and its change from the drawing. */
   tieRodM: number;
   tieRodChangeM: number;
-  /** Whether the layout could take the camber and toe asked for (a strut, a steered rod). */
+  /** Whether the strut top mount was moved for a camber asked for, and the tie rod for a toe (asked for, or held while
+   *  the camber changes). A layout without the adjuster (no strut, no steered rod) keeps its hardware as drawn. */
   camberSet: boolean;
   toeSet: boolean;
   /** Travel at rest, m: −rideHeight. */
@@ -158,8 +171,8 @@ export function resolveCorner(corner: CornerSpec, raw: CornerSetup): ResolvedCor
   const strut = spec.linkage.strut;
   const tieRow = solver.steerRow();
   const tieRodDesign = tieRow >= 0 ? solver.lengthOf(tieRow) : 0;
-  const camberSet = !!strut;
-  const toeSet = tieRow >= 0;
+  const camberSet = !!strut && setup.camberDeg !== 'factory';
+  const toeSet = tieRow >= 0 && (setup.toeDeg !== 'factory' || camberSet);
   let shiftY = 0;
   let tie = tieRodDesign;
   const pose = CornerSolver.identity();
@@ -172,9 +185,14 @@ export function resolveCorner(corner: CornerSpec, raw: CornerSetup): ResolvedCor
     solver.direction(pose, spec.spinAxis, spin);
     return [-Math.atan2(spin[2], Math.hypot(spin[0], spin[1])), Math.atan2(spin[0], spin[1])];
   };
-  const want: [number, number] = [setup.camberDeg * DEG, setup.toeDeg * DEG];
-  let err = Infinity;
-  for (let it = 0; it <= 12; it++) {
+  // The factory alignment at this ride height: the angles the hardware as drawn gives at rest.
+  const [camber0, toe0] = camberSet || toeSet ? angles(0, tieRodDesign) : [0, 0];
+  const want: [number, number] = [
+    setup.camberDeg === 'factory' ? camber0 : setup.camberDeg * DEG,
+    setup.toeDeg === 'factory' ? toe0 : setup.toeDeg * DEG,
+  ];
+  let err = 0;
+  for (let it = 0; it <= 12 && (camberSet || toeSet); it++) {
     const [c, t] = angles(shiftY, tie);
     const ec = camberSet ? c - want[0] : 0;
     const et = toeSet ? t - want[1] : 0;

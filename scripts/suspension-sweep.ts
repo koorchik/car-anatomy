@@ -1,6 +1,6 @@
 // Kinematic curves of the macpherson page corner and its quarter car over a bump, as CSV in .tmp/suspension-sweep/.
 // node scripts/suspension-sweep.ts [speed=30] [bump=50] [length=0.5] [spring=25] [damper=comfort|worn|sport|track|0.3]
-//                                  [ride=0] [camber=0] [toe=0] [pressure=2.3]
+//                                  [ride=0] [camber=factory|-1.5] [toe=factory|0.1] [pressure=2.3]
 // Speed in km/h, bump height in mm, length in m, spring in N/mm, ride height in mm, angles in degrees, pressure in bar.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -20,8 +20,8 @@ const setup: CornerSetup = {
   springNmm: num('spring', factory.springNmm),
   damper: damperArg === undefined ? factory.damper : Number.isFinite(Number(damperArg)) ? Number(damperArg) : (damperArg as DamperPreset),
   rideHeightM: num('ride', 0) / 1000,
-  camberDeg: num('camber', factory.camberDeg),
-  toeDeg: num('toe', factory.toeDeg),
+  camberDeg: args.camber === undefined || args.camber === 'factory' ? 'factory' : Number(args.camber),
+  toeDeg: args.toe === undefined || args.toe === 'factory' ? 'factory' : Number(args.toe),
   pressureBar: num('pressure', factory.pressureBar),
 };
 const rc = resolveCorner(corner, setup);
@@ -75,7 +75,7 @@ writeFileSync(`${dir}/bump.csv`, out.join('\n') + '\n');
 
 const leave = (at + lengthM) / speed;
 const toStop = (rc.atRest.damperLen - rc.bumpStop.contactM) / rc.atRest.mrDamper;
-console.log(`setup: spring ${setup.springNmm} N/mm, damper ${setup.damper} (ζ ${rc.zeta.toFixed(2)}), ride ${(setup.rideHeightM * 1000).toFixed(0)} mm, camber ${setup.camberDeg}°, toe ${setup.toeDeg}°, ${setup.pressureBar} bar`);
+console.log(`setup: spring ${setup.springNmm} N/mm, damper ${setup.damper} (ζ ${rc.zeta.toFixed(2)}), ride ${(setup.rideHeightM * 1000).toFixed(0)} mm, camber ${setup.camberDeg} (${(rc.atRest.camber * DEG).toFixed(2)}° at rest), toe ${setup.toeDeg} (${(rc.atRest.toe * DEG).toFixed(2)}°), ${setup.pressureBar} bar`);
 console.log(`corner: top shift ${(rc.topShiftM * 1000).toFixed(2)} mm, tie rod ${(rc.tieRodM * 1000).toFixed(2)} mm, perch ${(rc.spring.perchM * 1000).toFixed(1)} mm, wheel rate ${(rc.wheelRate / 1000).toFixed(1)} kN/m, body ${rc.bodyHz.toFixed(2)} Hz, hop ${rc.hopHz.toFixed(1)} Hz, tyre ${(rc.tyre.kt / 1000).toFixed(0)} kN/m, patch ${(rc.tyre.patchM * 1000).toFixed(0)} mm`);
 console.log(`at rest: roll centre ${(rc.atRest.contactY * rc.atRest.tanBeta * 1000).toFixed(0)} mm, camber gain ${((rc.axle.value('camber', rc.staticTravelM + 0.001) - rc.axle.value('camber', rc.staticTravelM - 0.001)) / 0.002 * DEG).toFixed(1)}°/m, ${(toStop * 1000).toFixed(0)} mm to the bump stop`);
 console.log(`bump ${(bumpM * 1000).toFixed(0)} mm × ${lengthM} m at ${(speed * 3.6).toFixed(0)} km/h: body up to ${(peakAcc / G).toFixed(2)} g, tyre ${(minTyre / staticN).toFixed(2)}–${(maxTyre / staticN).toFixed(2)} of static, in the air ${(air * 1000).toFixed(0)} ms, travel up to ${((maxTravel - rc.staticTravelM) * 1000).toFixed(0)} mm of ${(toStop * 1000).toFixed(0)}, settled ${Math.max(0, settled - leave).toFixed(2)} s after the bump`);

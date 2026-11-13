@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { fromJtekt, jtektCorner, JTEKT_TABLE1, macphersonJtekt } from '../src/suspension/templates/macpherson.ts';
 import { buildAxle, newCornerSample } from '../src/suspension/kinematics.ts';
-import { factorySetup, resolveCorner, SETUP_RANGES, type CornerSetup } from '../src/suspension/setup.ts';
+import { clampSetup, factorySetup, resolveCorner, SETUP_RANGES, type CornerSetup } from '../src/suspension/setup.ts';
 import { dist } from '../src/suspension/vec.ts';
+import { CornerSolver } from '../src/suspension/solve.ts';
 import { PRESSURE_KT_SLOPE, patchLengthM, TYRE_FILES, tyreVertical, verticalStiffness } from '../src/vehicle/tyre-data.ts';
 
 const DEG = Math.PI / 180;
@@ -106,7 +107,7 @@ describe('corner setup', () => {
   });
 
   it('sets static camber and toe to within 0.01°, at any ride height', () => {
-    const cases: Array<Partial<CornerSetup>> = [
+    const cases: Array<{ camberDeg: number; toeDeg: number; rideHeightM?: number; springNmm?: number }> = [
       { camberDeg: -1.5, toeDeg: 0.1 },
       { camberDeg: -3, toeDeg: -0.3, rideHeightM: -0.04 },
       { camberDeg: 0.5, toeDeg: 0.4, rideHeightM: 0.03 },
@@ -114,19 +115,48 @@ describe('corner setup', () => {
     ];
     for (const c of cases) {
       const r = resolveCorner(corner, { ...factory, ...c });
-      expect(Math.abs(r.atRest.camber / DEG - r.setup.camberDeg)).toBeLessThan(0.01);
-      expect(Math.abs(r.atRest.toe / DEG - r.setup.toeDeg)).toBeLessThan(0.01);
+      expect(r.camberSet && r.toeSet).toBe(true);
+      expect(Math.abs(r.atRest.camber / DEG - c.camberDeg)).toBeLessThan(0.01);
+      expect(Math.abs(r.atRest.toe / DEG - c.toeDeg)).toBeLessThan(0.01);
       // The exact solve agrees with the table at rest.
       const s = newCornerSample();
       r.axle.measureAt(r.staticTravelM, s);
-      expect(Math.abs(s.camber / DEG - r.setup.camberDeg)).toBeLessThan(1e-6);
-      expect(Math.abs(s.toe / DEG - r.setup.toeDeg)).toBeLessThan(1e-6);
+      expect(Math.abs(s.camber / DEG - c.camberDeg)).toBeLessThan(1e-6);
+      expect(Math.abs(s.toe / DEG - c.toeDeg)).toBeLessThan(1e-6);
     }
     // Negative camber comes from moving the top mount inboard, toe-in from a shorter tie rod (arm ahead of the axle).
     const neg = resolveCorner(corner, { ...factory, camberDeg: -2 });
     expect(neg.topShiftM).toBeLessThan(0);
     const toeIn = resolveCorner(corner, { ...factory, toeDeg: 0.3 });
     expect(toeIn.tieRodChangeM).not.toBe(0);
+  });
+
+  it('changes camber without dragging the toe, and toe without moving the top mount', () => {
+    const D = 180 / Math.PI;
+    for (const rh of [0, -0.04]) {
+      // Camber alone: the toe stays what the factory hardware gives at this height (0° at design, −0.35° lowered).
+      const camber = resolveCorner(corner, { ...factory, rideHeightM: rh, camberDeg: -1.5 });
+      expect(camber.camberSet && camber.toeSet).toBe(true);
+      expect(camber.atRest.camber * D).toBeCloseTo(-1.5, 6);
+      expect(camber.atRest.toe).toBeCloseTo(page.value('toe', -rh), 9);
+      // Toe alone: the top mount stays as drawn. Turning the wheel by δ about an axis with caster ν changes its camber
+      // by about −δ·sin ν (toe-in on the left wheel steers it to the right, where it is the outer wheel).
+      const toe = resolveCorner(corner, { ...factory, rideHeightM: rh, toeDeg: 0.2 });
+      expect(toe.camberSet).toBe(false);
+      expect(toe.topShiftM).toBe(0);
+      expect(toe.atRest.toe * D).toBeCloseTo(0.2, 6);
+      const steer = toe.atRest.toe - page.value('toe', -rh);
+      const expected = -steer * Math.sin(page.value('caster', -rh));
+      expect(Math.abs((toe.atRest.camber - page.value('camber', -rh)) / expected - 1)).toBeLessThan(0.05);
+    }
+    // Without the re-set the camber plate would drag the toe by well over a degree: that is why it is re-set.
+    const plates = new CornerSolver(corner.axle);
+    const shifted = CornerSolver.identity();
+    plates.setTopShift(corner.axle.linkage.strut!.top, [0, resolveCorner(corner, { ...factory, camberDeg: -1.5 }).topShiftM, 0]);
+    expect(plates.solve(shifted, 0, 0, 40).ok).toBe(true);
+    const spin = [0, 0, 0];
+    plates.direction(shifted, corner.axle.spinAxis, spin);
+    expect(Math.abs(Math.atan2(spin[0], spin[1]) * D)).toBeGreaterThan(1);
   });
 
   it('leaves an adjuster the layout lacks alone: no steered rod, no toe change', () => {
@@ -152,20 +182,25 @@ describe('corner setup', () => {
 
   it('moves the static point along the kinematic curves with ride height', () => {
     const D = 180 / Math.PI;
+    const fields = ['camber', 'toe', 'mrSpring', 'tanBeta', 'kpi', 'caster', 'scrub', 'damperLen'] as const;
     for (const rh of [-0.04, -0.02, 0.02, 0.04]) {
-      // Keep the alignment the factory curve has at that travel, so no shift is needed and the corner is the factory one.
-      const camber = page.value('camber', -rh) * D;
-      const toe = page.value('toe', -rh) * D;
-      const r = resolveCorner(corner, { ...factory, rideHeightM: rh, camberDeg: camber, toeDeg: toe });
+      // The factory alignment leaves the hardware alone: the corner at rest is the factory one at travel −rh.
+      const r = resolveCorner(corner, { ...factory, rideHeightM: rh });
       expect(r.staticTravelM).toBe(-rh);
-      expect(Math.abs(r.topShiftM)).toBeLessThan(1e-6);
-      for (const f of ['mrSpring', 'tanBeta', 'kpi', 'caster', 'scrub', 'damperLen'] as const) {
-        expect(r.atRest[f]).toBeCloseTo(page.value(f, -rh), 6);
-      }
+      expect(r.camberSet || r.toeSet).toBe(false);
+      expect(r.topShiftM).toBe(0);
+      expect(r.tieRodChangeM).toBe(0);
+      for (const f of fields) expect(r.atRest[f], f).toBeCloseTo(page.value(f, -rh), 9);
+      // Asking for the angles the curve already has there needs no adjustment either.
+      const same = resolveCorner(corner, { ...factory, rideHeightM: rh, camberDeg: page.value('camber', -rh) * D, toeDeg: page.value('toe', -rh) * D });
+      expect(Math.abs(same.topShiftM)).toBeLessThan(1e-6);
+      for (const f of fields) expect(same.atRest[f], f).toBeCloseTo(page.value(f, -rh), 6);
       // The body stands rh higher; the tyre is as pressed as before.
       expect(r.bodyStaticM).toBeCloseTo(rh, 9);
       expect(r.tyre.staticDeflM).toBeCloseTo(resolveCorner(corner, factory).tyre.staticDeflM, 12);
     }
+    // Lowered 40 mm on factory hardware, the JTEKT strut sits at the −0.48° of the curve at +40 mm.
+    expect(resolveCorner(corner, { ...factory, rideHeightM: -0.04 }).atRest.camber * D).toBeCloseTo(-0.48, 2);
     // Lowering a strut drops its roll centre (y_C·dy_C/dz) and eats into the travel left to the bump stop.
     const low = resolveCorner(corner, { ...factory, rideHeightM: -0.04 });
     const base = resolveCorner(corner, factory);
@@ -201,10 +236,15 @@ describe('corner setup', () => {
     expect(r.setup.springNmm).toBe(25);
     expect(r.setup.rideHeightM).toBe(0.04);
     expect(r.setup.camberDeg).toBe(-3);
-    expect(r.setup.toeDeg).toBe(0);
+    expect(r.setup.toeDeg).toBe('factory');
     expect(r.setup.pressureBar).toBe(1.2);
     expect(r.setup.damper).toBe(0.05);
     expect(Number.isFinite(r.bodyHz)).toBe(true);
+    // Anything but a finite number is the factory alignment; clamping twice changes nothing.
+    const odd = { ...factory, camberDeg: 'tilted', toeDeg: '0.2', damper: '__proto__' } as unknown as CornerSetup;
+    const once = clampSetup(odd, factory);
+    expect(once).toEqual(factory);
+    expect(clampSetup(clampSetup(r.setup, factory), factory)).toEqual(r.setup);
   });
 });
 
