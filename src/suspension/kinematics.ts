@@ -30,7 +30,7 @@
 
 import type { AxleSpec, Vec3 } from './spec.ts';
 import { CornerSolver, POSE_SIZE, type SolveResult } from './solve.ts';
-import { cross, dist, dot, nlerpInto, rotateQuatBy, sub, unit } from './vec.ts';
+import { cross, dist, dot, nlerpInto, rotateQuatBy, scale, sub, unit } from './vec.ts';
 
 export type Side = 'left' | 'right';
 
@@ -123,7 +123,9 @@ type AxisSource =
  *  wishbone (rigid with it, turning about its pivot axis), or on a rod's own line. */
 type Mount =
   | { kind: 'knuckle'; body: Vec3; wheel: Vec3 }
-  | { kind: 'wishbone'; body: Vec3; wheel: Vec3; front: Vec3; axis: Vec3; ball: Vec3 }
+  /** On a wishbone: its pivot `front` and unit `axis`, the ball joint at design, and at design the ball's arm square to
+   *  the axis (r0), the wheel end from the pivot (q), axis × q and axis·q, so measuring allocates nothing. */
+  | { kind: 'wishbone'; body: Vec3; front: Vec3; axis: Vec3; ball: Vec3; r0: Vec3; q: Vec3; axq: Vec3; aq: number }
   | { kind: 'rod'; body: Vec3; rodBody: Vec3; rodKnuckle: Vec3; along: number };
 
 export class Axle {
@@ -191,7 +193,13 @@ export class Axle {
       if (wheel === 'strut') return null;
       if (!on) return { kind: 'knuckle', body, wheel };
       const arm = link.wishbones.find((w) => w.id === on);
-      if (arm) return { kind: 'wishbone', body, wheel, front: arm.front, axis: unit(sub(arm.rear, arm.front)), ball: arm.ball };
+      if (arm) {
+        const axis = unit(sub(arm.rear, arm.front));
+        const r = sub(arm.ball, arm.front);
+        const r0 = sub(r, scale(axis, dot(r, axis)));
+        const q = sub(wheel, arm.front);
+        return { kind: 'wishbone', body, front: arm.front, axis, ball: arm.ball, r0, q, axq: cross(axis, q), aq: dot(axis, q) };
+      }
       const rod = link.rods.find((r) => r.id === on);
       if (!rod) throw new Error(`A spring or damper sits on a link the corner lacks: ${on}`);
       const d = sub(rod.knuckle, rod.body);
@@ -373,18 +381,29 @@ export class Axle {
     this.solver.point(pose, b.knuckle, q);
     const ay = a.steer ? rack : 0;
     const by = b.steer ? rack : 0;
-    // Lines P + s·d (from the rod's knuckle end to its body end) and Q + t·e.
-    const d: Vec3 = [a.body[0] - p[0], a.body[1] + ay - p[1], a.body[2] - p[2]];
-    const e: Vec3 = [b.body[0] - q[0], b.body[1] + by - q[1], b.body[2] - q[2]];
-    const w: Vec3 = [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
-    const A = dot(d, d);
-    const B = dot(d, e);
-    const C = dot(e, e);
+    // Lines P + s·d (from the rod's knuckle end to its body end) and Q + t·e, w = P − Q. Scalars: the 3D may call this
+    // every frame.
+    const dx = a.body[0] - p[0];
+    const dy = a.body[1] + ay - p[1];
+    const dz = a.body[2] - p[2];
+    const ex = b.body[0] - q[0];
+    const ey = b.body[1] + by - q[1];
+    const ez = b.body[2] - q[2];
+    const wx = p[0] - q[0];
+    const wy = p[1] - q[1];
+    const wz = p[2] - q[2];
+    const A = dx * dx + dy * dy + dz * dz;
+    const B = dx * ex + dy * ey + dz * ez;
+    const C = ex * ex + ey * ey + ez * ez;
+    const dw = dx * wx + dy * wy + dz * wz;
+    const ew = ex * wx + ey * wy + ez * wz;
     const den = A * C - B * B;
     if (den < 1e-12 * A * C) return false;
-    const s = (B * dot(e, w) - C * dot(d, w)) / den;
-    const t = (A * dot(e, w) - B * dot(d, w)) / den;
-    for (let k = 0; k < 3; k++) out[k] = (p[k] + s * d[k] + q[k] + t * e[k]) / 2;
+    const s = (B * ew - C * dw) / den;
+    const t = (A * ew - B * dw) / den;
+    out[0] = (p[0] + s * dx + q[0] + t * ex) / 2;
+    out[1] = (p[1] + s * dy + q[1] + t * ey) / 2;
+    out[2] = (p[2] + s * dz + q[2] + t * ez) / 2;
     return true;
   }
 
@@ -413,31 +432,37 @@ export class Axle {
       solver.carrierPoint(pose, m.ball, B);
       solver.pointVelocity(pose, v, m.ball, false, vB);
       const [ax, ay, az] = m.axis;
-      const perp = (x: number, y: number, z: number): Vec3 => {
-        const t = x * ax + y * ay + z * az;
-        return [x - t * ax, y - t * ay, z - t * az];
-      };
-      const r0 = perp(m.ball[0] - m.front[0], m.ball[1] - m.front[1], m.ball[2] - m.front[2]);
-      const r1 = perp(B[0] - m.front[0], B[1] - m.front[1], B[2] - m.front[2]);
-      const phi = Math.atan2(dot(m.axis, cross(r0, r1)), dot(r0, r1));
-      const ur = cross(m.axis, r1);
-      const rate = dot([vB[0], vB[1], vB[2]], ur) / dot(r1, r1);
-      // P = F + Rot(axis, φ)·(P0 − F) by Rodrigues; v_P = φ̇·axis × (P − F).
-      const q = sub(m.wheel, m.front);
+      const [r0x, r0y, r0z] = m.r0;
+      // r1: the ball's arm now, square to the axis.
+      let r1x = B[0] - m.front[0];
+      let r1y = B[1] - m.front[1];
+      let r1z = B[2] - m.front[2];
+      const along = r1x * ax + r1y * ay + r1z * az;
+      r1x -= along * ax;
+      r1y -= along * ay;
+      r1z -= along * az;
+      // φ = atan2(axis·(r0 × r1), r0·r1); φ̇ = v_B·(axis × r1)/|r1|².
+      const sinTerm = ax * (r0y * r1z - r0z * r1y) + ay * (r0z * r1x - r0x * r1z) + az * (r0x * r1y - r0y * r1x);
+      const phi = Math.atan2(sinTerm, r0x * r1x + r0y * r1y + r0z * r1z);
+      const urx = ay * r1z - az * r1y;
+      const ury = az * r1x - ax * r1z;
+      const urz = ax * r1y - ay * r1x;
+      const rate = (vB[0] * urx + vB[1] * ury + vB[2] * urz) / (r1x * r1x + r1y * r1y + r1z * r1z);
+      // P = F + Rot(axis, φ)·q by Rodrigues; v_P = φ̇·axis × (P − F).
       const c = Math.cos(phi);
       const sn = Math.sin(phi);
-      const axq = cross(m.axis, q);
-      const aq = dot(m.axis, q);
-      const rel: Vec3 = [
-        q[0] * c + axq[0] * sn + ax * aq * (1 - c),
-        q[1] * c + axq[1] * sn + ay * aq * (1 - c),
-        q[2] * c + axq[2] * sn + az * aq * (1 - c),
-      ];
-      const vel = cross(m.axis, rel);
-      for (let i = 0; i < 3; i++) {
-        p[i] = m.front[i] + rel[i];
-        pv[i] = rate * vel[i];
-      }
+      const [qx, qy, qz] = m.q;
+      const [bx, by, bz] = m.axq;
+      const k = m.aq * (1 - c);
+      const relx = qx * c + bx * sn + ax * k;
+      const rely = qy * c + by * sn + ay * k;
+      const relz = qz * c + bz * sn + az * k;
+      p[0] = m.front[0] + relx;
+      p[1] = m.front[1] + rely;
+      p[2] = m.front[2] + relz;
+      pv[0] = rate * (ay * relz - az * rely);
+      pv[1] = rate * (az * relx - ax * relz);
+      pv[2] = rate * (ax * rely - ay * relx);
     }
     const lx = p[0] - m.body[0];
     const ly = p[1] - m.body[1];

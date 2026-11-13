@@ -365,7 +365,8 @@ export class CornerSolver {
       const hx = this.top[0] - Wx;
       const hy = this.top[1] - Wy;
       const hz = this.top[2] - Wz;
-      for (const e of [this.e1, this.e2]) {
+      for (let side = 0; side < 2; side++) {
+        const e = side === 0 ? this.e1 : this.e2;
         const ex = M[0] * e[0] + M[1] * e[1] + M[2] * e[2];
         const ey = M[3] * e[0] + M[4] * e[1] + M[5] * e[2];
         const ez = M[6] * e[0] + M[7] * e[1] + M[8] * e[2];
