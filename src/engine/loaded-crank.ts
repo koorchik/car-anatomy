@@ -149,7 +149,9 @@ export class LoadedCrank {
     }
 
     let charge = Math.max(demand, this.idleCharge, leakCharge(map, rpm));
-    charge = Math.min(charge, chargeLimit(map, rpm, this.pressure));
+    // Resting cylinders take no charge: those still firing hold at most their share of the full-load charge.
+    // The valve controller wakes them as soon as the load passes its threshold, which sits below that share.
+    charge = Math.min(charge, chargeLimit(map, rpm, this.pressure) * sim.valves.state.active);
     this.charge = charge;
 
     let engineNm = fuelOn ? brakeTorque(map, rpm, charge) : -motoringTorque(map, rpm, charge);

@@ -22,7 +22,7 @@ import { buildEngine } from '../src/engine/kinematics.ts';
 import type { CrankLoad, EngineRequest, LoadReadings } from '../src/engine/load.ts';
 import { LoadedCrank, type CrankReadings } from '../src/engine/loaded-crank.ts';
 import { EngineSim, PEDAL_TOP_SPEED, type SimParams } from '../src/engine/sim.ts';
-import { ATM_BAR, brakeTorque, mapValue, peakPower, peakTorque, type EngineTorqueMap } from '../src/engine/torque-map.ts';
+import { ATM_BAR, brakeTorque, chargeLimit, mapValue, peakPower, peakTorque, type EngineTorqueMap } from '../src/engine/torque-map.ts';
 
 const DT = 1 / 3000;
 const RAD = Math.PI / 30;
@@ -626,5 +626,50 @@ describe('hooks the drivetrain will use', () => {
     run(sim, 1);
     expect(sim.rpm).toBeGreaterThan(200);
     expect(sim.fuelCut).toBe(true);
+  });
+});
+
+describe('resting cylinders on the dyno', () => {
+  const LT1 = 'v8-cross/camaro-ss-lt1';
+  /** The LT1 idling on the dyno; `loadMax` widens the controller's light-load window to reach the cap itself. */
+  const lt1 = (loadMax?: number): Rig => {
+    const map = mapFor(LT1);
+    const base = paramsFor(LT1);
+    const valves = base.valves!;
+    const params = loadMax === undefined ? base : { ...base, valves: { ...valves, deactivation: { ...valves.deactivation!, loadMax } } };
+    const sim = new EngineSim(params);
+    const load = new DynoLoad(sizeAbsorber(map, 'eddy'));
+    const crank = new LoadedCrank(map, load);
+    sim.start();
+    run(sim, 2);
+    sim.attach(crank);
+    return { sim, load, crank, map, params };
+  };
+
+  it('the LT1 rests half its cylinders at a light held load, and full load wakes all eight', () => {
+    const r = lt1();
+    hold(r, 2000, 0.2);
+    run(r.sim, 4);
+    expect(r.sim.valves.state.active).toBe(0.5);
+    hold(r, 2000, 1);
+    run(r.sim, 2);
+    expect(r.sim.valves.state.active).toBe(1);
+    expect(r.crank.lastCharge).toBeGreaterThan(0.99);
+  });
+
+  it('those still firing take at most their share of the full-load charge', () => {
+    // A controller that let the cylinders rest up to 90 % load: the four left can still only fill four cylinders.
+    const r = lt1(0.9);
+    hold(r, 2000, 0.2);
+    run(r.sim, 4);
+    expect(r.sim.valves.state.active).toBe(0.5);
+    hold(r, 2000, 1);
+    let most = 0;
+    run(r.sim, 2, () => {
+      if (r.sim.valves.state.active === 0.5) most = Math.max(most, r.crank.lastCharge / chargeLimit(r.map, r.sim.rpm, 1));
+    });
+    expect(r.sim.valves.state.active).toBe(0.5);
+    expect(most).toBeGreaterThan(0.45);
+    expect(most).toBeLessThanOrEqual(0.5 + 1e-9);
   });
 });
