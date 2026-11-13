@@ -1,5 +1,5 @@
 // BMW M3 (E30), the European car without a catalytic converter (200 PS): the car of the first gearbox pages and the
-// third car of the overview, in place of the VAZ-2101. Wikipedia gives the wheelbase, a mass range of 1165-1360 kg,
+// third car of the overview, in place of the Soviet-era sedan the first plan named. Wikipedia gives the wheelbase, a mass range of 1165-1360 kg,
 // 225/45 R16 tyres (the build order's table names 205/55 R15 as the other size, by year) and 235 km/h, the last for
 // the 195 PS car with a catalytic converter.
 // The mass and tracks are recalled; all of these wait for BMW's brochure or a workshop manual (build order, A1). The
