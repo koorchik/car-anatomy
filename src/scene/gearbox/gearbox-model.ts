@@ -22,6 +22,7 @@ import type { Gearbox } from '../../drivetrain/topology.ts';
 import { extrude, hullShape, gearShape, merge, MM, roundedRect, zCylinder, type Pulley2D } from '../geometry.ts';
 import { brassMaterial, castAluminiumMaterial, glassMaterial } from '../materials.ts';
 import { tag, type ViewMode } from '../model-types.ts';
+import { DAMAGE as DAMAGE_COLOR, HIGHLIGHT as HIGHLIGHT_COLORS, POWER } from '../palette.ts';
 import { acquireGearGeometry, drawnGear, type MeshQuality } from './gear-mesh.ts';
 import { releaseGeometry } from './geometry-cache.ts';
 
@@ -44,12 +45,12 @@ export interface GearboxModelOptions {
   extensionMm?: number;
 }
 
-/** Power path colour (the colour table of the whole-car plan; moves to palette.ts with O2b) and how bright a full share glows. */
-const POWER_GLOW = new THREE.Color('#ea6a15');
+/** Power path colour (palette.ts) and how bright a full share glows. */
+const POWER_GLOW = new THREE.Color(POWER);
 const GLOW_GAIN = 0.3;
 /** Hover highlight of the whole box in the car overview. */
-const HIGHLIGHT = new THREE.Color('#3d7fd9').multiplyScalar(0.22);
-const DAMAGE = new THREE.Color('#ff2a10');
+const HIGHLIGHT = new THREE.Color(HIGHLIGHT_COLORS.gearbox).multiplyScalar(0.22);
+const DAMAGE = new THREE.Color(DAMAGE_COLOR);
 
 // Layout estimates (not data), as fractions of the centre distance a unless marked mm.
 const INPUT_SHAFT = 0.17;

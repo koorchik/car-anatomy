@@ -12,6 +12,7 @@ import { ACCUMULATOR_DEAD_L, ACCUMULATOR_L } from '../../lubrication/constants.t
 import { sumpLayout, type PanShape, type SumpLayout } from '../../systems/sump.ts';
 import type { EngineMount } from '../../vehicle/vehicle.ts';
 import { PARTS } from '../parts-info.ts';
+import { FLUID, STARVED } from '../palette.ts';
 import { SYSTEM_PARTS } from '../systems/parts.ts';
 import { SUMP_PARTS } from './parts.ts';
 
@@ -21,7 +22,7 @@ Object.assign(PARTS, SYSTEM_PARTS, SUMP_PARTS);
 const MM = 0.01;
 const NX = 12;
 const NZ = 24;
-const OIL = new THREE.Color('#e8a93a');
+const OIL = new THREE.Color(FLUID.oil);
 const STEEL = new THREE.Color('#9aa1a6');
 const DARK = new THREE.Color('#3a3d40');
 const MARK = new THREE.Color('#f2f2f2');
@@ -231,7 +232,7 @@ export class SumpScene {
       add(glass, 'sight-glass', new THREE.Color('#c9d6dc'));
       const oil = new THREE.CylinderGeometry(0.028, 0.028, 1, 10);
       oil.translate(0, 0.5, 0);
-      const material = new THREE.MeshStandardMaterial({ color: OIL, emissive: '#5a3405', roughness: 0.3 });
+      const material = new THREE.MeshStandardMaterial({ color: OIL, emissive: FLUID.oilGlow, roughness: 0.3 });
       this.materials.push(material);
       this.sightOil = new THREE.Mesh(oil, material);
       this.sightOil.position.set(tank.position.x, tank.position.y - tank.height / 2, tank.position.z + tank.radius + 0.05);
@@ -340,7 +341,7 @@ export class SumpScene {
     }
     geo.setIndex(index);
     this.geometries.push(geo);
-    const oilMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 0.25, metalness: 0.05, emissive: '#5a3405', side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true });
+    const oilMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 0.25, metalness: 0.05, emissive: FLUID.oilGlow, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true });
     this.materials.push(oilMat);
     this.oilBody = new THREE.Mesh(geo, oilMat);
     this.oilBody.userData.part = 'oil-body';
@@ -360,7 +361,7 @@ export class SumpScene {
       const ringGeo = new THREE.TorusGeometry(p.radius * 1.25, 0.012, 8, 32);
       ringGeo.rotateX(Math.PI / 2);
       ringGeo.translate(p.x, p.y + p.bell, p.z);
-      const ringMat = new THREE.MeshBasicMaterial({ color: '#ff3b2f', transparent: true, opacity: 0, depthTest: false });
+      const ringMat = new THREE.MeshBasicMaterial({ color: STARVED, transparent: true, opacity: 0, depthTest: false });
       this.materials.push(ringMat);
       this.geometries.push(ringGeo);
       this.ring = new THREE.Mesh(ringGeo, ringMat);
@@ -393,7 +394,7 @@ export class SumpScene {
     if (o.heads.length) {
       const plate = new THREE.BoxGeometry(1, 1, 1);
       this.geometries.push(plate);
-      const material = new THREE.MeshStandardMaterial({ color: OIL, emissive: '#5a3405', transparent: true, opacity: 0.55, roughness: 0.3, depthWrite: false });
+      const material = new THREE.MeshStandardMaterial({ color: OIL, emissive: FLUID.oilGlow, transparent: true, opacity: 0.55, roughness: 0.3, depthWrite: false });
       this.materials.push(material);
       this.puddles = new THREE.InstancedMesh(plate, material, o.heads.length);
       this.puddles.userData.instanceParts = o.heads.map(() => 'head-oil');

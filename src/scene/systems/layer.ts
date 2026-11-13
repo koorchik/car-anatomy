@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DEG, pistonPin, type Engine } from '../../engine/kinematics.ts';
 import { glowTexture } from '../materials.ts';
+import { FLUID, SPARK } from '../palette.ts';
 import type { EngineAnchors } from './anchors.ts';
 import { flowMaterial, MAX_CHANNELS, type FlowMaterial } from './flow-material.ts';
 import { pathLength, tightPath, type LayerPlan, type PartMaterial, type PartPlacement, type Space } from './route.ts';
@@ -317,7 +318,7 @@ export class SystemLayer {
         positions[i * 3 + 1] = f.position.y;
         positions[i * 3 + 2] = f.position.z;
         this.flashSlots[i] = f.slot;
-        const c = new THREE.Color(f.color ?? '#cfe6ff');
+        const c = new THREE.Color(f.color ?? SPARK.plug);
         this.flashBase[i * 3] = c.r;
         this.flashBase[i * 3 + 1] = c.g;
         this.flashBase[i * 3 + 2] = c.b;
@@ -381,7 +382,7 @@ export class SystemLayer {
       const fan: number[] = [];
       for (let i = 1; i < LEVEL_CORNERS - 1; i++) fan.push(0, i, i + 1);
       geo.setIndex(fan);
-      const material = new THREE.MeshStandardMaterial({ color: '#c98a1c', emissive: '#6a3c05', transparent: true, opacity: 0.62, roughness: 0.25, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true });
+      const material = new THREE.MeshStandardMaterial({ color: FLUID.oilSurface, emissive: FLUID.oilSurfaceGlow, transparent: true, opacity: 0.62, roughness: 0.25, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true });
       this.materials.push(material);
       this.level = new THREE.Mesh(geo, material);
       this.level.userData.part = 'oil-level';

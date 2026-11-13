@@ -12,6 +12,7 @@ import type { ValveTiming } from '../engine/spec.ts';
 import { MM, camshaftGeometry, extrude, merge, roundedRect, zCylinder, type LobeDef } from './geometry.ts';
 import type { EngineMaterials } from './materials.ts';
 import { tag, type FrameState } from './model-types.ts';
+import { MARK } from './palette.ts';
 
 export type CamRole = 'intake' | 'exhaust' | 'both';
 
@@ -204,7 +205,7 @@ export class VariableValveGear {
     if (!v) return;
     const { materials: m, bore: b } = this.ctx;
     if (v.phaser !== 'none') {
-      const mark = new THREE.MeshBasicMaterial({ color: '#ffd23f' });
+      const mark = new THREE.MeshBasicMaterial({ color: MARK.vvt });
       for (const [cam, role] of this.cams) {
         const phased = v.phaser === 'coupled' || role === 'both' || role === 'intake' || (v.phaser === 'dual' && role === 'exhaust');
         if (!phased || (v.phaser === 'intake' && role !== 'intake')) continue;
@@ -238,7 +239,7 @@ export class VariableValveGear {
     const pinGeo = zCylinder(b * 0.02, 1, 10);
     // Bright enough to pick out among the valves: brass followers and a yellow pin.
     const padMaterial = new THREE.MeshStandardMaterial({ color: '#c9a13b', metalness: 0.8, roughness: 0.35 });
-    const pinMaterial = new THREE.MeshStandardMaterial({ color: '#ffd23f', metalness: 0.4, roughness: 0.3, emissive: '#5a4300' });
+    const pinMaterial = new THREE.MeshStandardMaterial({ color: MARK.vvt, metalness: 0.4, roughness: 0.3, emissive: MARK.vvtGlow });
     heads.forEach((head, bank) => {
       const sets = this.pinSets.filter((s) => s.bank === bank);
       if (!sets.length) return;

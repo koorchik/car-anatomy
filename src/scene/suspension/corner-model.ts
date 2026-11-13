@@ -17,6 +17,7 @@
 
 import * as THREE from 'three';
 import { markDamaged, tag, type ViewMode } from '../model-types.ts';
+import { DAMAGE, HIGHLIGHT } from '../palette.ts';
 import { merge } from '../geometry.ts';
 import { G } from '../../suspension/forces.ts';
 import { KnuckleStatics } from '../../suspension/knuckle-statics.ts';
@@ -683,7 +684,7 @@ export class CornerModel {
       if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
       const before = mat.emissive.clone();
       const intensity = mat.emissiveIntensity;
-      mat.emissive.set('#ffb35c');
+      mat.emissive.set(HIGHLIGHT.suspension);
       mat.emissiveIntensity = 0.28;
       this.highlightUndo.push(() => {
         mat.emissive.copy(before);
@@ -840,7 +841,7 @@ export class CornerModel {
     if (red !== this.stopRed && this.failed !== 'susp.bump-stop') {
       this.stopRed = red;
       for (const mat of [this.materials.bumpStop, this.materials.bumpStopGlass]) {
-        mat.emissive.set(red ? '#ff2a10' : '#000000');
+        mat.emissive.set(red ? DAMAGE : '#000000');
         mat.emissiveIntensity = 1;
       }
     }

@@ -12,6 +12,7 @@ import type { HalfshaftSpec } from '../../suspension/spec.ts';
 import { Bellows, boss, lathe, rodBetween, toScene } from './geometry.ts';
 import { merge } from '../geometry.ts';
 import { glassMaterial } from '../materials.ts';
+import { DAMAGE } from '../palette.ts';
 import type { CornerMaterials } from './materials.ts';
 
 const X = new THREE.Vector3(1, 0, 0);
@@ -39,7 +40,7 @@ export interface HalfshaftState {
 
 /** A joint past its limit glows red. */
 const paint = (mat: THREE.MeshStandardMaterial, on: boolean): void => {
-  mat.emissive.set(on ? '#ff2a10' : '#000000');
+  mat.emissive.set(on ? DAMAGE : '#000000');
   mat.emissiveIntensity = on ? 0.9 : 1;
 };
 

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { EngineAnchors, SystemsLook } from './systems/anchors.ts';
 import type { ValveState } from '../engine/valve-control.ts';
+import { DAMAGE, GAS_COLORS } from './palette.ts';
 
 export type ViewMode = 'solid' | 'xray' | 'mechanism';
 
@@ -46,21 +47,21 @@ export const tag = <T extends THREE.Object3D>(obj: T, part: string): T => {
   return obj;
 };
 
-/** Gas colours by stroke, shared by piston and rotary engines. */
+/** Gas colours by stroke, shared by piston and rotary engines (palette.ts). */
 export const GAS = {
-  intake: new THREE.Color('#62c6ec'),
-  compression: new THREE.Color('#bfe4ff'),
-  flash: new THREE.Color('#fff0c8'),
-  fire: new THREE.Color('#ff7a1a'),
-  smoke: new THREE.Color('#8a6a55'),
-  exhaust: new THREE.Color('#6a635c'),
+  intake: new THREE.Color(GAS_COLORS.intake),
+  compression: new THREE.Color(GAS_COLORS.compression),
+  flash: new THREE.Color(GAS_COLORS.flash),
+  fire: new THREE.Color(GAS_COLORS.fire),
+  smoke: new THREE.Color(GAS_COLORS.smoke),
+  exhaust: new THREE.Color(GAS_COLORS.exhaust),
 };
 
 /** Tints a material to show damage, and gives back a way to undo it. */
 export const markDamaged = (material: THREE.MeshStandardMaterial): (() => void) => {
   const { emissive, emissiveIntensity } = material;
   const before = emissive.clone();
-  material.emissive.set('#ff2a10');
+  material.emissive.set(DAMAGE);
   material.emissiveIntensity = 1.3;
   return () => {
     material.emissive.copy(before);

@@ -9,6 +9,7 @@ import { turboCountOf } from '../../systems/size.ts';
 import { airFlowShare } from '../../systems/thermal.ts';
 import { sumpLayout } from '../../systems/sump.ts';
 import type { EngineModel, ViewMode } from '../model-types.ts';
+import { FLUID } from '../palette.ts';
 import { PARTS } from '../parts-info.ts';
 import { SYSTEM_PARTS } from './parts.ts';
 import type { EngineAnchors, SystemsLook } from './anchors.ts';
@@ -236,10 +237,10 @@ function airFeed(engine: Engine, anchors: EngineAnchors, layer: SystemLayer): (s
   };
 }
 
-const COOL = new THREE.Color('#3fa9f5');
-const NORMAL = new THREE.Color('#2fd3a0');
-const HOT = new THREE.Color('#ff5a3c');
-const AIR = new THREE.Color('#bfe6ff');
+const COOL = new THREE.Color(FLUID.coolantCold);
+const NORMAL = new THREE.Color(FLUID.coolant);
+const HOT = new THREE.Color(FLUID.coolantHot);
+const AIR = new THREE.Color(FLUID.airCooled);
 
 /** Coolant channels from the pump's flow and the thermostat; the colour follows the coolant's temperature. */
 function coolantFeed(engine: Engine, anchors: EngineAnchors, layer: SystemLayer): (state: SystemsState) => void {
