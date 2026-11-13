@@ -187,12 +187,6 @@ export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
     cars: ['BMW M3 E30'],
     years: '1986-1989',
   },
-  'i4/vaz-2101': {
-    name: 'VAZ-2101 (Lada)',
-    note: 'The simplest on this page: one camshaft, two valves per cylinder, a carburetor, and a cast-iron block. The short 66 mm stroke at 1198 cc gives only 64 hp, and at peak power there are 187 firing events per second, so the sound is low and simple.',
-    cars: ['VAZ-2101', 'VAZ-21013'],
-    years: '1970-1983',
-  },
   'i4/civic-type-r-k20c1': {
     name: 'Honda Civic Type R FK8',
     note: 'Nearly the same geometry as the K20A, 86 by 85.9 mm, but a turbocharger and direct injection give 400 N·m from 2500 rpm instead of 202 N·m at 7000 rpm. The turbine muffles the pulses and the rev limit is 1400 rpm lower, so the sound is duller than the naturally aspirated K20A.',
