@@ -8,9 +8,9 @@
 // - 911 Carrera T: 3.91 / 2.29 / 1.58 / 1.18 / 0.94 / 0.79 / 0.62, reverse 3.55, final drive 3.56 and the 9.0 in
 //   (229 mm) clutch, from Porsche's US technical specifications (primary).
 //
-// Reconstructed (ours): every tooth count, module, helix and centre distance. Honda's figures are the tooth ratios cut
-// after three places rather than rounded (sixth 36/49 = 0.73469 is Honda's 0.734 and DSPORT's 0.735), so the Civic's
-// teeth reproduce them that way; the final drive 18/74 shares its tooth sum 92 with the FL5's 19/73 = 3.842, so both
+// Reconstructed (ours): every tooth count, module, helix and centre distance. We read Honda's figures as tooth ratios
+// cut after three places rather than rounded, since Honda gives sixth as 0.734 and DSPORT as 0.735; the Civic's teeth
+// reproduce them that way (sixth 36/49 = 0.73469 gives both). The final drive 18/74 shares its tooth sum 92 with the FL5's 19/73 = 3.842, so both
 // run on one centre distance in one case. No single reverse idler between shafts 80 mm apart gives 3.757, so the
 // Civic's reverse runs through a compound idler. The 911's pairs reproduce Porsche's two places; its 9/32 crown wheel
 // and pinion matches the 991 manual's 3.44 = 31/9. Shaft positions, face widths, hands, the sleeves' order and the
@@ -57,7 +57,7 @@ const CIVIC_FK8: GearboxRecord = {
   published: { ratios: [3.625, 2.115, 1.529, 1.125, 0.911, 0.734], reverse: 3.757, ratedTorqueNm: null, centreMm: null, finalDrive: 4.111 },
   verifyNote:
     'Передаточні числа 3,625 / 2,115 / 1,529 / 1,125 / 0,911 / 0,734, задній хід 3,757 і головна передача 4,111 — з технічних характеристик Honda Europe для Civic Type R 2017 року. ' +
-    'Зубці, модулі, кути нахилу й міжосьові відстані — наша реконструкція. Числа Honda збігаються з відношеннями зубців, обрізаними після третього знака, а не округленими: шоста 36/49 = 0,73469 у Honda 0,734, а в DSPORT для того самого авто 0,735. ' +
+    'Зубці, модулі, кути нахилу й міжосьові відстані — наша реконструкція. Ми припускаємо, що Honda обрізає числа після третього знака, а не округлює: шосту Honda дає як 0,734, а DSPORT для того самого авто як 0,735. Наша шоста 36/49 = 0,73469 дає обидва: обрізане й округлене. ' +
     'Головну пару 18/74 підказує Civic Type R FL5 з головною передачею 3,842 = 73/19: сума зубців та сама (92), тож у тому самому картері обидві пари стоять на одній міжосьовій. ' +
     'Задній хід 3,757 не дає жодна пара через одну проміжну шестерню, що вміщується між валами за 80 мм, тож ми взяли подвійну проміжну шестерню (19 → 34 і 20 → 42). ' +
     'Міжосьова 80 мм, розташування валів, ширини вінців, напрям нахилу зубців, порядок муфт (1–2 на вторинному валу, 3–4 і 5–6 на первинному) і місце диференціала — оцінка.',

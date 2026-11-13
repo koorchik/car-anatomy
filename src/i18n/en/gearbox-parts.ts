@@ -69,8 +69,8 @@ export const GEARBOX_PARTS_EN: Record<string, string> = {
   'Ведуча шестерня на вторинному валу крутить велике ведене колесо на корпусі диференціала. Її число множиться на число кожної передачі. Коли двигун стоїть упоперек, це косозуба пара на паралельних осях; коли вздовж, — конічна, бо колеса крутяться поперек валів коробки.':
     'The pinion on the output shaft turns a large gear on the differential case. Its ratio multiplies the ratio of every speed. With a transverse engine it is a helical pair on parallel axes; with a longitudinal one it is a bevel pair, because the wheels turn across the transmission’s shafts.',
   'Корпус диференціала': 'Differential case',
-  'Крутиться разом із веденим колесом головної передачі. Сателіти й напівосьові шестерні всередині дають колесам у повороті крутитися з різною швидкістю. У самоблоці тертя чи косозубі сателіти не дають колесу, яке буксує, забрати весь момент.':
-    'It turns with the final drive gear. The spider gears and side gears inside let the wheels turn at different speeds in a corner. In a limited-slip differential, friction or helical planet gears keep a spinning wheel from taking all the torque.',
+  'Крутиться разом із веденим колесом головної передачі. Сателіти й напівосьові шестерні всередині дають колесам у повороті крутитися з різною швидкістю. Вільний диференціал дає обом колесам однаковий момент, тож колесо, що буксує, обмежує тягу обох. У самоблоці тертя дисків чи косозубих сателітів передає більше моменту колесу, яке тримає дорогу.':
+    'It turns with the final drive gear. The spider gears and side gears inside let the wheels turn at different speeds in a corner. An open differential gives both wheels the same torque, so a spinning wheel limits the drive to both. In a limited-slip differential, the friction of its plates or of its helical planet gears sends more torque to the wheel that grips.',
   'Піввісь': 'Halfshaft',
   'Веде від диференціала до колеса. Тут видно лише її початок біля коробки: решту показує підвіска.':
     'It runs from the differential to the wheel. Only its start next to the transmission is shown here; the suspension shows the rest.',

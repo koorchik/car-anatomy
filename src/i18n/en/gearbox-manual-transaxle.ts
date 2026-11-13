@@ -5,7 +5,7 @@ export const GEARBOX_MANUAL_TRANSAXLE_EN: Record<string, GearboxTextEn> = {
   'manual-transaxle': {
     verifyNote:
       'The gear ratios 3.625 / 2.115 / 1.529 / 1.125 / 0.911 / 0.734, the 3.757 reverse and the 4.111 final drive come from the Honda Europe specifications of the 2017 Civic Type R. ' +
-      'The tooth counts, modules, helix angles and center distances are our reconstruction. Honda’s figures match the tooth ratios cut off after the third place rather than rounded: sixth, 36/49 = 0.73469, is 0.734 for Honda and 0.735 for DSPORT on the same car. ' +
+      'The tooth counts, modules, helix angles and center distances are our reconstruction. We assume Honda cuts its figures off after the third place rather than rounding them: Honda gives sixth as 0.734, and DSPORT gives 0.735 for the same car. Our sixth, 36/49 = 0.73469, gives both, cut off and rounded. ' +
       'The 18/74 final drive is suggested by the Civic Type R FL5 with its 3.842 = 73/19 final drive: the tooth sum is the same (92), so in the same case both pairs run on one center distance. ' +
       'No pair through a single reverse idler that fits between shafts 80 mm apart gives 3.757, so we took a compound idler (19 → 34 and 20 → 42). ' +
       'The 80 mm center distance, the shaft positions, the face widths, the helix hand, the order of the sleeves (1–2 on the output shaft, 3–4 and 5–6 on the input shaft) and the place of the differential are estimates.',
