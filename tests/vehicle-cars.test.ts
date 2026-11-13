@@ -533,7 +533,7 @@ describe('gearbox links', () => {
     },
   );
 
-  it("the drive car of every linked car has its driven axle's inner joints, the gearbox its final drive", () => {
+  it("the drive car of every linked car has its driven axle's inner joints, a transaxle its final drive", () => {
     for (const car of CAR_LIST.filter((c) => c.gearbox !== null)) {
       const drive = DRIVE_CARS[car.id]!;
       const axle = car.drive === 'fwd' ? 'front' : 'rear';
@@ -542,7 +542,10 @@ describe('gearbox links', () => {
       const joint = drive.driveline.diffOutputs[axle]!;
       expect(joint[1], car.id).toBeGreaterThan(0);
       expect(joint[1], car.id).toBeLessThan(wheelCentre(car, axle, 'left')[1] - 0.25);
-      expect(Math.abs(Math.abs(stateRatioFinal(car.gearbox!)) - drive.finalDrive.ratio), car.id).toBeLessThanOrEqual(0.005);
+      // A transaxle's teeth give the published final drive; a layshaft box leaves it to the car's axle.
+      if (gearboxSpec(gearboxById(car.gearbox!)!).finalDrive) {
+        expect(Math.abs(Math.abs(stateRatioFinal(car.gearbox!)) - drive.finalDrive.ratio), car.id).toBeLessThanOrEqual(0.005);
+      }
     }
   });
 
