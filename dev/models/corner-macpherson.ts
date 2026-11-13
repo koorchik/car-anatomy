@@ -2,7 +2,7 @@
 // its travel, or driven over a bump or a kerb by the quarter car, with the forces on the wheel and the camber laser.
 
 import { coilForce, bumpStopForce, G } from '../../src/suspension/forces.ts';
-import { QuarterSim } from '../../src/suspension/quarter.ts';
+import { QUARTER_STEP_S, QuarterSim } from '../../src/suspension/quarter.ts';
 import { EventRoad, RoadBuffer, type RoadEvent } from '../../src/suspension/road.ts';
 import { DAMPER_PRESETS, SETUP_RANGES, factorySetup, resolveCorner, type CornerSetup, type DamperPreset } from '../../src/suspension/setup.ts';
 import { jtektCorner } from '../../src/suspension/templates/macpherson.ts';
@@ -83,11 +83,14 @@ export default defineModel({
     const frame = cornerFrame();
     let sim: QuarterSim | null = null;
     let scene: (typeof SCENES)[string] | null = null;
+    /** Time not yet stepped, s: the quarter car steps 1 ms at a time whatever the frame rate. */
+    let pending = 0;
 
     /** The quarter car of the current scene, or none on the rig. */
     const restart = (): void => {
       const mode = values.mode as string;
       scene = SCENES[mode] ?? null;
+      pending = 0;
       if (!scene) {
         sim = null;
         model.setRoad(null);
@@ -131,11 +134,15 @@ export default defineModel({
       frame(_time, dt) {
         frame.rack = (values.rack as number) / 1000;
         if (sim && scene) {
-          const steps = Math.min(100, Math.round(dt / 0.001));
+          // At most 0.1 s per frame: a frame that took longer (a tab in the background) is not caught up.
+          pending = Math.min(pending + dt, 0.1);
+          const steps = Math.floor(pending / QUARTER_STEP_S);
+          pending -= steps * QUARTER_STEP_S;
           for (let i = 0; i < steps; i++) sim.step();
+          // The wheel rolls the distance the quarter car went.
+          frame.spin += (sim.speed * steps * QUARTER_STEP_S) / resolved.wheelCentreZM;
           if (sim.x > scene.lapM) sim.reset(0);
           frameFromQuarter(sim.observe(), frame);
-          frame.spin += (sim.speed * dt) / resolved.wheelCentreZM;
         } else {
           rig();
         }
