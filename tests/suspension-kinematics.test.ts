@@ -685,6 +685,13 @@ describe('twist beam: heave about the bushes, roll about the shear centre', () =
     const raised = beam({ beamPos: 1, shearCentreDzM: 0.05 });
     expect(Math.abs(at(raised, 0, 0).rcHeight - raised.spec.linkage.shearCentre[2])).toBeLessThan(1e-9);
     expect(raised.spec.linkage.shearCentre[2]).toBeCloseTo(0.35, 12);
+    // At the bushes an offset shear centre no longer gives the trailing arm's zero: the line from B to S then lies in
+    // the bushes' transverse plane, never meets the wheel's, and its front-view slope dz/pivotYM sets the roll centre.
+    for (const dz of [-0.03, 0.03]) {
+      const offset = beam({ beamPos: 0, shearCentreDzM: dz });
+      const rc = (TWIST_BEAM_TYPICAL.trackM / 2) * (dz / TWIST_BEAM_TYPICAL.pivotYM);
+      expect(Math.abs(at(offset, 0, 0).rcHeight - rc)).toBeLessThan(1e-9);
+    }
   });
 
   it('with the beam at the bushes each arm is a trailing arm: the other wheel changes nothing', () => {

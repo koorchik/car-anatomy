@@ -8,9 +8,10 @@
 // `beamPos` of the way from B to W, raised by `shearCentreDzM`. In roll each arm turns about the line from B to S, so
 // the front-view instant centre is where that line pierces the wheel's transverse plane and the roll centre is
 //   h_RC = z_IC·y_C / (y_C − y_IC),  y_IC = −pivotYM·(1 − beamPos)/beamPos,  z_IC = W_z + shearCentreDzM/beamPos,
-// zero at the bushes and the shear centre's height at the wheels (research's analogy table). The road-relative roll
-// camber factor follows from the same centre: RCF = 1 − y_C/(y_C − y_IC) = 1 − h_RC/z_IC. With S on the arm line
-// z_IC = W_z, so a higher roll centre always means less camber kept against the road.
+// zero at the bushes and the shear centre's height at the wheels with S on the arm line (research's analogy table);
+// at the bushes an offset S tilts the axis in the front view instead, and h_RC = y_C·shearCentreDzM/pivotYM. The
+// road-relative roll camber factor follows from the same centre: RCF = 1 − y_C/(y_C − y_IC) = 1 − h_RC/z_IC. With S
+// on the arm line z_IC = W_z, so a higher roll centre always means less camber kept against the road.
 //
 // No drawing of a real car is behind these numbers: every point here is typical geometry, an estimate
 // (docs/suspension-model.md has the table).
