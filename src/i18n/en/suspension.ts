@@ -40,7 +40,7 @@ export const SUSPENSION_EN: Record<string, string> = {
     'Pushes and pulls the knuckle’s steering arm to turn the wheel. Its length sets the toe.',
   'Рульова рейка': 'Steering rack',
   'Зубчаста рейка в картері рухається вбік, коли крутять кермо, і тягне за собою обидві рульові тяги. Гофрований пильник захищає її внутрішній шарнір. Тут показано лише край рейки біля колеса.':
-    'A toothed rack in its housing slides sideways when the wheel is turned and pulls both tie rods with it. A bellows boot protects its inner joint. Only the end of the rack near the wheel is shown here.',
+    'A toothed rack in its housing slides sideways when the steering wheel is turned and pulls both tie rods with it. A bellows boot protects its inner joint. Only the end of the rack near the wheel is shown here.',
   'Маточина': 'Hub',
   'Обертається на підшипнику в кулаці. До її фланця кріпляться гальмівний диск і колесо, а всередину заходить шліцьований хвостовик ШРУСа.':
     'Turns on a bearing in the knuckle. The brake rotor and the wheel bolt to its flange, and the splined stub of the CV joint goes into it.',
