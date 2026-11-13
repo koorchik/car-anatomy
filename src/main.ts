@@ -262,6 +262,8 @@ app.querySelector('.dash')!.append(dyno.element);
 $('to-designer').before(dyno.toggleButton);
 const valveReadout = new ValveReadout();
 app.append(valveReadout.element);
+// The labels wrap into more rows beside the compact force card: the systems card above them stops higher.
+new ResizeObserver(() => document.documentElement.style.setProperty('--valve-state-h', `${valveReadout.element.offsetHeight}px`)).observe(valveReadout.element);
 /** Room the switches and a card of a few lines need under the force card, when the systems sit at the top right. */
 const SYSTEMS_ASIDE_ROOM = 200;
 // The full force card, the systems switches and card and the valve gear's labels all live on the right of the stage.

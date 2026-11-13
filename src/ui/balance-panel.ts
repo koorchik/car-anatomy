@@ -152,12 +152,17 @@ export class BalancePanel {
     again();
   }
 
-  /** The full card's height, for what moves under it (--forces-card-h); 0 while it is compact or hidden. */
+  /**
+   * The full card's height, for what moves under it (--forces-card-h), and the compact card's width, for what shares
+   * its row at the bottom of the stage (--forces-compact-w). Each is 0 while the card has the other form or is hidden.
+   */
   private publish(): void {
-    const full = !this.card.hidden && !this.card.classList.contains('compact');
+    const compact = this.card.classList.contains('compact');
+    const full = !this.card.hidden && !compact;
     const height = full ? this.card.offsetHeight : 0;
     if (height > 0) this.fullHeight = height;
     document.documentElement.style.setProperty('--forces-card-h', `${height}px`);
+    document.documentElement.style.setProperty('--forces-compact-w', `${!this.card.hidden && compact ? this.card.offsetWidth : 0}px`);
   }
 
   /**
