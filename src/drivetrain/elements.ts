@@ -93,8 +93,10 @@ export const DISC_DAMPER: DamperDef = {
 };
 
 /**
- * The clutch disc's hub with its side plates and springs, on the input shaft whatever the clutch does [estimate:
- * about 1 kg of steel at 40–70 mm for a 228 mm disc]. The ring with the facings is the damper's `inertia`.
+ * The clutch disc's hub with its flange, side plates and springs, which the model keeps on the input shaft whatever
+ * the clutch does [estimate: about 1 kg of steel at 40–70 mm for a 228 mm disc]. With the clutch open that is right;
+ * locked, a real disc's side plates carry the facings on the engine side of the springs (docs/gearbox-model.md, the
+ * limits of the disc order). The ring with the facings is the damper's `inertia`.
  */
 export const DISC_HUB = 0.003;
 
