@@ -8,18 +8,22 @@ import { newWheelSample, type WheelSample } from '../src/suspension/chassis-axle
 import { TwistBeamAxle, newBeamSample } from '../src/suspension/beam-kinematics.ts';
 import { SolidAxle, newSolidSample } from '../src/suspension/solid-kinematics.ts';
 import {
-  axleRollStiffness, liftOff, millikenTransfer, rollModel, settle, understeerGradient,
+  axleRollStiffness, liftOff, millikenTransfer, rollModel, settle, settleAt, understeerGradient, type SteadyState,
 } from '../src/suspension/statics.ts';
+import { antiGeometry } from '../src/suspension/anti.ts';
+import { doubleWishbone, wishboneDefaults } from '../src/suspension/templates/double-wishbone.ts';
+import { solidAxle, SOLID_TYPICAL } from '../src/suspension/templates/solid-axle.ts';
+import { aeroDragN, roadLoadN } from '../src/vehicle/road-load.ts';
 import {
   chassisOf, restWheelCentreZM, typicalChassis, typicalFront, typicalRear, type TypicalCar,
 } from '../src/suspension/templates/typical-chassis.ts';
-import { swayBarTorsionRate, G } from '../src/suspension/forces.ts';
+import { coilForce, swayBarTorsionRate, G } from '../src/suspension/forces.ts';
 import { QuarterSim } from '../src/suspension/quarter.ts';
 import { factorySetup, resolveCorner } from '../src/suspension/setup.ts';
 import { EventRoad, RoadBuffer } from '../src/suspension/road.ts';
 import { estimateInertia, GYRATION_RATIOS, NHTSA_CARS } from '../src/vehicle/body-estimate.ts';
 import { tyreVertical } from '../src/vehicle/tyre-data.ts';
-import type { AxleSpec, ChassisSpec, CornerLinkage, SolidAxleLinkage, TwistBeamLinkage } from '../src/suspension/spec.ts';
+import type { AxleSpec, ChassisLongitudinal, ChassisSpec, CornerLinkage, SolidAxleLinkage, TwistBeamLinkage } from '../src/suspension/spec.ts';
 
 const DEG = Math.PI / 180;
 
@@ -560,5 +564,373 @@ describe('inertias without a measurement', () => {
       near(est.iyy, r.iyy, 0.22);
       near(est.izz, r.izz, 0.22);
     }
+  });
+});
+
+// ---- Stage P9-core: braking and accelerating ----
+
+/** A sedan on double wishbones whose arms lean `svDeg` in the side view (front, rear): the anti angle of the template. */
+function wishboneSedan(svDeg: readonly [number, number], longitudinal: Partial<ChassisLongitudinal> = {}): Chassis {
+  const front = doubleWishbone({ ...wishboneDefaults('front'), trackM: 1.52, wheelCentreZM: restWheelCentreZM('street', (1500 * 0.55) / 2), driven: false, svAngleDeg: svDeg[0] });
+  const rear = doubleWishbone({ ...wishboneDefaults('rear'), trackM: 1.54, wheelCentreZM: restWheelCentreZM('street', (1500 * 0.45) / 2), driven: true, svAngleDeg: svDeg[1] });
+  return buildChassis(chassisOf({
+    id: 'wishbone-sedan', massKg: 1500, frontShare: 0.55, cgHeightM: 0.55, wheelbaseM: 2.7, front, rear, frontBar: null, rearBar: null,
+    unsprungKg: [45, 45], rideHz: [1.3, 1.45], zeta: 0.25, tyre: 'street', geometry: 'typical', longitudinal,
+  }));
+}
+
+/**
+ * The side-view angles that give `target` % of anti in braking on each axle (antiGeometry), by the secant on each:
+ * an axle's anti depends on its own arms only.
+ */
+function antiAngles(target: readonly [number, number], longitudinal: Partial<ChassisLongitudinal> = {}): [number, number] {
+  const sv: [number, number] = [0, 0];
+  for (const k of [0, 1] as const) {
+    if (target[k] === 0) continue;
+    const anti = (deg: number): number => {
+      const pair: [number, number] = [0, 0];
+      pair[k] = deg;
+      return antiGeometry(wishboneSedan(pair, longitudinal)).braking[k];
+    };
+    let [x0, y0, x1] = [0, anti(0), 10];
+    for (let i = 0; i < 10; i++) {
+      const y1 = anti(x1);
+      if (Math.abs(y1 - target[k]) < 1e-4) break;
+      [x0, y0, x1] = [x1, y1, x1 + ((target[k] - y1) * (x1 - x0)) / (y1 - y0)];
+    }
+    sv[k] = x1;
+  }
+  return sv;
+}
+
+/** Front axle's load gain less what the sprung centre of mass's move over the patches adds (h·θ ahead), N. */
+const transferLessShift = (c: Chassis, s: SteadyState): number =>
+  s.longitudinalTransfer - (c.sprung.massKg * G * (c.sprung.cgHeightM + s.z) * s.pitch) / c.wheelbaseM;
+
+/**
+ * m·a_x·h/L onto the front axle, N, with h the whole car's centre of mass as it stands (a body that sinks in braking
+ * lowers it: the hot hatch's 9 mm are 1.6 % of the transfer), and the drag D (N along x, on the body at h_a).
+ */
+function textbookTransfer(c: Chassis, s: SteadyState, dragN = 0): number {
+  const h = (c.sprung.massKg * (c.sprung.cgHeightM + s.z) + c.corners.reduce((a, k, i) => a + k.unsprungKg * s.wheelZ[i], 0)) / c.massKg;
+  return (-c.massKg * s.ax * h + c.spec.longitudinal.aeroHeightM * dragN) / c.wheelbaseM;
+}
+
+/** The body's pitch over its wheel centres (nose down positive), from the travels, rad. */
+const suspensionPitch = (c: Chassis, s: SteadyState): number =>
+  ((s.travel[0] + s.travel[1]) / 2 - (s.travel[2] + s.travel[3]) / 2) / (c.corners[0].x - c.corners[2].x);
+
+describe('braking and accelerating: the forces', () => {
+  it.each(LAYOUTS.map((c) => [c.id, c] as const))('%s: the tyres make m·a_x less the drag, by the brake balance or the driven axle', (_id, car) => {
+    const c = chassis(car);
+    const lon = c.spec.longitudinal;
+    const sim = new ChassisSim(c);
+    for (const [ax, v] of [[-0.6 * G, 0], [0.3 * G, 0], [-0.4 * G, 40], [0, 30]] as const) {
+      sim.ax = ax;
+      sim.v = v;
+      const o = sim.observe();
+      expect(o.impossible).toBe(false);
+      near(sum(o.fx), c.massKg * ax - o.dragN, 1e-12);
+      // Rolling in the patches and drag on the body: the car's road load, none standing.
+      if (v) near(-sum(o.rollingN) - o.dragN, roadLoadN(lon.roadLoad, v, 0), 1e-12);
+      else expect(sum(o.rollingN) + o.dragN).toBe(0);
+      near(-o.dragN, aeroDragN(lon.roadLoad, v), 1e-12);
+      const front = o.brakeN[0] + o.brakeN[1] + o.driveN[0] + o.driveN[1];
+      const total = sum(o.brakeN) + sum(o.driveN);
+      if (total < 0) {
+        near(front / total, lon.brakeFront, 1e-12);
+        for (const i of [0, 2]) near(o.brakeN[i], o.brakeN[i + 1], 1e-12);
+      } else {
+        near(front / total, car.drive === 'fwd' ? 1 : 0, 1e-12);
+        expect(sum(o.brakeN)).toBe(0);
+      }
+    }
+  });
+});
+
+describe('braking and accelerating: the load transfer and the pitch', () => {
+  it.each(LAYOUTS.map((c) => [c.id, c] as const))('%s: the front gains m·a_x·h/L less the CG’s shift (1 %), braking and under drive', (_id, car) => {
+    const c = chassis(car);
+    for (const ax of [-0.8 * G, 0.3 * G]) {
+      const s = settleAt(c, { ax });
+      expect(s.impossible).toBe(false);
+      near(transferLessShift(c, s), textbookTransfer(c, s), 0.01);
+      // The nose goes down in braking and up under drive.
+      expect(Math.sign(s.pitch)).toBe(-Math.sign(ax));
+    }
+  });
+
+  it('anti-dive changes the pitch but not the transfer (acceptance)', () => {
+    const ax = -0.8 * G;
+    const results = [0, 50, 100].map((target) => {
+      const sv = antiAngles([target, 0]);
+      const c = wishboneSedan(sv);
+      expect(Math.abs(antiGeometry(c).braking[0] - target)).toBeLessThan(0.01);
+      return { c, s: settleAt(c, { ax }) };
+    });
+    for (const { c, s } of results) near(transferLessShift(c, s), textbookTransfer(c, s), 0.01);
+    expect(results[1].s.pitch).toBeLessThan(results[0].s.pitch - 0.2 * DEG);
+    expect(results[2].s.pitch).toBeLessThan(results[1].s.pitch - 0.2 * DEG);
+    // 100 % in front: the front springs carry nothing of m·a_x·h/L at design (the table's slopes and the virtual work
+    // agree), only what the centre of mass's move adds as the rear, without anti-lift, rises 46 mm and lifts and tips
+    // the body: the body still pitches.
+    const [none, full] = [results[0].s, results[2].s];
+    const frontElastic = (s: SteadyState): number => s.elasticN[0] + s.elasticN[1];
+    const atDesign = (-1500 * ax * 0.55) / 2.7;
+    near(frontElastic(none), none.longitudinalTransfer, 0.01);
+    expect(Math.abs(frontElastic(full) - (full.longitudinalTransfer - atDesign))).toBeLessThan(0.005 * atDesign);
+    expect(Math.abs(frontElastic(full))).toBeLessThan(0.06 * atDesign);
+    expect(Math.abs(full.travel[0])).toBeLessThan(0.07 * none.travel[0]);
+    expect(full.travel[2]).toBeLessThan(-0.04);
+    expect(full.pitch).toBeGreaterThan(1 * DEG);
+  });
+
+  it('100 % anti on both axles holds the suspension still in braking: pitch over the wheels under 0.02°', () => {
+    // A brake balance of 0.6 keeps the rear arms' lean near 30°; at 0.5 g neither axle reaches its tyres' limit (which
+    // would move brake force to the other axle and off the balance the anti was set for).
+    const lon = { brakeFront: 0.6 };
+    const c = wishboneSedan(antiAngles([100, 100], lon), lon);
+    const anti = antiGeometry(c);
+    near(anti.braking[0], 100, 1e-5);
+    near(anti.braking[1], 100, 1e-5);
+    // The textbook figure, without the wheels' own inertia, says a tenth more: it would not hold the body.
+    expect(anti.textbookBraking[0]).toBeGreaterThan(105);
+    const s = settleAt(c, { ax: -0.5 * G });
+    expect(s.impossible).toBe(false);
+    expect(Math.abs(suspensionPitch(c, s))).toBeLessThan(0.02 * DEG);
+    for (const q of s.travel) expect(Math.abs(q)).toBeLessThan(0.0002);
+    near(transferLessShift(c, s), textbookTransfer(c, s), 0.01);
+    // All of it went through the links: the elastic support barely changed.
+    for (const e of s.elasticN) expect(Math.abs(e)).toBeLessThan(5);
+    // What pitch is left over the road is the tyres': the front ones squashed by the transfer, the rear ones relieved.
+    near(s.pitch - suspensionPitch(c, s), (s.longitudinalTransfer / c.corners[0].tyre.kt) / (c.corners[0].x - c.corners[2].x), 0.02);
+  });
+
+  it('without anti the body pitches as the springs and tyres in series say (3 %)', () => {
+    const c = wishboneSedan([0, 0]);
+    const anti = antiGeometry(c);
+    for (const a of [...anti.braking, ...anti.drive]) expect(Math.abs(a)).toBeLessThan(0.5);
+    // Each corner's heave rate at design: the spring through its motion ratio, preload through its change.
+    const L = newWheelSample();
+    const R = newWheelSample();
+    const rate = (k: 0 | 1): number => {
+      const corner = c.corners[2 * k];
+      const support = (q: number): number => {
+        c.axles[k].sample(q, q, L, R);
+        return coilForce(corner.spring.rate, corner.spring.freeM, L.springLen, corner.spring.rate2, corner.spring.fromM) * L.mrSpring;
+      };
+      return (support(1e-4) - support(-1e-4)) / 2e-4;
+    };
+    const compliance = (k: 0 | 1): number => 1 / (2 * rate(k)) + 1 / (2 * c.corners[2 * k].tyre.kt);
+    for (const ax of [-0.3 * G, 0.3 * G]) {
+      const s = settleAt(c, { ax });
+      const span = c.corners[0].x - c.corners[2].x;
+      near(s.pitch, (s.longitudinalTransfer * (compliance(0) + compliance(1))) / span, 0.03);
+    }
+  });
+
+  it('inboard brakes react through the wheel centre: a semi-trailing arm loses its anti-lift', () => {
+    // The semi-trailing arm's knuckle point at the patch swings about the arm's axis, far ahead (tanθ_KP −0.6); its
+    // wheel centre barely moves along the car. Brakes on the differential put the torque into the body instead.
+    const car = { ...SEDAN, id: 'sedan-semi-trailing', rear: 'semi-trailing' } as const;
+    const outboard = chassis(car);
+    const inboard = buildChassis(typicalChassis({ ...car, longitudinal: { brakeInboard: [false, true] } }));
+    const [a, b] = [antiGeometry(outboard), antiGeometry(inboard)];
+    expect(a.braking[1]).toBeGreaterThan(60);
+    expect(Math.abs(b.braking[1])).toBeLessThan(a.braking[1] - 50);
+    near(b.braking[0], a.braking[0], 1e-12);
+    const ax = -0.8 * G;
+    const [sa, sb] = [settleAt(outboard, { ax }), settleAt(inboard, { ax })];
+    near(transferLessShift(outboard, sa), textbookTransfer(outboard, sa), 0.01);
+    near(transferLessShift(inboard, sb), textbookTransfer(inboard, sb), 0.01);
+    // The rear rises more without the anti-lift.
+    expect(sb.travel[2]).toBeLessThan(sa.travel[2] - 0.01);
+    expect(sb.pitch).toBeGreaterThan(sa.pitch + 0.3 * DEG);
+  });
+
+  it('drag acts on the body at its own height: it pitches the body, but the links carry only what the tyres push', () => {
+    // A drag centre well above the CG (0.9 m, a van's), so its own moment shows. The road load is drag alone.
+    const base = wishboneSedan(antiAngles([100, 100], { brakeFront: 0.6 }), { brakeFront: 0.6 });
+    const spec = { ...base.spec, longitudinal: { ...base.spec.longitudinal, aeroHeightM: 0.9, roadLoad: { a: 0, b: 0, c: 0.42, aeroC: 0.42, massKg: 1500 } } };
+    const c = buildChassis(spec);
+    const v = 210 / 3.6;
+    // The same tyre forces twice: braking at 0.5 g standing, and at 210 km/h with the drag's 1.4 kN on top.
+    const still = settleAt(c, { ax: -0.5 * G });
+    const sim = new ChassisSim(c);
+    sim.v = v;
+    const drag = sim.observe().dragN;
+    near(-drag, 1428, 0.01);
+    const fast = settleAt(c, { ax: -0.5 * G + drag / c.massKg, v }, sim);
+    for (let i = 0; i < 4; i++) near(fast.fx[i], still.fx[i], 1e-9);
+    // The links carry the same (but for the 2–3 % their slopes change over the 2.5 mm of travel the drag's pitch puts
+    // in); the springs take the drag's moment about the CG, so the body pitches nose up over its wheels, and the transfer
+    // follows the drag's own height.
+    for (let i = 0; i < 4; i++) near(fast.antiN[i], still.antiN[i], 0.04);
+    expect(Math.abs(suspensionPitch(c, still))).toBeLessThan(0.02 * DEG);
+    expect(suspensionPitch(c, fast)).toBeLessThan(-0.05 * DEG);
+    near(transferLessShift(c, fast), textbookTransfer(c, fast, drag), 0.01);
+    near(transferLessShift(c, still), textbookTransfer(c, still), 0.01);
+  });
+
+  it('a braking step: steps of 1/3000 s and 1/1000 s agree within 1 %, and both end where settleAt() says', () => {
+    const c = chassis(SEDAN);
+    const ax = -0.8 * G;
+    const run = (h: number): ChassisSim => {
+      const sim = new ChassisSim(c);
+      sim.ax = ax;
+      for (let i = 0, n = Math.round(0.6 / h); i < n; i++) sim.step(h);
+      return sim;
+    };
+    const a = run(1 / 1000).observe();
+    const b = run(1 / 3000).observe();
+    near(a.pitch, b.pitch, 0.01);
+    for (let i = 0; i < 4; i++) near(a.fz[i], b.fz[i], 0.01);
+    const sim = new ChassisSim(c);
+    sim.ax = ax;
+    for (let i = 0; i < 4000; i++) sim.step();
+    const s = settleAt(c, { ax });
+    near(sim.observe().pitch, s.pitch, 0.005);
+    for (let i = 0; i < 4; i++) near(sim.out.fz[i], s.fz[i], 0.005);
+  });
+});
+
+describe('braking and accelerating: the wheel’s limit', () => {
+  const total = (o: { fx: Float64Array }): number => sum(o.fx);
+
+  it('a wheel on wet ice passes its excess to the other wheel of its axle; the sum stays exact', () => {
+    const c = chassis(SEDAN);
+    const sim = new ChassisSim(c);
+    sim.surfaceMu[0] = 0.5;
+    const ax = -0.5 * G;
+    const s = settleAt(c, { ax }, sim);
+    const o = sim.out;
+    expect(s.impossible).toBe(false);
+    near(total(o), c.massKg * ax, 1e-12);
+    expect(Array.from(o.atLimit)).toEqual([1, 0, 0, 0]);
+    near(-o.fx[0], o.limitXN[0], 1e-9);
+    // The front axle still brakes its share: the right wheel took the rest.
+    near(o.fx[0] + o.fx[1], c.spec.longitudinal.brakeFront * c.massKg * ax, 1e-9);
+    expect(o.fx[1]).toBeLessThan(1.05 * o.fx[0]);
+    // Harder, the right wheel reaches its limit too and the rear takes what is left.
+    const t = settleAt(c, { ax: -0.75 * G }, sim);
+    expect(t.impossible).toBe(false);
+    near(total(sim.out), c.massKg * -0.75 * G, 1e-12);
+    expect(sim.out.atLimit[0] && sim.out.atLimit[1]).toBe(1);
+    expect((sim.out.fx[2] + sim.out.fx[3]) / total(sim.out)).toBeGreaterThan(1 - c.spec.longitudinal.brakeFront + 0.01);
+  });
+
+  it('a front axle on ice passes the excess to the rear axle, as far as the rear can take it', () => {
+    const c = chassis(SEDAN);
+    const sim = new ChassisSim(c);
+    sim.surfaceMu.set([0.3, 0.3, 1, 1]);
+    const s = settleAt(c, { ax: -0.5 * G }, sim);
+    const o = sim.out;
+    expect(s.impossible).toBe(false);
+    near(total(o), c.massKg * -0.5 * G, 1e-12);
+    expect(o.atLimit[0] && o.atLimit[1]).toBe(1);
+    expect(o.atLimit[2] || o.atLimit[3]).toBe(0);
+    // The rear brakes more than its share of 0.3.
+    expect((o.fx[2] + o.fx[3]) / total(o)).toBeGreaterThan(0.5);
+  });
+
+  it('past every wheel’s limit the sample is impossible: forces at the limits, the shortfall written down (1 N)', () => {
+    const c = chassis(SEDAN);
+    const sim = new ChassisSim(c);
+    const s = settleAt(c, { ax: -1.4 * G }, sim);
+    const o = sim.out;
+    expect(s.impossible).toBe(true);
+    for (let i = 0; i < 4; i++) {
+      expect(o.atLimit[i]).toBe(1);
+      near(-o.fx[i], o.limitXN[i], 1e-9);
+    }
+    expect(Math.abs(c.massKg * 1.4 * G - -total(o) - o.shortfallXN)).toBeLessThan(1);
+    expect(o.shortfallXN).toBeGreaterThan(1000);
+    // Without the limit the tyres would make it all.
+    sim.gripLimit = false;
+    sim.observe();
+    near(total(sim.out), c.massKg * -1.4 * G, 1e-12);
+    expect(sim.out.impossible).toBe(false);
+  });
+
+  it('drive goes only to driven wheels: a front-drive car with a wheel on ice is short, not pushed by its rear', () => {
+    const c = chassis(HOT_HATCH);
+    const sim = new ChassisSim(c);
+    sim.surfaceMu.set([0.1, 0.1, 1, 1]);
+    sim.ax = 0.3 * G;
+    const o = sim.observe();
+    expect(o.impossible).toBe(true);
+    expect(o.fx[2]).toBe(0);
+    expect(o.fx[3]).toBe(0);
+    near(o.fx[0] + o.fx[1] + o.shortfallXN, c.massKg * 0.3 * G, 1e-9);
+    // Braking the same car on the same ice, the rear helps.
+    sim.ax = -0.3 * G;
+    const b = sim.observe();
+    expect(b.impossible).toBe(false);
+    expect(b.fx[2]).toBeLessThan(-0.15 * c.massKg * 0.3 * G);
+  });
+
+  it('marks a wheel past its side peak and an axle that cannot make its side force, but keeps the side force', () => {
+    const c = chassis(SEDAN);
+    const sim = new ChassisSim(c);
+    sim.surfaceMu.set([0.5, 0.5, 0.5, 0.5]);
+    sim.ay = 0.8 * G;
+    const o = sim.observe();
+    expect(o.impossible).toBe(true);
+    expect(o.shortfallYN).toBeGreaterThan(0);
+    near(sum(o.fy), c.massKg * 0.8 * G, 1e-12);
+  });
+});
+
+describe('the propshaft’s reaction', () => {
+  /** A rear-drive car on a live axle with Watt's linkage, no bars; rigid tyres when asked. */
+  function liveAxleCar(rigid: boolean): Chassis {
+    const z = (share: number): number => (rigid ? tyreVertical('street').freeRadiusM : restWheelCentreZM('street', (1500 * share) / 2));
+    const c = buildChassis(chassisOf({
+      id: 'live-axle-sedan', massKg: 1500, frontShare: 0.55, cgHeightM: 0.55, wheelbaseM: 2.7,
+      front: typicalFront('double-wishbone', 1.52, z(0.55), false), rear: solidAxle({ ...SOLID_TYPICAL.watt, trackM: 1.54, wheelCentreZM: z(0.45), driven: true }),
+      frontBar: null, rearBar: null, unsprungKg: [45, 60], rideHz: [1.3, 1.4], zeta: 0.25, tyre: 'street', geometry: 'typical',
+    }));
+    if (rigid) {
+      for (const k of c.corners) {
+        k.tyre.kt *= 1e4;
+        k.restWheelZM = k.tyre.freeRadiusM - k.staticN / k.tyre.kt;
+      }
+    }
+    return c;
+  }
+
+  it('live axle under throttle: the body rolls with the shaft’s torque, the axle against it, the right rear unloads (acceptance)', () => {
+    // With rigid tyres the axle cannot roll, so the body takes T against both axles' roll stiffness and the pendulum
+    // P = m_s·g·h′: φ = T/(ΣK_φ − P). The rear springs hand K_φr·φ of it back to the axle, which the pinion turns the other
+    // way with T, so the right rear unloads by (T − K_φr·φ)/t_r = (K_φf − P)/(ΣK_φ − P)·T/t_r: the plan's
+    // (K_φf/ΣK_φ)·T/t_r with the pendulum. Linear, so at a gentle 0.05 g; harder, the squat moves the roll centres.
+    const c = liveAxleCar(true);
+    const sim = new ChassisSim(c);
+    const s = settleAt(c, { ax: 0.05 * G }, sim);
+    const T = sim.out.propNm;
+    near(T, ((sim.out.driveN[2] + sim.out.driveN[3]) * c.corners[2].tyre.freeRadiusM) / c.spec.longitudinal.finalDrive, 1e-12);
+    expect(T).toBeGreaterThan(0);
+    const K = [axleRollStiffness(c, 0).total, axleRollStiffness(c, 1).total];
+    const P = c.sprung.massKg * G * rollModel(c).hPrimeM;
+    near(s.roll, T / (K[0] + K[1] - P), 0.03);
+    near((s.fz[2] - s.fz[3]) / 2, ((K[0] - P) / (K[0] + K[1] - P)) * (T / c.tracks[1]), 0.03);
+    expect(s.fz[1]).toBeGreaterThan(s.fz[0]);
+    // On real tyres, harder: the axle itself tips its left side down.
+    const soft = liveAxleCar(false);
+    const sim2 = new ChassisSim(soft);
+    const t = settleAt(soft, { ax: 0.4 * G }, sim2);
+    expect(t.roll).toBeGreaterThan(0.5 * DEG);
+    expect(t.fz[3]).toBeLessThan(t.fz[2] - 300);
+    expect(t.fz[1]).toBeGreaterThan(t.fz[0] + 300);
+    expect(sim2.out.wheelZ[2]).toBeLessThan(sim2.out.wheelZ[3]);
+  });
+
+  it.each(['double-wishbone', 'multilink', 'semi-trailing'] as const)('independent rear (%s), differential on the body: nothing from the shaft, full throttle', (rear) => {
+    const c = chassis({ ...SEDAN, id: `sedan-${rear}`, rear });
+    const sim = new ChassisSim(c);
+    const s = settleAt(c, { ax: 0.5 * G }, sim);
+    expect(sim.out.propNm).toBe(0);
+    expect(Math.abs(s.fz[3] - s.fz[2])).toBeLessThan(1);
+    expect(Math.abs(s.roll)).toBeLessThan(1e-9);
   });
 });

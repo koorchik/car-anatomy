@@ -90,6 +90,11 @@ export function buildChassis(spec: ChassisSpec): Chassis {
   const fs = body.frontShare;
   const L = body.wheelbaseM;
   if (!(m > 0 && fs > 0 && fs < 1 && L > 0)) throw new Error('The chassis needs a mass, a front share inside (0, 1) and a wheelbase');
+  const lon = spec.longitudinal;
+  const share = (x: number): boolean => x >= 0 && x <= 1;
+  if (!(share(lon.brakeFront) && share(lon.driveFront) && lon.finalDrive > 0 && lon.aeroHeightM >= 0)) {
+    throw new Error('The chassis needs brake and drive shares inside [0, 1], a final drive and the height of the drag');
+  }
   const a = L * (1 - fs);
   const b = L * fs;
   const h = body.cgHeightM ?? CG_HEIGHT_ESTIMATE_M;

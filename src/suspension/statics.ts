@@ -2,9 +2,10 @@
 // scene and the tests set beside it. Conventions are at the top of kinematics.ts; corners FL, FR, RL, RR; a_y > 0 is a
 // left turn, so the right wheels are the outer ones.
 //
-// settle() solves the simulation's own equations for zero accelerations at zero speed (Newton on the seven positions,
-// from the car at rest, the side force raised in steps), so a steady state here is exactly where the simulation ends
-// up. The closed forms are linear at design (rollModel):
+// settle() solves the simulation's own equations for zero accelerations at zero speed of the body's coordinates
+// (Newton on the seven positions, from the car at rest, the accelerations raised in steps), so a steady state here is
+// exactly where the simulation ends up; settleAt() does the same braking or accelerating as well, at a road speed. The
+// closed forms are linear at design (rollModel):
 //   - roll stiffness of an axle K_φ: the roll moment its springs (with the rise of their motion ratio), its bar and a
 //     twist beam's torsion put on the body per radian of body roll with the wheels held on the road;
 //   - roll axis under the sprung centre of mass, between the two axles' roll centres; h′ = h_s minus its height, and
@@ -28,23 +29,33 @@ import { inclinationOf, mfForces, newMfForces, tyreAt, type Tyre } from '../vehi
 /** Where the chassis settles at one lateral acceleration. Per corner FL, FR, RL, RR; forces in N, angles in rad. */
 export interface SteadyState {
   ay: number;
+  ax: number;
+  v: number;
   z: number;
   roll: number;
   pitch: number;
   travel: number[];
+  /** Wheel centres above the road, m. */
+  wheelZ: number[];
   fz: number[];
   fy: number[];
+  fx: number[];
   camber: number[];
   camberRoad: number[];
   /** The links' share of each corner's support, split as in ChassisOut, and the elastic support's change from rest. */
   geometricN: number[];
   unsprungN: number[];
+  antiN: number[];
   elasticN: number[];
   /** Roll of the body over each axle's wheel centres, (q_R − q_L)/t_W, rad, front and rear. */
   suspensionRoll: [number, number];
   /** Lateral load transfer of each axle, (F_z,R − F_z,L)/2, N, and the front's share of the total. */
   transfer: [number, number];
   frontTransferShare: number;
+  /** Longitudinal load transfer: the front axle's load over its static load, N (positive in braking). */
+  longitudinalTransfer: number;
+  /** The tyres could not make these forces (wheel-forces.ts): they stand at their limits. */
+  impossible: boolean;
   /** Newton iterations it took over all steps, and the largest acceleration left, m/s² or rad/s². */
   iterations: number;
   residual: number;
@@ -57,7 +68,25 @@ const SETTLE_TOLERANCE = 1e-9;
 
 /** Solves the simulation for zero accelerations at `ay` from rest; throws if Newton does not get there. */
 export function settle(chassis: Chassis, ay: number, sim: ChassisSim = new ChassisSim(chassis)): SteadyState {
+  return settleAt(chassis, { ay }, sim);
+}
+
+/** What the car does when it settles: lateral and longitudinal acceleration, m/s², and road speed, m/s. */
+export interface SettleAt {
+  ay?: number;
+  ax?: number;
+  v?: number;
+}
+
+/**
+ * Solves the simulation for zero accelerations of its coordinates at `ay`, `ax` and speed `v` from rest, on the
+ * surfaces and with the grip limit `sim` has; throws if Newton does not get there.
+ */
+export function settleAt(chassis: Chassis, at: SettleAt, sim: ChassisSim = new ChassisSim(chassis)): SteadyState {
+  const ay = at.ay ?? 0;
+  const ax = at.ax ?? 0;
   sim.reset();
+  sim.v = at.v ?? 0;
   const n = CHASSIS_DOF;
   const p = new Float64Array(sim.pos);
   const v = new Float64Array(n);
@@ -71,6 +100,7 @@ export function settle(chassis: Chassis, ay: number, sim: ChassisSim = new Chass
   let residual = 0;
   for (let step = 1; step <= SETTLE_STEPS; step++) {
     sim.ay = (ay * step) / SETTLE_STEPS;
+    sim.ax = (ax * step) / SETTLE_STEPS;
     sim.accelerations(p, v, r, false);
     for (let it = 0; it < 60 && norm(r) > SETTLE_TOLERANCE; it++) {
       iterations++;
@@ -101,7 +131,9 @@ export function settle(chassis: Chassis, ay: number, sim: ChassisSim = new Chass
       r.set(r1);
     }
     residual = norm(r);
-    if (!(residual <= 1e-6)) throw new Error(`The chassis does not settle at ${(sim.ay / G).toFixed(2)} g`);
+    if (!(residual <= 1e-6)) {
+      throw new Error(`The chassis does not settle at ${(sim.ay / G).toFixed(2)} g across, ${(sim.ax / G).toFixed(2)} g along`);
+    }
   }
   sim.pos.set(p);
   sim.vel.fill(0);
@@ -113,20 +145,27 @@ export function settle(chassis: Chassis, ay: number, sim: ChassisSim = new Chass
   const rollOf = (k: 0 | 1): number => (o.travel[2 * k + 1] - o.travel[2 * k]) / (c.corners[2 * k].y - c.corners[2 * k + 1].y);
   return {
     ay,
+    ax,
+    v: sim.v,
     z: o.z,
     roll: o.roll,
     pitch: o.pitch,
     travel: arr(o.travel),
+    wheelZ: arr(o.wheelZ),
     fz: arr(o.fz),
     fy: arr(o.fy),
+    fx: arr(o.fx),
     camber: arr(o.camber),
     camberRoad: arr(o.camberRoad),
     geometricN: arr(o.geometricN),
     unsprungN: arr(o.unsprungN),
+    antiN: arr(o.antiN),
     elasticN: arr(o.elasticN).map((s, i) => s - restSupport[i]),
     suspensionRoll: [rollOf(0), rollOf(1)],
     transfer,
     frontTransferShare: transfer[0] / (transfer[0] + transfer[1]),
+    longitudinalTransfer: o.fz[0] + o.fz[1] - c.corners[0].staticN - c.corners[1].staticN,
+    impossible: o.impossible,
     iterations,
     residual,
   };

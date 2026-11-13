@@ -6,6 +6,7 @@
 
 import type { TyreChoice } from '../vehicle/tyre-data.ts';
 import type { VehicleBody } from '../vehicle/car.ts';
+import type { RoadLoadCoeffs } from '../vehicle/road-load.ts';
 
 /** ISO 8855, metres: x forward, y left, z up. Points of an independent corner are given for the left side. */
 export type Vec3 = readonly [number, number, number];
@@ -270,6 +271,27 @@ export interface ChassisAxleSpec {
 }
 
 /**
+ * How a chassis brakes and drives, and what holds it back (stage P9-core). The driven axles are those whose AxleSpec
+ * says `driven`, and each axle's `diff` says where its differential sits.
+ */
+export interface ChassisLongitudinal {
+  /** Share of the brake force on the front axle (the brake balance). */
+  brakeFront: number;
+  /** Whether each axle's brakes sit inboard, on the body or the differential (a de Dion, racing cars), and not in the
+   *  wheel: their torque then reaches the body through the half-shafts instead of the knuckle. [front, rear] */
+  brakeInboard: readonly [boolean, boolean];
+  /** Share of the drive force on the front axle when both axles are driven; ignored otherwise. */
+  driveFront: number;
+  /** Final drive ratio: the propshaft torque is the driven wheels' torque over it. */
+  finalDrive: number;
+  /** The car's road load (src/vehicle/road-load.ts): its drag part acts on the body at `aeroHeightM`, the rest (rolling)
+   *  in the contact patches. */
+  roadLoad: RoadLoadCoeffs;
+  /** Height above the road the drag acts at, m. */
+  aeroHeightM: number;
+}
+
+/**
  * A whole chassis for ChassisSim and statics.ts. `body` holds what NHTSA measures for the whole car, unsprung masses
  * included (the shared VehicleBody of src/vehicle/car.ts with the mass, as bodyOf gives it); buildChassis derives the
  * sprung body from it. The tracks of the chassis are those of its axles.
@@ -281,6 +303,8 @@ export interface ChassisSpec {
   rear: ChassisAxleSpec;
   /** Which tyre the car rides on (src/vehicle/tyre-data.ts), the same on all four wheels. */
   tyre: TyreChoice;
+  /** Brakes, drive and road load. */
+  longitudinal: ChassisLongitudinal;
   /** 'measured' only for published hardpoints (JTEKT). Everything else is typical geometry. */
   geometry: 'measured' | 'typical';
 }

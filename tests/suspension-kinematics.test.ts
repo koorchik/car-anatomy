@@ -5,7 +5,7 @@ import { multilink, multilinkDefaults } from '../src/suspension/templates/multil
 import { buildAxle, newCornerSample } from '../src/suspension/kinematics.ts';
 import { buildAxleLite, rolledRollCentre } from '../src/suspension/axle-lite.ts';
 import { POSE_SIZE } from '../src/suspension/solve.ts';
-import type { AxleSpec, PivotLinkage, Vec3 } from '../src/suspension/spec.ts';
+import type { AnyCornerLinkage, AxleSpec, PivotLinkage, Vec3 } from '../src/suspension/spec.ts';
 import { cross, dot, rotateInto, sub, svd } from '../src/suspension/vec.ts';
 import { clampSetup, factorySetup, resolveCorner, SETUP_RANGES, type CornerSetup } from '../src/suspension/setup.ts';
 import { dist } from '../src/suspension/vec.ts';
@@ -654,7 +654,10 @@ describe('derived quantities of the table', () => {
     // What outboard brakes react through. The wheel's lowest point (tanθ_CP) does not turn with the knuckle, so on a
     // semi-trailing arm, whose wheel centre swings level with the pivot, it says 0 where the knuckle's point says −0.6.
     const semi = pivotAxle(PIVOT_TYPICAL['semi-trailing']);
-    for (const spec of [macphersonJtekt({ wheelCentreZM: 0.3 }), front.dw, rear.ml, macphersonJtekt({ wheelCentreZM: 0.3, knuckle: 'revoknuckle' }), semi]) {
+    const specs: AxleSpec<AnyCornerLinkage>[] = [
+      macphersonJtekt({ wheelCentreZM: 0.3 }), front.dw, rear.ml, macphersonJtekt({ wheelCentreZM: 0.3, knuckle: 'revoknuckle' }), semi,
+    ];
+    for (const spec of specs) {
       const a = buildAxle(spec);
       const c = sampleAt(a, 0);
       const patch: Vec3 = [c.contactX, c.contactY, c.contactZ];
