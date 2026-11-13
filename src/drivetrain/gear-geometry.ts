@@ -71,6 +71,9 @@ export function helixForCentre(a: number, module: number, teeth1: number, teeth2
   const at = (deg: number) => centreDistance(module, teeth1, teeth2, deg, pressureAngleDeg, shiftSum);
   let lo = 0;
   let hi = 60;
+  // A spur pair whose shift sum was solved for this centre (shiftSumForCentre) spans it at 0° to a rounding hair, on
+  // either side: it is spur, not NaN or a helix of a millionth of a degree.
+  if (Math.abs(at(lo) - a) <= 1e-9 * a) return 0;
   if (at(lo) > a || at(hi) < a) return NaN;
   for (let i = 0; i < 200 && hi - lo > 1e-13; i++) {
     const mid = (lo + hi) / 2;
