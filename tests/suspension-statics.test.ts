@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { G } from '../src/suspension/forces.ts';
 import { KnuckleStatics } from '../src/suspension/knuckle-statics.ts';
 import { factorySetup, resolveCorner } from '../src/suspension/setup.ts';
-import { jtektCorner } from '../src/suspension/templates/macpherson.ts';
+import { jtektCorner, macphersonJtekt } from '../src/suspension/templates/macpherson.ts';
+import { typicalCorner, typicalWheelCentreZM } from '../src/suspension/templates/typical-corner.ts';
 
 const corner = jtektCorner();
 const r = resolveCorner(corner, factorySetup(corner));
@@ -88,5 +89,42 @@ describe('knuckle statics', () => {
     const side = f[1]! + g[1]!;
     expect(side).toBeGreaterThan(500);
     expect(side).toBeLessThan(2000);
+  });
+});
+
+describe('statics of a split knuckle', () => {
+  // The RevoKnuckle's carrier holds the strut and the arm; the tie rod holds the wheel knuckle that turns in it. Seven
+  // unknowns: the strut's push on the carrier also works through the knuckle's turn in it.
+  const c = typicalCorner(macphersonJtekt({ wheelCentreZM: typicalWheelCentreZM(), knuckle: 'revoknuckle' }));
+  const rr = resolveCorner(c, factorySetup(c));
+  const ax = rr.axle;
+  const st = ax.spec.linkage.strut!;
+
+  it('leaves nothing to accelerate the wheel at rest, and holds the carrier with a couple only', () => {
+    const pose = ax.measureAt(rr.staticTravelM, { ...rr.atRest });
+    const s = rr.atRest;
+    const lower = [0, 0, 0];
+    ax.solver.carrierPoint(pose, st.lower, lower);
+    const len = Math.hypot(st.top[0] - lower[0]!, st.top[1] - lower[1]!, st.top[2] - lower[2]!);
+    const n = rr.spring.staticN / len;
+    const statics = new KnuckleStatics(ax);
+    statics.begin(pose, rr.staticTravelM, 0);
+    const tyre = (rr.sprungKg + rr.unsprungKg) * G;
+    statics.force(s.contactX, s.contactY, s.contactZ, 0, 0, tyre);
+    statics.carrierForce(st.lower, (lower[0]! - st.top[0]) * n, (lower[1]! - st.top[1]) * n, (lower[2]! - st.top[2]) * n);
+    statics.force(s.wheelX, s.wheelY, s.wheelZ, 0, 0, -rr.unsprungKg * G);
+    expect(statics.solve()).toBe(true);
+    expect(ax.solver.rows).toEqual(['lower-arm.front', 'lower-arm.rear', 'tie-rod', 'strut', 'strut', 'hold', 'travel']);
+    expect(Math.abs(statics.lambda[6]!)).toBeLessThan(0.005 * tyre);
+    // The hold keeps the carrier from spinning about the strut: a moment, no force.
+    const f = [0, 0, 0];
+    statics.rowForce(5, f);
+    expect(Math.hypot(f[0]!, f[1]!, f[2]!)).toBeLessThan(1e-9);
+    // And the lower arm carries the carrier's side load as on the plain strut: inward at the ball joint.
+    const a = [0, 0, 0];
+    const b = [0, 0, 0];
+    statics.rowForce(0, a);
+    statics.rowForce(1, b);
+    expect(a[1]! + b[1]!).toBeLessThan(-500);
   });
 });
