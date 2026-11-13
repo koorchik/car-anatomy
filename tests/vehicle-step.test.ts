@@ -109,6 +109,20 @@ describe('snapshot and restore', () => {
     expect(copy.snapshot().values).toEqual(load.snapshot().values);
   });
 
+  it('a step of no time (a frame of dt = 0) moves nothing and leaves no NaN behind', () => {
+    const { sim, load } = rig();
+    const story = new DriveStory(cd, load, sim);
+    runStory(story, 1 / 1000, 5);
+    const before = load.snapshot().values;
+    sim.step(0);
+    expect(load.snapshot().values).toEqual(before);
+    for (let i = 0; i < 100; i++) sim.step(1 / 1000);
+    expect(Number.isFinite(sim.rpm)).toBe(true);
+    // The speed holds of free members are NaN by design; everything finite before stays finite.
+    const after = load.snapshot().values;
+    expect(before.every((x, i) => !Number.isFinite(x) || Number.isFinite(after[i]!))).toBe(true);
+  });
+
   it('ignores a snapshot of another size', () => {
     const load = new VehicleLoad(spec);
     load.restore({ kind: 'vehicle', values: new Float64Array(3) });

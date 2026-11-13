@@ -111,6 +111,8 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
   }
 
   step(input: CrankInput, dt: number): LoadTorque {
+    // A step of no time moves nothing: the solver divides by the step, and one NaN would stay in the car for good.
+    if (!(dt > 0)) return this.torque;
     const veh = this.vehicle;
     const s = veh.solver;
     this.crankAngle += dt * input.omega;
