@@ -114,18 +114,23 @@ export function mfEval(p: MfSet, kappa: number, alpha: number, gamma: number, fz
   const by = ky / (cy * dy);
   const fy0 = dy * mf(by, cy, ey, ay) + svy;
 
-  // Combined slip: Fx weighted by α, Fy by κ, plus the side force that κ induces. The weights' slip scales RBX1 and
-  // RBY1 shrink with the surface as the saturation slips do (see tyreAt), so the friction ellipse keeps its shape on a
-  // slippery road; the MF leaves them fixed, and on a wet road (0.6) the envelope would bulge 12 % past the ellipse.
+  // Combined slip: Fx weighted by α, Fy by κ, plus the side force that κ induces. A slippery road scales the
+  // saturation slips by μ (D falls, K stays), so every slip the weights see, in their arguments and in RBX2·κ and
+  // RBY2·α, is divided by μ as well: the combined curve keeps its dry shape in slips normalised by μ (similarity), and
+  // at μ = 1 these are the published equations. With fixed weights, as in the MF, the envelope bulges past the
+  // friction ellipse by 12 % on a wet road (0.6) and 39 % on ice (0.1); with only RBX1 and RBY1 divided, a locked wheel
+  // on ice at 20° kept a fifth of its sliding force. The weights stop at 0: with RCX1 and RCY1 above 1 the cosine turns
+  // negative far into the slide, and the force would push along the sliding (up to 7 % of D at 45–60° even on a
+  // dry road).
   const shxa = p.RHX1;
-  const bxa = (p.RBX1 / mu) * Math.cos(Math.atan(p.RBX2 * kappa));
+  const bxa = (p.RBX1 / mu) * Math.cos(Math.atan((p.RBX2 * kappa) / mu));
   const exa = Math.min(1, p.REX1 + p.REX2 * dfz);
-  const gxa = weight(bxa, p.RCX1, exa, alpha + shxa) / weight(bxa, p.RCX1, exa, shxa);
+  const gxa = Math.max(0, weight(bxa, p.RCX1, exa, alpha + shxa)) / weight(bxa, p.RCX1, exa, shxa);
   const fx = gxa * fx0;
   const shyk = p.RHY1 + p.RHY2 * dfz;
-  const byk = (p.RBY1 / mu) * Math.cos(Math.atan(p.RBY2 * (alpha - p.RBY3)));
+  const byk = (p.RBY1 / mu) * Math.cos(Math.atan(p.RBY2 * (alpha / mu - p.RBY3)));
   const eyk = Math.min(1, p.REY1 + p.REY2 * dfz);
-  const gyk = weight(byk, p.RCY1, eyk, kappa + shyk) / weight(byk, p.RCY1, eyk, shyk);
+  const gyk = Math.max(0, weight(byk, p.RCY1, eyk, kappa + shyk)) / weight(byk, p.RCY1, eyk, shyk);
   const dvyk = muy * fz * (p.RVY1 + p.RVY2 * dfz + p.RVY3 * gamma) * Math.cos(Math.atan(p.RVY4 * alpha));
   const svyk = dvyk * Math.sin(p.RVY5 * Math.atan(p.RVY6 * kappa)) * rolling;
   const fy = gyk * fy0 + svyk;

@@ -356,6 +356,43 @@ describe('signs, mirror and combined slip', () => {
     }
   });
 
+  it('never pushes along the sliding under combined slip, dry to ice', () => {
+    // Friction opposes the sliding: Fx has the sign of κ and Fy the sign of −α, however deep the slide. Slips from
+    // 0.02 and 1° keep the files' small zero-slip shifts out of it.
+    for (const id of ['classic', 'street', 'semi', 'slick'] as TyreId[]) {
+      const set = tyreAt(id, 4000).set;
+      for (const mu of [1, 0.6, 0.3, 0.1]) {
+        for (const k of [-1, -0.2, -0.05, -0.02, 0.02, 0.05, 0.2, 0.5, 1.5]) {
+          for (const ad of [1, 3, 8, 20, 45, 60, -1, -8, -45]) {
+            mfEval(set, k, ad * DEG, 0, 4000, mu, o);
+            expect(Math.sign(k) * o.fx, `${id} μ ${mu} κ ${k} α ${ad}°`).toBeGreaterThanOrEqual(0);
+            expect(Math.sign(ad) * o.fy, `${id} μ ${mu} κ ${k} α ${ad}°`).toBeLessThanOrEqual(0);
+          }
+        }
+      }
+    }
+  });
+
+  it('lets a locked wheel keep most of its sliding force at a small slip angle, the same share on any surface', () => {
+    // A sliding patch rubs with much the same friction whichever way it slides, so up to 20° the force of a locked wheel
+    // stays near its pure sliding force at κ = −1. A slippery road scales the forces, not the shape of the combined
+    // curve, so the share is the dry one: the weights' slips are normalised by μ like the pure curves' (similarity).
+    for (const id of ['classic', 'street', 'slick'] as TyreId[]) {
+      const set = tyreAt(id, 4000).set;
+      const share = (mu: number, ad: number): number => {
+        mfEval(set, -1, 0, 0, 4000, mu, o);
+        const pure = Math.abs(o.fx);
+        mfEval(set, -1, ad * DEG, 0, 4000, mu, o);
+        return Math.hypot(o.fx, o.fy) / pure;
+      };
+      for (const ad of [2, 5, 10, 20]) {
+        const dry = share(1, ad);
+        expect(dry, `${id} α ${ad}°`).toBeGreaterThan(0.7);
+        for (const mu of [0.6, 0.3, 0.1]) expect(Math.abs(share(mu, ad) - dry), `${id} μ ${mu} α ${ad}°`).toBeLessThan(0.02);
+      }
+    }
+  });
+
   it('peaks the aligning moment before the side force, on a trail of about a sixth of the patch', () => {
     for (const id of ['classic', 'street'] as TyreId[]) {
       const set = tyreAt(id, 4000).set;
