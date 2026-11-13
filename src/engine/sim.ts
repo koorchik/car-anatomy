@@ -111,13 +111,11 @@ export class EngineSim {
    * other one finished long ago; a car restored onto it would be dragged by a starter.
    */
   adopt(state: EngineState, rpm: number): void {
+    // As start(), stop() and startImmediately() enter their states, from any state (stop() leaves 'off' alone).
     if (state !== this.state) {
-      if (state === 'running') this.startImmediately();
-      else if (state === 'stopping') this.stop();
-      else if (state === 'cranking') {
-        this.state = 'off';
-        this.start();
-      } else this.state = 'off';
+      this.state = state;
+      this.stateTime = 0;
+      if (state === 'cranking') this.idleIntegral = 0;
     }
     this.rpm = rpm;
   }
