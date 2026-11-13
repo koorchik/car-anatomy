@@ -420,9 +420,10 @@ export class DrivetrainSolver {
   }
 
   /**
-   * Projects the speeds onto every lock (and keeps held members at their speed): the smallest change in the mass
-   * metric. Its kinetic energy ½·δφ̇ᵀMδφ̇ is what the impact turned into heat (Carnot); the newly locked elements
-   * share it by their own ½·J_slip·Δω².
+   * Projects the speeds onto the new locks, keeping the old locks' slip and the held members' speeds as they are:
+   * the smallest change in the mass metric. Its kinetic energy ½·δφ̇ᵀMδφ̇ is what the impact turned into heat
+   * (Carnot); the newly locked elements share it by their own ½·J_slip·Δω². An old lock's rounding drift is left to
+   * its own row in the acceleration (rhs −Δω/h); correcting it here as well would overshoot it to −Δω.
    */
   private project(): void {
     const { core, G, Yp, Sp, impulse, impact, dv, cls } = this;
@@ -430,7 +431,7 @@ export class DrivetrainSolver {
     const E = core.elements;
     const ne = E.ids.length;
     const m = this.rows;
-    // Yp = M⁻¹Gᵀ, Sp = G·M⁻¹·Gᵀ, impulse = Sp⁻¹(−G·φ̇) for the locks and 0 for the held members.
+    // Yp = M⁻¹Gᵀ, Sp = G·M⁻¹·Gᵀ, impulse = Sp⁻¹(−G·φ̇) for the new locks and 0 for old locks and held members.
     for (let j = 0; j < m; j++) {
       for (let r = 0; r < n; r++) {
         let s = 0;
@@ -444,12 +445,12 @@ export class DrivetrainSolver {
     for (let j = 0; j < m; j++) {
       const e = this.rowElement[j]!;
       let s = 0;
-      if (e >= 0) for (let k = 0; k < n; k++) s -= G[j * n + k]! * this.phiDot[k]!;
-      impulse[j] = s;
       if (e >= 0 && this.state[e] !== LOCKED) {
+        for (let k = 0; k < n; k++) s -= G[j * n + k]! * this.phiDot[k]!;
         impact[e] = (E.slipInertia[e]! * s * s) / 2;
         share += impact[e]!;
       }
+      impulse[j] = s;
     }
     solveSchur(Sp, m, impulse);
     for (let k = 0; k < n; k++) {
@@ -521,7 +522,9 @@ function schur(G: Float64Array, Y: Float64Array, S: Float64Array, m: number, n: 
 function solveSchur(S: Float64Array, m: number, x: Float64Array): void {
   if (m === 0) return;
   if (!cholesky(S, m)) {
-    // A jammed set of locks can leave S indefinite by rounding: fall back to its diagonal.
+    // A jammed set of locks can leave S indefinite by rounding: drop the constraint torques for this one step
+    // rather than throw on the audio thread. The locks drift by h·Δω̇ and their rows (rhs −Δω/h) pull them back on
+    // the next step.
     for (let i = 0; i < m; i++) x[i] = 0;
     return;
   }

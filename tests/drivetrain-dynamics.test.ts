@@ -138,6 +138,26 @@ describe('2. the lock law', () => {
     }
   });
 
+  it('a new lock projects only itself: a held lock with a drift comes back to zero slip, not to minus the drift', () => {
+    // a–b held by a clutch, b–c closed by a dog in this very step. The clutch's drift is corrected once, by its own
+    // row (rhs −Δω/h); a projection that also zeroed it would leave it at +drift after the step.
+    const d = draft([['a', 0.2], ['b', 0.05], ['c', 0.1]], [
+      { id: 'clutch', kind: 'friction', a: 'a', b: 'b', friction: friction(500) },
+      { id: 'dog', kind: 'dog', a: 'b', b: 'c' },
+    ]);
+    const s = new DrivetrainSolver(buildCore(d));
+    s.command[0] = 1;
+    s.phiDot.set([100, 100, 50]);
+    for (let i = 0; i < 10; i++) s.step(1e-3);
+    expect(s.state[0]).toBe(LOCKED);
+    s.phiDot[1]! += 1e-3;
+    s.command[1] = 1;
+    s.step(1e-3);
+    expect([s.state[0], s.state[1]]).toEqual([LOCKED, LOCKED]);
+    expect(Math.abs(s.slip[0]!)).toBeLessThan(1e-9);
+    expect(Math.abs(s.slip[1]!)).toBeLessThan(1e-9);
+  });
+
   it('the projection never adds energy in a geared box either: closing first with the clutch locked', () => {
     const core = e30();
     const s = new DrivetrainSolver(core);
