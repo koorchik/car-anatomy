@@ -13,15 +13,14 @@
 // phase + member angle exactly as topology.ts states it; nothing is integrated here (research §2.3). The sleeves
 // slide by their pose, and the warm glow of the power path is the share of the input power each mesh rolls.
 //
-// It implements the SceneModel<GearboxFrame> contract of the whole-car plan structurally: O2b adds the type to
-// model-types.ts, and this class then declares `implements SceneModel<GearboxFrame>`.
+// It is a SceneModel<GearboxFrame> (model-types.ts), the contract of every model on the stage.
 
 import * as THREE from 'three';
 import type { GearDef, SleevePlace } from '../../drivetrain/spec.ts';
 import type { Gearbox } from '../../drivetrain/topology.ts';
 import { extrude, hullShape, gearShape, merge, MM, roundedRect, zCylinder, type Pulley2D } from '../geometry.ts';
 import { brassMaterial, castAluminiumMaterial, glassMaterial } from '../materials.ts';
-import { tag, type ViewMode } from '../model-types.ts';
+import { tag, type SceneModel, type ViewMode } from '../model-types.ts';
 import { DAMAGE as DAMAGE_COLOR, HIGHLIGHT as HIGHLIGHT_COLORS, POWER } from '../palette.ts';
 import { acquireGearGeometry, drawnGear, type MeshQuality } from './gear-mesh.ts';
 import { releaseGeometry } from './geometry-cache.ts';
@@ -113,7 +112,7 @@ interface SleeveView {
   travel: number;
 }
 
-export class GearboxModel {
+export class GearboxModel implements SceneModel<GearboxFrame> {
   readonly group = new THREE.Group();
   /** The gearbox frame (see the top of the file), lifted onto the floor and centred along its length. */
   readonly mounted = new THREE.Group();

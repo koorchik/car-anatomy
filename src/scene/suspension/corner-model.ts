@@ -12,11 +12,11 @@
 // arm, link or knuckle it sits on and points at its top mount. Every link is rigid geometry of the solver's length,
 // so nothing stretches (tests/suspension-scene.test.ts).
 //
-// Implements the shell's SceneModel<CornerFrame> structurally (whole-car plan, the Stage section); O2b adds
-// the type, and this class then declares it.
+// A SceneModel<CornerFrame> (model-types.ts), the contract of every model on the stage; its `parts` tell the
+// stage how this corner's knuckle, joints and spring read.
 
 import * as THREE from 'three';
-import { markDamaged, tag, type ViewMode } from '../model-types.ts';
+import { markDamaged, tag, type SceneModel, type ViewMode } from '../model-types.ts';
 import { DAMAGE, HIGHLIGHT } from '../palette.ts';
 import { merge } from '../geometry.ts';
 import { G } from '../../suspension/forces.ts';
@@ -125,7 +125,7 @@ type Seat =
   | { kind: 'knuckle'; at: THREE.Vector3; iso: Vec3 };
 
 /** An independent corner on links (the left one: outboard is +X). */
-export class CornerModel {
+export class CornerModel implements SceneModel<CornerFrame> {
   readonly group = new THREE.Group();
   /** Everything on the body: moves with bodyZ. Overlays live here too. */
   readonly body = new THREE.Group();

@@ -10,7 +10,7 @@ import { airFlowShare } from '../../systems/thermal.ts';
 import { sumpLayout } from '../../systems/sump.ts';
 import type { EngineModel, ViewMode } from '../model-types.ts';
 import { FLUID } from '../palette.ts';
-import { PARTS } from '../parts-info.ts';
+import { registerParts } from '../parts-registry.ts';
 import { SYSTEM_PARTS } from './parts.ts';
 import type { EngineAnchors, SystemsLook } from './anchors.ts';
 import { SystemLayer } from './layer.ts';
@@ -26,7 +26,7 @@ import type { LayerPlan } from './route.ts';
 export { LAYER_IDS, LAYER_STYLES, type LayerId } from './styles.ts';
 
 // The layers' parts explain themselves on click once their code is loaded, as the model's own parts do.
-Object.assign(PARTS, SYSTEM_PARTS);
+registerParts(SYSTEM_PARTS);
 
 /** Velocity in a passage, m/s, from a flow in L/min and a nominal bore in metres. */
 const speedOf = (litresPerMin: number, bore: number): number => litresPerMin / 60000 / ((Math.PI / 4) * bore * bore);

@@ -11,13 +11,14 @@ import type { SystemsSpec } from '../../engine/systems-spec.ts';
 import { ACCUMULATOR_DEAD_L, ACCUMULATOR_L } from '../../lubrication/constants.ts';
 import { sumpLayout, type PanShape, type SumpLayout } from '../../systems/sump.ts';
 import type { EngineMount } from '../../vehicle/vehicle.ts';
-import { PARTS } from '../parts-info.ts';
+import { registerParts } from '../parts-registry.ts';
 import { FLUID, STARVED } from '../palette.ts';
 import { SYSTEM_PARTS } from '../systems/parts.ts';
 import { SUMP_PARTS } from './parts.ts';
 
 // The pickup ring and bubbles are the oil layer's pickup; both tables explain themselves on click.
-Object.assign(PARTS, SYSTEM_PARTS, SUMP_PARTS);
+registerParts(SYSTEM_PARTS);
+registerParts(SUMP_PARTS);
 
 const MM = 0.01;
 const NX = 12;

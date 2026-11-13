@@ -1,9 +1,9 @@
-import { t } from '../i18n/t.ts';
+// The engines' parts, with the dyno's and the valve gear's. The engines section registers them (parts-registry.ts).
 
-export interface PartInfo {
-  name: string;
-  text: string;
-}
+import { t } from '../i18n/t.ts';
+import type { PartInfo } from './parts-registry.ts';
+
+export type { PartInfo } from './parts-registry.ts';
 
 export const PARTS: Record<string, PartInfo> = {
   block: { name: t('Блок циліндрів'), text: t('Основа двигуна. Тримає колінвал і циліндри, всередині проходять канали для оливи й охолоджувальної рідини.') },

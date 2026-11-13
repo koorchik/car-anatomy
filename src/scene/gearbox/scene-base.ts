@@ -2,8 +2,8 @@
 // its own copy and can move onto this when its page is done): owned materials, glass shells, the power glow, the
 // highlight, a failed part, ghosting, render bands, views, pulling apart, anchors and giving back cached geometry.
 //
-// The whole-car plan's SceneModel contract (setHighlight, setGhost, setRenderBand, anchors) is implemented
-// structurally; O2b adds the type to model-types.ts.
+// The models built on it declare the SceneModel contract of model-types.ts (setHighlight, setGhost, setRenderBand,
+// anchors come from here).
 
 import * as THREE from 'three';
 import { MM } from '../geometry.ts';

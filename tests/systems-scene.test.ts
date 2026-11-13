@@ -7,11 +7,15 @@ import { ENGINES, engineById } from '../src/data/engines.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import type { EngineModel } from '../src/scene/model-types.ts';
 import { PARTS } from '../src/scene/parts-info.ts';
+import { partInfo, registerParts } from '../src/scene/parts-registry.ts';
 import { PistonEngineModel } from '../src/scene/piston-engine.ts';
 import { RotaryEngineModel } from '../src/scene/rotary-engine.ts';
 import { fitBox, partKeyOf } from '../src/scene/stage.ts';
 import { LAYER_IDS, layerPlan, SystemsLayers, type LayerId } from '../src/scene/systems/index.ts';
 import { pointAlong, tightPath } from '../src/scene/systems/route.ts';
+
+// The engines section registers its own parts when it mounts; the layers' code registers theirs.
+registerParts(PARTS);
 
 const context = new Proxy({}, { get: () => () => ({ addColorStop: () => {} }), set: () => true });
 vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => context }) });
@@ -52,7 +56,7 @@ describe.each(ENGINES.map((e) => e.id))('layers of %s', (id) => {
         if ((o as THREE.Points).isPoints) continue;
         const keys = [o.userData.part, ...((o.userData.partOf as string[] | undefined) ?? []), ...((o.userData.instanceParts as string[] | undefined) ?? [])].filter(Boolean) as string[];
         expect(keys.length, `${id} ${layer} unnamed mesh`).toBeGreaterThan(0);
-        for (const key of keys) expect(PARTS[key], key).toBeDefined();
+        for (const key of keys) expect(partInfo(key), key).not.toBeNull();
       }
     }
     layers.dispose();

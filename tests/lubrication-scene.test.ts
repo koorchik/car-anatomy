@@ -10,9 +10,13 @@ import { systemsOf, type SumpKind } from '../src/engine/systems-spec.ts';
 import { lubeSetup } from '../src/lubrication/setup.ts';
 import { panGrid, volumeUnder } from '../src/lubrication/pan.ts';
 import { PARTS } from '../src/scene/parts-info.ts';
+import { partInfo, registerParts } from '../src/scene/parts-registry.ts';
 import { SumpScene, type SumpSceneFrame } from '../src/scene/lubrication/sump-scene.ts';
 import { partKeyOf } from '../src/scene/stage.ts';
 import { panShape } from '../src/systems/sump.ts';
+
+// The engines section registers its own parts when it mounts; the layers' code registers theirs.
+registerParts(PARTS);
 
 const context = new Proxy({}, { get: () => () => ({ addColorStop: () => {} }), set: () => true });
 vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => context }) });
@@ -91,7 +95,7 @@ describe('the sump on the page', () => {
       for (const o of scene.drawn) {
         const keys = [o.userData.part, ...(o.userData.partOf ?? []), ...(o.userData.instanceParts ?? [])].filter(Boolean) as string[];
         expect(keys.length, o.type).toBeGreaterThan(0);
-        for (const key of keys) expect(PARTS[key], key).toBeDefined();
+        for (const key of keys) expect(partInfo(key), key).not.toBeNull();
       }
       void ray;
       void partKeyOf;

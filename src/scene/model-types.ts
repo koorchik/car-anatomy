@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { EngineAnchors, SystemsLook } from './systems/anchors.ts';
 import type { ValveState } from '../engine/valve-control.ts';
 import { DAMAGE, GAS_COLORS } from './palette.ts';
+import type { PartDictionary } from './parts-registry.ts';
 
 export type ViewMode = 'solid' | 'xray' | 'mechanism';
 
@@ -24,21 +25,42 @@ export interface FrameState {
   valves?: ValveState;
 }
 
-export interface EngineModel {
+/**
+ * What the stage shows, from any section: an engine, a gearbox, a corner, a whole car (the plan of the whole car,
+ * «Stage для всіх розділів»). F is what the model draws in a frame. Several models at once are one composed model
+ * (CarAssembly, EngineWithGearbox) that implements this itself, so the stage always holds one.
+ */
+export interface SceneModel<F> {
   group: THREE.Group;
-  /** Engine frame of kinematics.ts: crank axis on Z, scene units. Shakes with the engine; overlays go here. */
-  readonly mounted: THREE.Group;
-  /** Where the parts the systems layers follow were built (src/scene/systems/anchors.ts). */
-  systemsAnchors?(): EngineAnchors;
-  /** Glass intake while the air or fuel layer shows; the model's own sparks off while the fuel layer draws real ones. */
-  setSystemsLook?(look: SystemsLook): void;
-  update(state: FrameState): void;
+  update(frame: F): void;
   setView(view: ViewMode): void;
   /** 0 = assembled, 1 = fully pulled apart. */
   setExplode(amount: number): void;
   /** Marks the part that failed. Null clears it. */
   setFailure(part: string | null): void;
   dispose(): void;
+  /** Named points in the model's own frame, for joining models: a flywheel face, a bellhousing, wheel centres. */
+  anchors?(): Record<string, THREE.Vector3>;
+  /** Whole-system hover highlight in the car overview. The model tints its own materials. */
+  setHighlight?(on: boolean): void;
+  /** 1 = as the view draws it, 0.15 = faint ghost while another system is in focus. */
+  setGhost?(alpha: number): void;
+  /** Adds `base` to every renderOrder of the model, so nested glass shells of several models sort as bands. */
+  setRenderBand?(base: number): void;
+  /**
+   * Cards of this model's parts in its own words, over the registry's (parts-registry.ts): a corner tells its knuckle
+   * by how that corner is steered. Every key is one its section has registered.
+   */
+  readonly parts?: PartDictionary;
+}
+
+export interface EngineModel extends SceneModel<FrameState> {
+  /** Engine frame of kinematics.ts: crank axis on Z, scene units. Shakes with the engine; overlays go here. */
+  readonly mounted: THREE.Group;
+  /** Where the parts the systems layers follow were built (src/scene/systems/anchors.ts). */
+  systemsAnchors?(): EngineAnchors;
+  /** Glass intake while the air or fuel layer shows; the model's own sparks off while the fuel layer draws real ones. */
+  setSystemsLook?(look: SystemsLook): void;
 }
 
 /** Marks an object with the part it belongs to, for click-to-explain. */
