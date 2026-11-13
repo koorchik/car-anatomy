@@ -22,7 +22,7 @@ export class DesignerHost {
         s.showEngine(next, true);
       },
       sameShape(next) {
-        s.features.balance?.updateEngine(next);
+        s.features.sameShape(next);
       },
       heading: () => {
         this.syncHeading();

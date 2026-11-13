@@ -7,6 +7,7 @@
 // the features build them, and each feature is brought up to date with the page when its code arrives.
 
 import type { Engine } from '../../engine/kinematics.ts';
+import type { EngineModel } from '../../scene/model-types.ts';
 import type { BalancePanel } from '../balance-panel.ts';
 import type { DynoPanel, EngineSource } from '../dyno/dyno-panel.ts';
 import { dynoColumn, dynoToggle } from '../dyno/toggle.ts';
@@ -32,6 +33,8 @@ export class EngineFeatures {
   private readonly dynoPlace: HTMLElement;
   /** The engine on the page and where it came from, for a dyno that loads later. */
   private dynoFor: { engine: Engine; source: EngineSource } | null = null;
+  /** The designer's latest engine of the model's shape (sameShape), for force arrows that load later. */
+  private reshaped: { model: EngineModel; engine: Engine } | null = null;
 
   constructor(section: EnginesSection) {
     this.section = section;
@@ -66,6 +69,16 @@ export class EngineFeatures {
     this.dyno?.setEngine(engine, source);
   }
 
+  /**
+   * The designer changed the engine without changing what the model looks like: its masses or its rev limit, say.
+   * Arrows that load later take this engine and not the one the model was built for.
+   */
+  sameShape(engine: Engine): void {
+    const model = this.section.model;
+    this.reshaped = model ? { model, engine } : null;
+    this.balance?.updateEngine(engine);
+  }
+
   /** The force arrows, loaded if need be. */
   async loadForces(): Promise<BalancePanel> {
     const { BalancePanel } = await FORCES.load();
@@ -77,7 +90,10 @@ export class EngineFeatures {
     this.balance = balance;
     // The valve gear's labels stay after the card, as they were when both were made at the start.
     if (this.valves) app.append(this.valves.element);
-    if (s.model) balance.setEngine(s.engine, s.model, s.onDesigner);
+    if (s.model) {
+      balance.setEngine(s.engine, s.model, s.onDesigner);
+      if (this.reshaped?.model === s.model) balance.updateEngine(this.reshaped.engine);
+    }
     // The force card turns compact, grows or hides on its own schedule, and the list of engines makes room for it.
     const card = app.querySelector<HTMLElement>('.forces-card');
     if (card) new ResizeObserver(() => s.catalogue.fitVariants()).observe(card);
