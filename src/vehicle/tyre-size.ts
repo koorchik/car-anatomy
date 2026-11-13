@@ -1,5 +1,6 @@
-// Tyre sizes as printed on the sidewall and in makers' data: '245/30 R20', '235/40 ZR 19', '245/40 R18 97W'.
-// A record stores the size, never a radius: radii come from here, so they cannot disagree with the size.
+// Tyre sizes as printed on the sidewall and in makers' data: '245/30 R20', '235/40 ZR 19', '245/40 R18 97W', and the
+// US forms 'P225/75R15' (passenger) and 'LT265/75R16' (light truck), whose dimensions follow the same formula. A record
+// stores the size, never a radius: radii come from here, so they cannot disagree with the size.
 
 export interface TyreSize {
   /** Section width, mm. */
@@ -12,7 +13,8 @@ export interface TyreSize {
   speed: string;
 }
 
-const SIZE = /^\s*(\d{3})\s*\/\s*(\d{2})\s*([A-Z]?)\s*R\s*(\d{2}(?:\.\d)?)\b/;
+// The rim may be followed by a load index or a letter such as the C of a van tyre, but not by another digit.
+const SIZE = /^\s*(?:P|LT)?\s*(\d{3})\s*\/\s*(\d{2})\s*([A-Z]?)\s*R\s*(\d{2}(?:\.\d)?)(?![\d.])/;
 
 /** Reads a metric size. Throws on anything else, so a mistyped record fails its test instead of rolling wrong. */
 export function parseTyreSize(size: string): TyreSize {

@@ -63,8 +63,9 @@ describe('car records', () => {
     it('has tyres whose sizes parse to plausible radii', () => {
       for (const size of [car.tyre.size, car.tyre.sizeRear].filter((s): s is string => !!s)) {
         const r = rollingRadiusM(parseTyreSize(size));
-        expect(r, size).toBeGreaterThan(0.27);
-        expect(r, size).toBeLessThan(0.4);
+        // From the ZAZ-1102 Tavria's 155/70 R13 (0.265 m) to an off-road 285/75 R16 (0.405 m).
+        expect(r, size).toBeGreaterThan(0.25);
+        expect(r, size).toBeLessThan(0.42);
       }
       expect(TYRES[car.tyre.id]).toBeDefined();
     });
@@ -74,7 +75,8 @@ describe('car records', () => {
       expect(car.massKg).toBeLessThan(3000);
       expect(car.body.frontShare).toBeGreaterThan(0.3);
       expect(car.body.frontShare).toBeLessThan(0.7);
-      expect(car.body.wheelbaseM).toBeGreaterThan(2);
+      // A Smart ForTwo, on the plan's live-axle page, has about 1.8 m.
+      expect(car.body.wheelbaseM).toBeGreaterThan(1.7);
       expect(car.body.wheelbaseM).toBeLessThan(3.2);
       for (const track of [car.body.trackFrontM, car.body.trackRearM]) {
         expect(track).toBeGreaterThan(1.2);
@@ -180,8 +182,14 @@ describe('tyre sizes', () => {
     expect(parseTyreSize('235/40 ZR 19')).toEqual({ widthMm: 235, aspect: 40, rimIn: 19, speed: 'Z' });
     expect(parseTyreSize('205/55 VR15')).toEqual({ widthMm: 205, aspect: 55, rimIn: 15, speed: 'V' });
     expect(parseTyreSize('245/40 R18 97W')).toEqual({ widthMm: 245, aspect: 40, rimIn: 18, speed: '' });
+    // US passenger and light-truck sizes as Ford, Jeep and GM print them, and a van tyre's C.
+    expect(parseTyreSize('P225/75R15')).toEqual({ widthMm: 225, aspect: 75, rimIn: 15, speed: '' });
+    expect(parseTyreSize('P235/50ZR18')).toEqual({ widthMm: 235, aspect: 50, rimIn: 18, speed: 'Z' });
+    expect(parseTyreSize('LT265/75R16')).toEqual({ widthMm: 265, aspect: 75, rimIn: 16, speed: '' });
+    expect(parseTyreSize('205/65 R16C')).toEqual({ widthMm: 205, aspect: 65, rimIn: 16, speed: '' });
     expect(() => parseTyreSize('R16')).toThrow();
     expect(() => parseTyreSize('155SR13')).toThrow();
+    expect(() => parseTyreSize('245/40 R185')).toThrow();
   });
 
   it('gives a 205/55 R16 its published circumference', () => {
