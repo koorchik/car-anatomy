@@ -22,17 +22,31 @@ export interface SumpKindConstants {
   aeration: number;
   /** The heads are emptied by scavenge stages, whatever the g-load. */
   headScavenge: boolean;
+  /**
+   * Share of the oil reaching the counterweights' orbit that they strip off: a track pan's crank scraper and windage
+   * screen keep most of it in the pan (estimate).
+   */
+  crankCatch: number;
 }
 
 /** Period of the reference FSAE pan's first mode, s: about 0.30 m long with 50 mm of oil (estimate, to be checked). */
 export const REFERENCE_PERIOD_S = 0.894;
 
 export const SUMP_KIND_CONSTANTS: Record<SumpKind, SumpKindConstants> = {
-  wet: { kIn: 0.5 / 3 / REFERENCE_PERIOD_S, kOut: 2.0 / REFERENCE_PERIOD_S, zeta: 0.35, aeration: 1, headScavenge: false },
-  baffled: { kIn: 0.03 / 3 / REFERENCE_PERIOD_S, kOut: 6.0 / REFERENCE_PERIOD_S, zeta: 0.5, aeration: 0.6, headScavenge: false },
-  'integrated-dry': { kIn: 0.03 / 3 / REFERENCE_PERIOD_S, kOut: 6.0 / REFERENCE_PERIOD_S, zeta: 0.5, aeration: 0.5, headScavenge: true },
-  dry: { kIn: 0, kOut: 0, zeta: 0.5, aeration: 0.25, headScavenge: true },
+  wet: { kIn: 0.5 / 3 / REFERENCE_PERIOD_S, kOut: 2.0 / REFERENCE_PERIOD_S, zeta: 0.35, aeration: 1, headScavenge: false, crankCatch: 0.2 },
+  baffled: { kIn: 0.03 / 3 / REFERENCE_PERIOD_S, kOut: 6.0 / REFERENCE_PERIOD_S, zeta: 0.5, aeration: 0.6, headScavenge: false, crankCatch: 0.1 },
+  'integrated-dry': { kIn: 0.03 / 3 / REFERENCE_PERIOD_S, kOut: 6.0 / REFERENCE_PERIOD_S, zeta: 0.5, aeration: 0.5, headScavenge: true, crankCatch: 0.1 },
+  dry: { kIn: 0, kOut: 0, zeta: 0.5, aeration: 0.25, headScavenge: true, crankCatch: 0 },
 };
+
+// The crank in the oil (src/lubrication/run.ts, src/lubrication/pan.ts).
+/**
+ * A wet pan has no lid: in a long corner the oil climbs past the rail and up the crankcase wall, as far as the crank
+ * axis here (estimate). Clipping it at the rail instead would push the surface up over the pickup.
+ */
+export const CRANKCASE_CEIL = 0;
+/** Turns of the crank in which the counterweights strip the oil that reaches their orbit (estimate). */
+export const CATCH_TURNS = 5;
 
 /** Oil on track runs hot: 110-150 °C, LN Engineering quotes over 300 °F on track. Held constant over the lap. */
 export const T_OIL_TRACK = 120;

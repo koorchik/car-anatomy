@@ -4,6 +4,7 @@
 // volumes come out in litres. No DOM, no allocation per step.
 
 import type { PanShape, PanRect } from '../systems/sump.ts';
+import { CRANKCASE_CEIL } from './constants.ts';
 
 export const GRID_X = 12;
 export const GRID_Z = 24;
@@ -64,7 +65,10 @@ export function panGrid(shape: PanShape, nx = GRID_X, nz = GRID_Z): PanGrid {
       const oz = Math.max(0, Math.min(z + dz / 2, w.z1) - Math.max(z - dz / 2, w.z0)) / dz;
       const floor = shape.yShelf + (shape.yFloor - shape.yShelf) * ox * oz;
       const inBox = !!shape.box && inside(shape.box, x, z);
-      const ceil = inBox ? shape.box!.top : shape.top;
+      // A track pan's box has a lid. Elsewhere a wet pan is open to the crankcase, so oil a corner piles against the
+      // outer wall goes on up past the rail instead of stopping there.
+      const lid = shape.kind === 'baffled' || shape.kind === 'integrated-dry';
+      const ceil = inBox && lid ? shape.box!.top : shape.kind === 'dry' ? shape.top : Math.max(shape.top, CRANKCASE_CEIL);
       const cell = { x, z, floor, ceil };
       all.push(cell);
       (inBox ? box : outside).push(cell);

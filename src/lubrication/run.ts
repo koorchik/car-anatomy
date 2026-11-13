@@ -11,7 +11,7 @@ import { newLapSample, sampleLap, type LapTrace } from '../vehicle/lap.ts';
 import { surfaceSlope } from '../vehicle/mount.ts';
 import { Accumulator } from './accumulator.ts';
 import { FilmReserve, pressureNeed } from './bearings.ts';
-import { DT, G, HEAD_FLOW_SHARE, REFILL_ABOVE, WELL_RAIN, HEAD_TAU_S, HEAD_TAU_SCAVENGED_S, PRESSURE_TAU_S, SCAVENGE_TAU_S, T_OIL_TRACK, TANK_LOW_L, TANK_SPAN_L, WALL_TAU_S } from './constants.ts';
+import { CATCH_TURNS, DT, G, HEAD_FLOW_SHARE, REFILL_ABOVE, WELL_RAIN, HEAD_TAU_S, HEAD_TAU_SCAVENGED_S, PRESSURE_TAU_S, SCAVENGE_TAU_S, T_OIL_TRACK, TANK_LOW_L, TANK_SPAN_L, WALL_TAU_S } from './constants.ts';
 import { capacity, newLevelSolve, solveLevel, volumeUnder, wettedSize } from './pan.ts';
 import { SloshAxis, sloshOmega } from './slosh.ts';
 import type { LubeSetup } from './setup.ts';
@@ -61,6 +61,8 @@ export interface LubeRun {
   slopeZ: Float32Array;
   /** Litres per second into the compartment: positive while it fills (trap doors open). */
   boxFlow: Float32Array;
+  /** Litres per second the counterweights strip off the oil that reaches their orbit. */
+  crankCatch: Float32Array;
   /** Surface over the top of the screen's bell, mm. */
   immersion: Float32Array;
   /** Absolute pressure at the pump's inlet, bar. */
@@ -117,6 +119,8 @@ export class LubeRunner {
   private readonly crank: { x0: number; x1: number; z0: number; z1: number; drop: number; wallL: number; wallR: number };
   private readonly boxCap: number;
   private readonly outCap: number;
+  /** Per column of the whole pan: the bottom of the counterweights' orbit over it, Infinity where they never reach. */
+  private readonly orbitFloor: Float64Array;
 
   constructor(setup: LubeSetup, trace: LapTrace, accumulator: boolean) {
     this.setup = setup;
@@ -133,6 +137,13 @@ export class LubeRunner {
     const sh = setup.shape;
     this.crank = { x0: -orbit, x1: orbit, z0: e.zMin * 0.01, z1: e.zMax * 0.01, drop: Math.max(0, -sh.yFull), wallL: -sh.halfW, wallR: sh.halfW };
     this.outCap = capacity(setup.grid.outside);
+    const all = setup.grid.all;
+    this.orbitFloor = new Float64Array(all.count).fill(Infinity);
+    for (let i = 0; i < all.count; i++) {
+      const x = all.x[i]!;
+      const z = all.z[i]!;
+      if (Math.abs(x) < orbit && z >= this.crank.z0 && z <= this.crank.z1) this.orbitFloor[i] = -Math.sqrt(orbit * orbit - x * x);
+    }
     const n = this.lapSteps;
     const f = (): Float32Array => new Float32Array(n);
     this.run = {
@@ -141,7 +152,7 @@ export class LubeRunner {
       lapTime: trace.lapTime,
       pressure: f(), need: f(), pickupOil: f(), pumpSupply: f(), aeration: f(),
       panL: f(), boxL: f(), headL: setup.heads.map(() => f()), wallsL: f(), tankL: f(), dryPanL: f(), accOilL: f(),
-      levelOut: f(), levelBox: f(), slopeX: f(), slopeZ: f(), boxFlow: f(), immersion: f(), inletBar: f(),
+      levelOut: f(), levelBox: f(), slopeX: f(), slopeZ: f(), boxFlow: f(), crankCatch: f(), immersion: f(), inletBar: f(),
       reserve: f(), wearRate: f(), lifters: new Uint8Array(n), delivered: f(),
       summary: { minPressure: 0, belowNeedS: 0, starvedS: 0, wearPerLap: 0, lapsToFailure: null, band: 'none', longestDipS: 0 },
     };
@@ -187,6 +198,20 @@ export class LubeRunner {
       this.boxL = Math.min(pan, volumeUnder(s.grid.box, this.hEq, this.sx.slope, this.sz.slope));
       wettedSize(s.grid.all, this.hEq, this.sx.slope, this.sz.slope, this.size, s.grid.dx, s.grid.dz);
     }
+  }
+
+  /** Oil of the settled surface that stands inside the counterweights' orbit, litres. */
+  private inOrbit(h: number, sx: number, sz: number): number {
+    const r = this.setup.grid.all;
+    let v = 0;
+    for (let i = 0; i < r.count; i++) {
+      const o = this.orbitFloor[i]!;
+      if (o === Infinity) continue;
+      const surface = Math.min(h + sx * r.x[i]! + sz * r.z[i]!, r.ceil[i]!);
+      const d = surface - Math.max(o, r.floor[i]!);
+      if (d > 0) v += d;
+    }
+    return v * r.area;
   }
 
   /**
@@ -257,12 +282,21 @@ export class LubeRunner {
     let atScreen = 1;
     let level = shape.yFull;
     let boxFlow = 0;
-    const pan = this.panVolume();
+    let caught = 0;
+    let pan = this.panVolume();
     if (s.kind !== 'dry') {
       // Where the oil would settle given time, and how much of it that puts round the pickup.
       solveLevel(grid.all, pan, sx, sz, this.hEq, this.solve);
       this.hEq = this.solve.h;
       wettedSize(grid.all, this.hEq, sx, sz, this.size, grid.dx, grid.dz);
+      // Oil a corner or a stop piles up into the counterweights' orbit is stripped off within a few turns and thrown
+      // onto the crankcase walls, from where it comes back down like the rest: held up meanwhile, not in the pan.
+      if (k.crankCatch > 0 && rpm > 0) {
+        const tau = (CATCH_TURNS * 60) / rpm;
+        caught = Math.min(1, DT / tau) * k.crankCatch * this.inOrbit(this.hEq, sx, sz);
+        this.wallsL += caught;
+        pan -= caught;
+      }
       const eq = Math.min(pan, volumeUnder(grid.box, this.hEq, sx, sz));
       const period = (2 * Math.PI) / Math.max(1, Math.min(wX || Infinity, wZ || Infinity));
       const tau = Math.max(1e-3, (eq > this.boxL ? k.kIn : k.kOut) * Math.min(3, Math.max(0.2, period)));
@@ -390,6 +424,7 @@ export class LubeRunner {
       r.slopeX[i] = sx;
       r.slopeZ[i] = sz;
       r.boxFlow[i] = boxFlow;
+      r.crankCatch[i] = caught / DT;
       r.immersion[i] = immersion * 100;
       r.inletBar[i] = inlet;
       r.reserve[i] = this.reserve.seconds;

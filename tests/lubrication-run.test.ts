@@ -59,8 +59,9 @@ describe('a Camaro SS lapping the test circuit', () => {
     expect(run('wet', 'street', -1).summary.wearPerLap).toBeLessThanOrEqual(0.02);
     expect(run('wet', 'semi', 0).summary.wearPerLap).toBeLessThanOrEqual(0.01);
   });
-  it('starts to dip on slicks a litre short, and wears no more than a fifth of the bearings a lap with full oil', () => {
-    expect(run('wet', 'slick', -1).summary.belowNeedS).toBeGreaterThan(0);
+  it('dips on slicks even with full oil, deeper a litre short, and wears no more than a fifth of the bearings a lap', () => {
+    // Slicks without downforce give 1.4-1.8 g; BMW rates even the S65's wet sump, with its own return pump, to 1.4 g.
+    expect(run('wet', 'slick', 0).summary.belowNeedS).toBeGreaterThan(1);
     expect(run('wet', 'slick', -1).summary.belowNeedS).toBeGreaterThan(run('wet', 'slick', 0).summary.belowNeedS);
     expect(run('wet', 'slick', 0).summary.wearPerLap).toBeLessThanOrEqual(0.2);
   });
@@ -178,6 +179,21 @@ describe('the four sumps on the same lap', () => {
 });
 
 describe('every car of the page', () => {
+  // Calibration targets from sources (docs/lubrication-model.md): a factory wet pan holds on street tyres (GM sells
+  // wet-sump cars for track days on 1.10 g tyres), and slicks at 1.4-1.8 g go past what even BMW's S65 wet sump with
+  // its own return pump is rated for (1.4 g). Porsche sells the GT4 with its integrated dry sump on Cup 2 tyres and
+  // goes to a separate tank only on the RS models.
+  it('holds with a plain wet pan and full oil on street tyres, and dips with it on slicks', () => {
+    for (const c of SUMP_CARS) {
+      expect(pageRun(c.engineId, 'wet', 'street', 0).summary.wearPerLap, c.engineId).toBeLessThanOrEqual(0.001);
+      expect(pageRun(c.engineId, 'wet', 'slick', 0).summary.belowNeedS, c.engineId).toBeGreaterThan(1);
+    }
+  }, 60_000);
+
+  it('holds with an integrated dry sump and full oil on semi-slicks', () => {
+    for (const c of SUMP_CARS) expect(pageRun(c.engineId, 'integrated-dry', 'semi', 0).summary.belowNeedS, c.engineId).toBe(0);
+  }, 60_000);
+
   it('survives a hundred laps on street tyres with its own sump and full oil', () => {
     for (const c of SUMP_CARS) {
       const s = engineById(c.engineId)!;
