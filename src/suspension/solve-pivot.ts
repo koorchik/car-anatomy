@@ -71,6 +71,18 @@ export class PivotSolver extends CornerSolver {
     this.turn = cross(this.dir, this.across);
   }
 
+  /**
+   * The base class's rows here are only the axis written as distances; the closed form never reads them. Changing a
+   * row length or a strut top would be silently ignored, so both refuse: a pivot corner has nothing to adjust there.
+   */
+  override setLength(_i: number, _lengthM: number): void {
+    throw new Error('A pivot corner has no rod whose length can be set');
+  }
+
+  override setTopShift(_top: Vec3, _shift: Vec3): void {
+    throw new Error('A pivot corner has no strut top to move');
+  }
+
   /** Turn of the knuckle about the axis in `pose` (its rotation projected on the axis), rad. */
   angleOf(pose: Float64Array): number {
     const e = this.dir;
@@ -112,12 +124,13 @@ export class PivotSolver extends CornerSolver {
     const psi = Math.atan2(b, a);
     const spread = Math.acos(d / rho);
     const warm = this.angleOf(pose);
-    const near = (phi: number): number => {
-      const k = Math.round((warm - phi) / (2 * Math.PI));
-      return phi + 2 * Math.PI * k;
-    };
-    const p1 = near(psi + spread);
-    const p2 = near(psi - spread);
+    // Each root moved by whole turns to the one nearest the warm start; then the nearer of the two. Inline, as the 3D
+    // calls this every frame.
+    const TWO_PI = 2 * Math.PI;
+    let p1 = psi + spread;
+    p1 += TWO_PI * Math.round((warm - p1) / TWO_PI);
+    let p2 = psi - spread;
+    p2 += TWO_PI * Math.round((warm - p2) / TWO_PI);
     const phi = Math.abs(p1 - warm) <= Math.abs(p2 - warm) ? p1 : p2;
     this.setAngle(pose, phi);
     const residual = Math.abs(pose[2] - travel);

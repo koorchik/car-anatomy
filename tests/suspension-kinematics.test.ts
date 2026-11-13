@@ -537,4 +537,11 @@ describe('single pivot axis: trailing arm, semi-trailing arm, swing axle', () =>
     expect(() => pivotAxle({ ...PIVOT_TYPICAL['semi-trailing'], sweepDeg: NaN })).toThrow();
     expect(() => pivotAxle({ ...PIVOT_TYPICAL['trailing-arm'], armM: 0 })).toThrow();
   });
+
+  it('refuses to adjust rods or a strut top that a pivot corner does not have', () => {
+    const solver = buildAxle(pivotAxle(PIVOT_TYPICAL['semi-trailing'])).solver;
+    expect(solver.steerRow()).toBe(-1);
+    expect(() => solver.setLength(0, 0.5)).toThrow();
+    expect(() => solver.setTopShift([0, 0, 0], [0, 0.01, 0])).toThrow();
+  });
 });
