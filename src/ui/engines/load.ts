@@ -9,7 +9,9 @@ import { enginesPage } from './routes.ts';
 
 export async function loadEngines(route: Route): Promise<Section> {
   const page = enginesPage(route);
-  // Fetched side by side, so the first view is the page asked for and not the catalogue on its way there.
-  const [{ EnginesSection }] = await Promise.all([withDictionaries(['engines'], () => import('./section.ts')), page === 'designer' ? DESIGNER.load() : null, page === 'sump' ? SUMP.load() : null]);
+  // Fetched side by side, so the first view is the page asked for and not the catalogue on its way there. A page whose
+  // code fails to come still leaves the section to show: the section asks for that code again when it opens the page.
+  const pageCode = page === 'designer' ? DESIGNER.load() : page === 'sump' ? SUMP.load() : null;
+  const [{ EnginesSection }] = await Promise.all([withDictionaries(['engines'], () => import('./section.ts')), pageCode?.catch(() => null)]);
   return new EnginesSection();
 }

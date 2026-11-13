@@ -20,6 +20,19 @@ import type { EnginesSection } from './ui/engines/section.ts';
 import type { SumpPage } from './ui/sump/sump-page.ts';
 import type { SystemsView } from './ui/systems-view.ts';
 
+// A deploy replaces every chunk, so a tab opened before it asks for files that are gone. It reloads once to get the new
+// build, at the same address; a second failure within a minute is left to the console, so a missing file never loops.
+const RELOADED_AT = 'chunk-reload';
+window.addEventListener('vite:preloadError', () => {
+  try {
+    if (Date.now() - Number(sessionStorage.getItem(RELOADED_AT) ?? 0) < 60_000) return;
+    sessionStorage.setItem(RELOADED_AT, String(Date.now()));
+  } catch {
+    return;
+  }
+  location.reload();
+});
+
 const route = parseRoute(location.hash);
 const [{ Shell }, first] = await Promise.all([import('./shell/app.ts'), sectionEntry(route).load(route)]);
 const shell = new Shell(document.getElementById('app')!, SECTIONS);
