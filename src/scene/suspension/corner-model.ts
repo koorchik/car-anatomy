@@ -359,13 +359,14 @@ export class CornerModel {
           latheAlong(ringProfile(0.15, 0.5, -0.2, -0.12), new THREE.Vector3(), UP, 28, true),
           latheAlong(ringProfile(0.15, 0.36, -this.upperSeat + 0.04, -0.2), new THREE.Vector3(), UP, 28, true),
           latheAlong(ringProfile(0.15, seatR, -this.upperSeat, -this.upperSeat + 0.04), new THREE.Vector3(), UP, 36, true),
+          // The nut on the rod's end above the mount: the same steel, so the same draw call.
+          boss(new THREE.Vector3(0, 0.3, 0), UP, 0.17, 0.12, 6),
         ]),
         m.steel,
       ),
       'susp.top-mount',
     );
     const rodMesh = tag(new THREE.Mesh(rodBetween(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, -this.rodLength, 0), DRAWING.rodRadiusM * 10, 16), m.chrome), 'susp.damper-rod');
-    const nut = tag(new THREE.Mesh(boss(new THREE.Vector3(0, 0.3, 0), UP, 0.17, 0.12, 6), m.steel), 'susp.top-mount');
     const pistonY = -this.rodLength;
     const piston = tag(
       new THREE.Mesh(
@@ -398,8 +399,8 @@ export class CornerModel {
     this.springMesh = tag(new THREE.Mesh(this.spring.geometry, m.spring), 'susp.spring');
     this.springMesh.position.y = -this.upperSeat;
     this.springMesh.frustumCulled = false;
-    this.strutTop.add(upper, rodMesh, nut, piston, this.bumpStop, this.springMesh);
-    this.solidOnly.push(upper, rodMesh, nut, this.bumpStop);
+    this.strutTop.add(upper, rodMesh, piston, this.bumpStop, this.springMesh);
+    this.solidOnly.push(upper, rodMesh, this.bumpStop);
 
     // ---- Knuckle and everything rigid with it ----
     this.body.add(this.knuckle);
@@ -583,9 +584,13 @@ export class CornerModel {
 
     // Lines and sprites sort by renderOrder too, so the band takes every object, overlays included, not only meshes.
     this.group.traverse((o) => this.orders.set(o, o.renderOrder));
+    // Shadows from what can cast one: not the road, not the overlays, and not parts that sit inside others (the piston,
+    // the oil, the tripod's spider and the joint's balls, the rack's bar in its housing) or under the wheel (the nuts).
+    const inside = new Set<THREE.Object3D>([...this.xrayOnly, this.nuts]);
+    if (this.halfshaft) for (const o of [this.halfshaft.spider, this.halfshaft.balls]) inside.add(o);
     this.group.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (mesh.isMesh && o.userData.part && o !== this.road.mesh) mesh.castShadow = true;
+      if (mesh.isMesh && o.userData.part && o !== this.road.mesh && !inside.has(o)) mesh.castShadow = true;
     });
     this.setView('solid');
     this.update(this.frame);
@@ -633,7 +638,8 @@ export class CornerModel {
     const mech = view === 'mechanism';
     for (const s of this.shells) {
       s.mesh.material = view === 'xray' ? s.glass : s.solid;
-      s.mesh.castShadow = view === 'solid';
+      // Glass casts no shadow: the shells in the X-ray, and the body, which is glass in every view.
+      s.mesh.castShadow = view === 'solid' && !s.solid.transparent;
     }
     for (const o of this.solidOnly) o.visible = !mech;
     for (const o of this.xrayOnly) o.visible = view === 'xray';

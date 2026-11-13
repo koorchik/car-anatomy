@@ -51,14 +51,23 @@ const visible = (o: THREE.Object3D): boolean => {
   return true;
 };
 
-/** Draw calls of the main pass: every shown mesh, line and sprite. */
-function drawCalls(root: THREE.Object3D): number {
-  let n = 0;
+/**
+ * Draw calls of a frame: every shown mesh, line and sprite in the main pass, and every shown mesh that casts a shadow
+ * once more in the key light's shadow pass (the stage and the viewer have one such light). No material here is both
+ * transparent and two-sided, which three.js would draw twice.
+ */
+function drawCalls(root: THREE.Object3D): { main: number; shadow: number } {
+  let main = 0;
+  let shadow = 0;
   root.traverse((o) => {
     const any = o as THREE.Mesh & THREE.Line & THREE.Sprite;
-    if ((any.isMesh || any.isLine || any.isSprite) && visible(o)) n++;
+    if (!(any.isMesh || any.isLine || any.isSprite) || !visible(o)) return;
+    main++;
+    if (any.isMesh && o.castShadow) shadow++;
+    const materials = [any.material].flat() as THREE.Material[];
+    expect(materials.some((m) => m.transparent && m.side === THREE.DoubleSide), 'a two-pass material').toBe(false);
   });
-  return n;
+  return { main, shadow };
 }
 
 const FULL_CORNER = [
@@ -115,11 +124,12 @@ describe('MacPherson corner in 3D', () => {
     model.dispose();
   });
 
-  it('stays within the corner budget of draw calls in every view', () => {
+  it('stays within the corner budget of 60 draw calls in every view, shadows included', () => {
     const model = new CornerModel(resolved);
     for (const view of ['solid', 'xray', 'mechanism'] as const) {
       model.setView(view);
-      expect(drawCalls(model.group), view).toBeLessThanOrEqual(60);
+      const { main, shadow } = drawCalls(model.group);
+      expect(main + shadow, view).toBeLessThanOrEqual(60);
     }
     model.dispose();
   });
