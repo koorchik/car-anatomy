@@ -68,6 +68,11 @@ export class BalancePanel {
   private scale = 1;
   private forces: BalanceForces | null = null;
   private overlay: BalanceOverlay | null = null;
+  /** Height of the full card when it last showed, to tell whether it fits before showing it full again. */
+  private fullHeight = 270;
+  /** Viewport y the full card has to end above: other overlays on the right of the stage live under it. */
+  private room: () => number = () => Infinity;
+  private refit: () => void = () => {};
   private on = false;
   /** The card is redrawn with each engine and set of layers, and must not fold the note back up. */
   private noteOpen = false;
@@ -113,14 +118,46 @@ export class BalancePanel {
     // under it. Then it shrinks to the buttons and one line. The stage box resizes with the window and the side panels,
     // the name with each engine.
     const name = host.querySelector<HTMLElement>('.engine-name');
+    // It shrinks too when what shares the right of the stage (shareStage) would end up under the full card.
     const fit = (): void => {
       const stage = this.stageBox.getBoundingClientRect();
       const nameRight = name?.getBoundingClientRect().right ?? stage.left;
-      this.card.classList.toggle('compact', window.innerWidth <= 860 || stage.right - CARD_GAP - CARD_W < nameRight + 12);
+      const topH = parseFloat(getComputedStyle(this.stageBox).getPropertyValue('--top-h')) || 0;
+      const fullBottom = stage.top + topH + 8 + this.fullHeight;
+      const compact = window.innerWidth <= 860 || stage.right - CARD_GAP - CARD_W < nameRight + 12 || fullBottom + 8 > this.room();
+      this.card.classList.toggle('compact', compact);
+      this.publish();
     };
+    this.refit = fit;
     const fitter = new ResizeObserver(fit);
     fitter.observe(this.stageBox);
     if (name) fitter.observe(name);
+    new ResizeObserver(() => this.publish()).observe(this.card);
+  }
+
+  /**
+   * Other overlays on the right of the stage. `room` gives the viewport y the full card has to end above; while it
+   * does not, the card takes its compact form at the bottom left. A change to the size, classes or visibility of any
+   * of `watched` asks again.
+   */
+  shareStage(room: () => number, watched: HTMLElement[]): void {
+    this.room = room;
+    const again = (): void => this.refit();
+    const observer = new MutationObserver(again);
+    const sizes = new ResizeObserver(again);
+    for (const element of watched) {
+      observer.observe(element, { attributes: true, attributeFilter: ['class', 'hidden'] });
+      sizes.observe(element);
+    }
+    again();
+  }
+
+  /** The full card's height, for what moves under it (--forces-card-h); 0 while it is compact or hidden. */
+  private publish(): void {
+    const full = !this.card.hidden && !this.card.classList.contains('compact');
+    const height = full ? this.card.offsetHeight : 0;
+    if (height > 0) this.fullHeight = height;
+    document.documentElement.style.setProperty('--forces-card-h', `${height}px`);
   }
 
   /**
@@ -161,6 +198,7 @@ export class BalancePanel {
     this.checkbox.checked = on;
     this.card.hidden = !on;
     document.body.classList.toggle('forces-on', on);
+    this.refit();
     if (on && !this.overlay) this.build();
     if (this.overlay) this.overlay.group.visible = on;
   }

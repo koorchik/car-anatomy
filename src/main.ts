@@ -262,6 +262,23 @@ app.querySelector('.dash')!.append(dyno.element);
 $('to-designer').before(dyno.toggleButton);
 const valveReadout = new ValveReadout();
 app.append(valveReadout.element);
+/** Room the switches and a card of a few lines need under the force card, when the systems sit at the top right. */
+const SYSTEMS_ASIDE_ROOM = 200;
+// The full force card, the systems switches and card and the valve gear's labels all live on the right of the stage.
+// The force card keeps its full form only while the others still fit under it.
+balancePanel.shareStage(() => {
+  const shown = (e: HTMLElement): boolean => !e.hidden && e.offsetParent !== null;
+  const tool = $('systems-tool');
+  const readout = $('systems-readout');
+  let limit = shown(valveReadout.element) ? valveReadout.element.getBoundingClientRect().top : Infinity;
+  if (shown(tool) && tool.classList.contains('aside')) {
+    limit = Math.min(limit, app.getBoundingClientRect().bottom - parseFloat(getComputedStyle(app).getPropertyValue('--dash-h')) - 116);
+    return limit - SYSTEMS_ASIDE_ROOM;
+  }
+  if (shown(readout)) limit = Math.min(limit, readout.getBoundingClientRect().top);
+  return limit;
+  // The dash grows on the dyno and the row of view options with the speed mode: both move the bottom right.
+}, [$('systems-tool'), $('systems-readout'), valveReadout.element, app.querySelector<HTMLElement>('.dash')!, app.querySelector<HTMLElement>('.view-tools')!]);
 
 let model: EngineModel | null = null;
 let view: ViewMode = 'xray';

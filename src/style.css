@@ -2359,18 +2359,23 @@ input[type='range']::-moz-range-thumb {
   flex: none;
 }
 
-/* Where the row of view options has no room for them (SystemsView), the switches and the card sit top right. */
+/*
+ * Where the row of view options has no room for them (SystemsView), the switches and the card sit top right. The full
+ * force card takes the top of that corner (--forces-card-h, BalancePanel), so they go under it, and the card stops
+ * above the valve gear's labels.
+ */
 .tool-systems.aside {
   position: fixed;
   z-index: 4;
   right: calc(var(--panel-w) + 18px);
-  top: calc(var(--top-h) + 78px);
+  top: calc(var(--top-h) + max(78px, var(--forces-card-h, 0px) + 18px));
   align-items: flex-end;
 }
 
 .systems-readout.aside {
   bottom: auto;
-  top: calc(var(--top-h) + 140px);
+  top: calc(var(--top-h) + max(140px, var(--forces-card-h, 0px) + 80px));
+  max-height: calc(100vh - var(--top-h) - var(--dash-h) - max(150px, var(--tools-h, 74px) + 76px) - max(140px, var(--forces-card-h, 0px) + 80px));
 }
 
 /* Below this width the switches keep only their pictures, so the view options stay on one row. */
@@ -3340,8 +3345,8 @@ body.dyno-mode {
   position: absolute;
   z-index: 4;
   right: calc(var(--panel-w) + 18px);
-  /* Above the scale bar, clear of the view tools along the bottom. */
-  bottom: calc(var(--dash-h) + 116px);
+  /* Above the scale bar, clear of the view tools along the bottom, and above the systems card when it sits here. */
+  bottom: calc(var(--dash-h) + max(116px, var(--tools-h, 74px) + 42px + var(--systems-readout-h, 0px)));
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;

@@ -137,12 +137,17 @@ export class SystemsView {
         const aside = !phone?.matches && needed > parseFloat(style.maxWidth);
         tool.classList.toggle('aside', aside);
         readout.classList.toggle('aside', aside);
-        const above = parseFloat(style.bottom) - parseFloat(getComputedStyle(root).getPropertyValue('--dash-h'));
+        // The row's own --dash-h: the dyno sets a taller one on the body, which the root does not see.
+        const above = parseFloat(style.bottom) - parseFloat(style.getPropertyValue('--dash-h'));
         root.style.setProperty('--tools-h', `${Math.round(row.offsetHeight + (Number.isFinite(above) ? above : 12))}px`);
+        // The card's height at the bottom right, so what else sits there (the valve gear's labels) goes above it.
+        const below = !aside && !phone?.matches && !readout.hidden && readout.offsetParent !== null;
+        root.style.setProperty('--systems-readout-h', below ? `${readout.offsetHeight + 6}px` : '0px');
       };
       const observer = new ResizeObserver(place);
       observer.observe(row);
       observer.observe(root);
+      observer.observe(readout);
     }
 
     try {
