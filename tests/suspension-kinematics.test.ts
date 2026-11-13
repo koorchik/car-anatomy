@@ -6,7 +6,14 @@ import { dist } from '../src/suspension/vec.ts';
 import { CornerSolver } from '../src/suspension/solve.ts';
 import { PRESSURE_KT_SLOPE, patchLengthM, TYRE_FILES, tyreVertical, verticalStiffness } from '../src/vehicle/tyre-data.ts';
 import type { Axle } from '../src/suspension/kinematics.ts';
-import { pivotAxisDirection, pivotAxle, pivotLayout, PIVOT_TYPICAL, type PivotIntent } from '../src/suspension/templates/pivot.ts';
+import {
+  pivotAxisDirection,
+  pivotAxle,
+  pivotLayout,
+  PIVOT_TRAVEL,
+  PIVOT_TYPICAL,
+  type PivotIntent,
+} from '../src/suspension/templates/pivot.ts';
 import { pivotAsLinks, pivotFrontViewCentre, PivotSolver } from '../src/suspension/solve-pivot.ts';
 import type { PivotLinkage, Vec3 } from '../src/suspension/spec.ts';
 
@@ -536,6 +543,35 @@ describe('single pivot axis: trailing arm, semi-trailing arm, swing axle', () =>
     expect(() => pivotAxle({ ...PIVOT_TYPICAL['semi-trailing'], sweepDeg: 95 })).toThrow();
     expect(() => pivotAxle({ ...PIVOT_TYPICAL['semi-trailing'], sweepDeg: NaN })).toThrow();
     expect(() => pivotAxle({ ...PIVOT_TYPICAL['trailing-arm'], armM: 0 })).toThrow();
+  });
+
+  it('refuses an arm that cannot reach the end stops, and every arm it takes builds', () => {
+    // A level trailing arm swings its wheel on a circle of radius armM: it reaches 120 mm of bump only if longer, and
+    // at that length the arm would stand vertical. Shorter ones were taken and then failed inside the table.
+    const bump = PIVOT_TRAVEL.bumpM;
+    for (const arm of [0.05, 0.11, bump - 1e-6, bump]) {
+      expect(() => pivotAxle({ ...PIVOT_TYPICAL['trailing-arm'], armM: arm })).toThrow(/too short/);
+    }
+    for (const arm of [bump + 0.001, 0.15, 0.4, -0.4]) {
+      expect(() => buildAxle(pivotAxle({ ...PIVOT_TYPICAL['trailing-arm'], armM: arm }))).not.toThrow();
+    }
+    // An arm hanging steeply from a high pivot reaches bump but would pass the vertical in droop.
+    expect(() => pivotAxle({ ...PIVOT_TYPICAL['trailing-arm'], armM: 0.03, pivotZM: 0.7 })).toThrow(/too short or too steep/);
+  });
+
+  it('refuses intents whose numbers are not numbers or put the joints in impossible places', () => {
+    const semi = PIVOT_TYPICAL['semi-trailing'];
+    const swing = PIVOT_TYPICAL['swing-axle'];
+    for (const key of ['armM', 'pivotYM', 'pivotZM', 'bushSpanM', 'trackM', 'wheelCentreZM', 'diffOutputYM'] as const) {
+      expect(() => pivotAxle({ ...semi, [key]: NaN })).toThrow(/not a number/);
+    }
+    expect(() => pivotAxle({ ...semi, bushSpanM: 0 })).toThrow(/second bush/);
+    // The differential output beyond the outer joint, or across the centre line.
+    expect(() => pivotAxle({ ...semi, diffOutputYM: 0.65 })).toThrow(/differential output/);
+    expect(() => pivotAxle({ ...semi, diffOutputYM: -0.1 })).toThrow(/differential output/);
+    // A swing axle whose joint is beyond the wheel would turn its shaft inward; one at the wheel has no arm at all.
+    expect(() => pivotAxle({ ...swing, pivotYM: 1.4 })).toThrow(/not inboard/);
+    expect(() => pivotAxle({ ...swing, pivotYM: 0.7 })).toThrow(/too short/);
   });
 
   it('refuses to adjust rods or a strut top that a pivot corner does not have', () => {

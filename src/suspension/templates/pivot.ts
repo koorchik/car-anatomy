@@ -72,6 +72,8 @@ const ARM_PART: Record<PivotLayout, string> = {
 
 /** Wheel travel from design to the bump stop, m, as on the macpherson corner (the plan's figure for the bump scene). */
 export const PIVOT_BUMP_STOP_TRAVEL_M = 0.08;
+/** Travel range of the tables, m: to a pressed bump stop and to damper top-out. Typical, an estimate. */
+export const PIVOT_TRAVEL = { bumpM: 0.12, droopM: 0.1 } as const;
 /** Where the coil-over sits on the arm: this share of the way from the axis to the wheel centre, then this far inboard;
  *  and how long it is at design. Typical, an estimate. */
 const SPRING_SHARE = 0.75;
@@ -98,6 +100,12 @@ export function pivotAxle(intent: PivotIntent): AxleSpec<PivotLinkage> {
     throw new Error(`The sweep of a pivot axis runs from 0° to 90°, not ${sweepDeg}°`);
   }
   if (!(Math.abs(svAngleDeg) < 45)) throw new Error(`The side-view slope ${svAngleDeg}° is not a pivot axis`);
+  // A number that is not one would otherwise surface far away (a NaN plunge in the table, or a misleading message).
+  for (const key of ['armM', 'pivotYM', 'pivotZM', 'bushSpanM', 'trackM', 'wheelCentreZM', 'diffOutputYM'] as const) {
+    if (!Number.isFinite(intent[key])) throw new Error(`The pivot corner's ${key} is not a number: ${intent[key]}`);
+  }
+  if (!(bushSpanM > 0)) throw new Error(`The second bush must sit along the axis from the first, not ${bushSpanM} m`);
+  if (!(trackM > 0 && wheelCentreZM > 0)) throw new Error('The track and the wheel centre height must be positive');
   const layout = pivotLayout(sweepDeg);
   const W: Vec3 = [0, trackM / 2, wheelCentreZM];
   const e = pivotAxisDirection(sweepDeg, svAngleDeg);
@@ -107,8 +115,13 @@ export function pivotAxle(intent: PivotIntent): AxleSpec<PivotLinkage> {
   // Foot of the wheel centre on the axis, and the arm across it.
   const foot = add(Q, scale(e, dot(sub(W, Q), e)));
   const arm = sub(W, foot);
-  // The wheel centre rises at (e × arm)_z per radian: the arm's lever in plan view. Below 0.1 m it is no arm.
-  if (!(Math.abs(cross(e, arm)[2]) >= 0.1)) throw new Error('The wheel centre is too close to the pivot axis in plan');
+  // The wheel centre runs on a circle of radius |arm| about the axis; its height is c0_z + arm_z·(cos φ − 1) +
+  // (e × arm)_z·sin φ (solve-pivot.ts). It reaches every height of the travel, without the arm passing the vertical
+  // where the travel stops rising, only while arm_z + bump and arm_z − droop stay inside ±hypot(arm_z, (e × arm)_z).
+  const reach = Math.hypot(arm[2], cross(e, arm)[2]);
+  if (!(arm[2] + PIVOT_TRAVEL.bumpM < reach && arm[2] - PIVOT_TRAVEL.droopM > -reach)) {
+    throw new Error('The arm is too short or too steep for the wheel travel: it would pass the vertical');
+  }
 
   const seat = add(add(foot, scale(arm, SPRING_SHARE)), [0, -SPRING_INBOARD_M, 0]);
   const top = add(seat, [0, 0, SPRING_LENGTH_M]);
@@ -120,6 +133,8 @@ export function pivotAxle(intent: PivotIntent): AxleSpec<PivotLinkage> {
   if (layout === 'swing-axle') {
     const centre = pivotFrontViewCentre(linkage, W[0])!;
     const joint: Vec3 = [W[0], centre.y, centre.z];
+    // The shaft runs out from its joint to the hub; a joint at or beyond the wheel centre leaves no shaft.
+    if (!(joint[1] < W[1])) throw new Error(`The swing axle's joint at ${joint[1]} m is not inboard of the wheel`);
     spinAxis = unit(sub(W, joint));
     if (intent.driven) {
       halfshaft = {
@@ -135,9 +150,13 @@ export function pivotAxle(intent: PivotIntent): AxleSpec<PivotLinkage> {
       };
     }
   } else if (intent.driven) {
+    const outerY = W[1] - OUTER_JOINT_INBOARD_M;
+    if (!(intent.diffOutputYM >= 0 && intent.diffOutputYM < outerY)) {
+      throw new Error(`The differential output at ${intent.diffOutputYM} m is not between the centre line and the hub`);
+    }
     halfshaft = {
       diffOutput: [W[0], intent.diffOutputYM, wheelCentreZM],
-      outerJoint: [W[0], W[1] - OUTER_JOINT_INBOARD_M, W[2]],
+      outerJoint: [W[0], outerY, W[2]],
       inner: 'tripod',
       outer: 'fixed-ball',
       // GKN, by a search excerpt of the «Spidan» brochure: tripod GI up to 23° and 50 mm of plunge, fixed AC 47°.
@@ -171,7 +190,7 @@ export function pivotAxle(intent: PivotIntent): AxleSpec<PivotLinkage> {
     driven: intent.driven,
     diff: intent.driven ? 'body' : 'none',
     halfshaft,
-    travel: { bumpM: 0.12, droopM: 0.1 },
+    travel: { ...PIVOT_TRAVEL },
   };
   spec.bumpStop.gapM = dist(top, seat) - damperLengthAt(spec, PIVOT_BUMP_STOP_TRAVEL_M);
   return spec;
