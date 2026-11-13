@@ -107,7 +107,7 @@ export const DRAWING = {
   guideM: 0.02,
 } as const;
 
-/** Shear modulus of spring steel, Pa: the textbook value the coil's wire is sized with. */
+/** Shear modulus of carbon steel, Pa: the handbook value (Shigley, table A-5), not checked against a primary source. */
 const STEEL_SHEAR_PA = 79.3e9;
 
 /**
