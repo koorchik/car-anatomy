@@ -74,8 +74,12 @@ const CONTROL_W = 6;
 const CONTROL_ZETA = 0.9;
 /** Filter on the derivative that leads the absorber's lag, s. */
 const LEAD_FILTER = 0.02;
-/** The cell's throttle actuator: full travel per second, either way. */
-const ACTUATOR_RATE = 1;
+/**
+ * The cell's throttle actuator, full travel per second. It opens slowly, so a wide-open engine does not run away from
+ * the absorber, and shuts in about 0.15 s as a real one does (estimate), fast enough for a blow-off valve to open.
+ */
+const ACTUATOR_OPEN = 1;
+const ACTUATOR_CLOSE = 7;
 const SETTLE_S = 2;
 /**
  * Below the speed it is to hold, the automation brings the engine up on part throttle first, as an operator would:
@@ -295,8 +299,7 @@ export class DynoLoad implements CrankLoad {
     if (this.auto !== null && approaching && (this.phase === 'hold' || this.phase === 'settle')) {
       wanted = Math.min(wanted, REACH_THROTTLE + 0.1 * this.reachTime);
     }
-    const travel = ACTUATOR_RATE * dt;
-    this.actuator += clamp(wanted - this.actuator, -travel, travel);
+    this.actuator += clamp(wanted - this.actuator, -ACTUATOR_CLOSE * dt, ACTUATOR_OPEN * dt);
 
     // Speed controller: feed-forward of the engine torque the dyno sees and of the inertia the ramp needs, a PI on
     // the speed error, and a lead that cancels the absorber's own lag.

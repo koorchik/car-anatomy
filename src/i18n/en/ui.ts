@@ -137,6 +137,7 @@ export const UI_EN: Record<string, string> = {
   'радіус ротора': 'rotor radius',
   'ексцентриситет': 'eccentricity',
   'ширину ротора': 'rotor width',
+  'масу маховика': 'flywheel mass',
 
   // The sound of one engine
   'тихий дорожній випуск': 'quiet road exhaust',

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { engineById } from '../src/data/engines.ts';
+import { ENGINES, engineById, pageChoices } from '../src/data/engines.ts';
 import { synthConfig } from '../src/audio/synth.ts';
 import { resolveDesign } from '../src/designer/constraints.ts';
 import { DEFAULT_DESIGN } from '../src/designer/design.ts';
 import { evaluate } from '../src/designer/physics.ts';
 import { designToSpec } from '../src/designer/to-spec.ts';
-import { torqueMapFor } from '../src/designer/torque-map.ts';
+import { catalogueTorqueMap, torqueMapFor } from '../src/designer/torque-map.ts';
 import {
   DynoLoad,
   absorberMax,
@@ -23,7 +23,6 @@ import type { CrankLoad, EngineRequest, LoadReadings } from '../src/engine/load.
 import { LoadedCrank, type CrankReadings } from '../src/engine/loaded-crank.ts';
 import { EngineSim, PEDAL_TOP_SPEED, type SimParams } from '../src/engine/sim.ts';
 import { ATM_BAR, brakeTorque, mapValue, peakPower, peakTorque, type EngineTorqueMap } from '../src/engine/torque-map.ts';
-import { catalogueTorqueMap } from '../src/ui/dyno/maps.ts';
 
 const DT = 1 / 3000;
 const RAD = Math.PI / 30;
@@ -356,8 +355,7 @@ describe('idle under the loaded crank', () => {
     r.sim.pedal = 0.6;
     run(r.sim, 4);
     r.sim.pedal = 0;
-    // A heavy flywheel on a small engine (the CG125 has 0.12 kg·m² against 1.6 N·m of friction) coasts down for a while.
-    run(r.sim, 12);
+    run(r.sim, 5);
     const reading = r.crank.readings();
     expect(reading.coupled).toBe(true);
     expect(Math.abs(r.sim.rpm - r.map.idleRpm)).toBeLessThan(0.12 * r.map.idleRpm);
@@ -377,6 +375,61 @@ describe('idle under the loaded crank', () => {
     });
     expect(peak).toBeLessThan(1.15 * r.map.idleRpm);
     expect(lastOff).toBeLessThan(2);
+  });
+});
+
+describe('starting on the dyno', () => {
+  /** An engine on the dyno, not yet started, the absorber already told to hold a speed above idle. */
+  const parked = (id: string, absorber: AbsorberKind = 'eddy'): Rig => {
+    const map = mapFor(id);
+    const params = paramsFor(id);
+    const sim = new EngineSim(params);
+    const load = new DynoLoad(sizeAbsorber(map, absorber));
+    const crank = new LoadedCrank(map, load);
+    sim.attach(crank);
+    return { sim, load, crank, map, params };
+  };
+
+  it('every catalogue engine starts with the hold already chosen, and the hold takes it once it idles', () => {
+    // The step of the audio thread, so 131 engines stay quick.
+    const dt = 16 / 44100;
+    const failed: string[] = [];
+    for (const page of ENGINES) {
+      for (const choice of pageChoices(page.id)) {
+        const r = parked(choice.id);
+        hold(r, r.map.idleRpm + 1500);
+        r.sim.start();
+        run(r.sim, 4, undefined, dt);
+        const at4 = r.sim.state;
+        run(r.sim, 3, undefined, dt);
+        r.crank.readings();
+        run(r.sim, 1, undefined, dt);
+        const reading = r.crank.readings();
+        const idle = Math.abs(r.sim.rpm / r.map.idleRpm - 1) < 0.1;
+        if (at4 !== 'running' || r.sim.state !== 'running' || !reading.coupled || !idle) {
+          failed.push(`${choice.id}: ${at4} at 4 s, ${r.sim.state} ${Math.round(r.sim.rpm)} rpm at 8 s`);
+        }
+      }
+    }
+    expect(failed).toEqual([]);
+  });
+
+  it.each(['i4', 'i1', 'i1/honda-cg125', 'i6d/bmw-530d-b57', 'v2/ducati-1299-panigale'])('%s stopped under a hold starts again', (id) => {
+    const r = rig(id);
+    hold(r, r.map.idleRpm + 1500);
+    r.sim.pedal = 0.5;
+    run(r.sim, 3);
+    r.sim.pedal = 0;
+    r.sim.stop();
+    run(r.sim, 8);
+    expect(r.sim.state).toBe('off');
+    r.sim.start();
+    run(r.sim, 7);
+    r.crank.readings();
+    run(r.sim, 1);
+    expect(r.sim.state).toBe('running');
+    expect(r.crank.readings().coupled).toBe(true);
+    expect(Math.abs(r.sim.rpm / r.map.idleRpm - 1)).toBeLessThan(0.1);
   });
 });
 

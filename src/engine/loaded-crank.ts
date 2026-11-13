@@ -50,6 +50,11 @@ const IDLE_MAX = 0.55;
 /** Below this share of idle speed with fuel on, for this long, the engine stalls. */
 const STALL_SHARE = 0.5;
 const STALL_S = 0.3;
+/**
+ * A start runs on the free path, with its catch flare, until the engine is this close to idle: an engine that has only
+ * just fired cannot yet hold a load, and the stall rule would stop it before the idle governor lifted the flywheel.
+ */
+const CAUGHT_SHARE = 0.9;
 
 export class LoadedCrank {
   map: EngineTorqueMap;
@@ -61,6 +66,8 @@ export class LoadedCrank {
   private limiter = false;
   private stallTime = 0;
   private engaged = false;
+  /** The engine has started and come up to idle since the last time the starter turned it. */
+  private caught = false;
   private engineNm = 0;
   private request: EngineRequest | null = null;
   private charge = 0;
@@ -86,14 +93,17 @@ export class LoadedCrank {
     const map = this.map;
     const load = this.load;
     const omega = (sim.rpm * Math.PI) / 30;
-    const active = load.active() && sim.state !== 'cranking';
+    if (sim.state === 'cranking') this.caught = false;
+    else if (sim.state === 'running' && sim.rpm >= CAUGHT_SHARE * Math.min(map.idleRpm, sim.params.idleRpm)) this.caught = true;
+    // Once it has caught, the load stays on through a stall and while the engine runs down or stands.
+    const active = load.active() && sim.state !== 'cranking' && (this.caught || sim.state !== 'running');
     if (!active) {
       sim.inertiaShare = map.inertia / (map.inertia + load.inertia());
       this.engaged = false;
       load.step({ omega, pedal: sim.pedal, engineNm: 0, engineInertia: map.inertia, state: sim.state }, dt);
       // The free path has no charge of its own: its load is close enough for a readout.
       const pressure = pressureForShaft(map, sim.boost);
-      this.accumulate(false, 0, manifoldBar(map, sim.rpm, Math.max(sim.load, leakCharge(map, sim.rpm)), pressure), pressure, sim.rpm);
+      this.accumulate(false, 0, this.manifold(sim, Math.max(sim.load, leakCharge(map, sim.rpm)), pressure), pressure, sim.rpm);
       return false;
     }
     sim.inertiaShare = 1;
@@ -165,7 +175,7 @@ export class LoadedCrank {
     const targetLoad = fuelOn ? clamp(charge, 0, 1) : 0;
     sim.load += (targetLoad - sim.load) * Math.min(1, 14 * dt);
     sim.boost = turboShaft(map, this.pressure);
-    this.accumulate(true, engineNm, manifoldBar(map, sim.rpm, charge, this.pressure), this.pressure, sim.rpm);
+    this.accumulate(true, engineNm, this.manifold(sim, charge, this.pressure), this.pressure, sim.rpm);
     return true;
   }
 
@@ -182,6 +192,11 @@ export class LoadedCrank {
     this.engineNm = 0;
     this.load.engage({ omega: sim.rpm * RAD, engineNm: 0, throttle });
     this.engaged = true;
+  }
+
+  /** Manifold pressure over atmospheric, bar. An engine switched off soon fills its manifold to atmospheric. */
+  private manifold(sim: EngineSim, charge: number, pressure: number): number {
+    return sim.state === 'off' || sim.rpm < 1 ? 0 : manifoldBar(this.map, sim.rpm, charge, pressure);
   }
 
   private accumulate(coupled: boolean, engineNm: number, manifold: number, pressure: number, rpm: number): void {

@@ -28,7 +28,7 @@ export const DYNO_EN: Record<string, string> = {
   'Момент, Н·м': 'Torque, N·m',
   'Потужність, к.с.': 'Power, hp',
   'кВт': 'kW',
-  'Колектор, бар': 'Manifold, bar',
+  'Колектор, бар (модель)': 'Manifold, bar (model)',
   'Гальмо': 'Absorber',
   'Режим гальма': 'Absorber mode',
   'Вимкнене': 'Off',
@@ -58,6 +58,9 @@ export const DYNO_EN: Record<string, string> = {
   'Двигун не тягне на цих обертах: гальмо вже відпущене до мінімуму.': 'The engine cannot pull at this speed: the absorber is already at its minimum.',
   'Точка {index} з {count}: стенд чекає, поки все встоїться.': 'Point {index} of {count}: the dyno waits for everything to settle.',
   'Розгін іде: газ відкриває автоматика.': 'Sweep running: the automation opens the throttle.',
+  'Замір закінчено: газ закрито, і гальмо спускає оберти до початкових.': 'Run finished: the throttle is shut, and the absorber brings the revs back down to the start.',
+  'Замір готовий. Новий «Пуск» малює наступний, а цей стане пунктиром.': 'The run is done. Another “Start” draws the next one, and this one turns dashed.',
+  'Натисни «Пуск»: стенд сам відкриє газ і рівно підніматиме оберти.': 'Press “Start”: the dyno opens the throttle itself and raises the revs at a steady rate.',
   'Гальмо вимкнене: двигун крутить ще й ротор гальма, тому розганяється в {ratio} раза повільніше, а стенд нічого не міряє.':
     'Absorber off: the engine also turns the absorber rotor, so it revs {ratio} times slower, and the dyno measures nothing.',
   'Гальмо відпустило двигун, а газ тримає ті самі оберти без навантаження. Порівняй звук.':
@@ -74,7 +77,9 @@ export const DYNO_EN: Record<string, string> = {
   'Виміряно {nm} Н·м при {rpm} об/хв; ще {inertia} Н·м пішло на розгін маховика (J·ε); з поправкою {corrected} Н·м.':
     'Measured {nm} N·m at {rpm} rpm; another {inertia} N·m went into speeding up the flywheel (J·ε); corrected, {corrected} N·m.',
   '{hp} к.с. при {rpm} об/хв.': '{hp} hp at {rpm} rpm.',
-  'На такому темпі турбіна не встигає: усталена крива вища на {share}%.': 'At this rate the turbo cannot keep up: the steady curve is {share}% higher.',
+  'На {rpm} об/хв крива з поправкою на {share}% нижча за усталену: на такому темпі турбіна не встигає.':
+    'At {rpm} rpm the corrected curve is {share}% below the steady one: at this rate the turbo cannot keep up.',
+  'Суцільна лінія: замір {engine}.': 'Solid line: a run of the {engine}.',
   'Найбільше {nm} Н·м при {rpm1} об/хв, {hp} к.с. при {rpm2} об/хв.': 'Peak {nm} N·m at {rpm1} rpm, {hp} hp at {rpm2} rpm.',
   'Порожні точки не встигли встоятися.': 'Open points did not have time to settle.',
   'Стоп': 'Stop',
@@ -106,6 +111,8 @@ export const DYNO_EN: Record<string, string> = {
     'What a dyno sheet shows: torque and power curves by speed, the correction standard and its factor, pressure, temperature and humidity in the cell, the absorber type, the kind and rate of the run, the smoothing. Without these lines, figures from different dynos cannot be compared.',
   'Лінії на графіку: суцільна — цей замір, пунктир — попередній, тонкий пунктир — розрахунок усталеного повного газу, порожні кола — заводські дані. Точки утримання заповнені, а порожня точка означає, що двигун не встиг устоятися.':
     'Lines on the chart: solid is this run, dashed the previous one, thin dashed the calculated steady full-load curve, open rings the published figures. Held points are filled; an open point means the engine had no time to settle.',
-  'Звідки цифри: криву дає та сама модель, що й конструктор. На сторінці двигуна її масштаб приведено до заводських цифр зі статті, а оберти піків лишаються модельними. У конструкторі стенд показує саму модель, і порожні кола там показують заводські цифри для порівняння.':
-    'Where the figures come from: the curve comes from the same model as the designer. On an engine\'s page it is scaled to the published figures in the article, while the peak speeds stay the model\'s. In the designer the dyno shows the model itself, and the open rings there show the published figures for comparison.',
+  'Звідки цифри: криву дає та сама модель, що й конструктор. На сторінці двигуна її приведено до заводських цифр зі статті. Нижче них крива зберігає форму моделі, а там, де сягає їх, іде рівно на заводському моменті або на сталій заводській потужності, тому оберти піків можуть відрізнятися від модельних. У конструкторі стенд показує саму модель, і порожні кола там показують заводські цифри для порівняння.':
+    'Where the figures come from: the curve comes from the same model as the designer. On an engine\'s page it is brought to the published figures in the article. Below them the curve keeps the model\'s shape; where it reaches them, it runs flat at the published torque or at constant published power, so the peak speeds can differ from the model\'s. In the designer the dyno shows the model itself, and the open rings there show the published figures for comparison.',
+  'Тиск у колекторі стенд не міряє, його дає модель. На холостому вона показує 0,1–0,2 бар абсолютного тиску, а справжній двигун тримає 0,3–0,4: блок керування пізнім запалюванням тримає запас моменту, і частину заряду займають залишкові гази. Модель про це не знає.':
+    'The dyno does not measure manifold pressure; the model gives it. At idle the model shows 0.1–0.2 bar absolute, where a real engine holds 0.3–0.4: the engine computer retards the spark to keep a torque reserve, and residual gas takes up part of the charge. The model does not know about either.',
 };

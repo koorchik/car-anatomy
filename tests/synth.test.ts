@@ -12,7 +12,7 @@ import { designToSpec } from '../src/designer/to-spec.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import { sizeAbsorber, sweepEndRpm, sweepStartRpm } from '../src/engine/dyno-load.ts';
 import { ATM_BAR, holdCharge, manifoldBar, mapValue, turboShaft } from '../src/engine/torque-map.ts';
-import { catalogueTorqueMap } from '../src/ui/dyno/maps.ts';
+import { catalogueTorqueMap } from '../src/designer/torque-map.ts';
 
 const energy = (rows: OrderRow[], test: (order: number) => boolean): number =>
   rows.filter((r) => test(r.order)).reduce((sum, r) => sum + r.amp * r.amp, 0);
@@ -354,6 +354,38 @@ describe('on the dyno', () => {
     expect(on.boost).toBeGreaterThan(0.9 * turboShaft(map, mapValue(map, map.pressureRatio, rpm)));
     expect(on.db).toBeGreaterThan(10);
     expect(prominence(0).db).toBeLessThan(6);
+  });
+
+  it.each([
+    ['i3', true],
+    ['i3/fiesta-10-ecoboost', false],
+  ] as const)('%s: when the cell shuts the throttle after a sweep, a blow-off valve vents (%s)', (id, vents) => {
+    // The valve opens on a throttle that shuts fast with boost behind it. Heard as a burst of noise around 2.8 kHz
+    // in the first 0.3 s of the ramp down, measured against the same run with the valve taken out. The Fiesta 1.0
+    // recirculates into the intake, so nothing is heard.
+    const map = catalogueTorqueMap(engineById(id)!);
+    const dyno = sizeAbsorber(map, 'eddy');
+    const from = sweepStartRpm(map, dyno);
+    const to = sweepEndRpm(dyno);
+    const steps = [
+      { seconds: 1, pedal: 0, dyno: 'off' as const },
+      { seconds: 5 + (to - from) / 1200 + (to - from) / 1000, pedal: 0, dyno: { sweep: { from, to, rate: 1200 } } },
+    ];
+    const valve = render(id, steps);
+    const none = render(id, steps, undefined, { config: (c) => ({ ...c, blowoff: 0 }) });
+    let top = 0;
+    valve.rpm.forEach((v, i) => {
+      if (v > valve.rpm[top]!) top = i;
+    });
+    const band = (x: Float32Array): number => {
+      const window = x.subarray(top * 128, top * 128 + 0.3 * 48000);
+      let sum = 0;
+      for (let f = 2200; f <= 3400; f += 100) sum += goertzel(window, f) ** 2;
+      return sum;
+    };
+    const db = 10 * Math.log10(band(valve.l) / band(none.l));
+    if (vents) expect(db).toBeGreaterThan(2);
+    else expect(Math.abs(db)).toBeLessThan(0.5);
   });
 
   it.each(['i1', 'v8-cross', 'i3', 'i4d', 'r2', 'w16'])('%s has no NaN or overload through a held point, a fast sweep and the ramp down', (id) => {

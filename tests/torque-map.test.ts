@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ENGINES, engineById, engineFacts, pageChoices } from '../src/data/engines.ts';
 import { resolveDesign } from '../src/designer/constraints.ts';
-import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
+import { DEFAULT_DESIGN, displacementL, type Design } from '../src/designer/design.ts';
 import { evaluate } from '../src/designer/physics.ts';
 import { designFromSpec, editDesign } from '../src/designer/presets.ts';
 import { torqueMapFor } from '../src/designer/torque-map.ts';
@@ -47,6 +47,18 @@ describe('the dyno on a catalogue page reads what the article says', () => {
       expect(r.map.anchor.scale, worst.join(', ')).toBeGreaterThan(0.55);
       expect(r.map.anchor.scale, worst.join(', ')).toBeLessThan(1.5);
     }
+  });
+
+  it('turns a flywheel of a size that fits the engine, as the inertia correction and the sweep shortfall depend on it', () => {
+    // The flywheel of a Sherco 125 trials bike, heavy for its size, is about 0.0075 kg·m² (7391 kg·mm² calculated,
+    // 7586 measured by rolling: Electric Motion's notes, not a maker's figure). The model's car engines have
+    // 0.02-0.1 kg·m² per litre. A variant that inherited its page's flywheel (a 12 kg one on the CG125, a 40 kg truck
+    // one on a passenger diesel) had 0.3-1 kg·m² per litre, and a sweep at 300 rpm/s then read up to 40 % low.
+    const off = rows
+      .map((r) => ({ id: r.id, perLitre: r.map.inertia / displacementL(designFromSpec(engineById(r.id)!)) }))
+      .filter((r) => r.perLitre > 0.3 || r.perLitre < 0.01)
+      .map((r) => `${r.id} ${r.perLitre.toFixed(3)} kg·m²/l`);
+    expect(off).toEqual([]);
   });
 
   it('never claims more than the maker: the curve stays under both published figures', () => {

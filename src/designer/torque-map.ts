@@ -1,11 +1,14 @@
 // The absolute torque map a loaded crank runs on, built from the performance model. The dyno on a catalogue page,
 // on a variant page and in the designer all take it from here.
 
+import { engineFacts } from '../data/engines.ts';
+import type { EngineSpec } from '../engine/spec.ts';
 import type { EngineTorqueMap } from '../engine/torque-map.ts';
 import { anchorFor, anchoredTorque, noAnchor } from './anchor.ts';
 import { isTurbo, type Design, type PublishedFigures } from './design.ts';
 import { FUELS } from './fuels.ts';
 import { evaluate, type Performance, type RpmPoint } from './physics.ts';
+import { designFromSpec } from './presets.ts';
 
 /**
  * Turbo time constant on a loaded crank as a share of the designer's turbo lag, which is set for the free-revving
@@ -62,6 +65,7 @@ export function torqueMapFor(design: Design, perf: Performance = evaluate(design
     interceptNm: [...perf.motoring.interceptNm],
     atmosphereNm: perf.motoring.atmosphereNm,
     pressureRatio,
+    topPressureRatio: Math.max(...pressureRatio),
     flowShare,
     idleRpm: perf.idleRpm,
     limitRpm: design.rpmLimit,
@@ -78,4 +82,18 @@ export function torqueMapFor(design: Design, perf: Performance = evaluate(design
       modelNm: anchor.modelNm,
     },
   };
+}
+
+const catalogueMaps = new Map<string, EngineTorqueMap>();
+
+/** A catalogue engine or variant, its curve brought to the figures its article quotes. */
+export function catalogueTorqueMap(spec: EngineSpec): EngineTorqueMap {
+  const cached = catalogueMaps.get(spec.id);
+  if (cached) return cached;
+  const design = designFromSpec(spec);
+  const facts = engineFacts(spec.id);
+  const published = facts ? { powerHp: facts.powerHp, powerRpm: facts.powerRpm, torqueNm: facts.torqueNm, torqueRpm: facts.torqueRpm } : null;
+  const map = torqueMapFor(design, evaluate(design), published);
+  catalogueMaps.set(spec.id, map);
+  return map;
 }

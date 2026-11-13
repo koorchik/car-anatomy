@@ -5,6 +5,7 @@
 import type { Drive, DriveSnapshot } from '../../audio/drive.ts';
 import type { Design } from '../../designer/design.ts';
 import type { Performance } from '../../designer/physics.ts';
+import { catalogueTorqueMap, torqueMapFor } from '../../designer/torque-map.ts';
 import { absorberMax, freePedalFor, holdRange, sizeAbsorber, sweepEndRpm, sweepStartRpm, type AbsorberKind, type DynoCommand, type DynoSpec } from '../../engine/dyno-load.ts';
 import type { Engine } from '../../engine/kinematics.ts';
 import type { CrankReadings } from '../../engine/loaded-crank.ts';
@@ -17,8 +18,7 @@ import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
 import { RpmChart, type ChartSeries } from '../designer/chart.ts';
 import { publishedText } from '../published.ts';
-import { catalogueTorqueMap, designTorqueMap } from './maps.ts';
-import { RunRecorder, StepTest, peaksOf, shortfall, shownPoint, type Run, type RunKind } from './runs.ts';
+import { RunRecorder, StepTest, peaksOf, shownPoint, turboSag, type Run, type RunKind } from './runs.ts';
 
 export type DynoMode = 'off' | 'hold' | 'sweep';
 export type EngineSource = { kind: 'catalogue' } | { kind: 'designer'; design: Design; perf: Performance };
@@ -99,7 +99,7 @@ export class DynoPanel {
   private previous: Run | null = null;
   private window: CrankReadings[] = [];
   private last: CrankReadings | null = null;
-  private shown = { rpm: 0, nm: 0, throttle: 0, manifold: 0 };
+  private shown = { rpm: 0, nm: 0, absorber: 0, throttle: 0, manifold: 0 };
   private running = false;
   private lastSource: 'worklet' | 'local' | null = null;
   private notice = '';
@@ -147,7 +147,7 @@ export class DynoPanel {
           <div class="dyno-big"><b data-el="hp">0</b><span>${t('к.с.')}</span></div>
           <div class="dyno-small"><b data-el="kw">0</b><span>${t('кВт')}</span></div>
           <div class="dyno-small"><b data-el="throttle">0%</b><span>${t('Газ')}</span></div>
-          <div class="dyno-small"><b data-el="manifold">0,0</b><span>${t('Колектор, бар')}</span></div>
+          <div class="dyno-small"><b data-el="manifold">0,0</b><span>${t('Колектор, бар (модель)')}</span></div>
         </div>
         <p class="dyno-formula" data-el="formula"></p>
         <p class="dyno-feel" data-el="feel"></p>
@@ -327,7 +327,7 @@ export class DynoPanel {
 
   private prepare(): void {
     if (!this.engine) return;
-    this.map = this.source.kind === 'designer' ? designTorqueMap(this.source.design, this.source.perf) : catalogueTorqueMap(this.engine.spec);
+    this.map = this.source.kind === 'designer' ? torqueMapFor(this.source.design, this.source.perf) : catalogueTorqueMap(this.engine.spec);
     this.spec = sizeAbsorber(this.map, this.absorber);
     const range = holdRange(this.spec);
     // A held speed survives a change of engine or design, brought inside the new range.
@@ -438,12 +438,12 @@ export class DynoPanel {
   }
 
   /** A new run moves the last one to "previous", so the two can be compared. */
-  private beginRun(kind: RunKind, rate: number | null, throttle: number | null, recordFrom = 0): void {
+  private beginRun(map: EngineTorqueMap, kind: RunKind, rate: number | null, throttle: number | null, recordFrom = 0): void {
     const finished = this.recorder.run ? this.recorder.finish() : null;
     const latest = finished && finished.points.length ? finished : this.current;
     if (latest && latest.points.length) this.previous = latest;
     this.current = null;
-    this.recorder.begin(kind, { engine: this.engineName(), absorber: this.absorber, rate, throttle }, this.map?.inertia ?? 0, recordFrom);
+    this.recorder.begin(kind, { engine: this.engineName(), absorber: this.absorber, rate, throttle }, map, recordFrom);
     this.dirty = true;
   }
 
@@ -462,7 +462,7 @@ export class DynoPanel {
     const from = sweepStartRpm(this.map, this.spec);
     const to = sweepEndRpm(this.spec);
     this.listening = false;
-    this.beginRun('sweep', this.rate, 1, from + Math.max(200, 0.4 * this.rate));
+    this.beginRun(this.map, 'sweep', this.rate, 1, from + Math.max(200, 0.4 * this.rate));
     this.command({ kind: 'dyno', action: 'sweep', fromRpm: from, toRpm: to, rate: this.rate, throttle: 1 });
     this.sweeping = true;
     this.sweepSeenRamp = false;
@@ -480,7 +480,7 @@ export class DynoPanel {
     if (!this.map || !this.spec || !this.running) return;
     this.listening = false;
     this.stepTest = new StepTest(this.map, sweepStartRpm(this.map, this.spec), sweepEndRpm(this.spec), this.stepThrottle);
-    this.beginRun('steps', null, this.stepThrottle);
+    this.beginRun(this.map, 'steps', null, this.stepThrottle);
     this.command(this.stepTest.start());
     this.refreshControls();
   }
@@ -493,8 +493,8 @@ export class DynoPanel {
   }
 
   private recordPoint(): void {
-    if (!this.running || !this.window.length || this.listening) return;
-    if (this.recorder.run?.kind !== 'points') this.beginRun('points', null, null);
+    if (!this.map || !this.running || !this.window.length || this.listening) return;
+    if (this.recorder.run?.kind !== 'points' || this.recorder.run.map !== this.map) this.beginRun(this.map, 'points', null, null);
     this.recorder.addPoint(this.window);
     this.refreshSummary();
     this.dirty = true;
@@ -549,6 +549,7 @@ export class DynoPanel {
       const nm = r.coupled ? r.load.measuredNm + (this.correction && this.map ? this.map.inertia * r.load.alpha : 0) : 0;
       this.shown.rpm = snap.rpm;
       this.shown.nm += (nm - this.shown.nm) * k;
+      this.shown.absorber += ((r.coupled ? r.load.absorberNm : 0) - this.shown.absorber) * k;
       this.shown.throttle += (r.load.throttle - this.shown.throttle) * Math.min(1, dt / 0.1);
       this.shown.manifold += (r.manifoldBar - this.shown.manifold) * k;
     }
@@ -653,15 +654,16 @@ export class DynoPanel {
       [this.powerChart, 'hp', t('к.с.')],
     ] as const) {
       chart.setOverlay({ reference: reference(of), dots: [...dots(this.previous, of).map((d) => ({ ...d, hollow: true })), ...dots(run, of)], markers: markers(of) });
+      chart.setMarker(this.shown.rpm, false);
       chart.setData(series(run, of), previousSeries(of), unit, 0, true);
-      chart.setMarker(this.shown.rpm);
     }
   }
 
   private refreshReadouts(): void {
     const r = this.last;
     const rpm = this.shown.rpm;
-    const nm = this.shown.nm;
+    // An absorber only brakes. While the engine slows, the inertia term alone would show a negative engine torque.
+    const nm = Math.max(0, this.shown.nm);
     const kw = powerKw(nm, rpm);
     const hp = kw * HP_PER_KW;
     this.$('rpm').textContent = rpmText(rpm);
@@ -673,17 +675,18 @@ export class DynoPanel {
     const manifold = this.shown.manifold;
     this.$('manifold').textContent = `${manifold > 0.005 ? '+' : manifold < -0.005 ? '−' : ''}${num(Math.abs(manifold), 2)}`;
     this.$('formula').textContent = t('{kw} кВт = {nm} Н·м × {rpm} об/хв ÷ 9549 = {hp} к.с.', { kw: num(kw), nm: num(nm), rpm: num(rpm), hp: num(hp) });
-    const force = nm / ARM_M;
-    const kettles = kw / KETTLE_KW;
-    const litres = (kw / (WATER_HEAT * WATER_RISE_K)) * 60;
+    // The load cell holds the absorber's casing, and the heat goes into its water: both are the absorber's torque alone.
+    const absorberNm = Math.max(0, this.shown.absorber);
+    const force = absorberNm / ARM_M;
+    const heatKw = powerKw(absorberNm, rpm);
     this.$('feel').textContent = t('Датчик: {n} Н ({kg} кг) на важелі {arm} м. Тепло у воду: {kw} кВт, як {kettles} чайників; на {rise} °C нагріву це {litres} л/хв.', {
       n: num(force),
       kg: num(force / 9.81),
       arm: num(ARM_M, 2),
-      kw: num(kw),
-      kettles: num(kettles),
+      kw: num(heatKw),
+      kettles: num(heatKw / KETTLE_KW),
       rise: WATER_RISE_K,
-      litres: num(litres),
+      litres: num((heatKw / (WATER_HEAT * WATER_RISE_K)) * 60),
     });
     this.$('status').textContent = this.statusText(r);
     this.refreshSummary();
@@ -703,6 +706,10 @@ export class DynoPanel {
       lines.push(t('Точка {index} з {count}: стенд чекає, поки все встоїться.', { index: p.index + 1, count: p.count }));
     } else if (this.sweeping) {
       lines.push(t('Розгін іде: газ відкриває автоматика.'));
+    } else if (this.mode === 'sweep') {
+      if (r?.load.phase === 'rampdown') lines.push(t('Замір закінчено: газ закрито, і гальмо спускає оберти до початкових.'));
+      else if (this.current?.kind === 'sweep' && this.current.map === map) lines.push(t('Замір готовий. Новий «Пуск» малює наступний, а цей стане пунктиром.'));
+      else lines.push(t('Натисни «Пуск»: стенд сам відкриє газ і рівно підніматиме оберти.'));
     } else if (this.mode === 'off' && map && spec) {
       lines.push(t('Гальмо вимкнене: двигун крутить ще й ротор гальма, тому розганяється в {ratio} раза повільніше, а стенд нічого не міряє.', { ratio: num((map.inertia + spec.inertia) / map.inertia, 1) }));
     } else if (this.mode === 'hold' && this.listening) {
@@ -743,6 +750,8 @@ export class DynoPanel {
     const corrected = peaksOf(run, true)!;
     const raw = peaksOf(run, false)!;
     const parts: string[] = [];
+    // A kept run of another engine says whose it is.
+    if (run.map !== this.map) parts.push(t('Суцільна лінія: замір {engine}.', { engine: run.engine }));
     if (run.kind === 'sweep') {
       parts.push(
         t('Виміряно {nm} Н·м при {rpm} об/хв; ще {inertia} Н·м пішло на розгін маховика (J·ε); з поправкою {corrected} Н·м.', {
@@ -754,8 +763,9 @@ export class DynoPanel {
       );
       const peaks = this.correction ? corrected : raw;
       parts.push(t('{hp} к.с. при {rpm} об/хв.', { hp: num(peaks.power.hp), rpm: rpmText(peaks.power.rpm) }));
-      if (this.map && this.map.boostKind === 'turbo' && shortfall(run, this.map) > 0.02) {
-        parts.push(t('На такому темпі турбіна не встигає: усталена крива вища на {share}%.', { share: num(shortfall(run, this.map) * 100) }));
+      const sag = turboSag(run);
+      if (sag && sag.share > 0.02) {
+        parts.push(t('На {rpm} об/хв крива з поправкою на {share}% нижча за усталену: на такому темпі турбіна не встигає.', { rpm: rpmText(sag.rpm), share: num(sag.share * 100) }));
       }
     } else {
       const peaks = this.correction ? corrected : raw;
@@ -826,7 +836,8 @@ export class DynoPanel {
       t('Що є на листку стенда: криві моменту й потужності за обертами, стандарт поправки та її значення, тиск, температура й вологість у боксі, тип гальма, тип і темп заміру, згладжування. Без цих рядків цифри з різних стендів порівнювати не можна.'),
       sheet,
       t('Лінії на графіку: суцільна — цей замір, пунктир — попередній, тонкий пунктир — розрахунок усталеного повного газу, порожні кола — заводські дані. Точки утримання заповнені, а порожня точка означає, що двигун не встиг устоятися.'),
-      t('Звідки цифри: криву дає та сама модель, що й конструктор. На сторінці двигуна її масштаб приведено до заводських цифр зі статті, а оберти піків лишаються модельними. У конструкторі стенд показує саму модель, і порожні кола там показують заводські цифри для порівняння.'),
+      t('Звідки цифри: криву дає та сама модель, що й конструктор. На сторінці двигуна її приведено до заводських цифр зі статті. Нижче них крива зберігає форму моделі, а там, де сягає їх, іде рівно на заводському моменті або на сталій заводській потужності, тому оберти піків можуть відрізнятися від модельних. У конструкторі стенд показує саму модель, і порожні кола там показують заводські цифри для порівняння.'),
+      t('Тиск у колекторі стенд не міряє, його дає модель. На холостому вона показує 0,1–0,2 бар абсолютного тиску, а справжній двигун тримає 0,3–0,4: блок керування пізнім запалюванням тримає запас моменту, і частину заряду займають залишкові гази. Модель про це не знає.'),
     ].filter(Boolean);
     this.help.innerHTML = `<div class="dyno-help-card">
       <div class="panel-head"><h2>${t('Як читати стенд')}</h2><button type="button" class="btn" data-act="close-help">${t('Закрити')}</button></div>

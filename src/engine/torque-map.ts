@@ -36,6 +36,8 @@ export interface EngineTorqueMap {
   atmosphereNm: number;
   /** Manifold pressure at full load over atmospheric pressure. */
   pressureRatio: number[];
+  /** The highest of pressureRatio, where the turbo shaft is at full speed. */
+  topPressureRatio: number;
   /** Air mass flow at full load without boost, relative to its value at spoolRpm. */
   flowShare: number[];
   idleRpm: number;
@@ -152,7 +154,7 @@ export function spoolTime(map: EngineTorqueMap, rpm: number, rising: boolean): n
  */
 export function turboShaft(map: EngineTorqueMap, pressure: number): number {
   if (map.boostKind !== 'turbo') return 0;
-  const top = Math.max(...map.pressureRatio);
+  const top = map.topPressureRatio;
   if (top <= 1.001) return 0;
   return Math.sqrt(clamp((Math.max(1, pressure) ** COMPRESSOR_EXP - 1) / (top ** COMPRESSOR_EXP - 1), 0, 1));
 }
@@ -160,7 +162,7 @@ export function turboShaft(map: EngineTorqueMap, pressure: number): number {
 /** The pressure ratio a turbo shaft speed gives: the inverse of turboShaft. */
 export function pressureForShaft(map: EngineTorqueMap, shaft: number): number {
   if (map.boostKind !== 'turbo') return 1;
-  const top = Math.max(...map.pressureRatio);
+  const top = map.topPressureRatio;
   return (1 + clamp(shaft, 0, 1) ** 2 * (top ** COMPRESSOR_EXP - 1)) ** (1 / COMPRESSOR_EXP);
 }
 

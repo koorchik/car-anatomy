@@ -2361,6 +2361,11 @@ body.dyno-mode {
   display: none !important;
 }
 
+/* The stage is smaller on the dyno: the hint about parts would cover the model and the view buttons. */
+.dyno-mode .parts-callout {
+  display: none;
+}
+
 .dash > .dyno-col {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 236px 272px;
@@ -2422,7 +2427,8 @@ body.dyno-mode {
 .dyno-summary {
   min-height: 1.3em;
   max-height: 5.2em;
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
   font-size: 12px;
 }
 
@@ -2482,9 +2488,14 @@ body.dyno-mode {
   font-size: 13px;
 }
 
-.btn:disabled {
+.btn:disabled,
+.segmented button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+.segmented button:disabled:hover {
+  background: none;
 }
 
 .btn.small[aria-pressed='true'] {
@@ -2591,7 +2602,7 @@ body.dyno-mode {
 
 @media (max-width: 860px) {
   body.dyno-mode {
-    --dash-h: 336px;
+    --dash-h: 360px;
   }
 
   .dyno-mode .dash {
@@ -2673,11 +2684,27 @@ body.dyno-mode {
     font-size: 12px;
   }
 
+  /* Two rows that scroll sideways together: the mode and this mode's main action first, so «Пуск» and «Записати
+     точку» are on screen, and the next column peeks in at the edge. */
   .dyno-controls {
-    flex-direction: row;
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: auto auto;
+    grid-auto-columns: max-content;
+    justify-content: start;
+    align-items: center;
     overflow-x: auto;
-    gap: 10px;
+    gap: 4px 12px;
     padding-bottom: 2px;
+  }
+
+  .dyno-controls > .dyno-row:first-child {
+    order: -2;
+  }
+
+  .dyno-controls > [data-el='sweep-row'],
+  .dyno-controls > [data-el='hold-row2'] {
+    order: -1;
   }
 
   .dyno-row {

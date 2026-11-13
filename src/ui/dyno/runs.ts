@@ -22,6 +22,8 @@ export interface Run {
   kind: RunKind;
   /** Engine name, for the legend when runs of two engines are compared. */
   engine: string;
+  /** The torque map of the engine the run was made on: a run kept across engines is judged against its own. */
+  map: EngineTorqueMap;
   absorber: DynoSpec['absorber'];
   /** Sweep rate, rpm/s. */
   rate: number | null;
@@ -50,50 +52,79 @@ export const shownPoint = (p: RunPoint, correction: boolean): ShownPoint => {
 
 const BIN_RPM = 25;
 
+/** Sums of readings weighted by the steps each covers. */
+interface Sums {
+  n: number;
+  rpm: number;
+  nm: number;
+  alpha: number;
+  manifold: number;
+}
+
+const emptySums = (): Sums => ({ n: 0, rpm: 0, nm: 0, alpha: 0, manifold: 0 });
+
+function addReading(sums: Sums, r: CrankReadings): void {
+  const w = r.load.samples;
+  if (w <= 0) return;
+  sums.n += w;
+  sums.rpm += r.load.rpm * w;
+  sums.nm += r.load.measuredNm * w;
+  sums.alpha += r.load.alpha * w;
+  sums.manifold += r.manifoldBar * w;
+}
+
+const pointOf = (sums: Sums, inertia: number): RunPoint => ({
+  rpm: sums.rpm / sums.n,
+  nm: sums.nm / sums.n,
+  inertiaNm: (inertia * sums.alpha) / sums.n,
+  manifoldBar: sums.manifold / sums.n,
+  settled: true,
+});
+
 /** Averages readings weighted by the steps each one covers. */
 function average(readings: CrankReadings[], inertia: number): RunPoint | null {
-  let n = 0;
-  const sum = { rpm: 0, nm: 0, inertiaNm: 0, manifold: 0 };
-  for (const r of readings) {
-    const w = r.load.samples;
-    if (w <= 0) continue;
-    n += w;
-    sum.rpm += r.load.rpm * w;
-    sum.nm += r.load.measuredNm * w;
-    sum.inertiaNm += inertia * r.load.alpha * w;
-    sum.manifold += r.manifoldBar * w;
-  }
-  if (n === 0) return null;
-  return { rpm: sum.rpm / n, nm: sum.nm / n, inertiaNm: sum.inertiaNm / n, manifoldBar: sum.manifold / n, settled: true };
+  const sums = emptySums();
+  for (const r of readings) addReading(sums, r);
+  return sums.n > 0 ? pointOf(sums, inertia) : null;
 }
 
 export class RunRecorder {
   run: Run | null = null;
-  private bins = new Map<number, CrankReadings[]>();
+  /** Running sums of each 25 rpm bin of a sweep, and the bins' keys in the order of run.points. */
+  private bins = new Map<number, Sums>();
+  private keys: number[] = [];
   private inertia = 0;
   /** Sweeps record above this speed: the first moments of a ramp are a transient. */
   private recordFrom = 0;
 
-  begin(kind: RunKind, meta: Pick<Run, 'engine' | 'absorber' | 'rate' | 'throttle'>, inertia: number, recordFrom = 0): void {
-    this.run = { kind, ...meta, points: [], stopped: null, stoppedAt: null };
+  begin(kind: RunKind, meta: Pick<Run, 'engine' | 'absorber' | 'rate' | 'throttle'>, map: EngineTorqueMap, recordFrom = 0): void {
+    this.run = { kind, ...meta, map, points: [], stopped: null, stoppedAt: null };
     this.bins.clear();
-    this.inertia = inertia;
+    this.keys = [];
+    this.inertia = map.inertia;
     this.recordFrom = recordFrom;
   }
 
-  /** Takes a reading during a sweep. Only the ramp counts, in bins of 25 rpm. */
+  /** Takes a reading during a sweep. Only the ramp counts, in bins of 25 rpm; only the bin it falls in changes. */
   push(reading: CrankReadings): void {
     const run = this.run;
     if (!run || run.kind !== 'sweep' || reading.load.phase !== 'ramp' || reading.load.samples <= 0) return;
     if (reading.load.rpm < this.recordFrom) return;
     const key = Math.floor(reading.load.rpm / BIN_RPM);
-    const list = this.bins.get(key) ?? [];
-    list.push(reading);
-    this.bins.set(key, list);
-    run.points = [...this.bins.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([, readings]) => average(readings, this.inertia)!)
-      .filter(Boolean);
+    // Keys come almost always in rising order, so the search starts from the end.
+    let index = this.keys.length;
+    while (index > 0 && this.keys[index - 1]! > key) index--;
+    const known = this.bins.get(key);
+    const sums = known ?? emptySums();
+    addReading(sums, reading);
+    const point = pointOf(sums, this.inertia);
+    if (known) {
+      run.points[index - 1] = point;
+    } else {
+      this.bins.set(key, sums);
+      this.keys.splice(index, 0, key);
+      run.points.splice(index, 0, point);
+    }
   }
 
   /** Adds a held point, averaged from the readings given (the last second). */
@@ -115,6 +146,7 @@ export class RunRecorder {
     const run = this.run;
     this.run = null;
     this.bins.clear();
+    this.keys = [];
     return run;
   }
 }
@@ -138,12 +170,35 @@ export function peaksOf(run: Run, correction: boolean): Peaks | null {
   return { torque: shown[t]!, power: shown[p]!, inertiaNm: run.points[t]!.inertiaNm };
 }
 
-/** How far below the steady full-load curve a run's peak sits, as a share. Positive when lower. */
-export function shortfall(run: Run, map: EngineTorqueMap): number {
-  const peaks = peaksOf(run, true);
-  if (!peaks) return 0;
-  const steady = Math.max(...map.wotNm);
-  return 1 - peaks.torque.nm / steady;
+/** Where a sweep sits furthest below the steady full-load curve. */
+export interface Sag {
+  rpm: number;
+  /** Share of the steady torque missing, positive when lower. */
+  share: number;
+}
+
+/** Bins averaged on each side when looking for the sag, so one noisy bin cannot make it. */
+const SAG_SMOOTH = 2;
+
+/**
+ * Where an inertia-corrected sweep of a turbo engine falls furthest below the steady full-load curve of its own
+ * engine, from the start of the sweep to 1000 rpm past full boost: what is left once J·ε is put back is the turbo
+ * that has not yet caught up. Null for any other run.
+ */
+export function turboSag(run: Run): Sag | null {
+  const map = run.map;
+  if (run.kind !== 'sweep' || map.boostKind !== 'turbo' || !run.points.length) return null;
+  const top = map.spoolRpm + 1000;
+  const shown = run.points.map((p) => shownPoint(p, true));
+  let worst: Sag | null = null;
+  for (let i = 0; i < shown.length && shown[i]!.rpm <= top; i++) {
+    const near = shown.slice(Math.max(0, i - SAG_SMOOTH), i + SAG_SMOOTH + 1);
+    const nm = near.reduce((sum, p) => sum + p.nm, 0) / near.length;
+    const steady = mapValue(map, map.wotNm, shown[i]!.rpm);
+    const share = 1 - nm / steady;
+    if (!worst || share > worst.share) worst = { rpm: shown[i]!.rpm, share };
+  }
+  return worst;
 }
 
 interface StepState {

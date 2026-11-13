@@ -8,7 +8,7 @@ import { EngineSynth, synthConfig, type SynthConfig } from '../src/audio/synth.t
 import { DynoLoad, freePedalFor, sizeAbsorber, sweepEndRpm, sweepStartRpm, type AbsorberKind, type DynoCommand } from '../src/engine/dyno-load.ts';
 import { LoadedCrank } from '../src/engine/loaded-crank.ts';
 import { PEDAL_TOP_SPEED } from '../src/engine/sim.ts';
-import { catalogueTorqueMap } from '../src/ui/dyno/maps.ts';
+import { catalogueTorqueMap } from '../src/designer/torque-map.ts';
 
 const FS = 48000;
 const OUT = '.tmp/audio';

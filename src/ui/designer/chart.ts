@@ -116,15 +116,17 @@ export class RpmChart {
     this.draw();
   }
 
-  /** Fixes the axes, so a curve that grows point by point does not keep rescaling them. Null lets the data decide. */
+  /**
+   * Fixes the axes, so a curve that grows point by point does not keep rescaling them. Null lets the data decide.
+   * Takes effect with the next setData, which draws once for everything set before it.
+   */
   setFrame(frame: { xMax: number; yMax: number } | null): void {
     this.frame = frame;
-    this.setData(this.series, this.baseline, this.unit, this.digits, this.showPeak);
   }
 
+  /** Drawn with the next setData. */
   setOverlay(overlay: ChartOverlay | null): void {
     this.overlay = overlay;
-    this.draw();
   }
 
   /** Shades the speeds where the engine wears and where it breaks. */
@@ -134,10 +136,11 @@ export class RpmChart {
     this.draw();
   }
 
-  setMarker(rpm: number): void {
+  /** Moves the speed marker. With redraw false it waits for the next setData. */
+  setMarker(rpm: number, redraw = true): void {
     if (Math.abs(rpm - this.marker) < 1) return;
     this.marker = rpm;
-    this.draw();
+    if (redraw) this.draw();
   }
 
   private yAt(value: number, plotH: number): number {

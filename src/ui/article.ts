@@ -114,6 +114,7 @@ const FIELD_NAMES: Record<string, string> = {
   fuel: t('паливо'), years: t('роки випуску'), redline: t('межу обертів'), idle: t('холостий хід'), powerHp: t('потужність'), powerRpm: t('оберти потужності'), torqueNm: t('момент'), torqueRpm: t('оберти моменту'),
   firingOrder: t('порядок запалювання'), numbering: t('нумерацію циліндрів'), veeAngle: t('кут розвалу'), firingIntervals: t('інтервали спалахів'), exhaust: t('характер вихлопу'),
   rotorR: t('радіус ротора'), rotorE: t('ексцентриситет'), rotorWidth: t('ширину ротора'),
+  flywheelKg: t('масу маховика'),
 };
 
 /** What this engine's exhaust is set to, in words, so the difference between engines of a page can be read as well as heard. */
