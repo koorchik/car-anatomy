@@ -58,3 +58,16 @@ export function transaxleDiffOutput(car: CarRecord, engine: Engine, spec: Gearbo
   const [a, b] = frame.stubs.map(toCar) as [Vec3, Vec3];
   return a[1] >= b[1] ? a : b;
 }
+
+/**
+ * The stub ends a transaxle's 3D draws in a car: the left inner joint (DriveCar.diffOutputs) and its mirror in y, in
+ * the gearbox frame and in the order of transaxleFrame().stubs, for TransaxleModel's `stubs`.
+ */
+export function transaxleStubs(car: CarRecord, engine: Engine, spec: GearboxSpec, left: Vec3): [GearboxPoint, GearboxPoint] {
+  const frame = transaxleFrame(spec);
+  const toCar = gearboxToCar(car, engine, frame.bellhousing);
+  const toBox = carToGearbox(car, engine, frame.bellhousing);
+  const right: Vec3 = [left[0], -left[1], left[2]];
+  const leftFirst = toCar(frame.stubs[0])[1] >= toCar(frame.stubs[1])[1];
+  return leftFirst ? [toBox(left), toBox(right)] : [toBox(right), toBox(left)];
+}
