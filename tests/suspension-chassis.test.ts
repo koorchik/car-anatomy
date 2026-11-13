@@ -357,7 +357,8 @@ describe('steady cornering', () => {
     const ay = 0.9 * G;
     const r = settle(stiffRear, ay);
     expect(r.fz[2]).toBe(0);
-    // The rear takes more of the transfer than its static load allows: about 58 % in the linear model.
+    // The rear takes more of the transfer than its static load allows: 57 % in the linear model, where this car needs
+    // about 54 % (the research's 58 % is for a 1.50 m track and leaves out the centre of mass's shift in roll).
     const lin = rollModel(stiffRear).transferPerAy;
     expect(lin[1].total / (lin[0].total + lin[1].total)).toBeGreaterThan(0.55);
     const f = settle(thickFront, ay);
