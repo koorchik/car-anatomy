@@ -141,9 +141,16 @@ describe('the research numbers, same coefficients (docs/research/suspensions.md 
     const full = split(flat);
     const noShift = split({ ...flat, PVY3: 0, PVY4: 0 });
     expect(Math.abs(noShift)).toBeLessThan(0.2 * Math.abs(full));
-    // PDY3 alone: −PDY3·γ² at 2° is +0.35 %.
+    // PDY3 alone: (1 − PDY3·γ²) raises μ by 0.35 % at 2° with the file's negative PDY3, and the peak of the whole
+    // curve moves by about that, either way the wheel leans.
     expect(-SEDAN_PAC02.PDY3 * (2 * DEG) ** 2).toBeCloseTo(0.0035, 4);
-    expect(-SEDAN_PAC02.PDY3 * (2 * DEG) ** 2).toBeLessThan(0.005);
+    for (const gamma of [-2 * DEG, 2 * DEG]) {
+      for (const sign of [1, -1] as const) {
+        const gain = peakFy(flat, 4850, gamma, sign) / peakFy({ ...flat, PDY3: 0 }, 4850, gamma, sign) - 1;
+        expect(gain).toBeGreaterThan(0);
+        expect(gain).toBeLessThan(0.005);
+      }
+    }
   });
 
   it('E_y stays at or below 1 from −5° to +3.5° over the file loads; at +5° and 10 kN it reaches 1.31', () => {

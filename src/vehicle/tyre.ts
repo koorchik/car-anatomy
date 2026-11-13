@@ -16,8 +16,8 @@
 //
 // Equations: PAC2002 as in Pacejka, «Tire and Vehicle Dynamics», 2nd ed., ch. 4 (MF 5.2 form), cross-checked against
 // MFeval Solver.m and Chrono ChPac02Tire.cpp (BSD-3-Clause). Two places where Chrono departs from the book follow the
-// book: μy falls with camber as (1 − PDY3·γ²) (Chrono writes 1 + PDY3·γ²), and the combined trail uses sign(α_t)
-// (Chrono writes sign(κ)). Chrono's clamp of B·x at ±π/2 is not used: it bends the curve past the peak.
+// book: μy changes with camber as (1 − PDY3·γ²), so the Sedan file's negative PDY3 raises it (Chrono writes
+// 1 + PDY3·γ²), and the combined trail uses sign(α_t) (Chrono writes sign(κ)). Chrono's clamp of B·x at ±π/2 is not used: it bends the curve past the peak.
 
 import { modelMassKg, type CarRecord } from './car.ts';
 import { G } from './constants.ts';
