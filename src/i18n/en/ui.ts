@@ -247,7 +247,7 @@ export const UI_EN: Record<string, string> = {
   '{value} кГц': '{value} kHz',
   'Спектр зʼявиться після запуску': 'Spectrum appears after start',
 
-  // Tachometer (tacho.ts)
+  // Tachometer (widgets/tacho.ts)
   'Тахометр': 'Tachometer',
   'об/хв': 'rpm',
 

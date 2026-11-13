@@ -28,7 +28,7 @@ import { RELIEF_BAR, RELIEF_BAR_HEAVY } from '../../systems/oil.ts';
 import { WELL_PLACES, type WellPlace } from '../../systems/sump.ts';
 import { newLapSample, sampleLap, type LapSample, type LapTrace } from '../../vehicle/lap.ts';
 import { TYRE_IDS, TYRES, type TyreId, type VehicleSpec } from '../../vehicle/vehicle.ts';
-import { Tacho } from '../tacho.ts';
+import { Tacho } from '../widgets/tacho.ts';
 import { nextTask } from '../next-task.ts';
 import { sumpArticleHtml } from './article.ts';
 import { GgMeter, PressureGauge, StripChart, TrackMap } from './gauges.ts';

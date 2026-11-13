@@ -24,7 +24,7 @@ import { Spectrum } from './ui/spectrum.ts';
 import { tableHtml } from './ui/table.ts';
 import { LANGUAGE_GROUP_LABEL, LANGUAGE_LABELS, locale, switchLocale, type Locale } from './i18n/locale.ts';
 import { plural, t } from './i18n/t.ts';
-import { Tacho } from './ui/tacho.ts';
+import { Tacho } from './ui/widgets/tacho.ts';
 import { SystemsView } from './ui/systems-view.ts';
 import { shownAdvance, type SystemsFrame } from './systems/sim.ts';
 import { liveScratch, liveTiming, type ValveState } from './engine/valve-control.ts';
