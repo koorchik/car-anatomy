@@ -4,6 +4,7 @@
 // record by vehicleSpec() in car.ts.
 
 import { AIR_DENSITY, G } from './constants.ts';
+import { roadLoadN, type RoadLoadCoeffs } from './road-load.ts';
 // Compatibility until stage O2a: the oil page still reads TYRES[id].name. Then pages translate ids with TYRE_NAMES
 // themselves, and this import, the only one that gives src/vehicle text, goes.
 import { TYRE_NAMES } from '../data/vehicle-names.ts';
@@ -45,13 +46,12 @@ export interface EngineMount {
 
 export interface VehicleSpec {
   name: string;
+  /** With the driver: roadLoad.massKg is the same number. */
   massKg: number;
-  /** Drag area Cd·A, m². */
-  cdA: number;
+  /** Rolling resistance and drag: the one road load of the site (road-load.ts), derived from the car's record. */
+  roadLoad: RoadLoadCoeffs;
   /** Downforce area Cl·A, m², positive pushes down. */
   clA: number;
-  /** Rolling resistance coefficient. */
-  crr: number;
   drive: 'fwd' | 'rwd' | 'awd';
   /** Share of weight on the driven wheels at rest: the traction limit when no chassis data is given. */
   drivenShare: number;
@@ -65,5 +65,5 @@ export interface VehicleSpec {
   frontShare?: number;
 }
 
-/** Rolling and aerodynamic drag at a speed, newtons. */
-export const dragForce = (car: VehicleSpec, v: number): number => 0.5 * AIR_DENSITY * car.cdA * v * v + car.crr * car.massKg * G;
+/** Rolling and aerodynamic drag at a speed on the level, newtons: roadLoadN with the car's coefficients. */
+export const dragForce = (car: Pick<VehicleSpec, 'roadLoad'>, v: number): number => roadLoadN(car.roadLoad, v, 0);

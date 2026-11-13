@@ -56,6 +56,15 @@ export interface LapSample {
 
 export const newLapSample = (): LapSample => ({ s: 0, x: 0, y: 0, heading: 0, v: 0, ax: 0, ay: 0, av: 0, axF: 0, ayF: 0, avF: 0, rpm: 0, gear: 1, throttle: 0, brake: 0, sector: -1, index: 0 });
 
+/**
+ * Levels of the lap model (docs/vehicle-model.md): L0 a point mass on the oil page's stand-ins, L1 the car's record
+ * (mass with the driver, tyres, roadLoadN) and a real gearbox where one exists, L2 weight transfer, L3 the live drive.
+ */
+export type LapLevel = 'L0' | 'L1' | 'L2' | 'L3';
+
+/** The one lap every page shows on factory settings, and labels. Stage C3a moves every page to L2 at once. */
+export const CANONICAL_LAP_LEVEL: LapLevel = 'L1';
+
 /** Real tyres and suspension build their forces over 0.1-0.3 s; QSS steps at once (estimate). */
 export const CHASSIS_LAG_S = 0.15;
 /** Speed limit where nothing else limits, m/s. */

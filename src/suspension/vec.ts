@@ -149,3 +149,83 @@ export function solveLinear(a: Float64Array, b: Float64Array, n: number): number
   }
   return sign;
 }
+
+/**
+ * Singular value decomposition of the m×n row-major matrix `a` by one-sided Jacobi (Hestenes): the columns of a copy
+ * of `a` are rotated in pairs until they are mutually orthogonal, and the rotations, gathered in V, give a·V = U·Σ.
+ * Exact to rounding for the small matrices of a linkage (at most a few dozen entries). Returns the singular values in
+ * descending order and V (n×n, row-major; column j belongs to s[j]). With m < n the last n − m values are 0.
+ */
+export function svd(a: ArrayLike<number>, m: number, n: number): { s: Float64Array; v: Float64Array } {
+  const u = Float64Array.from({ length: m * n }, (_, i) => a[i]);
+  const v = new Float64Array(n * n);
+  for (let i = 0; i < n; i++) v[i * n + i] = 1;
+  for (let sweep = 0; sweep < 60; sweep++) {
+    let rotated = false;
+    for (let p = 0; p < n - 1; p++) {
+      for (let q = p + 1; q < n; q++) {
+        let alpha = 0;
+        let beta = 0;
+        let gamma = 0;
+        for (let i = 0; i < m; i++) {
+          const up = u[i * n + p];
+          const uq = u[i * n + q];
+          alpha += up * up;
+          beta += uq * uq;
+          gamma += up * uq;
+        }
+        if (gamma === 0 || Math.abs(gamma) <= 1e-15 * Math.sqrt(alpha * beta)) continue;
+        rotated = true;
+        const zeta = (beta - alpha) / (2 * gamma);
+        const t = (zeta >= 0 ? 1 : -1) / (Math.abs(zeta) + Math.sqrt(1 + zeta * zeta));
+        const c = 1 / Math.sqrt(1 + t * t);
+        const s = c * t;
+        for (let i = 0; i < m; i++) {
+          const up = u[i * n + p];
+          const uq = u[i * n + q];
+          u[i * n + p] = c * up - s * uq;
+          u[i * n + q] = s * up + c * uq;
+        }
+        for (let i = 0; i < n; i++) {
+          const vp = v[i * n + p];
+          const vq = v[i * n + q];
+          v[i * n + p] = c * vp - s * vq;
+          v[i * n + q] = s * vp + c * vq;
+        }
+      }
+    }
+    if (!rotated) break;
+  }
+  const norms = Array.from({ length: n }, (_, j) => {
+    let sum = 0;
+    for (let i = 0; i < m; i++) sum += u[i * n + j] ** 2;
+    return Math.sqrt(sum);
+  });
+  const order = norms.map((_, j) => j).sort((x, y) => norms[y] - norms[x]);
+  const s = Float64Array.from(order, (j) => norms[j]);
+  const sorted = new Float64Array(n * n);
+  order.forEach((j, k) => {
+    for (let i = 0; i < n; i++) sorted[i * n + k] = v[i * n + j];
+  });
+  return { s, v: sorted };
+}
+
+/** Numerical rank of the m×n matrix `a`: singular values above `tol` times the largest. */
+export function rank(a: ArrayLike<number>, m: number, n: number, tol = 1e-9): number {
+  const { s } = svd(a, m, n);
+  return s.filter((x) => x > tol * s[0]).length;
+}
+
+/**
+ * An orthonormal basis of the null space of the m×n matrix `a` (the directions x with a·x = 0), from its SVD: the
+ * right singular vectors whose singular values are at most `tol` times the largest.
+ */
+export function nullSpace(a: ArrayLike<number>, m: number, n: number, tol = 1e-9): Float64Array[] {
+  const { s, v } = svd(a, m, n);
+  const out: Float64Array[] = [];
+  for (let j = 0; j < n; j++) {
+    if (s[j] > tol * s[0]) continue;
+    out.push(Float64Array.from({ length: n }, (_, i) => v[i * n + j]));
+  }
+  return out;
+}

@@ -7,9 +7,12 @@
 // builder swaps an engine. The suspension's ChassisModel and ChassisSim work in the CG frame (origin on the road
 // under the centre of mass); carFrameToCg() is the only way between the two.
 
-import { LAP_STAND_IN } from './constants.ts';
-import type { RoadLoad } from './road-load.ts';
+import { drivingMassKg } from './mass.ts';
+import { roadLoadCoeffs, type RoadLoad } from './road-load.ts';
+import { parseTyreSize, rollingRadiusM } from './tyre-size.ts';
 import type { EngineMount, TyreId, VehicleSpec } from './vehicle.ts';
+
+export { DRIVER_KG, drivingMassKg } from './mass.ts';
 
 export type Vec3 = readonly [number, number, number];
 
@@ -76,7 +79,7 @@ export interface CarRecord {
   tyre: { size: string; sizeRear?: string; id: TyreId };
   /** EPA coast-down in SI, if the car is in the EPA test car list for this model year. */
   roadLoad: RoadLoad | null;
-  /** Maker's Cd and frontal area, for governed cars without an EPA row. */
+  /** Maker's Cd and frontal area, for cars without an EPA row whose top speed says nothing about drag. */
   aero: { cd: number; areaM2: number } | null;
   /** Filled by stage A1c for the cars of the overview. */
   dimensions?: CarDimensions;
@@ -87,20 +90,8 @@ export interface CarRecord {
   unverified: string[];
 }
 
-/** What the EU mass in running order counts for the driver, and what drivingMassKg adds to the other bases, kg. */
-export const DRIVER_KG = 75;
-
 /** CG height of a record without one, m: NHTSA measured 0.50-0.57 m on passenger cars (docs/vehicle-model.md). */
 export const CG_HEIGHT_ESTIMATE_M = 0.52;
-
-/** The car with one driver aboard, kg. */
-export const drivingMassKg = (car: CarRecord): number => car.massKg + (car.massBasis === 'eu' ? 0 : DRIVER_KG);
-
-/**
- * The mass every derived model carries. Stage A1a keeps the oil page's lap as it was, and that lap carries no driver,
- * so this is the recorded mass; A1b checks the masses against the makers and switches it to drivingMassKg.
- */
-export const modelMassKg = (car: CarRecord): number => car.massKg;
 
 /** Share of the weight on the driven wheels at rest; all of it on four-wheel drive. */
 export const drivenShare = (car: CarRecord): number => (car.drive === 'awd' ? 1 : car.drive === 'fwd' ? car.body.frontShare : 1 - car.body.frontShare);
@@ -125,18 +116,27 @@ export function cgToCarFrame(car: CarRecord): (p: Vec3) => Vec3 {
 /** The centre of mass in the front-axle frame: (−a, 0, cgHeight). */
 export const cgPoint = (car: CarRecord): Vec3 => [-cgBehindFrontAxleM(car), 0, cgHeightM(car)];
 
+/** Rolling radius of each axle's tyres, m, from the sizes; the rear is the front's unless the car is staggered. */
+export const tyreRadiiM = (car: CarRecord): { front: number; rear: number } => ({
+  front: rollingRadiusM(parseTyreSize(car.tyre.size)),
+  rear: rollingRadiusM(parseTyreSize(car.tyre.sizeRear ?? car.tyre.size)),
+});
+
+/** The radius the point-mass lap turns into speed: the driven axle's, the rear on four-wheel drive. */
+export const drivenTyreRadiusM = (car: CarRecord): number => (car.drive === 'fwd' ? tyreRadiiM(car).front : tyreRadiiM(car).rear);
+
 /**
- * The lap's VehicleSpec, derived and never stored a second time. Until stage A1b the drag, rolling resistance and
- * tyre radius are the lap's stand-ins for every car, as they were before the records existed.
+ * The lap's VehicleSpec, derived and never stored a second time: the mass with the driver, the road load by the
+ * C_dA rule (roadLoadCoeffs, the same coefficients every section gets) and the driven tyres' radius. No car has
+ * downforce data yet, so clA is 0.
  */
 export function vehicleSpec(car: CarRecord): VehicleSpec {
   return {
     name: car.name,
-    massKg: modelMassKg(car),
-    cdA: LAP_STAND_IN.cdA,
-    clA: LAP_STAND_IN.clA,
-    crr: LAP_STAND_IN.crr,
-    tyreRadiusM: LAP_STAND_IN.tyreRadiusM,
+    massKg: drivingMassKg(car),
+    roadLoad: roadLoadCoeffs(car),
+    clA: 0,
+    tyreRadiusM: drivenTyreRadiusM(car),
     drive: car.drive,
     drivenShare: drivenShare(car),
     mount: car.mount,
@@ -144,4 +144,4 @@ export function vehicleSpec(car: CarRecord): VehicleSpec {
 }
 
 /** The suspension plan's VehicleBody with the mass, for ChassisSpec: the same mass as vehicleSpec. */
-export const bodyOf = (car: CarRecord): VehicleBody & { massKg: number } => ({ ...car.body, massKg: modelMassKg(car) });
+export const bodyOf = (car: CarRecord): VehicleBody & { massKg: number } => ({ ...car.body, massKg: drivingMassKg(car) });

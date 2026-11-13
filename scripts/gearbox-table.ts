@@ -1,13 +1,21 @@
 // What the gearbox data gives: `node scripts/gearbox-table.ts [car or gearbox id...]` (all records without an id).
 // Ratios from the teeth against the published ones, the kind of every state of the shift matrix, the meshes that
 // carry torque, and the geometry of every pair (module, helix from the shared centre distance, contact ratios).
+// For a gearbox in a car: the natural frequencies of the drivetrain with each damper, from the car's engine.
+import { carById } from '../src/data/cars.ts';
 import { DRIVE_CARS, driveCarById } from '../src/data/drive-cars.ts';
+import { engineById } from '../src/data/engines.ts';
 import { ALL_GEARBOXES, gearboxById } from '../src/data/gearboxes.ts';
 import { gearboxSpec, type GearboxRecord } from '../src/drivetrain/catalogue.ts';
+import { CLUTCH, drivetrainCore } from '../src/drivetrain/core.ts';
 import type { DriveCar } from '../src/drivetrain/drive-car.ts';
+import { DISC_DAMPER, DISC_HUB, DMF_DAMPER, dryClutch, stiffDisc } from '../src/drivetrain/elements.ts';
 import { undercut } from '../src/drivetrain/gear-geometry.ts';
 import { stackLength } from '../src/drivetrain/layouts/layshaft.ts';
-import { buildGearbox } from '../src/drivetrain/topology.ts';
+import { naturalModes } from '../src/drivetrain/modes.ts';
+import type { DamperDef } from '../src/drivetrain/spec.ts';
+import { type Gearbox, buildGearbox } from '../src/drivetrain/topology.ts';
+import { catalogueTorqueMap } from '../src/designer/torque-map.ts';
 
 const DEG = 180 / Math.PI;
 const helix = (beta: number): string => (beta === 0 ? 'spur' : `${(Math.abs(beta) * DEG).toFixed(2)}° ${beta > 0 ? 'R' : 'L'}`);
@@ -44,6 +52,43 @@ function print(record: GearboxRecord, car: DriveCar | null): void {
   }
   if (spec.kind === 'layshaft') console.log(`gear stack ${stackLength(spec).toFixed(0)} mm long`);
   if (record.unverified.length) console.log(`unverified: ${record.unverified.join(', ')}`);
+  if (car) printModes(box, car);
+}
+
+/**
+ * Natural frequencies of the drivetrain from the car's engine to the gearbox output, without the car (stage K2b adds
+ * it): with the clutch slipping only the ring behind the damper swings against the engine; with it locked, the
+ * gearbox side joins in, in neutral or in each gear with the output free (a light car: the halfshafts are soft
+ * against the damper) or held (the brake stub). Undamped frequencies, with the damping ratio of each mode.
+ */
+function printModes(box: Gearbox, car: DriveCar): void {
+  const engineId = carById(car.car)?.engine;
+  const engine = engineId ? engineById(engineId) : undefined;
+  if (!engine) return;
+  const map = catalogueTorqueMap(engine);
+  const peak = Math.max(...map.wotNm);
+  console.log(
+    `\nnatural frequencies, Hz (damping ratio): engine ${engineId} ${map.inertia.toFixed(3)} kg·m², ${peak.toFixed(0)} N·m; ` +
+      `disc hub ${DISC_HUB} kg·m²; estimated dry clutch, no car`,
+  );
+  const gears = box.states.filter((s) => s.kind === 'gear').map((s) => s.name);
+  // Held output: the box is rigid to the case in any gear, so the first forward gear stands for all.
+  const first = gears.find((g) => g !== 'R') ?? gears[0]!;
+  const dampers: Array<[string, DamperDef]> = [['disc', DISC_DAMPER], ['dual-mass', DMF_DAMPER], ['stiff disc', stiffDisc(map.inertia)]];
+  const cell = (hz: number | undefined, zeta?: number) => (hz === undefined ? '—' : zeta === undefined ? hz.toFixed(1) : `${hz.toFixed(1)} (${zeta.toFixed(2)})`);
+  const columns = ['slipping', 'N, locked', ...gears.map((g) => `${g}, free`), `${first}, held`];
+  console.log('damper'.padEnd(34) + columns.map((c) => c.padStart(14)).join(''));
+  for (const [name, damper] of dampers) {
+    const core = drivetrainCore(box, { engineInertia: map.inertia, damper, clutch: dryClutch(peak) });
+    const mode = (locked: string[], held: string[] = []) => naturalModes(core, { locked, held })[0];
+    const cells = [
+      mode([]),
+      mode([CLUTCH]),
+      ...gears.map((g) => mode([CLUTCH, `sync-${g}`])),
+      mode([CLUTCH, `sync-${first}`], [box.spec.output]),
+    ].map((m) => cell(m?.hz, m?.zeta).padStart(14));
+    console.log(`${name} ${damper.stiffness.toFixed(0)} N·m/rad, J ${damper.inertia}`.padEnd(34) + cells.join(''));
+  }
 }
 
 const ids = process.argv.slice(2);

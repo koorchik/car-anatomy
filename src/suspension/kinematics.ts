@@ -12,15 +12,26 @@
 //   are relative to the side of the car, so both wheels give the same numbers.
 //   Motion ratio mr = −dL/dq: shortening of the spring (or damper) per metre of bump. Positive, about 0.94 on a strut.
 //   tanβ = dC_y/dq (left corner: the contact point moving out in bump is positive), tanθ = dP_x/dq.
+//   Camber gain dγ/dq and bump steer dτ/dq are per metre of travel; negative gain is more negative camber in bump,
+//   negative bump steer is toe-out. The roll centre of symmetric bump is y_C·tanβ above the road. Instant centres are
+//   those of the knuckle's motion seen from the front (plane x = W_x) and from the side (plane y = W_y), body frame,
+//   NaN when farther than a kilometre. Kingpin offset is the steering axis's lateral distance from the wheel centre at
+//   wheel-centre height, positive when the axis is inboard.
 //   Roll is positive when the left side goes up, pitch positive nose down.
 //
 // buildAxle solves the corner on a grid of travel (2 mm steps between the end stops) once; the simulation reads the
 // table with linear interpolation, the 3D solves each frame exactly starting from the table (solvePose), so links on
-// screen never stretch.
+// screen never stretch. buildAxleLite (axle-lite.ts) takes the static numbers from a few exact solves instead.
+//
+// Steering axis: the lower ball joint to the strut top (MacPherson), the two ball joints (double wishbone), the split
+// axis in the carrier (dual-axis, RevoKnuckle), or two virtual pivots where pairs of links come closest (multilink).
+// A split knuckle's pose carries its turn in the carrier as the eighth number; the strut and its spring sit on the
+// carrier, the wheel on the knuckle.
 
-import type { AxleSpec, Vec3 } from './spec.ts';
+import type { AnyCornerLinkage, AxleSpec, CornerLinkage, Vec3 } from './spec.ts';
 import { CornerSolver, POSE_SIZE, type SolveResult } from './solve.ts';
-import { dist, nlerpInto, rotateQuatBy } from './vec.ts';
+import { PivotSolver } from './solve-pivot.ts';
+import { cross, dist, dot, nlerpInto, rotateQuatBy, scale, sub, unit } from './vec.ts';
 
 export type Side = 'left' | 'right';
 
@@ -54,17 +65,32 @@ export interface CornerSample {
   plunge: number;
   cvInner: number;
   cvOuter: number;
+  /** dγ/dq and dτ/dq, rad/m. */
+  camberGain: number;
+  bumpSteer: number;
+  /** Roll centre of symmetric bump above the road under the wheel, y_C·tanβ, m. */
+  rcHeight: number;
+  /** Instant centres of the knuckle in the front view (y, z) and the side view (x, z), m; NaN at infinity. */
+  icFrontY: number;
+  icFrontZ: number;
+  icSideX: number;
+  icSideZ: number;
+  /** Lateral distance from the wheel centre to the steering axis at wheel-centre height, m, positive inboard. */
+  kingpinOffset: number;
 }
 
 const FIELDS = [
   'camber', 'toe', 'contactX', 'contactY', 'contactZ', 'wheelX', 'wheelY', 'wheelZ', 'springLen', 'damperLen',
   'mrSpring', 'mrDamper', 'tanBeta', 'tanThetaCP', 'tanThetaWC', 'caster', 'kpi', 'scrub', 'trail', 'plunge', 'cvInner',
-  'cvOuter',
+  'cvOuter', 'camberGain', 'bumpSteer', 'rcHeight', 'icFrontY', 'icFrontZ', 'icSideX', 'icSideZ', 'kingpinOffset',
 ] as const;
 export type CornerField = (typeof FIELDS)[number];
 type Field = CornerField;
 /** Fields whose sign flips on the right corner (lateral positions and slopes). */
-const MIRRORED: ReadonlySet<Field> = new Set<Field>(['contactY', 'wheelY', 'tanBeta']);
+const MIRRORED: ReadonlySet<Field> = new Set<Field>(['contactY', 'wheelY', 'tanBeta', 'icFrontY']);
+
+/** An instant centre farther than this from the wheel counts as at infinity, m. */
+const IC_FAR_M = 1000;
 
 export const newCornerSample = (): CornerSample => {
   const s = { travel: 0 } as CornerSample;
@@ -85,42 +111,120 @@ export interface AxleTable {
   detSign: number;
 }
 
-export class Axle {
-  readonly spec: AxleSpec;
+/** Where the steering axis of a corner comes from. */
+type AxisSource =
+  /** Two knuckle points: two ball joints, or the axis of a split knuckle (shared by carrier and knuckle). */
+  | { kind: 'points'; lower: Vec3; upper: Vec3 }
+  /** The lower ball joint (a knuckle point) to the strut top mount (a body point). */
+  | { kind: 'strut'; lower: Vec3; top: Vec3 }
+  /** Two virtual pivots of a multilink, each where the lines of two rods come closest (rod indices). */
+  | { kind: 'virtual'; lower: [number, number]; upper: [number, number] };
+
+/** The wheel end of a spring or damper that is not on the strut: on the knuckle (or a split knuckle's carrier), on a
+ *  wishbone (rigid with it, turning about its pivot axis), or on a rod's own line. */
+type Mount =
+  | { kind: 'knuckle'; body: Vec3; wheel: Vec3 }
+  /** On a wishbone: its pivot `front` and unit `axis`, the ball joint at design, and at design the ball's arm square to
+   *  the axis (r0), the wheel end from the pivot (q), axis × q and axis·q, so measuring allocates nothing. */
+  | { kind: 'wishbone'; body: Vec3; front: Vec3; axis: Vec3; ball: Vec3; r0: Vec3; q: Vec3; axq: Vec3; aq: number }
+  | { kind: 'rod'; body: Vec3; rodBody: Vec3; rodKnuckle: Vec3; along: number };
+
+export class Axle<L extends AnyCornerLinkage = CornerLinkage> {
+  readonly spec: AxleSpec<L>;
   readonly solver: CornerSolver;
-  readonly table: AxleTable;
   /** Loaded radius at design: the contact point is this far below the wheel centre in the wheel plane. */
   readonly radius: number;
-  private readonly kingpinLower: Vec3 | null;
-  private readonly kingpinUpper: Vec3 | null;
+  private readonly axis: AxisSource | null;
+  private readonly rods: AxleSpec['linkage']['rods'];
   private readonly strutLower: Vec3 | null;
   /** Strut top mount on the body, setup shift included. */
   private readonly strutTop: Vec3 | null;
+  private readonly springMount: Mount | null;
+  private readonly damperMount: Mount | null;
   private readonly seats: number;
   private readonly shaftLength: number;
   // Scratch
-  private readonly v = new Float64Array(6);
+  private readonly v = new Float64Array(7);
   private readonly p = new Float64Array(3);
   private readonly s = new Float64Array(3);
   private readonly k = new Float64Array(3);
+  private readonly u = new Float64Array(3);
+  private readonly w = new Float64Array(3);
+  private readonly pv = new Float64Array(3);
 
-  constructor(spec: AxleSpec) {
+  private tables: AxleTable | null = null;
+
+  /**
+   * With `table: false` the grid is built on first use, so a few exact solves (buildAxleLite) do not pay for it; the
+   * default builds it at once and throws there if the corner cannot travel its whole range.
+   */
+  constructor(spec: AxleSpec<L>, options: { table?: boolean } = {}) {
     this.spec = spec;
-    this.solver = new CornerSolver(spec);
+    const link: AnyCornerLinkage = spec.linkage;
+    // A single pivot axis has a closed form (solve-pivot.ts); links go through Newton.
+    this.solver =
+      link.kind === 'pivot'
+        ? new PivotSolver({ ...spec, linkage: link })
+        : new CornerSolver({ ...spec, linkage: link });
     this.radius = spec.wheelCentre[2];
-    const link = spec.linkage;
-    const strut = link.strut;
+    // A pivot arm has no links, strut or steering axis: its corner reads as one with none of them.
+    const links: CornerLinkage = link.kind === 'links' ? link : { kind: 'links', wishbones: [], rods: [] };
+    const strut = links.strut;
+    this.rods = links.rods;
     this.strutLower = strut ? strut.lower : null;
     const shift = strut?.topShift ?? [0, 0, 0];
     this.strutTop = strut ? [strut.top[0] + shift[0], strut.top[1] + shift[1], strut.top[2] + shift[2]] : null;
-    // Steering axis: lower ball joint to strut top (MacPherson), or lower to upper ball joint (two wishbones).
-    this.kingpinLower = link.wishbones[0]?.ball ?? null;
-    this.kingpinUpper = strut ? null : (link.wishbones[1]?.ball ?? null);
+    // Steering axis: the split axis of a dual-axis or RevoKnuckle strut; the lower ball joint to the strut top
+    // (MacPherson); the two ball joints (two wishbones); or the virtual pivots of a multilink. A pivot arm is not
+    // steered: no steering axis.
+    const rodIndex = (id: string): number => {
+      const i = links.rods.findIndex((r) => r.id === id);
+      if (i < 0) throw new Error(`The virtual steering axis names a rod the corner lacks: ${id}`);
+      return i;
+    };
+    const ball0 = links.wishbones[0]?.ball;
+    const ball1 = links.wishbones[1]?.ball;
+    this.axis = links.knuckle
+      ? { kind: 'points', lower: links.knuckle.axisLower, upper: links.knuckle.axisUpper }
+      : strut && ball0 && this.strutTop
+        ? { kind: 'strut', lower: ball0, top: this.strutTop }
+        : ball0 && ball1
+          ? { kind: 'points', lower: ball1[2] < ball0[2] ? ball1 : ball0, upper: ball1[2] < ball0[2] ? ball0 : ball1 }
+          : links.virtualAxis
+            ? {
+                kind: 'virtual',
+                lower: [rodIndex(links.virtualAxis.lower[0]), rodIndex(links.virtualAxis.lower[1])],
+                upper: [rodIndex(links.virtualAxis.upper[0]), rodIndex(links.virtualAxis.upper[1])],
+              }
+            : null;
+    const mount = (body: Vec3, wheel: Vec3 | 'strut', on: string | undefined): Mount | null => {
+      if (wheel === 'strut') return null;
+      if (!on) return { kind: 'knuckle', body, wheel };
+      const arm = links.wishbones.find((w) => w.id === on);
+      if (arm) {
+        const axis = unit(sub(arm.rear, arm.front));
+        const r = sub(arm.ball, arm.front);
+        const r0 = sub(r, scale(axis, dot(r, axis)));
+        const q = sub(wheel, arm.front);
+        return { kind: 'wishbone', body, front: arm.front, axis, ball: arm.ball, r0, q, axq: cross(axis, q), aq: dot(axis, q) };
+      }
+      const rod = links.rods.find((r) => r.id === on);
+      if (!rod) throw new Error(`A spring or damper sits on a link the corner lacks: ${on}`);
+      const d = sub(rod.knuckle, rod.body);
+      return { kind: 'rod', body, rodBody: rod.body, rodKnuckle: rod.knuckle, along: dot(sub(wheel, rod.body), d) / dot(d, d) };
+    };
+    this.springMount = mount(spec.spring.body, spec.spring.wheel, spec.spring.on);
+    this.damperMount = mount(spec.damper.body, spec.damper.wheel, spec.damper.on);
     const seats = spec.spring.strutSeats;
     this.seats = seats ? seats.upperM + seats.lowerM : 0;
     const shaft = spec.halfshaft;
     this.shaftLength = shaft ? dist(shaft.diffOutput, shaft.outerJoint) : 0;
-    this.table = this.build();
+    if (options.table !== false) this.tables = this.build();
+  }
+
+  /** The grid over the whole travel (rack 0). */
+  get table(): AxleTable {
+    return (this.tables ??= this.build());
   }
 
   /**
@@ -172,72 +276,60 @@ export class Axle {
     const duy = (duy0 - uy * along) / un;
     out.tanBeta = v[1] - r * duy;
     out.tanThetaCP = v[0] - r * dux;
+    // γ = −asin(s_z), τ = atan2(s_x, s_y)
+    out.camberGain = -dsz / Math.sqrt(Math.max(1e-300, 1 - sz * sz));
+    out.bumpSteer = (sy * dsx - sx * dsy) / (sx * sx + sy * sy);
+    out.rcHeight = out.contactY * out.tanBeta;
+    // Instant centres: where the velocity field of the knuckle vanishes in the plane x = W_x (front) and y = W_y (side).
+    const fvsa = v[2] / v[3];
+    const svsa = v[2] / v[4];
+    const near = (d: number): boolean => Number.isFinite(d) && Math.abs(d) <= IC_FAR_M;
+    out.icFrontY = near(fvsa) ? Wy - fvsa : NaN;
+    out.icFrontZ = near(fvsa) ? Wz + v[1] / v[3] : NaN;
+    out.icSideX = near(svsa) ? Wx + svsa : NaN;
+    out.icSideZ = near(svsa) ? Wz - v[0] / v[4] : NaN;
 
     // Strut and spring.
     if (this.strutLower && this.strutTop) {
       const T = this.strutTop;
       const p = this.p;
-      solver.point(pose, this.strutLower, p);
+      solver.carrierPoint(pose, this.strutLower, p);
       const lx = p[0] - T[0];
       const ly = p[1] - T[1];
       const lz = p[2] - T[2];
       const L = Math.hypot(lx, ly, lz);
-      const px = p[0] - Wx;
-      const py = p[1] - Wy;
-      const pz = p[2] - Wz;
-      // velocity of the lower strut point: dt + dθ × (p − W)
-      const vx = v[0] + v[4] * pz - v[5] * py;
-      const vy = v[1] + v[5] * px - v[3] * pz;
-      const vz = v[2] + v[3] * py - v[4] * px;
-      const mr = -(lx * vx + ly * vy + lz * vz) / L;
+      const pv = this.pv;
+      solver.pointVelocity(pose, v, this.strutLower, false, pv);
+      const mr = -(lx * pv[0] + ly * pv[1] + lz * pv[2]) / L;
       out.damperLen = L;
       out.mrDamper = mr;
       if (this.spec.spring.wheel === 'strut') {
         out.springLen = L - this.seats;
         out.mrSpring = mr;
-      } else {
-        this.elementOnKnuckle(pose, this.spec.spring.body, this.spec.spring.wheel, out, 'spring');
       }
-    } else {
-      const sw = this.spec.spring.wheel;
-      const dw = this.spec.damper.wheel;
-      if (sw !== 'strut') this.elementOnKnuckle(pose, this.spec.spring.body, sw, out, 'spring');
-      if (dw !== 'strut') this.elementOnKnuckle(pose, this.spec.damper.body, dw, out, 'damper');
     }
+    if (this.springMount) this.element(pose, this.springMount, out, 'spring');
+    if (this.damperMount) this.element(pose, this.damperMount, out, 'damper');
 
     // Steering axis and its traces on the road.
-    if (this.kingpinLower && (this.strutTop || this.kingpinUpper)) {
-      const k = this.k;
-      solver.point(pose, this.kingpinLower, k);
-      let ax: number;
-      let ay: number;
-      let az: number;
-      if (this.kingpinUpper) {
-        const up = this.p;
-        solver.point(pose, this.kingpinUpper, up);
-        ax = up[0] - k[0];
-        ay = up[1] - k[1];
-        az = up[2] - k[2];
-      } else {
-        const T = this.strutTop!;
-        ax = T[0] - k[0];
-        ay = T[1] - k[1];
-        az = T[2] - k[2];
-      }
-      const an = Math.hypot(ax, ay, az);
-      ax /= an;
-      ay /= an;
-      az /= an;
+    const k = this.k;
+    const a = this.u;
+    if (this.axis && this.steeringAxis(pose, rack, k, a)) {
+      const ax = a[0];
+      const ay = a[1];
+      const az = a[2];
       out.kpi = Math.atan2(-ay, az);
       out.caster = Math.atan2(-ax, az);
       const lambda = (out.contactZ - k[2]) / az;
       out.scrub = out.contactY - (k[1] + ay * lambda);
       out.trail = k[0] + ax * lambda - out.contactX;
+      out.kingpinOffset = Wy - (k[1] + (ay * (Wz - k[2])) / az);
     } else {
       out.kpi = NaN;
       out.caster = NaN;
       out.scrub = NaN;
       out.trail = NaN;
+      out.kingpinOffset = NaN;
     }
 
     // Halfshaft: straight between the two joint centres.
@@ -259,29 +351,132 @@ export class Axle {
     }
   }
 
-  /** Length and motion ratio of a spring or damper between a body point and a knuckle point. */
-  private elementOnKnuckle(
-    pose: Float64Array,
-    body: Vec3,
-    wheel: Vec3,
-    out: CornerSample,
-    which: 'spring' | 'damper',
-  ): void {
-    const v = this.v;
-    const c0 = this.solver.c0;
+  /**
+   * The steering axis for a solved pose: a point on it into `point` and its unit direction (upward) into `dir`. False
+   * when the virtual pivots of a multilink are undefined (two links parallel).
+   */
+  steeringAxis(pose: Float64Array, rack: number, point: Float64Array, dir: Float64Array): boolean {
+    const axis = this.axis;
+    if (!axis) return false;
+    const solver = this.solver;
+    const up = this.w;
+    if (axis.kind === 'points') {
+      solver.point(pose, axis.lower, point);
+      solver.point(pose, axis.upper, up);
+    } else if (axis.kind === 'strut') {
+      solver.point(pose, axis.lower, point);
+      for (let i = 0; i < 3; i++) up[i] = axis.top[i];
+    } else if (!this.virtualPivot(pose, rack, axis.lower, point) || !this.virtualPivot(pose, rack, axis.upper, up)) {
+      return false;
+    }
+    let n = 0;
+    for (let i = 0; i < 3; i++) {
+      dir[i] = up[i] - point[i];
+      n += dir[i] * dir[i];
+    }
+    n = (dir[2] < 0 ? -1 : 1) / Math.sqrt(n);
+    for (let i = 0; i < 3; i++) dir[i] *= n;
+    return true;
+  }
+
+  /** Midpoint of the shortest segment between the lines of two rods for a solved pose. */
+  private virtualPivot(pose: Float64Array, rack: number, [i, j]: [number, number], out: Float64Array): boolean {
+    const a = this.rods[i];
+    const b = this.rods[j];
     const p = this.p;
-    this.solver.point(pose, wheel, p);
-    const lx = p[0] - body[0];
-    const ly = p[1] - body[1];
-    const lz = p[2] - body[2];
+    const q = this.pv;
+    this.solver.point(pose, a.knuckle, p);
+    this.solver.point(pose, b.knuckle, q);
+    const ay = a.steer ? rack : 0;
+    const by = b.steer ? rack : 0;
+    // Lines P + s·d (from the rod's knuckle end to its body end) and Q + t·e, w = P − Q. Scalars: the 3D may call this
+    // every frame.
+    const dx = a.body[0] - p[0];
+    const dy = a.body[1] + ay - p[1];
+    const dz = a.body[2] - p[2];
+    const ex = b.body[0] - q[0];
+    const ey = b.body[1] + by - q[1];
+    const ez = b.body[2] - q[2];
+    const wx = p[0] - q[0];
+    const wy = p[1] - q[1];
+    const wz = p[2] - q[2];
+    const A = dx * dx + dy * dy + dz * dz;
+    const B = dx * ex + dy * ey + dz * ez;
+    const C = ex * ex + ey * ey + ez * ez;
+    const dw = dx * wx + dy * wy + dz * wz;
+    const ew = ex * wx + ey * wy + ez * wz;
+    const den = A * C - B * B;
+    if (den < 1e-12 * A * C) return false;
+    const s = (B * ew - C * dw) / den;
+    const t = (A * ew - B * dw) / den;
+    out[0] = (p[0] + s * dx + q[0] + t * ex) / 2;
+    out[1] = (p[1] + s * dy + q[1] + t * ey) / 2;
+    out[2] = (p[2] + s * dz + q[2] + t * ez) / 2;
+    return true;
+  }
+
+  /** Length and motion ratio of a spring or damper whose wheel end is on the knuckle, a wishbone or a rod. */
+  private element(pose: Float64Array, m: Mount, out: CornerSample, which: 'spring' | 'damper'): void {
+    const solver = this.solver;
+    const v = this.v;
+    const p = this.p;
+    const pv = this.pv;
+    if (m.kind === 'knuckle') {
+      solver.carrierPoint(pose, m.wheel, p);
+      solver.pointVelocity(pose, v, m.wheel, false, pv);
+    } else if (m.kind === 'rod') {
+      // On the rod's line, a fixed share of the way from its body end to its knuckle end.
+      const k = this.k;
+      solver.point(pose, m.rodKnuckle, k);
+      solver.pointVelocity(pose, v, m.rodKnuckle, true, pv);
+      for (let i = 0; i < 3; i++) {
+        p[i] = m.rodBody[i] + m.along * (k[i] - m.rodBody[i]);
+        pv[i] *= m.along;
+      }
+    } else {
+      // Rigid with the arm: the arm turns about its pivot axis by the angle its ball joint has turned.
+      const B = this.k;
+      const vB = this.w;
+      solver.carrierPoint(pose, m.ball, B);
+      solver.pointVelocity(pose, v, m.ball, false, vB);
+      const [ax, ay, az] = m.axis;
+      const [r0x, r0y, r0z] = m.r0;
+      // r1: the ball's arm now, square to the axis.
+      let r1x = B[0] - m.front[0];
+      let r1y = B[1] - m.front[1];
+      let r1z = B[2] - m.front[2];
+      const along = r1x * ax + r1y * ay + r1z * az;
+      r1x -= along * ax;
+      r1y -= along * ay;
+      r1z -= along * az;
+      // φ = atan2(axis·(r0 × r1), r0·r1); φ̇ = v_B·(axis × r1)/|r1|².
+      const sinTerm = ax * (r0y * r1z - r0z * r1y) + ay * (r0z * r1x - r0x * r1z) + az * (r0x * r1y - r0y * r1x);
+      const phi = Math.atan2(sinTerm, r0x * r1x + r0y * r1y + r0z * r1z);
+      const urx = ay * r1z - az * r1y;
+      const ury = az * r1x - ax * r1z;
+      const urz = ax * r1y - ay * r1x;
+      const rate = (vB[0] * urx + vB[1] * ury + vB[2] * urz) / (r1x * r1x + r1y * r1y + r1z * r1z);
+      // P = F + Rot(axis, φ)·q by Rodrigues; v_P = φ̇·axis × (P − F).
+      const c = Math.cos(phi);
+      const sn = Math.sin(phi);
+      const [qx, qy, qz] = m.q;
+      const [bx, by, bz] = m.axq;
+      const k = m.aq * (1 - c);
+      const relx = qx * c + bx * sn + ax * k;
+      const rely = qy * c + by * sn + ay * k;
+      const relz = qz * c + bz * sn + az * k;
+      p[0] = m.front[0] + relx;
+      p[1] = m.front[1] + rely;
+      p[2] = m.front[2] + relz;
+      pv[0] = rate * (ay * relz - az * rely);
+      pv[1] = rate * (az * relx - ax * relz);
+      pv[2] = rate * (ax * rely - ay * relx);
+    }
+    const lx = p[0] - m.body[0];
+    const ly = p[1] - m.body[1];
+    const lz = p[2] - m.body[2];
     const L = Math.hypot(lx, ly, lz);
-    const px = p[0] - c0[0] - pose[0];
-    const py = p[1] - c0[1] - pose[1];
-    const pz = p[2] - c0[2] - pose[2];
-    const vx = v[0] + v[4] * pz - v[5] * py;
-    const vy = v[1] + v[5] * px - v[3] * pz;
-    const vz = v[2] + v[3] * py - v[4] * px;
-    const mr = -(lx * vx + ly * vy + lz * vz) / L;
+    const mr = -(lx * pv[0] + ly * pv[1] + lz * pv[2]) / L;
     if (which === 'spring') {
       out.springLen = L;
       out.mrSpring = mr;
@@ -322,6 +517,7 @@ export class Axle {
       cur[1] += this.v[1] * dz;
       cur[2] += this.v[2] * dz;
       rotateQuatBy(cur, 3, this.v[3] * dz, this.v[4] * dz, this.v[5] * dz);
+      if (this.solver.split) cur[7] += this.v[6] * dz;
       const res = this.solver.solve(cur, travel, 0);
       this.check(res, travel, detSign);
       iterations[i] = res.iterations;
@@ -396,6 +592,7 @@ export class Axle {
     const b = a + POSE_SIZE;
     for (let k = 0; k < 3; k++) out[k] = t.pose[a + k] + (t.pose[b + k] - t.pose[a + k]) * x;
     nlerpInto(t.pose, a + 3, t.pose, b + 3, x, out, 3);
+    out[7] = t.pose[a + 7] + (t.pose[b + 7] - t.pose[a + 7]) * x;
   }
 
   /** World point of a knuckle point (given at design) for a left-corner pose. */
@@ -413,7 +610,10 @@ export class Axle {
   }
 }
 
-/** The right corner's pose from the left one: mirror across the xz plane. */
+/**
+ * The right corner's pose from the left one: mirror across the xz plane. A split knuckle's turn changes sign, since the
+ * mirror of a turn by ψ about an axis is a turn by −ψ about the mirrored axis.
+ */
 export function mirrorPose(left: Float64Array, out: Float64Array): void {
   out[0] = left[0];
   out[1] = -left[1];
@@ -422,8 +622,9 @@ export function mirrorPose(left: Float64Array, out: Float64Array): void {
   out[4] = left[4];
   out[5] = -left[5];
   out[6] = left[6];
+  out[7] = -left[7];
 }
 
-export function buildAxle(spec: AxleSpec): Axle {
+export function buildAxle<L extends AnyCornerLinkage = CornerLinkage>(spec: AxleSpec<L>): Axle<L> {
   return new Axle(spec);
 }

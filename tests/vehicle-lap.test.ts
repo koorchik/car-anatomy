@@ -3,14 +3,14 @@ import { buildTrack, TEST_CIRCUIT, type Track, type TrackDef } from '../src/vehi
 import { lagFilter, sampleDt, sampleLap, newLapSample, simulateLap } from '../src/vehicle/lap.ts';
 import { idealGearbox, topSpeed } from '../src/vehicle/powertrain.ts';
 import { carToEngine, surfaceSlope } from '../src/vehicle/mount.ts';
+import { coeffsFromDrag } from '../src/vehicle/road-load.ts';
 import { AIR_DENSITY, dragForce, G, TYRES, type EngineMount, type VehicleSpec } from '../src/vehicle/vehicle.ts';
 
 const CAR: VehicleSpec = {
   name: 'test',
   massKg: 1600,
-  cdA: 0.7,
+  roadLoad: coeffsFromDrag(1600, 0.7, 0.015),
   clA: 0,
-  crr: 0.015,
   drive: 'rwd',
   drivenShare: 0.55,
   tyreRadiusM: 0.33,
@@ -146,7 +146,7 @@ describe('lap simulation', () => {
     expect(rising).toBe(true);
     // Top speed is geared at the limiter, so the car gets within a hair of it.
     expect(Math.abs(vMax / vTop - 1)).toBeLessThan(0.01);
-    const need = (0.5 * AIR_DENSITY * CAR.cdA * vTop ** 2 + CAR.crr * CAR.massKg * G) * vTop;
+    const need = (0.5 * AIR_DENSITY * 0.7 * vTop ** 2 + 0.015 * CAR.massKg * G) * vTop;
     expect(need / (0.85 * PEAK_W)).toBeCloseTo(1, 3);
   });
 

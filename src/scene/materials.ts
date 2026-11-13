@@ -44,6 +44,9 @@ const castTexture = (): THREE.Texture => {
   return castBump;
 };
 
+/** The sand-cast relief of the engine blocks, for other sections' cast parts (the same shared texture). */
+export const castBumpTexture = (): THREE.Texture => castTexture();
+
 /** Wrinkle paint on cam covers. */
 const crinkleTexture = (): THREE.Texture => {
   crinkleBump ??= noiseTexture(256, (ctx, size) => {
@@ -239,3 +242,10 @@ export const glowTexture = (): THREE.Texture => {
   glowTex.colorSpace = THREE.SRGBColorSpace;
   return glowTex;
 };
+
+/** Cast aluminium of a gearbox case or a suspension casting: the engine block's surface. */
+export const castAluminiumMaterial = (): THREE.MeshStandardMaterial =>
+  new THREE.MeshStandardMaterial({ color: '#a9abac', metalness: 0.85, roughness: 0.62, bumpMap: castTexture(), bumpScale: 0.5 });
+
+/** Brass of synchronizer blocker rings. */
+export const brassMaterial = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ color: '#c9a04e', metalness: 1, roughness: 0.34 });
