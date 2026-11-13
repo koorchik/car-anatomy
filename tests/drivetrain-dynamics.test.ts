@@ -451,6 +451,12 @@ describe('3. launch energy', () => {
   it('balances exactly: what the engine passed through the clutch went into the slip, the car and the resistances', () => {
     expect(Math.abs((2000 * RAD * impulse) / (s.energy[clutch]! + behind + resist) - 1)).toBeLessThan(0.002);
   });
+
+  it('dissipates at least the body\'s kinetic energy at the synchronous speed (research §15.3: 14.8 kJ for the KAIST car)', () => {
+    // The car alone at the speed first gear gives 2000 rpm; the turning parts and the resistances only add to it.
+    const vSync = ((2000 * RAD) / (stateByName(cd.box, '1').ratio! * cd.axle.ratio)) * cd.radius[RL]!;
+    expect(s.energy[clutch]!).toBeGreaterThan(0.5 * ch.spec.roadLoad.massKg * vSync ** 2);
+  });
 });
 
 describe('4. shunt', () => {
