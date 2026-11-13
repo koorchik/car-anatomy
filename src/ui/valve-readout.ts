@@ -17,6 +17,7 @@ export class ValveReadout {
   private vvt: VariableValves | null = null;
   private spec: EngineSpec | null = null;
   private shown = '';
+  private withheld = false;
 
   constructor() {
     this.element.className = 'valve-state';
@@ -34,8 +35,15 @@ export class ValveReadout {
   setEngine(spec: EngineSpec): void {
     this.spec = spec;
     this.vvt = spec.vvt ?? null;
-    this.element.hidden = !this.vvt;
+    this.element.hidden = !this.vvt || this.withheld;
     this.shown = '';
+  }
+
+  /** The oil page plays its lap with or without the engine running; without it the labels would show the gear at rest. */
+  withhold(on: boolean): void {
+    if (on === this.withheld) return;
+    this.withheld = on;
+    this.element.hidden = !this.vvt || on;
   }
 
   update(state: ValveState | undefined, running: boolean): void {

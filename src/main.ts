@@ -1243,6 +1243,7 @@ function frame(now: number): void {
 
   tacho.update(snap.rpm, running && snap.fuelCut && snap.rpm > spec.redlineRpm - 200);
   if (onDesigner) designer.frame(snap.rpm, running, snap.load, dt, snap.valves);
+  valveReadout.withhold(onSump && !running);
   valveReadout.update(snap.valves, running && !demoMode);
   firing.setInactive(running ? (snap.valves?.off ?? []) : []);
   firing.draw(theta);
