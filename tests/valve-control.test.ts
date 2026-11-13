@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { synthConfig } from '../src/audio/synth.ts';
-import { engineById } from '../src/data/engines.ts';
+import { ENGINE_VARIANTS } from '../src/data/engine-variants.ts';
+import { CATALOGUE, engineById } from '../src/data/engines.ts';
+import { catalogueDesign } from '../src/designer/catalogue.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import { EngineSim, type SimParams } from '../src/engine/sim.ts';
-import { interpolate, liveTiming, PHASER_RATE, ValveControl, type VariableValves } from '../src/engine/valve-control.ts';
+import { interpolate, liftShareFor, liveTiming, PHASER_RATE, restingState, ValveControl, type VariableValves } from '../src/engine/valve-control.ts';
 
 const params = (id: string): SimParams => synthConfig(buildEngine(engineById(id)!)).sim;
 
@@ -100,6 +102,11 @@ describe('the engine computer running the valve gear', () => {
     run(sim, 20, 0.1, 2000);
     expect(sim.valves.state.off.length).toBe(3);
     expect(sim.valves.state.off).not.toEqual(first);
+    // Only between 1600 and 3000 rpm, as Porsche states.
+    run(sim, 3, 0.1, 3400);
+    expect(sim.valves.state.off).toEqual([]);
+    run(sim, 3, 0.1, 1400);
+    expect(sim.valves.state.off).toEqual([]);
   });
 
   it('opens the valves only a little at idle when they set the load', () => {
@@ -124,3 +131,32 @@ describe('the engine computer running the valve gear', () => {
     expect(sim.valves.state.active).toBe(1);
   });
 });
+
+describe('live valve events', () => {
+  const all = CATALOGUE.flatMap((entry) => [entry.id, ...(ENGINE_VARIANTS[entry.id]?.variants ?? []).map((v) => `${entry.id}/${v.id}`)]);
+  const geared = all.filter((id) => engineById(id)!.vvt);
+
+  it.each(geared)('%s: lifts are shares of the main cam, never more than it, on either cam', (id) => {
+    const spec = engineById(id)!;
+    const vvt = spec.vvt!;
+    const timing = buildEngine(spec).timing;
+    for (const highCam of [false, true]) {
+      for (const load of [0, 0.3, 1]) {
+        const now = liveTiming(timing, vvt, { ...restingState(), highCam, liftShare: vvt.lift ? liftShareFor(load) : 1 });
+        for (const lift of [now.intakeLift, now.exhaustLift]) {
+          expect(lift, `${id} high ${highCam} load ${load}`).toBeGreaterThan(0);
+          expect(lift, `${id} high ${highCam} load ${load}`).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+    const sw = vvt.switching;
+    if (!sw) return;
+    // The low cam's lift over the main cam's, as the design gives both in millimetres.
+    const [page, variant] = id.split('/');
+    const entry = CATALOGUE.find((e) => e.id === page)!;
+    const d = catalogueDesign(entry, variant ? ENGINE_VARIANTS[page!]!.variants.find((v) => v.id === variant) : undefined);
+    const low = liveTiming(timing, vvt, { ...restingState(), highCam: false });
+    expect(sw.cams === 'exhaust' ? low.exhaustLift : low.intakeLift).toBeCloseTo(d.lowLift / d.lift, 3);
+  });
+});
+

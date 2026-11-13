@@ -1,5 +1,10 @@
 // Finds a per-engine output trim so all engines sit at one level at high rpm, full throttle.
 // Rewrites src/audio/loudness-trim.ts: `node scripts/calibrate.ts`.
+//
+// Variable valve gear is held at park, on the main cam, while it measures. The trim then sets the engine's own
+// level, as at idle, and what the gear does live stays heard: phasers that open the exhaust later make it
+// quieter at load, the low cam quieter than the high one. Measured with the gear running, the trim would undo
+// that at load and lift the idle of a phased engine above a plain sibling's instead.
 
 import { writeFileSync } from 'node:fs';
 import { ENGINES, engineById } from '../src/data/engines.ts';
@@ -22,7 +27,7 @@ for (const spec of [...ENGINES, ...variants]) {
   for (let pass = 0; pass < 4; pass++) {
     const levels = POINTS.map(([share, pedal]) => {
       const rpm = spec.redlineRpm * share;
-      const { l, r } = render(spec.id, [{ seconds: 0.4, pedal, rpm }, { seconds: 0.8, pedal, rpm }], trim);
+      const { l, r } = render(spec.id, [{ seconds: 0.4, pedal, rpm }, { seconds: 0.8, pedal, rpm }], trim, true);
       return (rmsDb(l, 19200) + rmsDb(r, 19200)) / 2;
     });
     const level = levels.reduce((a, b) => a + b, 0) / levels.length;

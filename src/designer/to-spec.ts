@@ -7,7 +7,7 @@ import { safeCounterweight } from './constraints.ts';
 import { effectiveOpen, effectivePops, effectiveRasp, exhaustGroups, isRotary, isTurbo, type Design } from './design.ts';
 import { FUELS } from './fuels.ts';
 import { Model, type Performance } from './physics.ts';
-import { camAt, deactivationSets, hasVariableValves, phaserRanges, timingOf } from './valvetrain.ts';
+import { camAt, deactivationSets, deactivationWindow, hasVariableValves, phaserRanges, timingOf } from './valvetrain.ts';
 
 const FAMILY: Record<Design['layout'], Family> = {
   inline: 'inline',
@@ -98,6 +98,7 @@ export function variableValves(d: Design, perf: SpecInputs): VariableValves | un
     ? { wotRpm: model.valvetrain!.nodeRpm, wotIntake: model.valvetrain!.wotIntake, wotExhaust: model.valvetrain!.wotExhaust, partIntake: model.cruise!.intakeShift, partExhaust: model.cruise!.exhaustShift }
     : rule;
   const sets = deactivationSets(d);
+  const [rpmMin, rpmMax] = deactivationWindow(d, perf.idleRpm, perf.redlineRpm);
   const round = (v: number): number => Math.round(v * 100) / 100;
   return {
     phaser: d.camPhaser,
@@ -116,7 +117,7 @@ export function variableValves(d: Design, perf: SpecInputs): VariableValves | un
             rpm: d.switchRpm,
             kind: d.switchKind,
             low: timingOf(camAt(d, { high: false }).events),
-            lowLift: d.lowLift,
+            lowShare: Math.round((d.lowLift / d.lift) * 1000) / 1000,
             highGain: (model ? model.valvetrain!.highGain : cheapHighGain(d, schedule.wotRpm)).map(round),
           },
     lift: d.liftControl === 'cam' ? null : { kind: d.liftControl, maxLift: d.lift },
@@ -126,9 +127,9 @@ export function variableValves(d: Design, perf: SpecInputs): VariableValves | un
         : {
             kind: d.deactivation,
             sets,
-            // VW rests two cylinders from 1400 to 4000 rpm, Porsche from 1600 to 3000.
-            rpmMin: Math.round(Math.max(1000, perf.idleRpm * 1.4)),
-            rpmMax: Math.round(Math.min(4000, perf.redlineRpm * 0.55)),
+            rpmMin,
+            rpmMax,
+            documented: d.deactivateRpm !== null,
             loadMax: 0.3,
           },
   };

@@ -5,7 +5,7 @@ import { DEG } from '../engine/kinematics.ts';
 import { t } from '../i18n/t.ts';
 import { crankForPreset } from './crank.ts';
 import { DEFAULT_DESIGN, valveSplit, type Design, type DesignLayout } from './design.ts';
-import { resolveValvetrain } from './valvetrain.ts';
+import { resolveDeactivationWindow, resolveValvetrain } from './valvetrain.ts';
 
 export interface Range {
   min: number;
@@ -245,6 +245,7 @@ export function resolveDesign(input: Design): Design {
     const range = paramRange(d, key);
     (d[key] as number) = clamp(d[key] as number, range.min, range.max);
   }
+  resolveDeactivationWindow(d);
   resolveExhaustTables(d);
   resolveIdentity(d);
   if (d.collector === 'bybank' && !['vee', 'flatvee', 'boxer', 'w'].includes(d.layout)) d.collector = 'single';

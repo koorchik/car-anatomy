@@ -3236,6 +3236,8 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
         exhaustPhaseRange: 30,
         deactivation: 'fuel',
         deactivateGroup: 'alternate',
+        // Porsche press kit: one bank's injection is cut between 1600 and 3000 rpm, up to 100 Nm asked for.
+        deactivateRpm: [1600, 3000],
         rodLength: 138.5,
         compression: 13,
         pistonMaterial: 'cast',
@@ -4229,7 +4231,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 520,
       torqueRpm: 6100,
       voiceEvidence: 'default',
-      unverified: ['numbering', 'fuel'],
+      unverified: ['numbering', 'fuel', 'phaseRange'],
       sources: ['https://en.wikipedia.org/wiki/BMW_S85', 'https://www.bmwblog.com/2020/08/23/bmw-s85-v10-engine', 'https://australiancar.reviews/bmw-s85-engine-2005-10/', 'https://archive.org/download/BMWTechnicalTrainingDocuments/ST505%20E60%20M5%20Complete%20Vehicle/03_M%20Engines.pdf'],
       factory: {
         idleRpm: 740,
@@ -4242,6 +4244,8 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       },
       design: {
         camPhaser: 'dual',
+        // ST505 contradicts itself: its table gives intake 79–145 °KW (66°), its text and the actuator stroke
+        // (25.25 mm = 30° of camshaft) give 60°. The table is taken, so the range is marked unverified.
         intakePhaseRange: 66,
         exhaustPhaseRange: 37,
         veeAngle: 90,

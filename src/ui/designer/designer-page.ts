@@ -72,7 +72,7 @@ const summaryOf = (d: Design): string => {
 
 /** The parts of the valve gear that are drawn: not the schedule, which only moves them. */
 const drawnValves = (v: Engine['spec']['vvt']): unknown =>
-  v && [v.phaser, v.switching && [v.switching.cams, v.switching.kind, v.switching.low, v.switching.lowLift], v.lift?.kind, v.deactivation && [v.deactivation.kind, v.deactivation.sets]];
+  v && [v.phaser, v.switching && [v.switching.cams, v.switching.kind, v.switching.low, v.switching.lowShare], v.lift?.kind, v.deactivation && [v.deactivation.kind, v.deactivation.sets]];
 
 /** Everything about the spec that changes what the 3D model looks like. */
 const geometryKey = (engine: Engine): string => {

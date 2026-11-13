@@ -1,0 +1,259 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`real engines of each layout > the model’s warnings on real engines change only on purpose 1`] = `
+{
+  "b2": [],
+  "b2/bmw-700": [],
+  "b2/bmw-r1250": [
+    "warning:knock-limited",
+    "warning:egt",
+  ],
+  "b2/panhard-tigre": [],
+  "b2/tatra-11": [
+    "warning:egt",
+    "warning:valve-choke",
+  ],
+  "b2/toyota-sports-800": [],
+  "b4": [],
+  "b4/beetle-1600": [
+    "warning:valve-choke",
+  ],
+  "b4/gr86-fa24": [],
+  "b4/impreza-ej201": [],
+  "b4/porsche-718-2-0": [
+    "warning:knock-limited",
+  ],
+  "b4/porsche-718-2-5": [],
+  "b4/subaru-ej253": [],
+  "b4/subaru-fb25": [],
+  "b6": [],
+  "b6/porsche-718-gt4-4-0": [],
+  "b6/porsche-992-carrera-3-0": [
+    "warning:knock-limited",
+  ],
+  "b6/porsche-993-carrera": [],
+  "b6/porsche-cayman-981-3-4": [],
+  "b6/subaru-ez30-30r": [
+    "warning:exhaust-choke",
+  ],
+  "f12": [],
+  "f12/alfa-115-12": [],
+  "f12/ferrari-312t": [],
+  "f12/ferrari-512bb": [],
+  "f12/ferrari-f512m": [],
+  "f12/porsche-917-912": [],
+  "i1": [],
+  "i1/honda-cg125": [],
+  "i1/ktm-690-duke": [],
+  "i1/vespa-gts-300-hpe": [],
+  "i2": [
+    "warning:knock-limited",
+  ],
+  "i2/bmw-i3-rex": [],
+  "i2/fiat-126-594": [
+    "warning:valve-choke",
+  ],
+  "i2/fiat-500-f": [
+    "warning:valve-choke",
+  ],
+  "i2/honda-n360": [],
+  "i2/tata-nano": [],
+  "i3": [
+    "warning:knock-limited",
+  ],
+  "i3/bmw-i8-15": [],
+  "i3/daewoo-matiz-08": [],
+  "i3/fiesta-10-ecoboost": [],
+  "i3/fiesta-st-15-ecoboost": [
+    "warning:knock-limited",
+  ],
+  "i4": [],
+  "i4/bmw-m3-e30-s14": [],
+  "i4/civic-type-r-k20c1": [
+    "warning:knock-limited",
+  ],
+  "i4/corolla-18-2zr-fe": [],
+  "i4/vaz-2101": [],
+  "i4d": [],
+  "i4d/bmw-320d-n47": [
+    "warning:smoke",
+    "warning:turbo-small",
+  ],
+  "i4d/mercedes-240d-om616": [],
+  "i4d/peugeot-16-hdi": [
+    "warning:smoke",
+    "warning:turbo-small",
+  ],
+  "i4d/vw-20-tdi-ea288": [
+    "warning:smoke",
+    "warning:turbo-small",
+  ],
+  "i5": [],
+  "i5/audi-quattro-wr": [],
+  "i5/ford-focus-rs-mk2": [
+    "warning:knock-limited",
+  ],
+  "i5/mercedes-300d-om617": [
+    "warning:smoke",
+  ],
+  "i5/volvo-850-t5": [],
+  "i6": [],
+  "i6/bmw-m3-e46-s54": [],
+  "i6/mercedes-m256": [
+    "warning:exhaust-choke",
+  ],
+  "i6/skyline-gtr-rb26dett": [],
+  "i6/toyota-supra-b58": [],
+  "i6d": [],
+  "i6d/bmw-530d-b57": [
+    "warning:smoke",
+    "warning:turbo-small",
+    "warning:exhaust-choke",
+  ],
+  "i6d/bmw-m550d-b57s": [
+    "warning:smoke",
+    "warning:turbo-small",
+    "warning:exhaust-choke",
+  ],
+  "i6d/mercedes-actros-om471": [
+    "warning:smoke",
+    "warning:turbo-small",
+    "warning:exhaust-choke",
+  ],
+  "i6d/mercedes-s400d-om656": [
+    "warning:smoke",
+    "warning:turbo-small",
+    "warning:exhaust-choke",
+  ],
+  "i6d/toyota-1hd-fte": [
+    "warning:smoke",
+  ],
+  "i8": [
+    "warning:egt",
+  ],
+  "i8/alfa-romeo-8c-2300": [
+    "warning:egt",
+    "warning:valve-choke",
+  ],
+  "i8/bugatti-type-35": [
+    "warning:egt",
+  ],
+  "i8/mercedes-w196": [],
+  "i8/packard-one-sixty": [
+    "warning:exhaust-choke",
+  ],
+  "r2": [
+    "warning:egt",
+  ],
+  "r2/cosmo-l10a": [
+    "warning:egt",
+  ],
+  "r2/rx7-sa22-12a": [
+    "warning:egt",
+  ],
+  "r2/rx8-renesis": [
+    "warning:egt",
+  ],
+  "r4": [
+    "warning:egt",
+  ],
+  "r4/mazda-767-13j": [
+    "warning:egt",
+  ],
+  "r4/mercedes-c111-ii": [
+    "warning:egt",
+  ],
+  "v10": [],
+  "v10/audi-r8-52-fsi": [],
+  "v10/bmw-m5-e60-s85": [],
+  "v10/dodge-viper-84": [],
+  "v10/gallardo-50-even-fire": [],
+  "v10/huracan-lp610-4": [
+    "warning:piston-speed",
+  ],
+  "v12": [],
+  "v12/aston-db11-ae31": [
+    "warning:knock-limited",
+  ],
+  "v12/aventador-lp700-4-l539": [],
+  "v12/ferrari-812-superfast-f140": [],
+  "v12/mercedes-s600-m275": [
+    "warning:knock-limited",
+    "warning:exhaust-choke",
+  ],
+  "v2": [],
+  "v2/ducati-1299-panigale": [
+    "warning:valve-close",
+  ],
+  "v2/hd-pan-america-revolution-max": [
+    "warning:knock-limited",
+  ],
+  "v2/ktm-1290-super-duke-r": [
+    "warning:knock-limited",
+  ],
+  "v2/moto-guzzi-v85-tt": [],
+  "v6-60": [],
+  "v6-60/alfa-147-gta-busso-32": [],
+  "v6-60/camry-2gr-fe": [
+    "warning:exhaust-choke",
+  ],
+  "v6-60/nissan-370z-vq37vhr": [],
+  "v6-60/nissan-gtr-vr38dett": [],
+  "v6-90": [],
+  "v6-90/buick-special-198": [],
+  "v6-90/delorean-dmc12-prv": [
+    "warning:valve-choke",
+  ],
+  "v6-90/jeep-cj5-dauntless-225": [],
+  "v6-90/maserati-merak-c114": [],
+  "v8-cross": [],
+  "v8-cross/amg-c63s-m177": [],
+  "v8-cross/bmw-m5-f90-s63": [
+    "warning:exhaust-choke",
+  ],
+  "v8-cross/camaro-ss-lt1": [],
+  "v8-cross/challenger-srt-392": [],
+  "v8-cross/mustang-gt-coyote-50": [],
+  "v8-flat": [],
+  "v8-flat/corvette-z06-c8-lt6": [],
+  "v8-flat/ferrari-488-gtb-f154": [],
+  "v8-flat/mclaren-720s-m840t": [
+    "warning:knock-limited",
+  ],
+  "v8-flat/mustang-gt350-voodoo-52": [],
+  "vr6": [],
+  "vr6/audi-tt-3-2": [],
+  "vr6/passat-r36": [],
+  "vr6/passat-vr6-2-8": [],
+  "vr6/porsche-cayenne-3-2": [
+    "warning:exhaust-choke",
+  ],
+  "w12": [],
+  "w12/a8-phaeton-6-0-420": [
+    "warning:exhaust-choke",
+  ],
+  "w12/a8-phaeton-6-0-450": [
+    "warning:exhaust-choke",
+  ],
+  "w12/continental-supersports": [],
+  "w12/touareg-6-0": [],
+  "w16": [],
+  "w16/bolide-race": [],
+  "w16/chiron": [
+    "warning:knock-limited",
+    "warning:egt",
+    "warning:turbo-small",
+    "warning:exhaust-choke",
+  ],
+  "w16/chiron-super-sport": [
+    "warning:knock-limited",
+    "warning:turbo-small",
+    "warning:exhaust-choke",
+  ],
+  "w16/veyron-super-sport": [
+    "warning:knock-limited",
+    "warning:turbo-small",
+    "warning:exhaust-choke",
+  ],
+}
+`;

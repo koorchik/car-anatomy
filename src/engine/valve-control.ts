@@ -19,7 +19,8 @@ export interface CamSwitching {
   kind: 'pin' | 'slide';
   /** The low cam's events at park. */
   low: ValveTiming;
-  lowLift: number;
+  /** The low cam's lift as a share of the main cam's, the same on every switched valve. */
+  lowShare: number;
   /** Charge trapped on the high cam over the low one at wotRpm, from the performance model. */
   highGain: number[];
 }
@@ -39,8 +40,8 @@ export interface VariableValves {
   switching: CamSwitching | null;
   /** Intake valves that set the load: an intermediate lever, or MultiAir's oil column. */
   lift: { kind: LiftKind; maxLift: number } | null;
-  /** Cylinder numbers that rest: one set, or two that take turns. */
-  deactivation: { kind: DeactivationKind; sets: number[][]; rpmMin: number; rpmMax: number; loadMax: number } | null;
+  /** Cylinder numbers that rest: one set, or two that take turns. The window is the manufacturer's when documented. */
+  deactivation: { kind: DeactivationKind; sets: number[][]; rpmMin: number; rpmMax: number; documented: boolean; loadMax: number } | null;
 }
 
 export interface ValveState {
@@ -56,6 +57,9 @@ export interface ValveState {
   /** Share of cylinders firing. */
   active: number;
 }
+
+/** No cylinder resting. Shared, so the controller allocates nothing while it runs; never mutated. */
+const ALL_FIRING: number[] = [];
 
 export const restingState = (): ValveState => ({ intakeShift: 0, exhaustShift: 0, highCam: false, liftShare: 1, lateOpen: false, off: [], active: 1 });
 
@@ -164,7 +168,7 @@ export class ValveControl {
       if (!fits) {
         // Every cylinder comes back at once the moment power is wanted.
         this.holdTime = 0;
-        s.off = [];
+        s.off = ALL_FIRING;
       } else {
         this.holdTime += dt;
         if (this.holdTime >= DEACTIVATE_AFTER) {
@@ -194,11 +198,12 @@ export interface LiveTiming {
 /** MultiAir's late opening: the oil column is held only after the cam has done this share of its event. */
 export const LIVO_START = 0.3;
 
-export function liveTiming(timing: ValveTiming, vvt: VariableValves | undefined | null, state: ValveState | undefined | null, mainLift = 1): LiveTiming {
-  if (!vvt || !state) return { timing, intakeLift: 1, exhaustLift: 1 };
+/** Live events for this moment. Pass `out` to have them written there instead of into a new object. */
+export function liveTiming(timing: ValveTiming, vvt: VariableValves | undefined | null, state: ValveState | undefined | null, out?: LiveTiming): LiveTiming {
+  if (!vvt || !state) return written(out, timing.intakeOpen, timing.intakeClose, timing.exhaustOpen, timing.exhaustClose, 1, 1);
   const sw = vvt.switching;
   const low = sw && !state.highCam;
-  const lowShare = sw ? sw.lowLift / Math.max(mainLift, 0.1) : 1;
+  const lowShare = sw ? clamp(sw.lowShare, 0, 1) : 1;
   const intakeLow = low && sw!.cams !== 'exhaust';
   const exhaustLow = low && sw!.cams !== 'intake';
   let intakeOpen = (intakeLow ? sw!.low.intakeOpen : timing.intakeOpen) + state.intakeShift;
@@ -231,8 +236,23 @@ export function liveTiming(timing: ValveTiming, vvt: VariableValves | undefined 
       intakeLift *= Math.sin(Math.PI * Math.min(share, 0.5)) ** 2;
     }
   }
-  return { timing: { intakeOpen, intakeClose, exhaustOpen, exhaustClose }, intakeLift, exhaustLift };
+  return written(out, intakeOpen, intakeClose, exhaustOpen, exhaustClose, intakeLift, exhaustLift);
 }
+
+function written(out: LiveTiming | undefined, intakeOpen: number, intakeClose: number, exhaustOpen: number, exhaustClose: number, intakeLift: number, exhaustLift: number): LiveTiming {
+  if (!out) return { timing: { intakeOpen, intakeClose, exhaustOpen, exhaustClose }, intakeLift, exhaustLift };
+  const t = out.timing;
+  t.intakeOpen = intakeOpen;
+  t.intakeClose = intakeClose;
+  t.exhaustOpen = exhaustOpen;
+  t.exhaustClose = exhaustClose;
+  out.intakeLift = intakeLift;
+  out.exhaustLift = exhaustLift;
+  return out;
+}
+
+/** An object for liveTiming to write into, so a caller that runs every frame allocates nothing. */
+export const liveScratch = (): LiveTiming => ({ timing: { intakeOpen: 0, intakeClose: 0, exhaustOpen: 0, exhaustClose: 0 }, intakeLift: 1, exhaustLift: 1 });
 
 /** Share of the cam event MultiAir keeps the valve open for, from the lift share asked for. */
 export const multiairClose = (share: number): number => 0.08 + 0.92 * clamp(share, 0, 1);

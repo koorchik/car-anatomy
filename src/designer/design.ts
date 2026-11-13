@@ -145,6 +145,8 @@ export interface Design {
   deactivation: Deactivation;
   /** Which half of the firing order rests. Only heard and drawn. */
   deactivateGroup: DeactivateGroup;
+  /** Engine speeds between which cylinders may rest, from the manufacturer. Null: a generic estimate. */
+  deactivateRpm: [number, number] | null;
 
   /** Wankel only. */
   rotorR: number;
@@ -224,6 +226,7 @@ export const DEFAULT_DESIGN: Design = {
   liftControl: 'cam',
   deactivation: 'none',
   deactivateGroup: 'first',
+  deactivateRpm: null,
   rotorR: 105,
   rotorE: 15,
   rotorWidth: 80,

@@ -56,44 +56,66 @@ const volume = (compression: number, rodRatio: number, deg: number): number => {
 };
 
 describe('the sound of the valve gear', () => {
-  it('VTEC: the high cam opens the exhaust earlier on a fuller cylinder, as the model says', () => {
+  it('VTEC: the switch is heard by as much as the model’s charge, expansion and lift give', () => {
     const k20 = config('i4');
     const sw = k20.sim.valves!.switching!;
-    const low = render(withValves(k20, { switching: { ...sw, rpm: 9000 } }), 1, 1, 6500);
-    const high = render(withValves(k20, { switching: { ...sw, rpm: 5000 } }), 1, 1, 6500);
-    expect(low.synth.sim.valves.state.highCam).toBe(false);
-    expect(high.synth.sim.valves.state.highCam).toBe(true);
-
-    // Blowdown strength follows the cylinder pressure at the exhaust opening: charge trapped times expansion.
     const d = { ...catalogueDesign(CATALOGUE.find((e) => e.id === 'i4')!), factory: null };
     const model = new Model(d);
-    const fill = (h: boolean): number => model.at(6500, { throttle: 1, lambda: d.lambda, noBoost: false, cam: camAt(d, { high: h }) }).fillRatio;
+    const fill = (rpm: number, h: boolean): number => model.at(rpm, { throttle: 1, lambda: d.lambda, noBoost: false, cam: camAt(d, { high: h }) }).fillRatio;
     const evoLow = camAt(d, { high: false }).events.exhaustOpen;
     const evoHigh = camAt(d, { high: true }).events.exhaustOpen;
     const r = d.compression;
     const rod = d.rodLength / d.stroke;
-    const expected = (fill(true) / fill(false)) * (volume(r, rod, evoLow) / volume(r, rod, evoHigh)) ** 1.3;
-    const gainOf = (x: { synth: EngineSynth }): number => (x.synth as unknown as { live: { exhaustGain: number } }).live.exhaustGain;
-    // The model's trapped mass is sampled at the schedule speeds, so allow for the interpolation.
-    expect(gainOf(high) / gainOf(low)).toBeCloseTo(expected, 1);
-    expect(20 * Math.log10(expected)).toBeGreaterThan(1);
+    type Live = { exhaustGain: number; intakeGain: number };
+    const liveOf = (x: { synth: EngineSynth }): Live => (x.synth as unknown as { live: Live }).live;
 
-    // It is heard: louder, though the exhaust's own saturation takes some of it back.
-    expect(rmsDb(high.l, FS / 2, FS) - rmsDb(low.l, FS / 2, FS)).toBeGreaterThan(0.4);
-    // And the pulses move earlier by the change in exhaust opening, in time.
-    const lagLimit = 80;
-    let best = -Infinity;
-    let at = 0;
-    for (let lag = -lagLimit; lag <= lagLimit; lag++) {
-      let s = 0;
-      for (let i = 30000; i < 34800; i++) s += high.l[i]! * low.l[i + lag]!;
-      if (s > best) {
-        best = s;
-        at = lag;
+    // Just past Honda's 6000 rpm switch, where a driver hears it, and higher up.
+    for (const rpm of [6200, 6500]) {
+      const low = render(withValves(k20, { switching: { ...sw, rpm: 9000 } }), 1, 1, rpm);
+      const high = render(withValves(k20, { switching: { ...sw, rpm: 5000 } }), 1, 1, rpm);
+      expect(low.synth.sim.valves.state.highCam).toBe(false);
+      expect(high.synth.sim.valves.state.highCam).toBe(true);
+
+      // Blowdown strength follows the cylinder pressure at the exhaust opening: charge trapped times expansion,
+      // p ~ V^-1.3. The model's trapped mass is sampled at the schedule speeds, so allow for the interpolation.
+      const charge = fill(rpm, true) / fill(rpm, false);
+      const exhaust = charge * (volume(r, rod, evoLow) / volume(r, rod, evoHigh)) ** 1.3;
+      expect(liveOf(high).exhaustGain / liveOf(low).exhaustGain, `${rpm}`).toBeCloseTo(exhaust, 1);
+      expect(20 * Math.log10(exhaust), `${rpm}`).toBeGreaterThan(1);
+
+      // The intake pulse follows the charge and the square root of the valve's lift: the low cam's is weaker.
+      const intake = charge / Math.sqrt(d.lowLift / d.lift);
+      expect(liveOf(low).intakeGain, `${rpm}`).toBeLessThan(1);
+      expect(liveOf(low).intakeGain, `${rpm}`).toBeLessThan(liveOf(high).intakeGain);
+      expect(liveOf(high).intakeGain / liveOf(low).intakeGain, `${rpm}`).toBeCloseTo(intake, 1);
+
+      // The output is the exhaust path, scaled by the blowdown, plus the intake path; the mechanical noise
+      // doesn't move. So the step in level lies between the two paths' own steps. The 0.4 dB allowance covers
+      // the soft clipper on the output and the share of the unchanged noise. About 1 dB is the smallest change
+      // in level a listener notices, and the switch has to clear it.
+      const exDb = 20 * Math.log10(exhaust);
+      const inDb = 20 * Math.log10(intake);
+      const step = rmsDb(high.l, FS / 2, FS) - rmsDb(low.l, FS / 2, FS);
+      expect(step, `${rpm}`).toBeGreaterThan(Math.min(exDb, inDb) - 0.4);
+      expect(step, `${rpm}`).toBeLessThan(Math.max(exDb, inDb) + 0.4);
+      expect(step, `${rpm}`).toBeGreaterThan(1);
+
+      if (rpm !== 6500) continue;
+      // And the pulses move earlier by the change in exhaust opening, in time.
+      const lagLimit = 80;
+      let best = -Infinity;
+      let at = 0;
+      for (let lag = -lagLimit; lag <= lagLimit; lag++) {
+        let sum = 0;
+        for (let i = 30000; i < 34800; i++) sum += high.l[i]! * low.l[i + lag]!;
+        if (sum > best) {
+          best = sum;
+          at = lag;
+        }
       }
+      const expectedMs = ((evoLow - evoHigh) / (6 * rpm)) * 1000;
+      expect(Math.abs((at / FS) * 1000 - expectedMs)).toBeLessThan(0.3);
     }
-    const expectedMs = ((evoLow - evoHigh) / (6 * 6500)) * 1000;
-    expect(Math.abs((at / FS) * 1000 - expectedMs)).toBeLessThan(0.3);
   });
 
   it('GM AFM: with four cylinders resting, each bank fires at 180° and 540°, and the firing tone halves', () => {

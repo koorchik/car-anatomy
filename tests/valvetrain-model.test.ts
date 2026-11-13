@@ -45,6 +45,7 @@ describe('the mechanisms a design may have', () => {
       d.deactivateGroup = pick(['first', 'second', 'alternate', ...junk]);
       d.switchKind = pick(['pin', 'slide', ...junk]);
       for (const key of ['intakePhaseRange', 'exhaustPhaseRange', 'switchRpm', 'lowLift', 'lowDuration']) d[key] = pick([random() * 9000, ...junk]);
+      d.deactivateRpm = pick([[random() * 12000, random() * 12000], [random() * 3000, 'x'], [1500], [1, 2, 3], ...junk]);
       const once = resolveDesign(d as unknown as Design);
       expect(resolveDesign(once)).toEqual(once);
       expect(['none', 'intake', 'dual', 'coupled']).toContain(once.camPhaser);
@@ -57,6 +58,11 @@ describe('the mechanisms a design may have', () => {
         expect(once[key]).toBeLessThanOrEqual(range.max);
       }
       expect(once.lowLift).toBeLessThan(once.lift);
+      if (once.deactivateRpm) {
+        expect(once.deactivation).not.toBe('none');
+        expect(once.deactivateRpm[1] - once.deactivateRpm[0]).toBeGreaterThanOrEqual(200);
+        expect(once.deactivateRpm[1]).toBeLessThanOrEqual(once.rpmLimit);
+      }
       expect(once.switchRpm).toBeLessThanOrEqual(Math.max(1500, once.rpmLimit - 300));
     }
   });
@@ -92,6 +98,9 @@ describe('the mechanisms a design may have', () => {
     expect(editDesign(d, { switchKind: 'slide' }).factory).not.toBeNull();
     expect(editDesign(d, { deactivateGroup: 'second' }).factory).not.toBeNull();
     expect(editDesign(d, { camPhaser: 'none' }).factory).toBeNull();
+    // And the model agrees: a pin or a sliding block changes nothing it computes.
+    const pin = real('i4', { switchKind: 'pin' });
+    expect(JSON.stringify(evaluate({ ...pin, switchKind: 'slide' }))).toBe(JSON.stringify(evaluate(pin)));
   });
 });
 
@@ -112,6 +121,17 @@ describe('cylinders that rest', () => {
     expect(deactivationSets(gt4).map((s) => [...s].sort())).toEqual([[1, 2, 3], [4, 5, 6]]);
     // Lamborghini's V10 rests one bank.
     expect(deactivationSets(real('v10/huracan-lp610-4'))[0]!.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('rests only within the window the manufacturer gives, where there is one', () => {
+    // Porsche press kit for the 718 GT4: one bank's injection is cut between 1600 and 3000 rpm.
+    const gt4 = real('b6/porsche-718-gt4-4-0');
+    const window = designToSpec(gt4, evaluate(gt4)).vvt!.deactivation!;
+    expect([window.rpmMin, window.rpmMax, window.documented]).toEqual([1600, 3000, true]);
+    expect(designToSpec(real('v8-cross/camaro-ss-lt1'), evaluate(real('v8-cross/camaro-ss-lt1'))).vvt!.deactivation!.documented).toBe(false);
+    // A window that leaves out the cruise speed keeps every cylinder on there.
+    expect(evaluate({ ...gt4, deactivateRpm: [3000, 4500] }).cruise.activeCylinders).toBe(6);
+    expect(evaluate(gt4).cruise.activeCylinders).toBe(3);
   });
 
   it('leaves an even rhythm when the firing was even', () => {
@@ -275,13 +295,29 @@ describe('compression from the moment the intake closes', () => {
 });
 
 describe('residual gas', () => {
-  it('stays a few percent at full load, and grows with overlap at cruise', () => {
-    for (const id of ['i4', 'v8-cross', 'b6', 'v10']) {
-      for (const p of evaluate(real(id)).points.filter((_, i) => i % 12 === 6)) {
-        expect(p.residual, id).toBeGreaterThan(0.015);
-        expect(p.residual, id).toBeLessThan(0.1);
+  it('at full load is the gas left in the chamber, so it falls with compression', () => {
+    // Without backflow x_r / (1 - x_r) = (pe / pi) (Ti / Tres) / (ηv (r - 1)): the chamber holds 1 / (r - 1) of
+    // the swept volume at exhaust pressure and residual temperature. With pe ≈ pi, Ti / Tres = 0.35–0.45 and
+    // ηv = 0.8–1.05 that is x_r (r - 1) = 0.33–0.56; a turbine that lets pe fall below pi gives a little less.
+    for (const entry of CATALOGUE.filter((e) => e.design.layout !== 'rotary')) {
+      const d = real(entry.id);
+      for (const p of evaluate(d).points.filter((_, i) => i % 12 === 6)) {
+        expect(p.residual * (d.compression - 1), entry.id).toBeGreaterThan(0.25);
+        expect(p.residual * (d.compression - 1), entry.id).toBeLessThan(0.6);
       }
     }
+    const most = (id: string): number => Math.max(...evaluate(real(id)).points.map((p) => p.residual));
+    const least = (id: string): number => Math.min(...evaluate(real(id)).points.map((p) => p.residual));
+    // So a diesel at 17–19 : 1 keeps 2–4 %, a petrol engine at 10–13 : 1 3–5 %, and a 1920s eight at 5.2 : 1 7–9 %.
+    for (const id of ['i4d', 'i6d']) expect(most(id), id).toBeLessThan(0.04);
+    for (const id of ['i4', 'v8-cross', 'b6', 'v10', 'v12']) {
+      expect(least(id), id).toBeGreaterThan(0.03);
+      expect(most(id), id).toBeLessThan(0.055);
+    }
+    expect(least('i8')).toBeGreaterThan(0.07);
+  });
+
+  it('grows with overlap at light load', () => {
     // Heywood gives 20-30 % at light load for engines with generous overlap.
     const v8 = real('v8-cross');
     const model = new Model(v8);
@@ -324,6 +360,21 @@ describe('the valve setting the load', () => {
     expect(lever.liftMm).toBeLessThan(d.lift / 2);
   });
 
+  it('the cruise lift shown is the one that makes the cruise power at the phase shown', () => {
+    for (const id of ['i3/bmw-i8-15', 'v6-60/nissan-370z-vq37vhr', 'i6/toyota-supra-b58']) {
+      const d = real(id);
+      const cruise = evaluate(d).cruise;
+      expect(d.liftControl, id).toBe('continuous');
+      const model = new Model(d);
+      // Off boost when the engine makes the power that way, as the cruise search tries first.
+      const noBoost = model.at(2500, { throttle: 0.95, lambda: 1, noBoost: true, cam: camAt(d, { high: true, liftShare: 1 }) }).powerKw >= 30;
+      const cam = camAt(d, { high: true, intakeShift: cruise.intakeShift, exhaustShift: cruise.exhaustShift, liftShare: cruise.liftMm / d.lift });
+      const at = model.at(2500, { throttle: 0.95, lambda: 1, noBoost, cam, active: cruise.activeCylinders / d.cylinders });
+      expect(at.powerKw, id).toBeCloseTo(30, 1);
+      expect(at.fuelLh, id).toBeCloseTo(cruise.fuelLh, 2);
+    }
+  });
+
   it('MultiAir saves fuel on an engine that cruises throttled, within what Fiat reports', () => {
     const d = base({ cylinders: 6, bore: 89, stroke: 93, rodLength: 150 });
     const saving = 1 - evaluate(resolveDesign({ ...d, liftControl: 'multiair' })).cruise.fuelLh / evaluate(d).cruise.fuelLh;
@@ -350,5 +401,21 @@ describe('cost and the catalogue', () => {
     const d = real(id);
     const ids = diagnose(d, evaluate(d)).map((x) => x.id);
     for (const bad of ['relief-deep', 'phaser-idle', 'switch-early', 'switch-late', 'switch-useless', 'deact-uneven', 'valve-hit', 'valve-close']) expect(ids, id).not.toContain(bad);
+  });
+
+  it.each(all.filter((id) => real(id).camPhaser !== 'none'))('%s: the computer’s choice of phase never needs the retard of a knock-limited engine', (id) => {
+    const d = real(id);
+    const plain = resolveDesign({ ...d, camPhaser: 'none' });
+    const limited = (x: Design): boolean => diagnose(x, evaluate(x)).some((q) => q.id === 'knock-limited' || q.id === 'knock');
+    if (!limited(plain)) expect(limited(d), id).toBe(false);
+    // Point by point: never more than the margin, unless the cam in the middle of the travel needs more there.
+    const model = new Model(d);
+    const lim = { intake: phaserRanges(d).intake, exhaust: phaserRanges(d).exhaust };
+    for (const p of evaluate(d).points) {
+      if (p.knockRetard <= 6) continue;
+      const middle = d.camPhaser === 'coupled' ? { intakeShift: lim.intake / 2, exhaustShift: lim.intake / 2 } : { intakeShift: -lim.intake / 2, exhaustShift: lim.exhaust / 2 };
+      const at = model.at(p.rpm, { throttle: 1, lambda: d.lambda, noBoost: false, cam: camAt(d, { ...middle, high: p.highCam }) });
+      expect(p.knockRetard, `${id} at ${Math.round(p.rpm)} rpm`).toBeLessThanOrEqual(at.knockRetard + 1e-9);
+    }
   });
 });

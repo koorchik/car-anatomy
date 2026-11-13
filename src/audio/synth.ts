@@ -288,7 +288,9 @@ export class EngineSynth {
   private fadeRate = 0;
   private pendingCfg: SynthConfig | null = null;
   private live: LiveVoice | null = null;
-  private liveKey = '';
+  /** The controller's state the live voice was made for, quantised; and the resting list it saw. */
+  private readonly liveKey = new Float64Array(6).fill(Number.NaN);
+  private liveOff: readonly number[] | null = null;
 
   constructor(cfg: SynthConfig, fs: number) {
     this.fs = fs;
@@ -318,7 +320,8 @@ export class EngineSynth {
     this.cfg = cfg;
     this.cyl = cfg.cylinders.map((c, i) => new CylinderVoice(c, fs, this.noise, cfg.rough, i + 1));
     this.live = null;
-    this.liveKey = '';
+    this.liveKey.fill(Number.NaN);
+    this.liveOff = null;
     const groupCount = cfg.groupPans.length;
     this.groups = Array.from({ length: groupCount }, (_, i) => new GroupVoice(cfg.pipeM, cfg.groupPans[i] ?? 0, fs, cfg.open));
     this.ampScale = pulseScale(cfg.sim.cylinders, cfg.displacementCc) * 2.1 * cfg.trim;
@@ -638,9 +641,22 @@ export class EngineSynth {
     const vvt = cfg.sim.valves;
     const st = this.sim.valves.state;
     const load = Math.min(1, Math.max(0, this.sim.load));
-    const key = `${st.intakeShift.toFixed(1)}/${st.exhaustShift.toFixed(1)}/${st.highCam}/${st.liftShare.toFixed(3)}/${st.lateOpen}/${st.off.join(',')}/${Math.round(this.sim.rpm / 50)}/${Math.round(load * 20)}`;
-    if (key === this.liveKey) return;
-    this.liveKey = key;
+    // Runs on the audio thread every 16 samples: compare numbers, build nothing unless something moved.
+    const k = this.liveKey;
+    const a = Math.round(st.intakeShift * 10);
+    const b = Math.round(st.exhaustShift * 10);
+    const c = (st.highCam ? 1 : 0) + (st.lateOpen ? 2 : 0);
+    const e = Math.round(st.liftShare * 1000);
+    const f = Math.round(this.sim.rpm / 50);
+    const g = Math.round(load * 20);
+    if (k[0] === a && k[1] === b && k[2] === c && k[3] === e && k[4] === f && k[5] === g && this.liveOff === st.off) return;
+    k[0] = a;
+    k[1] = b;
+    k[2] = c;
+    k[3] = e;
+    k[4] = f;
+    k[5] = g;
+    this.liveOff = st.off;
     const ref = valves.timing;
     const now = liveTiming(ref, vvt, st);
     const volume = (deg: number): number => cylinderVolume(valves.compression, valves.rodRatio, Math.min(180, Math.max(20, deg)));

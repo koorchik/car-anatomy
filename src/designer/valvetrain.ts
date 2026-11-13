@@ -14,7 +14,7 @@ import { FUELS } from './fuels.ts';
 import type { CamState, ValveEvents } from './physics.ts';
 
 /** The mechanisms switched off. A variant of a page takes none of them from the page's own engine. */
-export const NO_MECHANISMS: Pick<Design, 'camPhaser' | 'intakePhaseRange' | 'exhaustPhaseRange' | 'camSwitch' | 'switchRpm' | 'lowLift' | 'lowDuration' | 'switchKind' | 'liftControl' | 'deactivation' | 'deactivateGroup'> = {
+export const NO_MECHANISMS: Pick<Design, 'camPhaser' | 'intakePhaseRange' | 'exhaustPhaseRange' | 'camSwitch' | 'switchRpm' | 'lowLift' | 'lowDuration' | 'switchKind' | 'liftControl' | 'deactivation' | 'deactivateGroup' | 'deactivateRpm'> = {
   camPhaser: DEFAULT_DESIGN.camPhaser,
   intakePhaseRange: DEFAULT_DESIGN.intakePhaseRange,
   exhaustPhaseRange: DEFAULT_DESIGN.exhaustPhaseRange,
@@ -26,6 +26,7 @@ export const NO_MECHANISMS: Pick<Design, 'camPhaser' | 'intakePhaseRange' | 'exh
   liftControl: DEFAULT_DESIGN.liftControl,
   deactivation: DEFAULT_DESIGN.deactivation,
   deactivateGroup: DEFAULT_DESIGN.deactivateGroup,
+  deactivateRpm: DEFAULT_DESIGN.deactivateRpm,
 };
 
 /** True when the design has any of the mechanisms. Engines without them take the old path unchanged. */
@@ -61,6 +62,30 @@ export function resolveValvetrain(d: Design): void {
     if (d.camSwitch === 'both') d.camSwitch = 'exhaust';
   }
   if (d.cylinders < 4 || d.cylinders % 2 === 1) d.deactivation = 'none';
+}
+
+/**
+ * A documented window for resting cylinders, in whole tens of rpm inside the rev range. Runs after the rev
+ * limit is settled. Anything else, or a window too narrow to use, falls back to the generic estimate.
+ */
+export function resolveDeactivationWindow(d: Design): void {
+  const w = d.deactivateRpm as unknown;
+  const valid = Array.isArray(w) && w.length === 2 && w.every((v) => typeof v === 'number' && Number.isFinite(v));
+  if (d.deactivation === 'none' || !valid) {
+    d.deactivateRpm = null;
+    return;
+  }
+  const [a, b] = w as [number, number];
+  const lo = Math.max(500, Math.round(Math.min(a, b) / 10) * 10);
+  const hi = Math.min(Math.floor(d.rpmLimit / 10) * 10, Math.round(Math.max(a, b) / 10) * 10);
+  d.deactivateRpm = hi - lo >= 200 ? [lo, hi] : null;
+}
+
+/** Speeds between which cylinders may rest: the manufacturer's, or one estimated from idle and the rev limit. */
+export function deactivationWindow(d: Design, idleRpm: number, redlineRpm: number): [number, number] {
+  // VW rests two cylinders from 1400 to 4000 rpm, Porsche from 1600 to 3000. The estimate is given to 50 rpm, no finer.
+  const fifty = (v: number): number => Math.round(v / 50) * 50;
+  return d.deactivateRpm ?? [fifty(Math.max(1000, idleRpm * 1.4)), fifty(Math.min(4000, redlineRpm * 0.55))];
 }
 
 /** Crank degrees each phaser travels. Zero where there is none. */
@@ -275,10 +300,13 @@ export function phaserCorners(d: Design): CamState[] {
   return list;
 }
 
-/** Extra friction of the mechanisms, bar. Estimates, see docs/engine-designer-model.md. */
+/**
+ * Extra friction of the mechanisms, bar. Estimates, see docs/engine-designer-model.md. A locking pin and a
+ * sliding cam block cost the same here: nothing published tells them apart, and switchKind is only drawn.
+ */
 export function mechanismFrictionBar(d: Design): number {
   const phasers = d.camPhaser === 'none' ? 0 : d.camPhaser === 'dual' ? 2 : 1;
-  const switching = d.camSwitch === 'none' ? 0 : d.switchKind === 'pin' ? 0.01 : 0.005;
+  const switching = d.camSwitch === 'none' ? 0 : 0.008;
   const lift = d.liftControl === 'continuous' ? 0.02 : d.liftControl === 'multiair' ? 0.01 : 0;
   return 0.004 * phasers + switching + lift;
 }
@@ -288,7 +316,7 @@ export function mechanismMassKg(d: Design): number {
   if (isRotary(d)) return 0;
   const banks = ['vee', 'flatvee', 'boxer', 'w'].includes(d.layout) ? 2 : 1;
   const phasers = (d.camPhaser === 'none' ? 0 : d.camPhaser === 'dual' ? 2 : 1) * (d.valvetrain === 'ohv' ? 1 : banks);
-  const switching = d.camSwitch === 'none' ? 0 : (d.switchKind === 'pin' ? 0.25 : 0.4) * d.cylinders;
+  const switching = d.camSwitch === 'none' ? 0 : 0.3 * d.cylinders;
   const lift = d.liftControl === 'cam' ? 0 : 3 * banks;
   const rest = d.deactivation === 'none' ? 0 : 3;
   return 0.6 * phasers + switching + lift + rest;

@@ -39,10 +39,11 @@ export interface Step {
   rpm?: number;
 }
 
-export function render(id: string, steps: Step[], trim?: number): { l: Float32Array; r: Float32Array; rpm: Float32Array } {
+/** `park` holds the variable valve gear at rest: phasers at park, the main cam, every cylinder firing. */
+export function render(id: string, steps: Step[], trim?: number, park = false): { l: Float32Array; r: Float32Array; rpm: Float32Array } {
   const spec = engineById(id);
   if (!spec) throw new Error(`Unknown engine ${id}`);
-  const synth = new EngineSynth(synthConfig(buildEngine(spec), trim), FS);
+  const synth = new EngineSynth(synthConfig(buildEngine(park ? { ...spec, vvt: undefined } : spec), trim), FS);
   synth.sim.start();
   const total = steps.reduce((a, s) => a + s.seconds, 0);
   const samples = Math.floor(total * FS);

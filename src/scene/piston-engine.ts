@@ -36,8 +36,11 @@ import {
 } from './geometry.ts';
 import { createMaterials, glowTexture, hotPipeMaterial, type EngineMaterials, type HotPipeUniforms } from './materials.ts';
 import { GAS, disposeTree, markDamaged, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
-import { liveTiming, type ValveState } from '../engine/valve-control.ts';
+import { liveScratch, liveTiming, type ValveState } from '../engine/valve-control.ts';
 import { VariableValveGear } from './variable-valves.ts';
+
+/** No cylinder resting. */
+const NONE_RESTING: readonly number[] = [];
 
 interface CylinderParts {
   def: Cylinder;
@@ -128,6 +131,7 @@ export class PistonEngineModel implements EngineModel {
   private readonly shakeGain: number;
   /** Phasers, switching cams, lift control and resting cylinders. Inert on engines without them. */
   private gear!: VariableValveGear;
+  private readonly live = liveScratch();
 
   private readonly deck: number;
   private readonly bore: number;
@@ -947,7 +951,7 @@ export class PistonEngineModel implements EngineModel {
 
     this.crank.rotation.z = -theta * DEG;
 
-    const resting = new Set(state.valves?.off ?? []);
+    const resting = state.valves?.off ?? NONE_RESTING;
     const fuelOnly = e.spec.vvt?.deactivation?.kind === 'fuel';
     for (const c of this.cylinders) {
       const def = c.def;
@@ -966,7 +970,7 @@ export class PistonEngineModel implements EngineModel {
 
       if (this.viewMode !== 'solid') {
         const phase = cyclePhase(e, def, theta);
-        const rests = resting.has(def.n);
+        const rests = resting.includes(def.n);
         const firing = running && !fuelCut && !rests;
         const look = gasAppearance(phase, firing);
         c.gasMaterial.color.copy(look.color);
@@ -1002,8 +1006,8 @@ export class PistonEngineModel implements EngineModel {
   private updateValves(theta: number, valves?: ValveState): void {
     const e = this.engine;
     // Phasers move the events, a low cam or a lever shrinks them, and a resting cylinder's valves stay shut.
-    const live = liveTiming(e.timing, e.spec.vvt, valves);
-    const shut = new Set(valves && e.spec.vvt?.deactivation?.kind === 'valves' ? valves.off : []);
+    const live = liveTiming(e.timing, e.spec.vvt, valves, this.live);
+    const shut = valves && e.spec.vvt?.deactivation?.kind === 'valves' ? valves.off : NONE_RESTING;
     const b = this.bore;
     const stemLen = b * (e.spec.valvetrain === 'dohc' ? 0.72 : 0.62);
     const m = new THREE.Matrix4();
@@ -1025,7 +1029,7 @@ export class PistonEngineModel implements EngineModel {
     for (const v of this.valves) {
       const phi = mod(theta - v.cyl.fire, 720);
       const camLift = (v.exhaust ? exhaustLift(phi, live.timing) * live.exhaustLift : intakeLift(phi, live.timing) * live.intakeLift) * this.valveLift;
-      const l = shut.has(v.cyl.n) ? 0 : camLift;
+      const l = shut.includes(v.cyl.n) ? 0 : camLift;
       lift.makeTranslation(0, -l, 0);
       const bankAlpha = e.banks[v.cyl.bank]!.alpha * DEG;
       offset.makeTranslation(Math.sin(bankAlpha) * exploded * 2.6 * b, Math.cos(bankAlpha) * exploded * 2.6 * b, 0);
@@ -1089,12 +1093,12 @@ export class PistonEngineModel implements EngineModel {
     const targetHeat = state.running ? Math.pow(state.load * 0.6 + nRpm * 0.5, 1.4) : 0;
     this.heat += (targetHeat - this.heat) * Math.min(1, state.dt * (targetHeat > this.heat ? 0.35 : 0.14));
     const firing = state.running && !state.fuelCut;
-    const resting = new Set(state.valves?.off ?? []);
+    const resting = state.valves?.off ?? NONE_RESTING;
     for (const h of this.headers) {
       h.uniforms.uHeat.value = this.heat;
       const phi = mod(state.theta - h.cyl.fire, 720);
       const x = (phi - e.timing.exhaustOpen) / 150;
-      if (firing && !resting.has(h.cyl.n) && x >= 0 && x <= 1.2) {
+      if (firing && !resting.includes(h.cyl.n) && x >= 0 && x <= 1.2) {
         h.uniforms.uPulsePos.value = x;
         h.uniforms.uPulseAmp.value = (1 - x * 0.7) * (0.25 + state.load * 0.75);
       } else {
@@ -1110,9 +1114,9 @@ export class PistonEngineModel implements EngineModel {
       return;
     }
     // Two most recent fires light up the inside of the engine. Resting cylinders don't fire.
-    const resting = new Set(state.valves?.off ?? []);
+    const resting = state.valves?.off ?? NONE_RESTING;
     const ranked = this.cylinders
-      .filter((c) => !resting.has(c.def.n))
+      .filter((c) => !resting.includes(c.def.n))
       .map((c) => ({ c, phase: cyclePhase(e, c.def, state.theta) }))
       .sort((a, b) => a.phase - b.phase);
     this.flash.forEach((light, i) => {

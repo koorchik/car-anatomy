@@ -716,7 +716,7 @@ exports[`catalogue engine b6 has not changed 1`] = `
       "valves": "spec.vvt",
     },
     "supercharger": false,
-    "trim": 0.307,
+    "trim": 0.271,
     "turboWhine": 0,
     "turbos": 0,
     "valves": {
@@ -1950,7 +1950,7 @@ exports[`catalogue engine i4 has not changed 1`] = `
       "valves": "spec.vvt",
     },
     "supercharger": false,
-    "trim": 0.349,
+    "trim": 0.319,
     "turboWhine": 0,
     "turbos": 0,
     "valves": {
@@ -2007,7 +2007,7 @@ exports[`catalogue engine i4 has not changed 1`] = `
         "intakeClose": 606,
         "intakeOpen": 376,
       },
-      "lowLift": 9,
+      "lowShare": 0.75,
       "rpm": 6000,
     },
     "wotExhaust": [
@@ -2489,7 +2489,7 @@ exports[`catalogue engine i5 has not changed 1`] = `
       "valves": "spec.vvt",
     },
     "supercharger": false,
-    "trim": 0.593,
+    "trim": 0.488,
     "turboWhine": 0.12,
     "turbos": 1,
     "valves": {
@@ -2546,7 +2546,7 @@ exports[`catalogue engine i5 has not changed 1`] = `
         "intakeClose": 613,
         "intakeOpen": 373,
       },
-      "lowLift": 9,
+      "lowShare": 0.841,
       "rpm": 3500,
     },
     "wotExhaust": [
@@ -4475,7 +4475,7 @@ exports[`catalogue engine v6-60 has not changed 1`] = `
       "valves": "spec.vvt",
     },
     "supercharger": false,
-    "trim": 0.325,
+    "trim": 0.329,
     "turboWhine": 0,
     "turbos": 0,
     "valves": {
@@ -6951,7 +6951,7 @@ exports[`catalogue engine w12 has not changed 1`] = `
       "valves": "spec.vvt",
     },
     "supercharger": false,
-    "trim": 0.684,
+    "trim": 0.656,
     "turboWhine": 0.12,
     "turbos": 2,
     "valves": {

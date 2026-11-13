@@ -7,9 +7,9 @@
 
 import * as THREE from 'three';
 import { DEG, liftWindow, mod, type Cylinder, type Engine } from '../engine/kinematics.ts';
-import { liveTiming, type ValveState, type VariableValves } from '../engine/valve-control.ts';
+import { liveScratch, liveTiming, type ValveState, type VariableValves } from '../engine/valve-control.ts';
 import type { ValveTiming } from '../engine/spec.ts';
-import { MM, camshaftGeometry, extrude, roundedRect, zCylinder, type LobeDef } from './geometry.ts';
+import { MM, camshaftGeometry, extrude, merge, roundedRect, zCylinder, type LobeDef } from './geometry.ts';
 import type { EngineMaterials } from './materials.ts';
 import { tag, type FrameState } from './model-types.ts';
 
@@ -60,6 +60,10 @@ interface PinSet {
   outer: ValveTip[];
   middle: { tip: THREE.Vector3; dir: THREE.Vector3 };
   locked: number;
+  /** Where its followers and pins sit in their bank's instanced meshes, fixed once built. */
+  mesh: number;
+  pad: number;
+  pin: number;
 }
 
 interface Phaser {
@@ -85,6 +89,14 @@ export class VariableValveGear {
   private readonly resting = new Set<number>();
   private readonly lowTiming: ValveTiming | null;
   private readonly deactivatable = new Set<number>();
+  // Scratch for the per-frame updates, so a frame allocates nothing.
+  private readonly liveHigh = liveScratch();
+  private readonly liveNow = liveScratch();
+  private highState: ValveState | null = null;
+  private readonly m = new THREE.Matrix4();
+  private readonly m2 = new THREE.Matrix4();
+  private readonly v1 = new THREE.Vector3();
+  private readonly v2 = new THREE.Vector3();
 
   constructor(ctx: GearContext) {
     this.ctx = ctx;
@@ -110,7 +122,7 @@ export class VariableValveGear {
     const sw = this.vvt.switching;
     const switched = this.switches(exhaust);
     const rests = this.deactivatable.has(cyl.n);
-    const low: LobeDef = switched && this.lowTiming ? { ...lobe, halfSpan: this.halfSpan(this.lowTiming, exhaust), lift: sw!.lowLift * MM } : lobe;
+    const low: LobeDef = switched && this.lowTiming ? { ...lobe, halfSpan: this.halfSpan(this.lowTiming, exhaust), lift: sw!.lowShare * this.ctx.valveLift } : lobe;
     const tipInfo: ValveTip = { cyl, exhaust, bank, tip, dir };
     this.tips.push(tipInfo);
     const slide = switched && sw!.kind === 'slide';
@@ -125,7 +137,7 @@ export class VariableValveGear {
     if (switched && sw!.kind === 'pin') {
       let set = this.pinSets.find((p) => p.cyl === cyl && p.exhaust === exhaust);
       if (!set) {
-        set = { camKey, cyl, exhaust, bank, outer: [], middle: { tip: tip.clone(), dir: dir.clone() }, locked: 0, lobe };
+        set = { camKey, cyl, exhaust, bank, outer: [], middle: { tip: tip.clone(), dir: dir.clone() }, locked: 0, lobe, mesh: 0, pad: 0, pin: 0 };
         this.pinSets.push(set);
       }
       set.outer.push(tipInfo);
@@ -165,7 +177,7 @@ export class VariableValveGear {
       const lobes: LobeDef[] = p.profiles.map((profile, k) => {
         const z = p.z + k * step;
         if (profile === 'zero') return { z, rotation: p.rotation, halfSpan: main, lift: 0 };
-        if (profile === 'low' && this.lowTiming) return { z, rotation: p.rotation, halfSpan: this.halfSpan(this.lowTiming, p.exhaust), lift: this.vvt!.switching!.lowLift * MM };
+        if (profile === 'low' && this.lowTiming) return { z, rotation: p.rotation, halfSpan: this.halfSpan(this.lowTiming, p.exhaust), lift: this.vvt!.switching!.lowShare * valveLift };
         return { z, rotation: p.rotation, halfSpan: main, lift: valveLift };
       });
       const geo = camshaftGeometry(lobes, camBase, valveLift, lobeWidth, camBase * 0.92, p.z - step * 0.55, p.z + step * (p.profiles.length - 0.45));
@@ -240,6 +252,15 @@ export class VariableValveGear {
       }
       padMesh.userData.bank = bank;
       pinMesh.userData.bank = bank;
+      let pad = 0;
+      let pin = 0;
+      for (const s of sets) {
+        s.mesh = this.padMeshes.length;
+        s.pad = pad;
+        s.pin = pin;
+        pad += s.outer.length + 1;
+        pin += s.outer.length;
+      }
       this.padMeshes.push(padMesh);
       this.pinMeshes.push(pinMesh);
     });
@@ -262,13 +283,13 @@ export class VariableValveGear {
       const zMax = Math.max(...zs) + b * 0.3;
       const shaft = new THREE.Group();
       shaft.position.set(x, y, 0);
-      const core = tag(new THREE.Mesh(zCylinder(b * 0.035, zMax - zMin, 16, 0, 0, (zMin + zMax) / 2), m.cam), 'valvetronic');
-      shaft.add(core);
+      // The shaft and its eccentric discs turn together: one mesh.
+      const parts = [zCylinder(b * 0.035, zMax - zMin, 16, 0, 0, (zMin + zMax) / 2)];
       for (const n of new Set(tips.map((t) => t.cyl.n))) {
         const z = engine.cylinders.find((c) => c.n === n)!.z * MM;
-        const disc = tag(new THREE.Mesh(zCylinder(b * 0.06, b * 0.05, 20, b * 0.025, 0, z), m.cam), 'valvetronic');
-        shaft.add(disc);
+        parts.push(zCylinder(b * 0.06, b * 0.05, 20, b * 0.025, 0, z));
       }
+      shaft.add(tag(new THREE.Mesh(merge(parts), m.cam), 'valvetronic'));
       head.add(shaft);
       const leverGeo = new THREE.BoxGeometry(b * 0.05, b * 0.22, b * 0.05);
       const levers = tag(new THREE.InstancedMesh(leverGeo, m.rod, tips.length), 'valvetronic');
@@ -334,8 +355,8 @@ export class VariableValveGear {
     if (this.eccentric.length) {
       const s = vs?.liftShare ?? 1;
       const turn = (1 - s) * 225 * DEG;
-      const m = new THREE.Matrix4();
-      const tiltM = new THREE.Matrix4().makeRotationZ(-(1 - s) * 15 * DEG);
+      const m = this.m;
+      const tiltM = this.m2.makeRotationZ(-(1 - s) * 15 * DEG);
       for (const e of this.eccentric) {
         e.shaft.rotation.z = -turn;
         e.frames.forEach((f, i) => {
@@ -351,39 +372,44 @@ export class VariableValveGear {
   private updatePins(theta: number, vs: ValveState | undefined, ease: number): void {
     const e = this.ctx.engine;
     const b = this.ctx.bore;
-    const high = liveTiming(e.timing, this.vvt, vs ? { ...vs, highCam: true } : undefined);
-    const now = liveTiming(e.timing, this.vvt, vs);
+    let highState: ValveState | undefined;
+    if (vs) {
+      highState = Object.assign((this.highState ??= { ...vs }), vs);
+      highState.highCam = true;
+    }
+    const high = liveTiming(e.timing, this.vvt, highState, this.liveHigh);
+    const now = liveTiming(e.timing, this.vvt, vs, this.liveNow);
     const lift = this.ctx.valveLift;
-    const m = new THREE.Matrix4();
-    const counters = new Map<number, { pad: number; pin: number }>();
+    const m = this.m;
+    const at = this.v1;
+    const middle = this.v2;
     for (const set of this.pinSets) {
       set.locked += ((vs?.highCam ? 1 : 0) - set.locked) * ease;
       const phi = mod(theta - set.cyl.fire, 720);
       const window = (t: ValveTiming): number => (set.exhaust ? liftWindow(phi, t.exhaustOpen, t.exhaustClose) : liftWindow(phi, t.intakeOpen, t.intakeClose));
       const highLift = window(high.timing) * lift * (set.exhaust ? high.exhaustLift : high.intakeLift);
       const outerLift = this.resting.has(set.cyl.n) ? 0 : window(now.timing) * lift * (set.exhaust ? now.exhaustLift : now.intakeLift);
-      const meshIndex = this.padMeshes.findIndex((p) => p.userData.bank === set.bank);
-      const pads = this.padMeshes[meshIndex]!;
-      const pins = this.pinMeshes[meshIndex]!;
-      const c = counters.get(set.bank) ?? { pad: 0, pin: 0 };
-      counters.set(set.bank, c);
-      const place = (tip: THREE.Vector3, dir: THREE.Vector3, l: number): THREE.Vector3 => tip.clone().addScaledVector(dir, -b * 0.03 - l);
-      const middle = place(set.middle.tip, set.middle.dir, highLift);
+      const pads = this.padMeshes[set.mesh]!;
+      const pins = this.pinMeshes[set.mesh]!;
+      let pad = set.pad;
+      let pin = set.pin;
+      middle.copy(set.middle.tip).addScaledVector(set.middle.dir, -b * 0.03 - highLift);
       m.makeTranslation(middle.x, middle.y, middle.z);
-      pads.setMatrixAt(c.pad++, m);
+      pads.setMatrixAt(pad++, m);
       for (const o of set.outer) {
-        const at = place(o.tip, o.dir, outerLift);
+        at.copy(o.tip).addScaledVector(o.dir, -b * 0.03 - outerLift);
         m.makeTranslation(at.x, at.y, at.z);
-        pads.setMatrixAt(c.pad++, m);
+        pads.setMatrixAt(pad++, m);
         // The pin starts inside the outer follower and slides halfway into the middle one.
         const gap = middle.z - at.z;
         const length = Math.abs(gap) * (0.35 + 0.65 * set.locked) + b * 0.02;
         const centre = at.z + gap * (0.2 + 0.3 * set.locked);
-        m.makeTranslation(at.x, at.y, centre).multiply(new THREE.Matrix4().makeScale(1, 1, length));
-        pins.setMatrixAt(c.pin++, m);
+        m.makeTranslation(at.x, at.y, centre).multiply(this.m2.makeScale(1, 1, length));
+        pins.setMatrixAt(pin++, m);
       }
     }
-    for (const mesh of [...this.padMeshes, ...this.pinMeshes]) mesh.instanceMatrix.needsUpdate = true;
+    for (const mesh of this.padMeshes) mesh.instanceMatrix.needsUpdate = true;
+    for (const mesh of this.pinMeshes) mesh.instanceMatrix.needsUpdate = true;
   }
 }
 

@@ -51,8 +51,12 @@ const DILUTION_LIMIT = 0.2; // past this share of residual gas the burn turns un
 const DILUTION_LIMIT_K = 8;
 /** Least valve-to-piston gap the reliefs are cut for, mm. */
 const RELIEF_GAP = 1.5;
-/** Retard a calibrator accepts from the variable valve gear before it backs off, degrees. My estimate. */
-const KNOCK_MARGIN = 10;
+/**
+ * Retard a calibrator accepts from the variable valve gear before it backs off, degrees. My estimate, kept
+ * under the 8 degrees at which diagnostics call an engine knock-limited, so that the computer's own choice of
+ * phase never earns that warning. Interpolation between the schedule speeds may add a little.
+ */
+const KNOCK_MARGIN = 6;
 /** Heat lost by the gas trapped in a resting cylinder each time it is squeezed, bar of mean pressure. */
 const GAS_SPRING_BAR = 0.1;
 
@@ -888,10 +892,10 @@ function compute(d: Design): Performance {
   let valvetrain: ValvetrainPerformance | null = null;
   let nodeRpm: number[] = [];
   let active: NodeChoice[] = [];
+  const lim = shiftLimits(d);
+  const middle = { intakeShift: (lim.intake[0] + lim.intake[1]) / 2, exhaustShift: (lim.exhaust[0] + lim.exhaust[1]) / 2 };
   if (variable) {
     nodeRpm = NODES.map((n) => n * limit);
-    const lim = shiftLimits(d);
-    const middle = { intakeShift: (lim.intake[0] + lim.intake[1]) / 2, exhaustShift: (lim.exhaust[0] + lim.exhaust[1]) / 2 };
     const search = (high: boolean): NodeChoice[] => {
       const warm = { exhaust: 0 };
       return nodeRpm.map((rpm) => {
@@ -970,14 +974,29 @@ function compute(d: Design): Performance {
     }
     const high = !switching || rpm >= d.switchRpm;
     const shares = active.map((c) => c.share);
-    points.push(
-      wot(rpm, {
-        high,
-        intakeShift: interpolateTable(nodeRpm, active.map((c) => c.intake), rpm),
-        exhaustShift: interpolateTable(nodeRpm, active.map((c) => c.exhaust), rpm),
-        liftShare: interpolateTable(nodeRpm, shares, rpm),
-      }),
-    );
+    const choice = {
+      high,
+      intakeShift: interpolateTable(nodeRpm, active.map((c) => c.intake), rpm),
+      exhaustShift: interpolateTable(nodeRpm, active.map((c) => c.exhaust), rpm),
+      liftShare: interpolateTable(nodeRpm, shares, rpm),
+    };
+    let point = wot(rpm, choice);
+    // Between the schedule speeds, and below the first, the phase is interpolated, and where the boost builds
+    // it may knock more than any node allowed. The computer then backs the cams toward the middle of the travel.
+    if (point.knockRetard > KNOCK_MARGIN && d.camPhaser !== 'none') {
+      const plain = wot(rpm, { ...middle, high });
+      const allowed = Math.max(KNOCK_MARGIN, plain.knockRetard);
+      if (point.knockRetard > allowed) {
+        const half = wot(rpm, {
+          high,
+          intakeShift: (choice.intakeShift + middle.intakeShift) / 2,
+          exhaustShift: (choice.exhaustShift + middle.exhaustShift) / 2,
+          liftShare: (choice.liftShare + 1) / 2,
+        });
+        point = half.knockRetard <= allowed ? half : plain;
+      }
+    }
+    points.push(point);
   }
   const peakPower = points.reduce((a, b) => (b.powerKw > a.powerKw ? b : a), points[0]!);
   const peakTorque = points.reduce((a, b) => (b.torqueNm > a.torqueNm ? b : a), points[0]!);
@@ -1115,20 +1134,26 @@ function cruiseState(d: Design, model: Model, limit: number): CruiseState {
   const bsfcBetter = (a: RpmPoint, b: RpmPoint): boolean => a.bsfc < b.bsfc - 1e-9;
   if (reachable && variable && d.camPhaser !== 'none') {
     let seed = best.x;
+    // The setting each solved point needs, so the chosen one keeps its own and not the last one tried.
+    const settings = new Map<RpmPoint, number>();
     const choice = bestChoice(
       d,
       (c) => {
         const r = solve(c, 1, seed);
-        if (r) seed = r.x;
-        return r?.point ?? null;
+        if (!r) return null;
+        seed = r.x;
+        settings.set(r.point, r.x);
+        return r.point;
       },
       bsfcBetter,
       high,
       { exhaust: 0 },
     );
-    if (choice && bsfcBetter(choice.point, best.point)) best = { choice: { intakeShift: choice.intake, exhaustShift: choice.exhaust }, active: 1, point: choice.point, x: seed };
+    if (choice && bsfcBetter(choice.point, best.point)) best = { choice: { intakeShift: choice.intake, exhaustShift: choice.exhaust }, active: 1, point: choice.point, x: settings.get(choice.point)! };
   }
-  if (reachable && variable && d.deactivation !== 'none') {
+  // Outside a documented window the cylinders stay on.
+  const restsHere = !d.deactivateRpm || (cruiseRpm >= d.deactivateRpm[0] && cruiseRpm <= d.deactivateRpm[1]);
+  if (reachable && variable && d.deactivation !== 'none' && restsHere) {
     const half = 0.5;
     // Half the cylinders have to make it without opening the butterfly wide: otherwise all of them stay on.
     const room = pointAt(best.choice, half)(fuel.diesel ? lo : liftControlled ? 0.9 : 0.9);
