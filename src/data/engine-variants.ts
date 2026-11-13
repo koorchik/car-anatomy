@@ -1215,10 +1215,11 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       // MeMZ's own data sheet (the plant traded as AvtoZAZ-Motor then): 72 × 67 mm, 1.091 l, 9.5:1, 37.5 kW (51 hp)
       // at 5300–5500 rpm, 78.5 N·m (8.0 kgf·m) at 3000–3500 rpm, 5600 rpm maximum, idle 850, firing 1-3-4-2,
       // octane 91 or more, 3.45 l of oil, one twin-choke carburettor that cuts fuel on overrun, hence no pops.
-      // Its 2003 summary page rounds the torque to 8.2 kgf·m; the sheet is taken. Power is quoted at the middle of
+      // Its 2003 summary page gives 8.2 kgf·m instead; the full sheet is taken. Power is quoted at the middle of
       // the range and torque where its plateau starts, as elsewhere in this file.
       // The cams are the sheet's timing at the 0.45 mm checking clearance: intake 9° before TDC to 48° after BDC,
-      // exhaust 40° before BDC to 17° after TDC, so 237° each with 105.5° between the lobe centres.
+      // exhaust 40° before BDC to 17° after TDC, so 237° each with 105.5° between the lobe centres. The sheet names
+      // one camshaft and rocker shafts, but not where the camshaft sits, so the overhead cam is unverified.
       // One carburettor feeds all four cylinders, so the narrow runner stands for its venturis.
       id: 'zaz-1102-memz-245',
       systems: { fuelSystem: 'carburettor', oilL: 3.45 },
@@ -1232,7 +1233,7 @@ export const ENGINE_VARIANTS: Record<string, PageVariants> = {
       torqueNm: 78.5,
       torqueRpm: 3000,
       voiceEvidence: 'estimate',
-      unverified: ['rodLength', 'blockMaterial', 'valvesPerCyl', 'years', 'ignition', 'oilPump'],
+      unverified: ['rodLength', 'blockMaterial', 'valvesPerCyl', 'valvetrain', 'years', 'ignition', 'oilPump'],
       sources: ['https://web.archive.org/web/20051224015449/http://www.memz.com.ua:80/html/memz-245.htm', 'https://uk.wikipedia.org/wiki/МеМЗ-245', 'https://uk.wikipedia.org/wiki/ЗАЗ-1102'],
       factory: {
         idleRpm: 850,
