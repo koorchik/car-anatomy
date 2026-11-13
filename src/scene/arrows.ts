@@ -179,4 +179,9 @@ export class CoupleArcs {
       side.head.scale.set(headRadius, headLength, headRadius);
     }
   }
+
+  /** Frees the arc tube it built. The head geometry and the material belong to the caller, as with Arrows. */
+  dispose(): void {
+    this.sides[0]!.tube.geometry.dispose();
+  }
 }

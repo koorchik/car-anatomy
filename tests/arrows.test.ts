@@ -66,4 +66,21 @@ describe('arrows', () => {
     const y2 = new THREE.Vector3(0, 1, 0).applyQuaternion(arcs.group.quaternion);
     expect(y2.distanceTo(new THREE.Vector3(1, 0, 0))).toBeLessThan(1e-9);
   });
+
+  it('frees the arc tube it built and leaves the caller its head and material', () => {
+    const head = arrowHeadGeometry();
+    const material = overlayMaterial('#ff5c93');
+    const arcs = new CoupleArcs(2, 0.05, head, material);
+    const freed = new Set<unknown>();
+    const geometries = new Set<THREE.BufferGeometry>();
+    arcs.group.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) geometries.add((o as THREE.Mesh).geometry);
+    });
+    for (const g of geometries) g.addEventListener('dispose', () => freed.add(g));
+    material.addEventListener('dispose', () => freed.add(material));
+    arcs.dispose();
+    expect([...freed]).toHaveLength(1);
+    expect([...freed][0]).toBeInstanceOf(THREE.TubeGeometry);
+    expect(freed.has(head)).toBe(false);
+  });
 });
