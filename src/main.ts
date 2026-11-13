@@ -319,6 +319,8 @@ let sumpSoundWanted = false;
 let flattenedLayer: SystemLayer | null = null;
 /** Held still for a snapshot (see freeze): no time passes and the crank stands at one angle. */
 let frozen: FreezeOptions | null = null;
+/** The next frame puts the camera at the page's home view, after the model has taken the frozen angle. */
+let frozenHomePending = false;
 
 /** How much bigger the largest engine of this page is. Size goes as the cube root of displacement, near enough to frame by. */
 function pageFrameScale(next: Engine): number {
@@ -1282,6 +1284,13 @@ function frame(now: number): void {
   systemsValves(sf, demoMode ? undefined : snap.valves);
   systems.frame(sf);
   dyno.frame(snap, theta, dt);
+  if (frozen && frozenHomePending) {
+    // The camera is framed on the model as it now stands, at the frozen angle: framed on the pose freeze() was called
+    // in, it would depend on where the crank happened to stop.
+    frozenHomePending = false;
+    stage.freeze({ quality: frozen.quality, orbit: frozen.orbit });
+    if (onSump) lookAtOil();
+  }
   stage.render(dt);
   updateScaleBar();
 
@@ -1323,11 +1332,14 @@ layoutPanels();
 applyRoute();
 requestAnimationFrame(frame);
 
-/** Holds the page still for a snapshot, the same way before and after a change (src/shell/freeze.ts). Null lets go. */
+/**
+ * Holds the page still for a snapshot, the same way before and after a change (src/shell/freeze.ts). Null lets go.
+ * The camera goes home on the next frame, once the model stands at the frozen angle (see frame).
+ */
 function freeze(options: FreezeOptions | null): void {
   frozen = options && { ...options };
-  stage.freeze(options && { quality: options.quality, orbit: options.orbit });
-  if (options && onSump) lookAtOil();
+  frozenHomePending = options !== null;
+  if (!options) stage.freeze(null);
 }
 
 // Handy for manual checks in the browser console.
