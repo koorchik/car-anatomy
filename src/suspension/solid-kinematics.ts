@@ -9,6 +9,12 @@
 // frame (negative y), as Axle.sample does. Axle-wide numbers (roll, steer, pitch, sideways shift, binding) are those of
 // the car, the same on both sides.
 //
+// tanθ_CP here is the slope of the axle's own point at the contact patch, which carries the axle's pitch: the line from
+// the contact patch to the axle's side-view instant centre, as anti-squat of a live axle and anti-dive or anti-lift with
+// the brakes on the axle need it. A corner's tanθ_CP (kinematics.ts) is the slope of the geometric lowest point of the
+// wheel instead; that is the wheel-centre slope where the camber holds, and on a pitching axle it is far off (on the
+// triangulated template −0.038 against −0.140 from the link lines).
+//
 // There is no table yet: the stage that animates the axle decides whether it needs one. A solve walks to the asked
 // travels in steps of at most STEP_M with a first-order predictor, so it stays on the design branch: a corrector that
 // lands farther from the prediction than JUMP_M or JUMP_RAD has found another assembly of the linkage, and the walk
@@ -46,7 +52,8 @@ export interface SolidSample {
   wheelZ: number;
   springLen: number;
   damperLen: number;
-  /** Per metre of this wheel's travel, the other wheel held. */
+  /** Per metre of this wheel's travel, the other wheel held. tanThetaCP follows the axle's own point at the contact
+   *  patch (see the top of the file), tanThetaWC the wheel centre. */
   mrSpring: number;
   mrDamper: number;
   tanBeta: number;
@@ -363,11 +370,11 @@ export class SolidAxle {
     const duy0 = -dsy * sz - sy * dsz;
     const duz0 = -2 * sz * dsz;
     const along = ux * dux0 + uy * duy0 + uz * duz0;
-    const dux = (dux0 - ux * along) / un;
     const duy = (duy0 - uy * along) / un;
     const r = this.radius;
     out.tanBeta = vy - r * duy;
-    out.tanThetaCP = vx - r * dux;
+    // The axle's point at the contact patch, W − r·u: its velocity is v_W + ω × (−r·u).
+    out.tanThetaCP = vx - r * (wy * uz - wz * uy);
     out.tanThetaWC = vx;
     // γ = −asin(s_z), τ = atan2(s_x, s_y)
     out.camberGain = -dsz / Math.sqrt(Math.max(1e-300, 1 - sz * sz));

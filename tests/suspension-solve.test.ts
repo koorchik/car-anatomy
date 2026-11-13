@@ -651,20 +651,31 @@ describe('solid axle solver (weighted least squares)', () => {
       for (const [zL, zR] of [[0, 0], [0.04, -0.03], [-0.06, 0.05], [0.08, 0.08]] as const) {
         for (const side of ['left', 'right'] as const) {
           const s = newSolidSample();
-          axle.measureAt(zL, zR, side, s);
+          const state = axle.measureAt(zL, zR, side, s);
+          // The axle's own point at this contact patch, as a design point: c0 + Rᵀ·(CP − C).
+          const c0 = axle.solver.c0;
+          const arm = sub([s.contactX, s.contactY, s.contactZ], [c0[0] + state[0], c0[1] + state[1], c0[2] + state[2]]);
+          const along = (axis: Vec3): number => {
+            const e = [0, 0, 0];
+            axle.solver.direction(state, axis, e);
+            return e[0] * arm[0] + e[1] * arm[1] + e[2] * arm[2];
+          };
+          const onAxle: Vec3 = [c0[0] + along([1, 0, 0]), c0[1] + along([0, 1, 0]), c0[2] + along([0, 0, 1])];
           const own: [number, number] = side === 'left' ? [1, 0] : [0, 1];
           const shifted = (k: number, sign: number) => {
             const out = newSolidSample();
             const d = k === 0 ? own : [own[1], own[0]];
-            axle.measureAt(zL + sign * h * d[0], zR + sign * h * d[1], side, out);
-            return out;
+            const moved = axle.measureAt(zL + sign * h * d[0], zR + sign * h * d[1], side, out);
+            return { ...out, onAxleX: at(axle, moved, onAxle)[0] };
           };
           const [a, b, c, d] = [shifted(0, 1), shifted(0, -1), shifted(1, 1), shifted(1, -1)];
           const fd = (p: number, q: number) => (p - q) / (2 * h);
           const pairs: Array<[string, number, number]> = [
             ['tanβ', s.tanBeta, fd(a.contactY, b.contactY)],
             ['tanβ cross', s.tanBetaCross, fd(c.contactY, d.contactY)],
-            ['tanθ CP', s.tanThetaCP, fd(a.contactX, b.contactX)],
+            ['tanθ CP', s.tanThetaCP, fd(a.onAxleX, b.onAxleX)],
+            ['tanθ CP cross', s.tanThetaCPCross, fd(c.onAxleX, d.onAxleX)],
+            ['tanθ WC', s.tanThetaWC, fd(a.wheelX, b.wheelX)],
             ['tanθ WC cross', s.tanThetaWCCross, fd(c.wheelX, d.wheelX)],
             ['camber gain', s.camberGain, fd(a.camber, b.camber)],
             ['camber gain cross', s.camberGainCross, fd(c.camber, d.camber)],

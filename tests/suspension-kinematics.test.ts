@@ -1488,6 +1488,43 @@ describe('solid axles: Panhard rod, Watt’s linkage, leaf springs, de Dion', ()
     expect(Math.sign(d.axleSteer)).toBe(-Math.sign(s.axleSteer));
   });
 
+  it('anti-squat lines: in heave the axle’s point at the contact patch moves square to the line to where the link lines meet, seen from the side', () => {
+    // With the drive or brake torque taken by the axle, the force from the road acts on the axle at the contact patch,
+    // so the anti line runs from the patch to the axle's side-view instant centre, where the side-view lines of the
+    // lower and upper links meet (docs/research/suspensions.md, «Анти-геометрія»: for a solid axle from the contact
+    // point). In heave both wheels move, so the slope is own plus cross. tanθ_WC is the line from the wheel centre
+    // instead, for torque the body takes (a de Dion's differential, inboard brakes).
+    const lineOf = (axle: SolidAxle, id: string): [number, number, number, number] => {
+      const r = axle.spec.linkage.rods.find((x) => x.id === id)!;
+      return [r.knuckle[0], r.knuckle[2], r.body[0] - r.knuckle[0], r.body[2] - r.knuckle[2]];
+    };
+    const cases: Array<[string, SolidAxleIntent, string]> = [
+      ['triangulated', SOLID_TYPICAL.triangulated, 'upper-left'],
+      ['three links, level upper', { ...SOLID_TYPICAL.panhard, links: 'three', upperAngleDeg: 0 }, 'upper'],
+      ['three links, upper at 12°', { ...SOLID_TYPICAL.watt, links: 'three', upperAngleDeg: 12 }, 'upper'],
+    ];
+    for (const [name, intent, upperId] of cases) {
+      const axle = new SolidAxle(solidAxle(intent));
+      const [x1, z1, dx1, dz1] = lineOf(axle, 'lower-left');
+      const [x2, z2, dx2, dz2] = lineOf(axle, upperId);
+      // x1 + s·dx1 = x2 + u·dx2, z1 + s·dz1 = z2 + u·dz2
+      const det = dx1 * -dz2 + dx2 * dz1;
+      const s = ((x2 - x1) * -dz2 + dx2 * (z2 - z1)) / det;
+      const icX = x1 + s * dx1;
+      const icZ = z1 + s * dz1;
+      const w = sample(axle, 0, 0);
+      expect(w.tanThetaCP + w.tanThetaCPCross, name).toBeCloseTo((w.contactZ - icZ) / (icX - w.contactX), 9);
+      expect(w.tanThetaWC + w.tanThetaWCCross, name).toBeCloseTo((w.wheelZ - icZ) / (icX - w.wheelX), 9);
+      // A pitching axle: the two lines differ by the wheel radius over the instant centre's distance.
+      expect(Math.abs(w.tanThetaCP + w.tanThetaCPCross - (w.tanThetaWC + w.tanThetaWCCross)), name).toBeGreaterThan(0.05);
+    }
+    // Parallel links: the instant centre is at infinity along them, and the axle translates square to them.
+    const parallel = sample(new SolidAxle(solidAxle(SOLID_TYPICAL.panhard)), 0, 0);
+    const slope = -Math.tan(SOLID_TYPICAL.panhard.linkAngleDeg * DEG);
+    expect(parallel.tanThetaCP + parallel.tanThetaCPCross).toBeCloseTo(slope, 9);
+    expect(parallel.tanThetaWC + parallel.tanThetaWCCross).toBeCloseTo(slope, 9);
+  });
+
   it('touches the bump stop 80 mm into bump, and refuses intents that cannot be built', () => {
     for (const intent of Object.values(SOLID_TYPICAL)) {
       const axle = new SolidAxle(solidAxle(intent));
