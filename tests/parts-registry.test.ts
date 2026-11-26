@@ -11,16 +11,9 @@ import { BODY_PARTS } from '../src/scene/car/parts.ts';
 import { SUMP_PARTS } from '../src/scene/lubrication/parts.ts';
 import { PARTS } from '../src/scene/parts-info.ts';
 import { partInfo, registerParts, type PartDictionary } from '../src/scene/parts-registry.ts';
-import { AXLE_PARTS, SUSPENSION_PARTS } from '../src/scene/suspension/parts.ts';
+import { AXLE_PARTS, SUSPENSION_PARTS, SUSPENSION_REGISTERED } from '../src/scene/suspension/parts.ts';
 import { SYSTEM_PARTS } from '../src/scene/systems/parts.ts';
 import { ROOT, rel } from './import-graph.ts';
-
-/**
- * The suspension's cards: a corner's, with the axle's own keys (the anti-roll bar and its links). Both name the rack,
- * the corner its end and the axle the whole of it; an axle hands its own words through its model's `parts`, which the
- * stage reads before the registry.
- */
-const SUSPENSION_REGISTERED: PartDictionary = { ...AXLE_PARTS, ...SUSPENSION_PARTS };
 
 /** Each section's dictionaries with the prefix its keys carry; the engines' keys have none. */
 const SECTIONS: Array<{ name: string; prefix: string | null; dictionaries: PartDictionary[] }> = [
@@ -76,6 +69,11 @@ describe('the part registry', () => {
     expect(() => registerParts(clash)).toThrow(/block/);
     expect(partInfo('gbx-fresh-test-key')).toBeNull();
     expect(partInfo('block')).toBe(PARTS.block);
+  });
+
+  it('takes every suspension card: a corner\'s and an axle\'s, with the corner\'s rack end', () => {
+    for (const key of Object.keys({ ...AXLE_PARTS, ...SUSPENSION_PARTS })) expect(partInfo(key), key).not.toBeNull();
+    expect(partInfo('susp.rack')).toBe(SUSPENSION_PARTS['susp.rack']);
   });
 
   it('knows nothing of a key no one registered', () => {
