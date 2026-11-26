@@ -2,6 +2,7 @@
 // suspension's chassis and the car overview both show it.
 
 import { t } from '../../i18n/t.ts';
+import type { CarSystem } from '../../vehicle/car-systems.ts';
 import type { PartInfo } from '../parts-info.ts';
 
 export const BODY_PARTS: Record<string, PartInfo> = {
@@ -59,10 +60,10 @@ export const CAR_PARTS: Record<string, PartInfo> = {
   },
 };
 
-/** Systems of a car the overview knows (stage C1a): every model's root carries one as userData.system. */
-export type CarSystem = 'engine' | 'gearbox' | 'front-suspension' | 'rear-suspension' | 'body' | 'exhaust' | 'cooling' | 'air' | 'fuel';
+/** Systems of a car the overview knows: every model's root carries one as userData.system (car-systems.ts). */
+export type { CarSystem } from '../../vehicle/car-systems.ts';
 
-/** The card each system shows on the overview, wherever on it the visitor points. */
+/** The card each system shows on the overview, wherever on it the visitor points; the overview gives its own, with the car's figures. */
 export const SYSTEM_CARDS: Record<CarSystem, PartInfo> = {
   engine: { name: t('Двигун'), text: t('Той самий двигун, що на його сторінці, у тому самому масштабі: тут видно, як він стоїть в авто і як з’єднується з коробкою передач.') },
   gearbox: { name: t('Коробка передач і головна передача'), text: t('Коробка прикручена до задньої площини блока, де обертається маховик. У поперечній коробці в одному картері стоять і передачі, і головна пара з диференціалом, від якого йдуть піввісі до коліс.') },
@@ -73,4 +74,10 @@ export const SYSTEM_CARDS: Record<CarSystem, PartInfo> = {
   cooling: { name: t('Охолодження'), text: t('Радіатор у носі й патрубки до двигуна: гаряча рідина йде в радіатор, охолоджена повертається до насоса.') },
   air: { name: t('Повітря'), text: t('Інтеркулер перед радіатором і патрубки наддуву: стиснене турбіною повітря охолоджується, перш ніж зайти в циліндри.') },
   fuel: { name: t('Паливо'), text: t('Паливний бак під заднім сидінням.') },
+  'final-drive': { name: t('Головна передача й диференціал'), text: t('Остання пара шестерень перед колесами та диференціал, який дає колесам крутитися з різною швидкістю в повороті.') },
+  halfshafts: { name: t('Піввісі'), text: t('Вали від диференціала до коліс, із шарнірами рівних кутових швидкостей на обох кінцях.') },
+  steering: { name: t('Кермо'), text: t('Рейка й рульові тяги, що повертають передні колеса.') },
+  wheels: { name: t('Колеса й шини'), text: t('Диски, шини й маточини.') },
+  brakes: { name: t('Гальмівна система'), text: t('Диски й супорти на кожному колесі.') },
+  oil: { name: t('Олива'), text: t('Піддон двигуна, з якого насос бере оливу.') },
 };

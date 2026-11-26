@@ -404,6 +404,14 @@ export class Stage {
     this.moveTo({ target: sphere.center.clone(), direction: this.pose().direction, distance: this.fittedDistance(sphere.radius) }, options);
   }
 
+  /** Goes back from a close look (focus) to the whole model framed as setModel frames it, from where the camera looks now. */
+  focusWhole(options: MoveOptions = {}): void {
+    const box = this.framedBox();
+    if (!box || box.isEmpty()) return;
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    this.moveTo({ target: sphere.center.clone(), direction: this.pose().direction, distance: this.fittedDistance(sphere.radius * this.frameScale) }, options);
+  }
+
   /** True while the camera is on its way to a view. */
   get moving(): boolean {
     return this.move !== null;

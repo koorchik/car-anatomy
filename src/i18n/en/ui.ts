@@ -50,6 +50,7 @@ export const UI_EN: Record<string, string> = {
   'Зібрати авто': 'Build a car',
   'Сторінки розділу': 'Section pages',
   '← До авто': '← Back to the car',
+  'На авто: {car} · ціле авто': 'In the car: {car} · whole car',
   'Клавіші': 'Keys',
   'На кожній сторінці': 'On every page',
   'Пробіл': 'Space',

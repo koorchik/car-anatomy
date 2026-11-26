@@ -47,9 +47,54 @@ import { FuelTankModel, IntercoolerModel, RadiatorModel, type HoseEnd } from './
 import { attachGearbox } from './attach.ts';
 import { CAR_TO_SCENE, fromScene, toScene } from './car-frame.ts';
 import { EXHAUST, ExhaustModel, exhaustRoute } from './exhaust.ts';
+import { HighlightOverlay } from './highlight-overlay.ts';
 import { SYSTEM_CARDS, type CarSystem } from './parts.ts';
 
 export type { CarSystem } from './parts.ts';
+
+/**
+ * The smaller system a part of a model belongs to, by its key (the whole-car plan's list of systems): the final drive
+ * and the halfshaft stubs in the gearbox's case, the steering, wheels and brakes of the chassis, the driven axle's
+ * halfshafts, and the engine's pan for the oil. A part not listed stays its model's.
+ */
+export function partSystem(key: string, root: CarSystem, drive: CarRecord['drive']): CarSystem {
+  if (root === 'engine') return key === 'sump' ? 'oil' : root;
+  if (root === 'gearbox') {
+    if (key === 'gbx-final-drive' || key === 'gbx-diff-case') return 'final-drive';
+    if (key === 'gbx-halfshaft' || key === 'gbx-cv-joint') return 'halfshafts';
+    return root;
+  }
+  if (root !== 'front-suspension' && root !== 'rear-suspension') return root;
+  const m = /^susp\.(front|rear)\.(.+)$/.exec(key);
+  if (!m) return root;
+  const part = m[2]!;
+  if (part === 'rack' || part === 'tie-rod') return 'steering';
+  if (part === 'wheel' || part === 'tyre' || part === 'hub') return 'wheels';
+  if (part === 'brake-disc' || part === 'caliper') return 'brakes';
+  const driven = drive === 'awd' || (drive === 'fwd') === (m[1] === 'front');
+  if (driven && (part === 'halfshaft' || part === 'cv-inner' || part === 'cv-outer' || part === 'cv-boot')) return 'halfshafts';
+  return root;
+}
+
+/** Systems whose models tint themselves (setHighlight): each is a whole model. The others are tinted part by part. */
+const MODEL_TINTED: readonly CarSystem[] = ['engine', 'exhaust', 'cooling', 'air', 'fuel', 'body'];
+
+/** The colour a system tinted part by part takes: its section's. */
+const TINT: Partial<Record<CarSystem, string>> = {
+  gearbox: HIGHLIGHT.gearbox,
+  'final-drive': HIGHLIGHT.gearbox,
+  halfshafts: HIGHLIGHT.gearbox,
+  oil: HIGHLIGHT.engine,
+};
+
+/** How faint the rest of the car is while one system is in focus. */
+export const GHOST_ALPHA = 0.15;
+
+/** A mesh of a system and, for an instanced mesh, which of its instances. */
+interface SystemPart {
+  mesh: THREE.Mesh;
+  instances?: number[];
+}
 
 /** renderOrder bands of the models in a car; the body shell lands on 90 (ChassisModel's BODY_BAND over the chassis's). */
 export const CAR_BANDS = { engine: 10, gearbox: 20, chassis: 30, ancillary: 40 } as const;
@@ -135,6 +180,14 @@ export class CarAssembly implements SceneModel<CarFrame> {
   readonly parts: Record<string, PartInfo> = {};
   private readonly models: Array<{ system: CarSystem; model: SceneModel<unknown> }> = [];
   private highlighted: CarSystem | null = null;
+  private overlay: HighlightOverlay | null = null;
+  private focused: CarSystem | null = null;
+  /** The system of every part key. */
+  readonly partSystems = new Map<string, CarSystem>();
+  /** Each system's meshes. */
+  private readonly systemParts = new Map<CarSystem, SystemPart[]>();
+  /** The models each system has parts in: these stay whole while it is in focus, the others fade. */
+  private readonly systemModels = new Map<CarSystem, Set<SceneModel<unknown>>>();
 
   constructor(inputs: CarInputs) {
     const { car, engine, gearbox, chassis, joint } = inputs;
@@ -203,9 +256,8 @@ export class CarAssembly implements SceneModel<CarFrame> {
     if (this.radiator) add('cooling', this.radiator, this.radiator.group, CAR_BANDS.ancillary);
     if (this.intercooler) add('air', this.intercooler, this.intercooler.group, CAR_BANDS.ancillary);
     if (this.fuelTank) add('fuel', this.fuelTank, this.fuelTank.group, CAR_BANDS.ancillary);
-    for (const [system, root] of Object.entries(this.systems) as Array<[CarSystem, THREE.Object3D]>) {
-      for (const key of partKeys(root)) this.parts[key] ??= SYSTEM_CARDS[system];
-    }
+    for (const { system, model } of this.models) this.classify(system, model, this.systems[system]!);
+    for (const [key, system] of this.partSystems) this.parts[key] ??= SYSTEM_CARDS[system];
     this.setView('xray');
     this.update(carFrame());
   }
@@ -246,8 +298,9 @@ export class CarAssembly implements SceneModel<CarFrame> {
     this.gearboxModel.setView(view);
     this.chassisModel.setView(view);
     for (const m of [this.exhaust, this.radiator, this.intercooler, this.fuelTank]) m?.setView(view);
-    // Views swap materials, so a highlight is laid on again.
+    // Views swap materials, so a highlight and a focus are laid on again.
     this.highlightSystem(this.highlighted);
+    this.focusSystem(this.focused);
   }
 
   setExplode(amount: number): void {
@@ -260,12 +313,56 @@ export class CarAssembly implements SceneModel<CarFrame> {
     for (const { model } of this.models) model.setFailure(part);
   }
 
-  /** Tints one system, or none. */
+  /** Sorts a model's meshes into the systems their part keys belong to. */
+  private classify(root: CarSystem, model: SceneModel<unknown>, group: THREE.Object3D): void {
+    const note = (system: CarSystem, part: SystemPart): void => {
+      const list = this.systemParts.get(system) ?? [];
+      list.push(part);
+      this.systemParts.set(system, list);
+      const models = this.systemModels.get(system) ?? new Set();
+      models.add(model);
+      this.systemModels.set(system, models);
+    };
+    const drive = this.car.drive;
+    group.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const instances = o.userData.instanceParts as string[] | undefined;
+      if ((mesh as THREE.InstancedMesh).isInstancedMesh && instances) {
+        const bySystem = new Map<CarSystem, number[]>();
+        instances.forEach((key, i) => {
+          const system = partSystem(key, root, drive);
+          this.partSystems.set(key, system);
+          bySystem.set(system, [...(bySystem.get(system) ?? []), i]);
+        });
+        for (const [system, list] of bySystem) note(system, { mesh, instances: list });
+        return;
+      }
+      const keys = [...(o.userData.part ? [o.userData.part as string] : []), ...((o.userData.partOf as string[] | undefined) ?? [])];
+      for (const key of keys) this.partSystems.set(key, partSystem(key, root, drive));
+      // A mesh without a key, or a merged one, goes with its first part's system.
+      note(keys.length ? partSystem(keys[0]!, root, drive) : root, (mesh as THREE.InstancedMesh).isInstancedMesh ? { mesh, instances: [...Array((mesh as THREE.InstancedMesh).count).keys()] } : { mesh });
+    });
+  }
+
+  /** Whether this car has the system in its 3D. */
+  has(system: CarSystem): boolean {
+    return this.systemParts.has(system);
+  }
+
+  /** Tints one system, or none: a whole model through its own setHighlight, a part of one by an overlay. */
   highlightSystem(system: CarSystem | null): void {
     this.highlighted = system;
     for (const { model } of this.models) model.setHighlight?.(false);
+    this.overlay?.dispose();
+    this.overlay = null;
     if (!system) return;
-    for (const { system: s, model } of this.models) if (s === system) model.setHighlight?.(true);
+    if (MODEL_TINTED.includes(system)) {
+      for (const { system: s, model } of this.models) if (s === system) model.setHighlight?.(true);
+      return;
+    }
+    const parts = this.systemParts.get(system);
+    if (parts) this.overlay = new HighlightOverlay(parts, TINT[system] ?? HIGHLIGHT.suspension);
   }
 
   /** The system tinted now. */
@@ -273,12 +370,75 @@ export class CarAssembly implements SceneModel<CarFrame> {
     return this.highlighted;
   }
 
+  /** Puts one system in focus: the models it has no part in fade to a ghost. Null brings the whole car back. */
+  focusSystem(system: CarSystem | null): void {
+    this.focused = system;
+    const keep = system ? (this.systemModels.get(system) ?? new Set()) : null;
+    for (const { model } of this.models) model.setGhost?.(keep && !keep.has(model) ? GHOST_ALPHA : 1);
+  }
+
+  /** The system in focus now. */
+  get focus(): CarSystem | null {
+    return this.focused;
+  }
+
+  /**
+   * The bounds of a system's parts as the view shows them, in the world; all of its parts when the view hides every
+   * one (the mechanism view hides the radiator's core).
+   */
+  systemBox(system: CarSystem): THREE.Box3 {
+    this.group.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    const shown = (o: THREE.Object3D): boolean => {
+      for (let q: THREE.Object3D | null = o; q; q = q.parent) if (!q.visible) return false;
+      return true;
+    };
+    const parts = this.systemParts.get(system) ?? [];
+    const one = new THREE.Box3();
+    const matrix = new THREE.Matrix4();
+    const add = (visibleOnly: boolean): void => {
+      for (const { mesh, instances } of parts) {
+        if (visibleOnly && !shown(mesh)) continue;
+        const geometry = mesh.geometry;
+        geometry.boundingBox ?? geometry.computeBoundingBox();
+        if (instances) {
+          const inst = mesh as THREE.InstancedMesh;
+          for (const i of instances) {
+            inst.getMatrixAt(i, matrix);
+            box.union(one.copy(geometry.boundingBox!).applyMatrix4(matrix.premultiply(mesh.matrixWorld)));
+          }
+        } else {
+          box.union(one.copy(geometry.boundingBox!).applyMatrix4(mesh.matrixWorld));
+        }
+      }
+    };
+    add(true);
+    if (box.isEmpty()) add(false);
+    return box;
+  }
+
+  /**
+   * The cards the parts answer with. In the overview every part names its system (`cards`, over SYSTEM_CARDS); the
+   * parts of the system in focus answer with their own cards from their section's model or registry.
+   */
+  setCards(cards: Partial<Record<CarSystem, PartInfo>>, focus: CarSystem | null): void {
+    for (const [key, system] of this.partSystems) {
+      if (system === focus) {
+        const own = this.models.map(({ model }) => model.parts?.[key]).find((info) => info) ?? this.chassisModel.parts[key];
+        if (own) this.parts[key] = own;
+        else delete this.parts[key];
+      } else {
+        this.parts[key] = cards[system] ?? SYSTEM_CARDS[system];
+      }
+    }
+  }
+
   setHighlight(on: boolean): void {
     for (const { model } of this.models) model.setHighlight?.(on);
   }
 
   setGhost(alpha: number): void {
-    for (const { system, model } of this.models) if (system !== 'engine') model.setGhost?.(alpha);
+    for (const { model } of this.models) model.setGhost?.(alpha);
   }
 
   setRenderBand(base: number): void {
@@ -308,21 +468,10 @@ export class CarAssembly implements SceneModel<CarFrame> {
   }
 
   dispose(): void {
+    this.overlay?.dispose();
     this.engineModel.dispose();
     this.gearboxModel.dispose();
     this.chassisModel.dispose();
     for (const m of [this.exhaust, this.radiator, this.intercooler, this.fuelTank]) m?.dispose();
   }
-}
-
-/** Every part key under a root: a mesh's own, a merged mesh's per-vertex table and an instanced mesh's per instance. */
-function partKeys(root: THREE.Object3D): Set<string> {
-  const keys = new Set<string>();
-  root.traverse((o) => {
-    const own = o.userData.part as string | undefined;
-    if (own) keys.add(own);
-    for (const k of (o.userData.partOf as string[] | undefined) ?? []) keys.add(k);
-    for (const k of (o.userData.instanceParts as string[] | undefined) ?? []) keys.add(k);
-  });
-  return keys;
 }

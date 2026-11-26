@@ -3,7 +3,7 @@
 // menu-model.ts; this module only draws it and keeps the sheet's focus.
 
 import { t } from '../i18n/t.ts';
-import { backToCar, menuItems, type MenuItem } from './menu-model.ts';
+import { backToCar, menuItems, onCar, type MenuItem } from './menu-model.ts';
 import type { SectionEntry } from './registry.ts';
 import type { Router } from './router.ts';
 import type { Route } from './routes.ts';
@@ -52,7 +52,8 @@ export class ShellMenu {
   update(route: Route): void {
     const items = menuItems(this.sections, route, (hash) => this.router.link(hash));
     const back = backToCar(route);
-    const key = JSON.stringify([items, back]);
+    const on = back === null ? onCar(route) : null;
+    const key = JSON.stringify([items, back, on]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.items = items;
@@ -61,10 +62,17 @@ export class ShellMenu {
     const here = items.find((item) => item.current);
     el.tabs.innerHTML = here && here.tabs.length > 1 ? tabsHtml(here) : '';
     el.tabs.hidden = el.tabs.innerHTML === '';
-    el.back.hidden = back === null;
+    // The same place says 'Back to the car' to a visitor who came from one, and 'On the car' on a page of a car's part.
+    el.back.hidden = back === null && on === null;
+    el.back.textContent = on ? t('На авто: {car} · ціле авто', { car: on.name }) : t('← До авто');
     if (back !== null) el.back.href = back;
+    else if (on) el.back.href = on.href;
     el.sheetBody.innerHTML = [
-      back === null ? '' : `<a class="sheet-back" href="${esc(back)}">${t('← До авто')}</a>`,
+      back !== null
+        ? `<a class="sheet-back" href="${esc(back)}">${t('← До авто')}</a>`
+        : on
+          ? `<a class="sheet-back" href="${esc(on.href)}">${esc(t('На авто: {car} · ціле авто', { car: on.name }))}</a>`
+          : '',
       ...items.map((item) => `<div class="sheet-section${item.current ? ' current' : ''}">${itemHtml(item)}${item.tabs.length > 1 ? `<div class="sheet-tabs">${tabsHtml(item)}</div>` : ''}</div>`),
     ].join('');
   }

@@ -2,7 +2,10 @@
 // still say 'coming soon', the tabs of each and the way back to the car the visitor came from. Built from the sections'
 // registry (registry.ts), so a section that registers a page gets its item without touching the menu.
 
+import { carById } from '../data/cars.ts';
 import { t } from '../i18n/t.ts';
+import { OVERVIEW_CARS } from '../ui/car/overview-cars.ts';
+import { focusForRoute } from '../vehicle/car-systems.ts';
 import type { SectionEntry } from './registry.ts';
 import { formatRoute, type Route, type SectionId } from './routes.ts';
 
@@ -36,9 +39,6 @@ const TAB_LABELS: Record<string, () => string> = {
   'car/drive': () => t('Їзда'),
   'car/designer': () => t('Зібрати авто'),
 };
-
-/** The system of the car a section's pages are about, for the way back: `#/car/<car>?focus=<system>`. */
-const FOCUS: Partial<Record<SectionId, string>> = { engines: 'engine', gearboxes: 'gearbox', suspensions: 'suspension' };
 
 export interface MenuTab {
   key: string;
@@ -100,6 +100,28 @@ export function routeEntry(route: Route, sections: readonly SectionEntry[]): Sec
 export function backToCar(route: Route): string | null {
   const car = route.query.car;
   if (!car || route.section === 'car' || route.section === 'not-found') return null;
-  const focus = route.section === 'engines' && route.page === 'sump' ? 'oil' : FOCUS[route.section];
+  // The system the page is about: the overview brings back the one the visitor came from (car-systems.ts).
+  const focus = focusForRoute(route, carById(car));
   return formatRoute({ section: 'car', page: 'overview', path: [car], query: focus ? { focus } : {} });
+}
+
+/**
+ * 'On the car' (the whole-car plan, navigation): a page about a part of a car the overview shows (its engine's
+ * variant, its suspension's page for it, its gearbox's page when no other car of the overview shares it) links to
+ * that car, in focus on the system the page is about. Null when the visitor came from a car (backToCar leads there)
+ * or the page belongs to no car of the overview.
+ */
+export function onCar(route: Route): { href: string; name: string } | null {
+  if (route.query.car) return null;
+  const path = route.path.join('/');
+  const cars = OVERVIEW_CARS.map((id) => carById(id)!).filter((car) => {
+    if (route.section === 'engines') return route.page === 'catalogue' && path === car.engine;
+    if (route.section === 'gearboxes') return route.page === 'catalogue' && !!car.gearbox && path === car.gearbox;
+    if (route.section === 'suspensions') return route.path[1] === car.id;
+    return false;
+  });
+  if (cars.length !== 1) return null;
+  const car = cars[0]!;
+  const focus = focusForRoute(route, car);
+  return { href: formatRoute({ section: 'car', page: 'overview', path: [car.id], query: focus ? { focus } : {} }), name: car.name };
 }
