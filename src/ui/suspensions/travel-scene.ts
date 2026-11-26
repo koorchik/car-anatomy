@@ -28,7 +28,6 @@ const TOE_BEFORE = '#ece6d6';
 /** Size of the wobble along each free motion: the wheel centre's move plus this many metres per radian of turn. */
 const WOBBLE_M = 0.012;
 const WOBBLE_LEVER_M = 0.3;
-const DEG = 180 / Math.PI;
 /** Roll centre heights kept for the trail on the front view. */
 const TRAIL = 24;
 
@@ -241,7 +240,8 @@ export class TravelScene {
       { axle, pose: this.pose, sample: this.sample, rack, radiusM: this.resolved.tyre.freeRadiusM, tyreWidthM: this.resolved.tyre.widthM, trail: this.trail },
       { width: Math.max(80, Math.round(box.width || 200)), height: Math.max(60, Math.round(box.height || 150)), label: t('Вид спереду: ланки, миттєвий центр і центр крену') },
     );
-    this.$('susp-rack-value').textContent = `${signed(this.sample.toe * DEG, 1)}°`;
+    // The rack's travel; the wheel's angle is the toe laser's.
+    this.$('susp-rack-value').textContent = t('{value} мм рейки', { value: signed(rack * 1000, 0) });
     this.writeNumbers();
   }
 

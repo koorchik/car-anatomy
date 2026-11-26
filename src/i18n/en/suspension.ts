@@ -335,4 +335,5 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Ступенів свободи: {value}': 'Degrees of freedom: {value}',
   '{value} кг': '{value} kg',
   'Про цю компоновку загалом': 'About this layout in general',
+  '{value} мм рейки': '{value} mm of rack',
 };

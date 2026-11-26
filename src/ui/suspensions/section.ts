@@ -433,6 +433,8 @@ export class SuspensionSection implements Section {
     if (record) this.ctx.router.replace({ query: { s: scene === DEFAULT_SCENE ? null : scene } });
     if (!changed) return;
     if (scene === 'bump') {
+      // The links taken away belong to the travel scene: the obstacle needs the whole linkage.
+      if (this.removed.length) this.setLinks([]);
       this.model.setExplode(0);
       this.$<HTMLInputElement>('susp-explode').value = '0';
       this.model.setRoad(new EventRoad(this.run.trace.events));
