@@ -76,7 +76,7 @@ export const CAR_DESIGNER_EN: Record<string, string> = {
   // diagnostics.ts: grip, springs, balance, gearing
   'Передні колеса': 'The front wheels',
   'Задні колеса': 'The rear wheels',
-  'Колеса': 'The wheels',
+  'Усі колеса': 'All the wheels',
   'Колеса буксують': 'Wheelspin',
   '{axle} буксують на першій передачі на повному газу до {kmh} км/год.': '{axle} spin in first gear at full throttle up to {kmh} km/h.',
   'Ширші або липкіші шини, довша перша передача.': 'Wider or stickier tires, a taller first gear.',

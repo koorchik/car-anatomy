@@ -116,7 +116,7 @@ export function diagnoseBuild(p: CarPerformance): CarDiagnostic[] {
   // Grip at the launch.
   const spin = p.spinKmh;
   if (spin > CAR_LIMITS.spinKmh) {
-    const axle = p.car.drive === 'fwd' ? t('Передні колеса') : p.car.drive === 'rwd' ? t('Задні колеса') : t('Колеса');
+    const axle = p.car.drive === 'fwd' ? t('Передні колеса') : p.car.drive === 'rwd' ? t('Задні колеса') : t('Усі колеса');
     const donorSpin = p.donorSpinKmh;
     add('wheelspin', spin > donorSpin + CAR_LIMITS.spinWorseKmh ? 'warning' : 'note', t('Колеса буксують'), t('{axle} буксують на першій передачі на повному газу до {kmh} км/год.', { axle, kmh: n0(spin) }), t('Ширші або липкіші шини, довша перша передача.'));
   }
