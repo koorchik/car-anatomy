@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { engineById } from '../src/data/engines.ts';
+import { GEARBOX_PAGE_NAMES } from '../src/data/gearbox-names.ts';
 import { GEARBOX_PAGES } from '../src/data/gearboxes.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import { pageShown, SECTIONS } from '../src/shell/registry.ts';
@@ -18,7 +19,12 @@ describe('the gearbox section', () => {
     expect(pageShown('gearboxes', 'manual-transaxle')).toBe(false);
     expect(pageShown('suspensions', 'macpherson')).toBe(false);
     expect(pageShown('engines', 'i4')).toBe(true);
-    for (const page of entry.pages ?? []) expect(GEARBOX_PAGES.some((p) => p.id === page && p.article)).toBe(true);
+    for (const page of entry.pages ?? []) {
+      const data = GEARBOX_PAGES.find((p) => p.id === page);
+      expect(data?.article, page).toBeDefined();
+      // Links name the gearbox without its data: the name they use is the record's.
+      expect(GEARBOX_PAGE_NAMES[page], page).toBe(data!.base.name);
+    }
     expect(parseRoute('#/gearboxes/manual-rwd')).toMatchObject({ section: 'gearboxes', page: 'catalogue', path: ['manual-rwd'] });
   });
 

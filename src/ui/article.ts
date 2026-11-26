@@ -2,7 +2,7 @@
 
 import { CAR_LIST } from '../data/cars.ts';
 import { ENGINES, engineFacts } from '../data/engines.ts';
-import { gearboxById } from '../data/gearboxes.ts';
+import { GEARBOX_PAGE_NAMES } from '../data/gearbox-names.ts';
 import type { EngineFacts } from '../designer/catalogue.ts';
 import { ALL_LAYERS, BalanceForces, atRpm, massesOf, roughly } from '../engine/balance-forces.ts';
 import { COOLING_NAMES, FUEL_SYSTEM_NAMES } from '../designer/systems.ts';
@@ -64,7 +64,7 @@ const gearboxRows = (s: EngineSpec): string => {
     .flatMap((car) =>
       carLinks(car, pages)
         .filter((link) => link.section === 'gearboxes')
-        .map((link) => `<div><dt>${t('Коробка')}</dt><dd><a class="sibling" href="${link.href}">${escapeHtml(gearboxById(link.target)?.name ?? link.target)}</a>, ${escapeHtml(car.name)}</dd></div>`),
+        .map((link) => `<div><dt>${t('Коробка')}</dt><dd><a class="sibling" href="${link.href}">${escapeHtml(GEARBOX_PAGE_NAMES[link.target] ?? link.target)}</a>, ${escapeHtml(car.name)}</dd></div>`),
     )
     .join('');
 };

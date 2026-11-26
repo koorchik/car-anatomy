@@ -16,11 +16,12 @@
 import { applyGearboxEnglish } from '../../i18n/en/apply-gearbox.ts';
 import { GEARBOX_MANUAL_RWD_ARTICLE_EN, GEARBOX_MANUAL_RWD_EN } from '../../i18n/en/gearbox-manual-rwd.ts';
 import { locale } from '../../i18n/locale.ts';
+import { GEARBOX_PAGE_NAMES } from '../gearbox-names.ts';
 import type { GearboxArticle, GearboxPage, GearboxRecord } from '../../drivetrain/catalogue.ts';
 
 const GETRAG_265_M3: GearboxRecord = {
   id: 'manual-rwd',
-  name: 'Getrag 265/5',
+  name: GEARBOX_PAGE_NAMES['manual-rwd']!,
   car: 'bmw-m3-e30',
   layout: {
     kind: 'layshaft',
