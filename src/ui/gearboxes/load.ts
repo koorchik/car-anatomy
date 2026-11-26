@@ -10,15 +10,15 @@ import type { Section } from '../../shell/section.ts';
  * `#/gearboxes/<page>/<variant>`): the first is where the menu leads. A page's data
  * may exist before its page does (src/data/gearboxes.ts); it joins this list with the stage that shows it.
  */
-export const GEARBOX_PAGES_SHOWN: readonly string[] = ['manual-rwd', 'manual-transaxle'];
+export const GEARBOX_PAGES_SHOWN: readonly string[] = ['manual-rwd', 'manual-transaxle', 'automatic'];
 
 /**
  * The engines' dictionary too: the page runs the car's engine from the engine catalogue, which brings its words. A
  * designer address (#/gearboxes/designer) fetches the designer's chunk alongside, so its first view is the designer;
- * the section asks for that chunk again should it fail to come.
+ * the manual pages' section asks for that chunk again should it fail to come.
  */
 export async function loadGearboxes(route: Route): Promise<Section> {
   const designer = route.page === 'designer' ? withDictionaries(['engines', 'gearboxes', 'gearbox-parts', 'gearbox-designer', 'presets'], () => import('../gearbox-designer/page.ts')) : null;
-  const [{ GearboxSection }] = await Promise.all([withDictionaries(['engines', 'gearboxes', 'gearbox-parts'], () => import('./section.ts')), designer?.catch(() => null)]);
-  return new GearboxSection();
+  const [{ GearboxPages }] = await Promise.all([withDictionaries(['engines', 'gearboxes', 'gearbox-parts'], () => import('./pages.ts')), designer?.catch(() => null)]);
+  return new GearboxPages();
 }

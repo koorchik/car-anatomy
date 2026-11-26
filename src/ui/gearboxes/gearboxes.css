@@ -2,6 +2,11 @@
  * shared widgets (start button, tachometer, pedal, figures) are styled by the engine pages' file, which the section
  * loads too. */
 
+/* An element of another gearbox page of the section (pages.ts): here, so that it holds before a page's chunk comes. */
+[data-gbx-page-away] {
+  display: none !important;
+}
+
 .gbx-title {
   display: flex;
   flex-direction: column;
@@ -60,6 +65,13 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 4px;
+}
+
+/* The title block stands in the shell's .engine-name, which lets clicks through to the stage: its buttons and the
+ * engine's link take them, as .engine-nav does on the engine pages. */
+.gbx-title-row,
+.gbx-title a {
+  pointer-events: auto;
 }
 
 /* The dash of the table: start, tachometer, pedal, the gears and what the shafts do. */

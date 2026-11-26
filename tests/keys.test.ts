@@ -19,7 +19,7 @@ function siteKeys(): ShellKeys {
   const engines = engineKeys({ gas: noop, ignition: noop, step: noop, table: noop, mute: noop, layer: noop, closeHelp: noop, lap: () => false });
   keys.bind('engines', engines.engines);
   keys.bind('engines/sump', engines.sump);
-  keys.bind(SUSPENSION_KEY_CONTEXTS[0], suspensionKeys({ event: () => true, scene: noop }));
+  keys.bind(SUSPENSION_KEY_CONTEXTS[0], suspensionKeys({ event: () => true, scene: noop, page: noop }));
   const gearboxes = gearboxKeys({ gas: noop, ignition: noop, mute: noop, gear: noop, brake: noop });
   keys.bind('gearboxes', gearboxes.gearboxes);
   keys.bind('gearboxes/drive', gearboxes.drive);
@@ -107,7 +107,7 @@ describe('keys of the site', () => {
 
   it('leaves the arrows to the panel when it is focused, so its article scrolls', () => {
     const steps: number[] = [];
-    const arrows = suspensionKeys({ event: () => true, scene: (d) => steps.push(d) }).find((b) => b.codes.includes('ArrowDown'))!;
+    const arrows = suspensionKeys({ event: () => true, scene: (d) => steps.push(d), page: noop }).find((b) => b.codes.includes('ArrowDown'))!;
     const press = (target: unknown) => {
       let prevented = false;
       const event = { code: 'ArrowDown', target, preventDefault: () => (prevented = true) } as unknown as KeyboardEvent;
@@ -119,9 +119,19 @@ describe('keys of the site', () => {
     expect(steps).toEqual([1, 1]);
   });
 
+  it('goes to another type of suspension on the arrows left and right, but not from a slider', () => {
+    const pages: number[] = [];
+    const arrows = suspensionKeys({ event: () => true, scene: noop, page: (d) => pages.push(d) }).find((b) => b.codes.includes('ArrowLeft'))!;
+    const press = (code: string, target: unknown) => arrows.down({ code, target, preventDefault: noop } as unknown as KeyboardEvent) !== false;
+    expect(press('ArrowLeft', { closest: () => null })).toBe(true);
+    expect(press('ArrowRight', null)).toBe(true);
+    expect(press('ArrowRight', { closest: (selector: string) => (selector.includes('input') ? {} : null) })).toBe(false);
+    expect(pages).toEqual([-1, 1]);
+  });
+
   it('leaves Space to a focused button, so the keyboard can press it', () => {
     let events = 0;
-    const space = suspensionKeys({ event: () => (events++, true), scene: noop }).find((b) => b.codes.includes('Space'))!;
+    const space = suspensionKeys({ event: () => (events++, true), scene: noop, page: noop }).find((b) => b.codes.includes('Space'))!;
     const press = (target: unknown) => space.down({ code: 'Space', target, preventDefault: noop } as unknown as KeyboardEvent) !== false;
     expect(press({ closest: (selector: string) => (selector.includes('button') ? {} : null) })).toBe(false);
     expect(press({ closest: () => null })).toBe(true);

@@ -24,7 +24,7 @@ describe('the gearbox section', () => {
     expect(parseRoute('#/gearboxes/manual-transaxle/porsche-911-carrera-t-992')).toMatchObject({ section: 'gearboxes', page: 'catalogue', path: ['manual-transaxle', 'porsche-911-carrera-t-992'] });
     // Data without its page yet is not a page a link may go to.
     expect(pageShown('gearboxes', 'differential')).toBe(false);
-    expect(pageShown('suspensions', 'macpherson')).toBe(false);
+    expect(pageShown('suspensions', 'twist-beam')).toBe(false);
     expect(pageShown('engines', 'i4')).toBe(true);
     for (const page of entry.openPages ?? []) {
       const data = GEARBOX_PAGES.find((p) => p.id === page);

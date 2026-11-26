@@ -6,4 +6,5 @@ export const GEARBOX_PAGE_NAMES: Readonly<Record<string, string>> = {
   'manual-rwd': 'Getrag 265/5',
   'manual-transaxle': 'Honda 6MT',
   'manual-transaxle/porsche-911-carrera-t-992': 'Porsche 7MT',
+  automatic: 'ZF 8HP51',
 };

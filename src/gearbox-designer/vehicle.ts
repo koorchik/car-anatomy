@@ -89,16 +89,27 @@ export function designDamper(d: GearboxDesign, map: EngineTorqueMap): DamperDef 
   return d.damper === 'dmf' ? DMF_DAMPER : d.damper === 'stiff' ? stiffDisc(map.inertia) : DISC_DAMPER;
 }
 
+/**
+ * An engine that is not the catalogue's `d.engine`: the car builder's engine from the engine designer (stage C4). `key`
+ * names it for the cache; the map and the firing events replace what d.engine would give.
+ */
+export interface DesignEngine {
+  key: string;
+  map: EngineTorqueMap;
+  firingPerRev: number;
+}
+
 const vehicles = new Map<string, DesignVehicle>();
 
-export function designVehicle(d: GearboxDesign): DesignVehicle {
-  const key = JSON.stringify([d.type, d.car, d.engine, d.massKg, d.drive, d.frontShare, d.tyreSize, d.tyre, d.cdA, d.crr, d.clutch, d.clutchMm, d.clampN, d.facing, d.damper, d.finalDrive]);
+export function designVehicle(d: GearboxDesign, engineOf?: DesignEngine): DesignVehicle {
+  const key = JSON.stringify([d.type, d.car, engineOf ? `own:${engineOf.key}` : d.engine, d.massKg, d.drive, d.frontShare, d.tyreSize, d.tyre, d.cdA, d.crr, d.clutch, d.clutchMm, d.clampN, d.facing, d.damper, d.finalDrive]);
   let v = vehicles.get(key);
   if (v) return v;
   const base = CARS[d.car];
-  const source = engineSource(d.engine);
-  if (!base || !source) throw new Error(`designer: no car ${d.car} or engine ${d.engine}`);
-  const { spec, map } = source;
+  const source = engineOf ? null : engineSource(d.engine);
+  if (!base || (!engineOf && !source)) throw new Error(`designer: no car ${d.car} or engine ${d.engine}`);
+  const spec = source ? source.spec : null;
+  const map = engineOf ? engineOf.map : source!.map;
   const own = roadLoadCoeffs(base);
   const m = d.massKg;
   const c = 0.5 * AIR_DENSITY * d.cdA;
@@ -119,7 +130,7 @@ export function designVehicle(d: GearboxDesign): DesignVehicle {
     }
   }
   const layshaft = d.type === 'layshaft';
-  const engine = buildEngine(spec);
+  const engine = engineOf ? null : buildEngine(spec!);
   const axleRatio = layshaft ? d.finalDrive : 1;
   v = {
     base,
@@ -143,7 +154,7 @@ export function designVehicle(d: GearboxDesign): DesignVehicle {
     // The pinion with its half of the propshaft and the propshaft's front half turn with the box's output; the case and
     // the side gears with the wheels (final-drive.ts). A transaxle's case is a member of the box.
     axleInertia: layshaft ? (PINION_INERTIA + propshaft) * axleRatio ** 2 + CASE_INERTIA + 2 * SIDE_INERTIA : 2 * SIDE_INERTIA,
-    firingPerRev: (engine.cylinders.length * 360) / engine.cycle,
+    firingPerRev: engine ? (engine.cylinders.length * 360) / engine.cycle : engineOf!.firingPerRev,
   };
   if (vehicles.size > 32) vehicles.clear();
   vehicles.set(key, v);
