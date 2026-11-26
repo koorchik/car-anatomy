@@ -17,8 +17,8 @@ export interface LineData {
   series: LineSeries[];
   /** The same series of the design the visitor started from, drawn pale and dashed. */
   ghost?: LineSeries[];
-  /** A vertical line at this x (rest, an invariant frequency) with its label. */
-  mark?: { x: number; label: string } | null;
+  /** Vertical lines at these x (rest, the invariant frequencies) with their labels, in a series' colour if given. */
+  marks?: Array<{ x: number; label: string; color?: string }>;
   /** A horizontal reference line (the neutral steer) with its label. */
   level?: { y: number; label: string } | null;
   xUnit: string;
@@ -108,9 +108,15 @@ export class LineChart extends CanvasChart {
   private x1 = 1;
   private y0 = 0;
   private y1 = 1;
+  /** The step of the y scale's ticks: y0 and y1 are its multiples. */
+  private yStep = 1;
+  /** The names of the series under the chart (the card puts it there). */
+  readonly legend = document.createElement('div');
 
   constructor(label: string) {
     super(label, 'sd-line-chart');
+    this.legend.className = 'sd-legend';
+    this.legend.hidden = true;
     this.canvas.addEventListener('pointermove', (e) => {
       const rect = this.canvas.getBoundingClientRect();
       this.hover = e.clientX - rect.left;
@@ -132,17 +138,38 @@ export class LineChart extends CanvasChart {
     this.x0 = xs.length ? Math.min(...xs) : 0;
     this.x1 = xs.length ? Math.max(...xs) : 1;
     if (this.x1 <= this.x0) this.x1 = this.x0 + 1;
-    let lo = ys.length ? Math.min(...ys) : 0;
-    let hi = ys.length ? Math.max(...ys) : 1;
-    const span = Math.max((hi - lo) * 1.1, data.minSpan ?? 0, 1e-9);
-    const mid = (lo + hi) / 2;
-    lo = mid - span / 2;
-    hi = mid + span / 2;
-    if (data.zero && lo > 0) lo = 0;
+    const dataLo = ys.length ? Math.min(...ys) : 0;
+    const dataHi = ys.length ? Math.max(...ys) : 1;
+    const span = Math.max((dataHi - dataLo) * 1.1, data.minSpan ?? 0, 1e-9);
+    const mid = (dataLo + dataHi) / 2;
+    let lo = mid - span / 2;
+    let hi = mid + span / 2;
+    // A quantity that never changes sign (a load, a gain) keeps its scale on its own side of zero.
+    if (data.zero && dataLo >= 0) lo = Math.max(lo, 0);
+    if (data.zero && dataHi <= 0) hi = Math.min(hi, 0);
     const step = niceStep(hi - lo, 3);
+    this.yStep = step;
     this.y0 = Math.floor(lo / step) * step;
     this.y1 = Math.ceil(hi / step) * step;
+    this.writeLegend(data.series);
     this.draw();
+  }
+
+  private writeLegend(series: readonly LineSeries[]): void {
+    const keys = series.length > 1 ? series : [];
+    const text = keys.map((s) => `${s.name}|${s.color}|${s.dashed ? 1 : 0}`).join(',');
+    if (this.legend.dataset.keys === text) return;
+    this.legend.dataset.keys = text;
+    this.legend.replaceChildren(
+      ...keys.map((s) => {
+        const item = document.createElement('span');
+        const swatch = document.createElement('i');
+        swatch.style.borderTop = `2px ${s.dashed ? 'dashed' : 'solid'} ${s.color}`;
+        item.append(swatch, s.name);
+        return item;
+      }),
+    );
+    this.legend.hidden = !keys.length;
   }
 
   private px(x: number): number {
@@ -190,7 +217,7 @@ export class LineChart extends CanvasChart {
     ctx.lineWidth = 1;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    const yStep = niceStep(this.y1 - this.y0, 3);
+    const yStep = this.yStep;
     const yDigits = Math.max(0, -Math.floor(Math.log10(yStep) + 1e-9));
     for (let v = this.y0; v <= this.y1 + yStep * 1e-6; v += yStep) {
       const y = Math.round(this.py(v)) + 0.5;
@@ -229,18 +256,23 @@ export class LineChart extends CanvasChart {
       ctx.textAlign = 'right';
       ctx.fillText(data.level.label, width - pad.r, y - 4);
     }
-    if (data.mark && data.mark.x >= this.x0 && data.mark.x <= this.x1) {
-      const x = Math.round(this.px(data.mark.x)) + 0.5;
-      ctx.strokeStyle = 'rgba(236,230,214,0.35)';
+    let labelRow = 0;
+    for (const mark of data.marks ?? []) {
+      if (!(mark.x >= this.x0 && mark.x <= this.x1)) continue;
+      const x = Math.round(this.px(mark.x)) + 0.5;
+      ctx.strokeStyle = mark.color ?? 'rgba(236,230,214,0.35)';
+      ctx.globalAlpha = mark.color ? 0.6 : 1;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
       ctx.moveTo(x, pad.t);
       ctx.lineTo(x, height - pad.b);
       ctx.stroke();
       ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
       ctx.textAlign = x > width / 2 ? 'right' : 'left';
-      ctx.fillStyle = DIM;
-      ctx.fillText(data.mark.label, x + (x > width / 2 ? -4 : 4), height - pad.b - 4);
+      ctx.fillStyle = mark.color ?? DIM;
+      // Labels stack upward, so two marks close together stay readable.
+      ctx.fillText(mark.label, x + (x > width / 2 ? -4 : 4), height - pad.b - 4 - 13 * labelRow++);
     }
     ctx.lineWidth = 1.5;
     ctx.globalAlpha = GHOST_ALPHA;

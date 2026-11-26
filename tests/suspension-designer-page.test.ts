@@ -10,7 +10,7 @@ import { G } from '../src/suspension/forces.ts';
 import { DAMPER_PRESETS, factorySetup } from '../src/suspension/setup.ts';
 import { encodeChassis } from '../src/suspension-designer/codec.ts';
 import { cornerSprungKg, resolveChassis, sameDesign } from '../src/suspension-designer/constraints.ts';
-import { rollCentreCurve, travelCurves, turnCurves, understeerParts } from '../src/suspension-designer/curves.ts';
+import { ROLL_CENTRE_SHOWN_M, rollCentreCurve, travelCurves, turnCurves, understeerParts } from '../src/suspension-designer/curves.ts';
 import { DEFAULT_CHASSIS } from '../src/suspension-designer/defaults.ts';
 import { axleKey, axleOf, type ChassisDesign } from '../src/suspension-designer/design.ts';
 import { editChassis } from '../src/suspension-designer/edit.ts';
@@ -43,6 +43,20 @@ describe('the curves of the graphs', () => {
     const roll = rollCentreCurve(spec.front.axle);
     expect(roll.rollRad[0]).toBe(0);
     expect(roll.heightM[0]).toBeCloseTo(travel.rcHeight[travel.travelM.indexOf(0)]!, 3);
+  });
+
+  it('follow the roll centre only as far as a graph can show it, and leave a gap where the force lines run parallel', () => {
+    // A pure trailing arm's force lines lie along the road: in roll they barely cross, metres away.
+    const trailing = editChassis(DEFAULT_CHASSIS, { layoutR: 'trailing-arm' } as Partial<ChassisDesign>);
+    const designs = [trailing, ...CHASSIS_PRESETS.map((p) => resolveChassis(p.design()))];
+    for (const d of designs) {
+      const s = chassisToSpec(d);
+      for (const axle of [s.front.axle, s.rear.axle]) {
+        for (const h of rollCentreCurve(axle).heightM) if (Number.isFinite(h)) expect(Math.abs(h)).toBeLessThanOrEqual(ROLL_CENTRE_SHOWN_M);
+      }
+    }
+    // A double wishbone's lines cross near the road all the way.
+    expect(rollCentreCurve(spec.front.axle).heightM.every(Number.isFinite)).toBe(true);
   });
 
   it('carry the car on its four wheels at every lateral acceleration, and the outer wheels take more', () => {

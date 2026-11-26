@@ -461,9 +461,10 @@ export const SUSPENSION_DESIGNER_EN: Record<string, string> = {
   'Сходження від ходу': 'Toe over travel',
   'Сходження змінюється на ході — це підрулювання на нерівностях.': 'Toe changing over the travel is bump steer.',
   'Міграція центра крену': 'Roll center migration',
-  'Висота центра крену над дорогою, коли кузов крениться в повороті.': "The roll center's height above the road as the body rolls in a turn.",
+  'Висота центра крену над дорогою, коли кузов крениться в повороті. Розрив лінії: лінії сил коліс стали майже паралельні, і центр крену пішов далі ніж на метр.':
+    "The roll center's height above the road as the body rolls in a turn. A gap in the line: the wheels' force lines have become nearly parallel and the roll center has moved more than a meter away.",
   'Амплітудно-частотна характеристика': 'Frequency response',
-  'Як кузов і шина відповідають на хвилясту дорогу, на метр її висоти. Вертикальний пунктир у кузова — незмінна точка: на цій частоті амортизатор нічого не змінює.': 'How the body and the tire respond to a wavy road, per meter of its height. The vertical dashed line on the body is the invariant point: at this frequency the damper changes nothing.',
+  'Як кузов і шина відповідають на хвилясту дорогу, на метр її висоти. Вертикальні пунктири у кузова — незмінні точки осей: на цій частоті амортизатор нічого не змінює.': 'How the body and the tire respond to a wavy road, per meter of its height. The vertical dashed lines on the body are the axles\' invariant points: at that frequency the damper changes nothing.',
   'Кут керма від бокового прискорення': 'Steering angle against lateral acceleration',
   'Коло радіусом 40 м: що крутіше лінія йде вгору від нейтральної, то більша недостатня поворотність.': 'A circle of 40 m radius: the steeper the line rises from the neutral one, the more understeer.',
   'Навантаження коліс': 'Wheel loads',

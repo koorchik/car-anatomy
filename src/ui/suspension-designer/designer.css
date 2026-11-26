@@ -356,6 +356,26 @@ body.susp-designer .view-tools .tool:has(#speed) {
   touch-action: pan-y;
 }
 
+.sd-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--bone-dim);
+}
+
+.sd-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sd-legend i {
+  display: inline-block;
+  width: 16px;
+}
+
 .sd-chart-tip {
   position: absolute;
   top: 4px;

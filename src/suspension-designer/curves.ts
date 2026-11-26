@@ -24,6 +24,10 @@ const TRAVEL_POINTS = 25;
 /** Body roll the roll-centre curve goes to, rad, and its points. */
 export const ROLL_MAX_RAD = (5 * Math.PI) / 180;
 const ROLL_POINTS = 11;
+/** How far from the road the roll centre graph follows the point, m. Past it the two wheels' force lines are nearly
+ *  parallel and their crossing runs off toward infinity (a trailing arm, some multilinks in roll): no car's centre of
+ *  mass is that high, and a point metres away would only squash the graph flat, so the graph leaves a gap there. */
+export const ROLL_CENTRE_SHOWN_M = 1;
 /** Radius of the steady turn whose steering-wheel angle the graph shows, m: a constant-radius test (ISO 4138 names
  *  40 m among its radii); a choice of the page. */
 export const TURN_RADIUS_M = 40;
@@ -182,7 +186,7 @@ export function rollCentreCurve(spec: AxleSpec<AnyAxleLinkage>, n = ROLL_POINTS)
     out.rollRad.push(phi);
     if (beam) {
       const p = beam.at(clamp(-dz), clamp(dz));
-      out.heightM.push(p ? p.rc : NaN);
+      out.heightM.push(p && Math.abs(p.rc) <= ROLL_CENTRE_SHOWN_M ? p.rc : NaN);
       out.lateralM.push(NaN);
       continue;
     }
@@ -194,8 +198,9 @@ export function rollCentreCurve(spec: AxleSpec<AnyAxleLinkage>, n = ROLL_POINTS)
       continue;
     }
     const rc = rolledRollCentre(outer, inner);
-    out.heightM.push(rc.heightM);
-    out.lateralM.push(rc.lateralM);
+    const shown = Math.abs(rc.heightM) <= ROLL_CENTRE_SHOWN_M;
+    out.heightM.push(shown ? rc.heightM : NaN);
+    out.lateralM.push(shown ? rc.lateralM : NaN);
   }
   return out;
 }

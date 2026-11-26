@@ -112,18 +112,18 @@ export class DesignerResults {
       frfSwitch.append(b);
     }
     this.charts.append(
-      this.card(t('Розвал від ходу'), t('Хід обох коліс разом від повного відбою до відбійника. Плюс — колесо вгору.'), this.camber.element).root,
-      this.card(t('Сходження від ходу'), t('Сходження змінюється на ході — це підрулювання на нерівностях.'), this.toe.element).root,
-      this.card(t('Міграція центра крену'), t('Висота центра крену над дорогою, коли кузов крениться в повороті.'), this.rc.element).root,
-      this.card(t('Амплітудно-частотна характеристика'), t('Як кузов і шина відповідають на хвилясту дорогу, на метр її висоти. Вертикальний пунктир у кузова — незмінна точка: на цій частоті амортизатор нічого не змінює.'), this.frf.element, frfSwitch).root,
-      this.card(t('Кут керма від бокового прискорення'), t('Коло радіусом 40 м: що крутіше лінія йде вгору від нейтральної, то більша недостатня поворотність.'), this.steer.element).root,
-      this.card(t('Навантаження коліс'), t('Ліве колесо внутрішнє: лівий поворот. Колесо, що дійшло до нуля, відірвалося від дороги.'), this.loads.element).root,
-      this.card(t('Розклад недостатньої поворотності'), t('З чого складається градієнт недостатньої поворотності: плюс — до недостатньої, мінус — до надмірної.'), this.understeer.element).root,
+      this.card(t('Розвал від ходу'), t('Хід обох коліс разом від повного відбою до відбійника. Плюс — колесо вгору.'), this.camber).root,
+      this.card(t('Сходження від ходу'), t('Сходження змінюється на ході — це підрулювання на нерівностях.'), this.toe).root,
+      this.card(t('Міграція центра крену'), t('Висота центра крену над дорогою, коли кузов крениться в повороті. Розрив лінії: лінії сил коліс стали майже паралельні, і центр крену пішов далі ніж на метр.'), this.rc).root,
+      this.card(t('Амплітудно-частотна характеристика'), t('Як кузов і шина відповідають на хвилясту дорогу, на метр її висоти. Вертикальні пунктири у кузова — незмінні точки осей: на цій частоті амортизатор нічого не змінює.'), this.frf, frfSwitch).root,
+      this.card(t('Кут керма від бокового прискорення'), t('Коло радіусом 40 м: що крутіше лінія йде вгору від нейтральної, то більша недостатня поворотність.'), this.steer).root,
+      this.card(t('Навантаження коліс'), t('Ліве колесо внутрішнє: лівий поворот. Колесо, що дійшло до нуля, відірвалося від дороги.'), this.loads).root,
+      this.card(t('Розклад недостатньої поворотності'), t('З чого складається градієнт недостатньої поворотності: плюс — до недостатньої, мінус — до надмірної.'), this.understeer).root,
     );
     this.root.append(head(t('Характер')), this.verdict, this.numbers, head(t('Діагнози')), this.diagnoses, head(t('Графіки')), this.charts);
   }
 
-  private card(title: string, note: string, chart: HTMLElement, extra?: HTMLElement): Card {
+  private card(title: string, note: string, chart: LineChart | BarChart, extra?: HTMLElement): Card {
     const root = document.createElement('section');
     root.className = 'sd-card';
     const h = document.createElement('h4');
@@ -133,7 +133,9 @@ export class DesignerResults {
     p.textContent = note;
     root.append(h);
     if (extra) root.append(extra);
-    root.append(chart, p);
+    root.append(chart.element);
+    if (chart instanceof LineChart) root.append(chart.legend);
+    root.append(p);
     return { root };
   }
 
@@ -163,9 +165,9 @@ export class DesignerResults {
     const mm = (xs: readonly number[]): number[] => xs.map((x) => x * 1000);
     const deg = (ys: readonly number[]): number[] => ys.map((y) => y * DEG);
     const travel = (c: DesignCurves, f: 'camber' | 'toe') => axis((k) => ({ x: mm(c.travel[k].travelM), y: deg(c.travel[k][f]) }));
-    const restMark = { x: 0, label: t('спокій') };
-    this.camber.set({ series: travel(curves, 'camber'), ghost: ghost ? travel(ghost, 'camber') : [], mark: restMark, xUnit: t('мм'), yUnit: '°', xDigits: 0, yDigits: 2, minSpan: 2 });
-    this.toe.set({ series: travel(curves, 'toe'), ghost: ghost ? travel(ghost, 'toe') : [], mark: restMark, xUnit: t('мм'), yUnit: '°', xDigits: 0, yDigits: 2, minSpan: 0.6 });
+    const restMark = [{ x: 0, label: t('спокій') }];
+    this.camber.set({ series: travel(curves, 'camber'), ghost: ghost ? travel(ghost, 'camber') : [], marks: restMark, xUnit: t('мм'), yUnit: '°', xDigits: 0, yDigits: 2, minSpan: 2 });
+    this.toe.set({ series: travel(curves, 'toe'), ghost: ghost ? travel(ghost, 'toe') : [], marks: restMark, xUnit: t('мм'), yUnit: '°', xDigits: 0, yDigits: 2, minSpan: 0.6 });
     const roll = (c: DesignCurves) => axis((k) => ({ x: deg(c.roll[k].rollRad), y: mm(c.roll[k].heightM) }));
     this.rc.set({ series: roll(curves), ghost: ghost ? roll(ghost) : [], xUnit: t('° крену'), yUnit: t('мм'), xDigits: 1, yDigits: 0, minSpan: 60, zero: true });
     this.drawFrf(curves, ghost);
@@ -207,12 +209,22 @@ export class DesignerResults {
     const body = this.frfMode === 'body';
     const pick = (c: DesignCurves): LineSeries[] =>
       c.response.map((r, k) => ({ name: k === 0 ? front() : rear(), color: k === 0 ? SERIES_COLORS.front : SERIES_COLORS.rear, x: r.hz, y: body ? r.bodyAcc : r.tyreForce.map((v) => v / 1000) }));
-    const inv = curves.invariant[0];
+    const label = (hz: number): string => t('{value} Гц', { value: fmt(hz, 1) });
+    const [fi, ri] = curves.invariant.map((inv) => inv.bodyHz);
+    // One line when both axles' points read the same, one per axle in its colour otherwise.
+    const marks = !body
+      ? []
+      : label(fi!) === label(ri!)
+        ? [{ x: fi!, label: label(fi!) }]
+        : [
+            { x: fi!, label: label(fi!), color: SERIES_COLORS.front },
+            { x: ri!, label: label(ri!), color: SERIES_COLORS.rear },
+          ];
     this.frf.set({
       series: pick(curves),
       ghost: ghost ? pick(ghost) : [],
-      // The body's acceleration has an invariant point at √(k_t/m_u): no damper moves it (evaluate.ts).
-      mark: body ? { x: inv.bodyHz, label: t('{value} Гц', { value: fmt(inv.bodyHz, 1) }) } : null,
+      // The body's acceleration has an invariant point at √(k_t/m_u) of each axle: no damper moves it (evaluate.ts).
+      marks,
       xUnit: t('Гц'),
       yUnit: body ? t('(м/с²)/м') : t('кН/м'),
       xDigits: 1,
