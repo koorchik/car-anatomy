@@ -174,7 +174,7 @@ export class CarAssembly implements SceneModel<CarFrame> {
     this.group.add(this.exhaust.group);
     const ends = this.hoseEnds();
     this.radiator = packaging.radiator ? new RadiatorModel(packaging.radiator, ends.coolant, ancillary) : null;
-    this.intercooler = packaging.intercooler ? new IntercoolerModel(packaging.intercooler, ends.air, ancillary) : null;
+    this.intercooler = packaging.intercooler ? new IntercoolerModel(packaging.intercooler, ends.air, ancillary, this.radiator?.boxes ?? []) : null;
     this.fuelTank = packaging.fuelTank ? new FuelTankModel(packaging.fuelTank, ancillary) : null;
     for (const m of [this.radiator, this.intercooler, this.fuelTank]) if (m) this.group.add(m.group);
 

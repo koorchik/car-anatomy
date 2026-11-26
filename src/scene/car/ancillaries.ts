@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import type { PlacedPart, Vec3 } from '../../vehicle/car.ts';
-import { placedPoints } from '../../vehicle/packaging.ts';
+import { placedPoints, type Box3 } from '../../vehicle/packaging.ts';
 import { tubeAlong } from '../geometry.ts';
 import { toScene } from './car-frame.ts';
 import { SimpleModel } from './simple-model.ts';
@@ -71,6 +71,30 @@ function hoseCurve(from: HoseEnd, to: Vec3): THREE.Vector3[] {
   return [a, lead, middle, approach, to].map((p) => toScene(p));
 }
 
+/** A core's outer box with its end tanks, front-axle frame. */
+function coreBox(at: Vec3, size: CoreSize): Box3 {
+  const half: Vec3 = [(size.depth + 0.01) / 2, size.width / 2, (size.height + 0.02) / 2];
+  return { min: [at[0] - half[0], at[1] - half[1], at[2] - half[2]], max: [at[0] + half[0], at[1] + half[1], at[2] + half[2]] };
+}
+
+/** Room left between a pipe's wall and a core it passes, m. */
+const CLEAR_M = 0.015;
+
+/**
+ * A charge pipe from a port under an end tank of a core ahead of `keepOut` (the radiator behind a front intercooler):
+ * down out of the tank, back under every core in the way, then up behind them to the open end on the engine. A pipe
+ * drawn straight back would run through the radiator's fins.
+ */
+function underCurve(from: HoseEnd, port: Vec3, front: Box3, keepOut: readonly Box3[], radius: number): THREE.Vector3[] {
+  const a = from.at;
+  const lead: Vec3 = [a[0] + from.out[0] * 0.08, a[1] + from.out[1] * 0.08, a[2] + from.out[2] * 0.08];
+  const low = Math.min(front.min[2], ...keepOut.map((b) => b.min[2])) - radius - CLEAR_M;
+  const back = Math.min(...keepOut.map((b) => b.min[0])) - radius - CLEAR_M;
+  const y = port[1];
+  const points: Vec3[] = [port, [port[0], y, low], [back, y, low], [back - 0.04, y, low + 0.06], [(back + lead[0]) / 2, (y + lead[1]) / 2, (low + lead[2]) / 2], lead, a];
+  return points.reverse().map((p) => toScene(p));
+}
+
 class ExchangerModel extends SimpleModel {
   /** A core of fins between two end tanks, standing across the car. */
   protected core(at: Vec3, size: CoreSize, part: string): void {
@@ -99,10 +123,14 @@ class ExchangerModel extends SimpleModel {
 
 /** The radiator (or the pair of them) and the hoses from the coolant layer's open ends: the higher to a top port. */
 export class RadiatorModel extends ExchangerModel {
+  /** Each core's outer box, front-axle frame: what the intercooler's pipes go round. */
+  readonly boxes: Box3[];
+
   constructor(part: PlacedPart, hoses: HoseEnd[], highlight: THREE.ColorRepresentation) {
     super(highlight);
     const size = part.side === 'both' ? ANCILLARY.radiatorPair : ANCILLARY.radiator;
     const cores = placedPoints(part);
+    this.boxes = cores.map((at) => coreBox(at, size));
     for (const at of cores) this.core(at, size, 'car.radiator');
     const rubber = this.rubber();
     // Hot coolant to the top of the nearer tank, back from the bottom of the same side: as in a cross-flow radiator
@@ -119,22 +147,30 @@ export class RadiatorModel extends ExchangerModel {
 
 /**
  * The intercooler and the charge pipes from the air layer's open ends: the end nearer the car's left goes to the left
- * tank, the other to the right, so the air crosses the core.
+ * tank, the other to the right, so the air crosses the core. `keepOut` are the cores behind it (the radiator): the pipes
+ * leave from under the end tanks and pass beneath them.
  */
 export class IntercoolerModel extends ExchangerModel {
-  constructor(part: PlacedPart, ends: HoseEnd[], highlight: THREE.ColorRepresentation) {
+  /** Each core's outer box, front-axle frame. */
+  readonly boxes: Box3[];
+
+  constructor(part: PlacedPart, ends: HoseEnd[], highlight: THREE.ColorRepresentation, keepOut: readonly Box3[] = []) {
     super(highlight);
     const size = part.side === 'both' ? ANCILLARY.intercoolerPair : ANCILLARY.intercooler;
     const cores = placedPoints(part);
     for (const at of cores) this.core(at, size, 'car.intercooler');
+    this.boxes = cores.map((at) => coreBox(at, size));
     if (cores.length !== 1 || ends.length === 0) return;
     const at = cores[0]!;
     const ports = portsOf(at, size);
     const metal = this.aluminium();
     const sorted = [...ends].sort((a, b) => b.at[1] - a.at[1]);
+    const behind = keepOut.filter((b) => b.max[0] < this.boxes[0]!.min[0] + 1e-9);
     sorted.forEach((end, i) => {
-      const port = i === 0 ? ports.left.middle : ports.right.middle;
-      this.hose(hoseCurve(end, port), ANCILLARY.chargePipeR, metal, 'car.charge-pipe');
+      const side = i === 0 ? ports.left : ports.right;
+      const under: Vec3 = [at[0], side.middle[1], at[2] - size.height / 2 - 0.01];
+      const curve = behind.length > 0 ? underCurve(end, under, this.boxes[0]!, behind, ANCILLARY.chargePipeR) : hoseCurve(end, side.middle);
+      this.hose(curve, ANCILLARY.chargePipeR, metal, 'car.charge-pipe');
     });
   }
 }

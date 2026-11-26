@@ -163,6 +163,22 @@ describe('the car as the overview assembles it', () => {
       expect(route.catalyst.s).toBeLessThan(route.muffler.s);
     });
 
+    it(`${id}: runs no hose or charge pipe through the fins of a radiator or an intercooler`, () => {
+      const cores = [...(assembly.radiator?.boxes ?? []), ...(assembly.intercooler?.boxes ?? [])];
+      // A pipe ends on its own core's face; a millimetre in, it would be inside the fins.
+      const inside = (p: Vec3): boolean => cores.some((b) => [0, 1, 2].every((k) => p[k]! > b.min[k]! + 0.001 && p[k]! < b.max[k]! - 0.001));
+      let pipes = 0;
+      for (const model of [assembly.radiator, assembly.intercooler]) {
+        if (!model) continue;
+        eachVertex(assembly, model.group, (p, mesh) => {
+          if (!/hose|pipe/.test(mesh.userData.part as string)) return;
+          pipes++;
+          expect(inside(p), `${mesh.userData.part} at ${p.join(', ')}`).toBe(false);
+        });
+      }
+      expect(pipes).toBeGreaterThan(0);
+    });
+
     it(`${id}: draws each model in its own renderOrder band, the body last`, () => {
       const bands: Array<[THREE.Object3D, number, number]> = [
         [assembly.engineModel.group, CAR_BANDS.engine, CAR_BANDS.engine + 9],
