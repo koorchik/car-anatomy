@@ -132,8 +132,9 @@ const BIND_COLOR = new THREE.Color('#e5412f');
 
 /** A rod (trailing link, Panhard rod, Watt rod): a link with an eye at each end and a bush in each eye. */
 interface RodPart {
-  /** The solver's row name. */
+  /** The solver's row name and its index in the solver's rows (−1 if it has none). */
   row: string;
+  rowIndex: number;
   object: THREE.Group;
   bushes: THREE.Mesh;
   bush: THREE.MeshStandardMaterial;
@@ -156,7 +157,12 @@ interface LeafPart {
   A: Vec3;
   B: Vec3;
   seat: Vec3;
+  /** The main leaf's line through the front eye, the clamp, the seat and the rear eye; its points rewritten in place. */
+  curve: THREE.CatmullRomCurve3;
 }
+
+/** Step along a leaf's curve for its tangent, a share of the curve. */
+const TANGENT_DU = 1e-3;
 
 /**
  * A band of rectangular section along a curve, rewritten in place: the leaves of a spring. The section is `width` wide
@@ -194,14 +200,17 @@ class LeafBand {
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
   }
 
-  /** Writes the band along `curve` (scene), its section across scene x. */
-  update(curve: THREE.Curve<THREE.Vector3>, p: THREE.Vector3, t: THREE.Vector3): void {
+  /** Writes the band along `curve` (scene), its section across scene x; `p`, `t`, `t2` are scratch. */
+  update(curve: THREE.Curve<THREE.Vector3>, p: THREE.Vector3, t: THREE.Vector3, t2: THREE.Vector3): void {
     const P = this.positions;
     const half = this.width / 2;
     for (let i = 0; i < this.n; i++) {
       const u = this.trim + ((1 - 2 * this.trim) * i) / (this.n - 1);
+      // The tangent by a central difference into scratch: Curve.getTangent makes two vectors on every call.
+      curve.getPoint(Math.min(1, u + TANGENT_DU), t);
+      curve.getPoint(Math.max(0, u - TANGENT_DU), t2);
+      t.sub(t2);
       curve.getPoint(u, p);
-      curve.getTangent(u, t);
       // The section's up: square to the tangent in the side view (scene y, z), pointing up.
       let ny = t.z;
       let nz = -t.y;
@@ -214,14 +223,10 @@ class LeafBand {
       nz /= l;
       const top = -this.offset;
       const bottom = top - this.thick;
-      const corners: Array<[number, number]> = [
-        [half, top],
-        [-half, top],
-        [-half, bottom],
-        [half, bottom],
-      ];
+      // Corners 0 top outer, 1 top inner, 2 bottom inner, 3 bottom outer.
       for (let k = 0; k < 4; k++) {
-        const [dx, dn] = corners[k]!;
+        const dx = k === 0 || k === 3 ? half : -half;
+        const dn = k < 2 ? top : bottom;
         const o = 3 * (i * 4 + k);
         P[o] = p.x + dx;
         P[o + 1] = p.y + ny * dn;
@@ -256,6 +261,8 @@ export class SolidAxleModel implements AxleModel {
   /** The rigid axle: housing or tube, wheels, brakes, brackets, seats. Posed by the solved state. */
   private readonly axleGroup = new THREE.Group();
   private readonly wheels: THREE.Group[] = [];
+  /** The turning parts of each wheel (tyre, wheel, disc, hub), left then right, turned by the frame's spin. */
+  private readonly spinners: THREE.Group[] = [];
   private readonly rods: RodPart[] = [];
   private readonly leaves: LeafPart[] = [];
   private readonly rocker: { mesh: THREE.Mesh; upper: Float64Array; lower: Float64Array } | null = null;
@@ -268,8 +275,12 @@ export class SolidAxleModel implements AxleModel {
   private readonly notMechanism: THREE.Object3D[] = [];
   private readonly frame = axleFrame();
   private explode = 0;
-  private shown: [number, number] = [Number.NaN, Number.NaN];
+  private readonly shown: [number, number] = [Number.NaN, Number.NaN];
+  /** Whether the pose drawn is stale: the state or the explode changed since. */
+  private dirty = true;
   private failures: Array<() => void> = [];
+  /** Materials shown as failed: the binding colour leaves their glow alone. */
+  private readonly damaged = new Set<THREE.Material>();
   private highlightUndo: Array<() => void> = [];
   private readonly ghostBase = new Map<THREE.Material, { opacity: number; transparent: boolean; depthWrite: boolean }>();
   private readonly orders = new Map<THREE.Object3D, number>();
@@ -277,6 +288,7 @@ export class SolidAxleModel implements AxleModel {
   private readonly p = new Float64Array(3);
   private readonly v1 = new THREE.Vector3();
   private readonly v2 = new THREE.Vector3();
+  private readonly v3 = new THREE.Vector3();
   private readonly d = new THREE.Vector3();
   private readonly q = new THREE.Quaternion();
   private readonly mat = new THREE.Matrix4();
@@ -401,7 +413,11 @@ export class SolidAxleModel implements AxleModel {
       const caliper = tag(new THREE.Mesh(caliperGeo, m.caliper), key('susp.caliper'));
       const hubMesh = tag(new THREE.Mesh(hubGeo, m.steel), key('susp.hub'));
       for (const o of [tyre, wheel, disc, caliper, hubMesh]) o.castShadow = true;
-      hub.add(tyre, wheel, disc, caliper, hubMesh);
+      // The caliper stays on the axle end; the rest turns with the wheel.
+      const spin = new THREE.Group();
+      spin.add(tyre, wheel, disc, hubMesh);
+      hub.add(spin, caliper);
+      this.spinners.push(spin);
       this.shells.push({ mesh: tyre, solid: m.tyre, glass: m.tyreGlass }, { mesh: wheel, solid: m.wheel, glass: m.wheelGlass });
       this.notMechanism.push(tyre, wheel, disc, caliper);
       this.wheels.push(hub);
@@ -425,7 +441,7 @@ export class SolidAxleModel implements AxleModel {
       object.add(rodMesh, bushes);
       this.group.add(object);
       const out = b.clone().add(toScene(axleAt)).multiplyScalar(0.5).sub(centre).setY(0).normalize().multiplyScalar(3);
-      this.rods.push({ row, object, bushes, bush, body: b, axle, out });
+      this.rods.push({ row, rowIndex: this.axle.solver.rows.indexOf(row), object, bushes, bush, body: b, axle, out });
     };
     for (const r of link.rods) addRod(r.id, r.part, r.body, r.knuckle, r.knuckle);
     if (link.lateral.kind === 'panhard') addRod('panhard', 'susp.panhard-rod', link.lateral.body, link.lateral.axle, link.lateral.axle);
@@ -491,7 +507,9 @@ export class SolidAxleModel implements AxleModel {
         );
         shackle.position.copy(pivot);
         this.group.add(frontEye, rearEye, shackle);
-        this.leaves.push({ side, pack, front: toScene(front), pivot, shackle, rearEye, A, B, seat });
+        const points = [toScene(front), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+        const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
+        this.leaves.push({ side, pack, front: toScene(front), pivot, shackle, rearEye, A, B, seat, curve });
       }
     }
 
@@ -623,9 +641,15 @@ export class SolidAxleModel implements AxleModel {
     if (f.travel[0] !== this.shown[0] || f.travel[1] !== this.shown[1]) {
       this.axle.solve(this.state, f.travel[0], f.travel[1]);
       this.axle.solver.residuals(this.state, this.residuals);
-      this.shown = [f.travel[0], f.travel[1]];
+      this.shown[0] = f.travel[0];
+      this.shown[1] = f.travel[1];
+      this.dirty = true;
     }
-    this.pose();
+    // Wheels turned forward: the right hub is the left one turned half round about the vertical, so its local x points
+    // inboard and the same forward turn is the opposite angle.
+    this.spinners[0]!.rotation.x = f.spin[0];
+    this.spinners[1]!.rotation.x = -f.spin[1];
+    if (this.dirty) this.pose();
   }
 
   /**
@@ -637,12 +661,14 @@ export class SolidAxleModel implements AxleModel {
     this.axle.solver.travels(this.state, this.p);
     this.frame.travel[0] = this.p[0];
     this.frame.travel[1] = this.p[1];
-    this.shown = [this.p[0], this.p[1]];
+    this.shown[0] = this.p[0];
+    this.shown[1] = this.p[1];
     this.axle.solver.residuals(this.state, this.residuals);
     this.pose();
   }
 
   private pose(): void {
+    this.dirty = false;
     const s = this.state;
     const solver = this.axle.solver;
     const e = this.explode;
@@ -674,11 +700,11 @@ export class SolidAxleModel implements AxleModel {
       to.add(drop);
       this.pointLink(r.object, r.body, to, false);
       r.object.position.addScaledVector(r.out, e);
-      const i = solver.rows.indexOf(r.row);
-      const stretch = i >= 0 ? Math.abs(this.residuals[i]!) : 0;
+      const stretch = r.rowIndex >= 0 ? Math.abs(this.residuals[r.rowIndex]!) : 0;
       const k = Math.min(1, stretch / BIND_FULL_M);
       r.bush.color.copy(BUSH_COLOR).lerp(BIND_COLOR, k);
-      r.bush.emissive.copy(BIND_COLOR).multiplyScalar(0.55 * k);
+      // A bush shown as failed keeps the failure's glow (setFailure).
+      if (!this.damaged.has(r.bush)) r.bush.emissive.copy(BIND_COLOR).multiplyScalar(0.55 * k);
     }
     if (this.rocker) {
       const u = this.rocker.upper;
@@ -692,14 +718,14 @@ export class SolidAxleModel implements AxleModel {
     }
 
     for (const lf of this.leaves) {
-      const A = this.axlePoint(lf.A, new THREE.Vector3()).add(drop);
-      const S = this.axlePoint(lf.seat, new THREE.Vector3()).add(drop);
-      const B = this.axlePoint(lf.B, new THREE.Vector3()).add(drop);
-      solver.shackleEnd(s, lf.side, this.p);
-      const E = new THREE.Vector3(this.p[1] * 10, this.p[2] * 10, this.p[0] * 10);
       // The main leaf's top runs through the eyes' centres and over the pad on the seat.
-      const curve = new THREE.CatmullRomCurve3([lf.front.clone(), A, S, B, E], false, 'centripetal');
-      for (const band of lf.pack) band.update(curve, this.tp, this.tt);
+      const pts = lf.curve.points;
+      this.axlePoint(lf.A, pts[1]!).add(drop);
+      this.axlePoint(lf.seat, pts[2]!).add(drop);
+      this.axlePoint(lf.B, pts[3]!).add(drop);
+      solver.shackleEnd(s, lf.side, this.p);
+      const E = pts[4]!.set(this.p[1] * 10, this.p[2] * 10, this.p[0] * 10);
+      for (const band of lf.pack) band.update(lf.curve, this.tp, this.tt, this.v3);
       lf.rearEye.position.copy(E);
       this.d.copy(E).sub(lf.pivot);
       const len = this.d.length();
@@ -767,7 +793,13 @@ export class SolidAxleModel implements AxleModel {
   setFailure(part: string | null): void {
     for (const undo of this.failures) undo();
     this.failures = [];
-    if (!part) return;
+    this.damaged.clear();
+    // The undo brings back the glow of the moment it was marked; the binding's own is redrawn from the state.
+    this.dirty = true;
+    if (!part) {
+      this.pose();
+      return;
+    }
     const seen = new Set<THREE.Material>();
     for (const mesh of this.meshes()) {
       if (mesh.userData.part !== part) continue;
@@ -775,6 +807,7 @@ export class SolidAxleModel implements AxleModel {
       for (const mat of looks) {
         if (seen.has(mat) || !(mat instanceof THREE.MeshStandardMaterial)) continue;
         seen.add(mat);
+        this.damaged.add(mat);
         this.failures.push(markDamaged(mat));
       }
     }
