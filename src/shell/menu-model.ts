@@ -86,6 +86,14 @@ export function menuItems(sections: readonly SectionEntry[], route: Route, link:
   return items;
 }
 
+/**
+ * The section that shows a route, or null when none does: an unknown address, or a section not built yet. Here and
+ * not in the registry, so that the shell's chunk does not pull the loader's list of sections into a chunk of its own.
+ */
+export function routeEntry(route: Route, sections: readonly SectionEntry[]): SectionEntry | null {
+  return sections.find((s) => s.id === route.section) ?? null;
+}
+
 /** 'Back to the car': the overview of the car the visitor came from, with this section's system in focus. Null without car=. */
 export function backToCar(route: Route): string | null {
   const car = route.query.car;

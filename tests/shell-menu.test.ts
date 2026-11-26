@@ -2,8 +2,8 @@
 // a page and says «готуємо» until then, every engine page has a tab, and «← До авто» follows car= on any page.
 
 import { describe, expect, it } from 'vitest';
-import { backToCar, menuItems } from '../src/shell/menu-model.ts';
-import { routeEntry, SECTIONS, type SectionEntry } from '../src/shell/registry.ts';
+import { backToCar, menuItems, routeEntry } from '../src/shell/menu-model.ts';
+import { SECTIONS, type SectionEntry } from '../src/shell/registry.ts';
 import { parseRoute } from '../src/shell/routes.ts';
 import { enginesPage } from '../src/ui/engines/routes.ts';
 
@@ -54,10 +54,10 @@ describe('menu', () => {
   });
 
   it('finds no section for an unknown address or for a section not built yet, so the card shows instead', () => {
-    expect(routeEntry(parseRoute('#/no/such/page'))).toBeNull();
+    expect(routeEntry(parseRoute('#/no/such/page'), SECTIONS)).toBeNull();
     expect(routeEntry(parseRoute('#/no-such-section/x'), [SECTIONS[0]!])).toBeNull();
     expect(routeEntry(parseRoute('#/gearboxes/manual-rwd'), [SECTIONS[0]!])).toBeNull();
     expect(routeEntry(parseRoute('#/car/civic-type-r-fk8'), [SECTIONS[0]!])).toBeNull();
-    for (const hash of ['', '#/', '#/engines/i4', '#/designer', '#/sump/i4']) expect(routeEntry(parseRoute(hash))?.id, hash).toBe('engines');
+    for (const hash of ['', '#/', '#/engines/i4', '#/designer', '#/sump/i4']) expect(routeEntry(parseRoute(hash), SECTIONS)?.id, hash).toBe('engines');
   });
 });

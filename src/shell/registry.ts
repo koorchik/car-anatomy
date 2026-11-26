@@ -47,8 +47,3 @@ export const SECTIONS: readonly SectionEntry[] = [
 export function sectionEntry(route: Route): SectionEntry {
   return SECTIONS.find((s) => s.id === route.section) ?? SECTIONS[0]!;
 }
-
-/** The section that shows a route, or null when none does: an unknown address, or a section not built yet. */
-export function routeEntry(route: Route, sections: readonly SectionEntry[] = SECTIONS): SectionEntry | null {
-  return sections.find((s) => s.id === route.section) ?? null;
-}
