@@ -40,6 +40,7 @@ const signed = (v: number, digits: number): string => {
 
 /** The panel's part of the scene, under the readout of the travel. */
 export const travelControlsHtml = (): string => `<section class="susp-travel-controls">
+      <dl class="susp-numbers susp-travel-numbers-phone" id="susp-travel-numbers-phone"></dl>
       <button type="button" class="btn" id="susp-lower" aria-pressed="false">${t('Занизити на 40 мм')}</button>
       <p class="susp-caption" id="susp-lower-caption"></p>
       <label class="susp-ctl" id="susp-tie-row">
@@ -276,9 +277,10 @@ export class TravelScene {
       ]);
     }
     if (this.choice.page.id === 'multilink') rows.push([t('Ступенів свободи кулака'), String(this.motions.length || 1), this.removed.length > 0]);
-    this.$('susp-travel-numbers').innerHTML = rows
-      .map(([label, value, alarm]) => `<div class="susp-number${alarm ? ' alarm' : ''}"><dt>${label}</dt><dd>${value}</dd></div>`)
-      .join('');
+    const html = rows.map(([label, value, alarm]) => `<div class="susp-number${alarm ? ' alarm' : ''}"><dt>${label}</dt><dd>${value}</dd></div>`).join('');
+    this.$('susp-travel-numbers').innerHTML = html;
+    // A phone's dash has no room for them: the panel shows the same rows there.
+    this.$('susp-travel-numbers-phone').innerHTML = html;
     this.$('susp-dof').textContent = t('Ступенів свободи: {value}', { value: String(this.removed.length ? this.motions.length : 1) });
   }
 

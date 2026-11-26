@@ -593,6 +593,11 @@ body.susp-scene-travel .susp-only-bump {
   overflow-x: hidden;
 }
 
+/* The dash's numbers again in the panel, for a phone whose dash has no room for them. */
+.susp-travel-numbers-phone {
+  display: none;
+}
+
 .susp-travel-dash .susp-number dt {
   white-space: normal;
 }
@@ -607,7 +612,7 @@ body.susp-scene-travel .susp-only-bump {
     --dash-h: 210px;
   }
 
-  /* The curves two by two beside the front view; the numbers are in the panel's captions. */
+  /* The curves two by two beside the front view; the numbers go to the panel. */
   .susp-travel-dash {
     grid-template-columns: minmax(0, 1fr) 116px;
     grid-template-rows: minmax(0, 1fr);
@@ -626,6 +631,27 @@ body.susp-scene-travel .susp-only-bump {
 
   .susp-travel-dash > .susp-dash-numbers {
     display: none;
+  }
+
+  .susp-travel-numbers-phone {
+    display: flex;
+    margin: 0 0 12px;
+    font-size: 13px;
+    gap: 3px;
+  }
+
+  .susp-travel-numbers-phone .susp-number {
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .susp-travel-numbers-phone .susp-number dt {
+    white-space: normal;
+  }
+
+  .susp-travel-numbers-phone .susp-number dd {
+    text-align: right;
+    white-space: nowrap;
   }
 
   .susp-cars {
