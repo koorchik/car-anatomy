@@ -15,8 +15,8 @@
 //
 // Every force between the body and the wheel leaves the body acceleration at the wheel-hop frequency √(k_t/m_u) where
 // it was (Hedrick & Butsuen: the invariant point, evaluate.ts), so no control can calm the body there; the shaker test
-// checks it. The linear estimates take the ideal skyhook, which a semi-active damper only approaches: for MagneRide
-// they are a bound from above.
+// checks it. The linear estimates take the ideal (unclipped) skyhook, its reaction on the wheel as in time, which a
+// semi-active damper only approaches: for MagneRide they are a bound from above.
 
 import type { DamperKind } from './spec.ts';
 import type { QuarterLinear } from './evaluate.ts';

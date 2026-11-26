@@ -101,9 +101,9 @@ export interface AxlePerformance {
   /** Load transfer per g by Milliken's terms, N, and the roll stiffness of the axle's suspension, N·m/rad. */
   transferPerG: { elastic: number; geometric: number; unsprung: number; total: number };
   rollStiffness: number;
-  /** The car laden with LADEN_PAYLOAD_KG: the ride frequency and how far the body sank over this axle, m. A coil keeps
-   *  its rate and sinks; a levelled air spring or hydropneumatic strut keeps the height and changes its rate
-   *  (spring-types.ts). */
+  /** The car laden with LADEN_PAYLOAD_KG: the ride frequency and how far the suspension sank over this axle, m (the
+   *  tyres' own deflection left out). A coil keeps its rate and sinks; a levelled air spring or hydropneumatic strut
+   *  keeps the height and changes its rate (spring-types.ts). */
   laden: { rideHz: number; sagM: number };
   /** Largest share of a half-shaft joint's limit (angle of either joint, plunge) over the travel at straight ahead;
    *  NaN without half-shafts. Steering lock is not in it (the designer has no rack yet, P13-core). */
