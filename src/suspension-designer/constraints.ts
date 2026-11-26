@@ -323,7 +323,8 @@ function buildable(d: ChassisDesign, end: AxleEnd): ChassisDesign {
   throw new Error(`The typical ${fallback} does not build on this car`);
 }
 
-/** A buildable design from anything: typed, clamped, every axle assembling over its travel. */
+/** A buildable design from anything: typed, clamped, every axle assembling over its travel. The design is frozen:
+ *  axleOf remembers the axles of each design object, so a design changed in place would keep its old axles. */
 export function resolveChassis(input: unknown): ChassisDesign {
   let d = typed(input);
   for (const key of Object.keys(CAR_RANGES) as CarNumericKey[]) {
@@ -340,7 +341,7 @@ export function resolveChassis(input: unknown): ChassisDesign {
       if (v !== spring) d = withAxle(d, end, { springNmm: v });
     }
   }
-  return d;
+  return Object.freeze(d);
 }
 
 /** Whether two designs are the same, field by field. */
