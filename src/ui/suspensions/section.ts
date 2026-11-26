@@ -1,9 +1,10 @@
 // The suspensions section (`#/suspensions/<page>/<car>`): the corner of a suspension page (macpherson, double-wishbone,
-// multilink; stage P4) or of one of its real cars, in two scenes. The bump scene (stage P1d) rolls the corner over an
-// obstacle and plays the run back with its strip chart and numbers; the travel scene (stages P1b and P4) holds the wheel
-// on a rig at the travel a slider picks, with the corner's curves, its front view, the lowering, the tie-rod pad and the
-// five links taken away (travel-scene.ts). The Setup panel (build order, A3) edits
-// the corner's setup in both, and every change shows at once on the arrows, the lasers, the tyre and the numbers. The
+// multilink; stage P4) or of one of its real cars, in five scenes. The bump scene (stage P1d) rolls the corner over an
+// obstacle and plays the run back with its strip chart and numbers; the rough road and the shaker (stage P3,
+// road-scene.ts and shaker-scene.ts) drive it along an ISO 8608 road and shake it on a stand; the travel scene (stages
+// P1b and P4) holds the wheel on a rig at the travel a slider picks, with the corner's curves, its front view, the
+// lowering, the tie-rod pad and the five links taken away (travel-scene.ts). The Setup panel (build order, A3) edits
+// the corner's setup in all of them, and every change shows at once on the arrows, the lasers, the tyre and the numbers. The
 // roll scene (stage P7, roll-scene.ts) turns the page's whole car on its own model with its own panel. There
 // is no engine here, so the sound is suspended while the section is shown (the plan of the whole car, its amendments to
 // the suspensions plan, item 9).
@@ -38,10 +39,12 @@ import { bumpCaption, bumpRows } from './bump-text.ts';
 import { SUSPENSION_KEY_CONTEXTS, suspensionKeys } from './keys.ts';
 import { dashHtml, obstacleSize, panelHtml, titleHtml, toolsHtml } from './markup.ts';
 import { carsHtml, choiceOf, stepPage, titleOf, type PageChoice } from './pages.ts';
+import { RoadScene } from './road-scene.ts';
+import { DEFAULT_SCENE, isRideScene, sceneOf, stepScene, type SceneId } from './scenes.ts';
+import { ShakerScene } from './shaker-scene.ts';
 import { LOWER_M, TravelScene, travelDashHtml } from './travel-scene.ts';
 import { RollScene, rollDashHtml } from './roll-scene.ts';
 import type { RollModel, RollView } from '../../scene/suspension/roll-model.ts';
-import { DEFAULT_SCENE, sceneOf, stepScene, type SceneId } from './scenes.ts';
 import { SetupPanel } from './setup-panel.ts';
 import { StripChart } from './strip-chart.ts';
 import './suspensions.css';
@@ -58,10 +61,10 @@ const SLOWDOWN: readonly number[] = [0.02, 0.05, 0.1, 0.25, 0.5];
 const OPENING_FACTOR = 0.1;
 /** Simulated seconds the wheel rolls on after a run before the next one starts over. */
 const HOLD_S = 0.6;
-/** Height of the bump scene's dash, px; suspensions.css gives --dash-h the same. */
+/** Height of each scene's dash, px; suspensions.css gives --dash-h the same. */
 const DASH_PX = { wide: 156, small: 188 };
-/** Height of the travel scene's dash, px; suspensions.css gives --dash-h the same. */
 const TRAVEL_DASH_PX = { wide: 188, small: 210 };
+const RIDE_DASH_PX = { road: { wide: 176, small: 300 }, shaker: { wide: 200, small: 230 } };
 /** Height of the roll scene's dash, px; suspensions.css gives --dash-h the same. */
 const ROLL_DASH_PX = { wide: 188, small: 196 };
 /** Where the camera looks at the roll scene's model from: an axle head-on, a little from above; the chassis from ahead. */
@@ -115,6 +118,9 @@ export class SuspensionSection implements Section {
   private model!: CornerModel;
   private setupPanel!: SetupPanel;
   private strip!: StripChart;
+  /** The rough road and the shaker (stage P3): each resolves its own corner on the wheel the shared mass control picks. */
+  private road!: RoadScene;
+  private shaker!: ShakerScene;
   private readonly frameData = cornerFrame();
   private readonly sample = newBumpSample();
   private scene: SceneId = DEFAULT_SCENE;
@@ -137,6 +143,8 @@ export class SuspensionSection implements Section {
   /** The freeze the camera has gone home for (TimeControl.frozen). */
   private homedFor: FreezeOptions | null = null;
   private clockShown = Number.NaN;
+  /** The rough road's run whose road the model shows. */
+  private roadShown: RoadScene['road'] = null;
   /** Real seconds since the clock was last written. */
   private clockAge = Infinity;
   private readonly frameMs = new Float64Array(FRAME_WINDOW);
@@ -175,6 +183,9 @@ export class SuspensionSection implements Section {
       },
       links: (removed) => this.setLinks(removed),
     });
+    this.road = new RoadScene(slots.root, this.pageCorner, () => (this.dirty = true));
+    this.shaker = new ShakerScene(slots.root, this.pageCorner, this.road.scene.unsprungKg, () => (this.dirty = true));
+    setSegment(this.$('susp-ride-mass'), String(this.road.scene.unsprungKg));
     this.rollScene = new RollScene((id) => this.$(id), {
       viewMode: () => this.ctx.view.mode,
       showModel: (model, keep) => this.showRollModel(model, keep),
@@ -189,6 +200,10 @@ export class SuspensionSection implements Section {
         event: () => {
           if (this.scene === 'roll') {
             this.rollScene.swerve();
+            return true;
+          }
+          if (this.scene === 'road') {
+            this.road.restart();
             return true;
           }
           if (this.scene !== 'bump') return false;
@@ -227,6 +242,9 @@ export class SuspensionSection implements Section {
     this.tieDzM = 0;
     this.rack = 0;
     this.$<HTMLInputElement>('susp-rack').value = '0';
+    // The rough road and the shaker resolve the page's corner on their own wheel.
+    this.road.setCorner(this.pageCorner);
+    this.shaker.setCorner(this.pageCorner);
     // Another corner has all its links: the model too, when it is kept for the same geometry.
     if (this.removed.length) this.setLinks([]);
     this.travelScene.resetLinks();
@@ -252,6 +270,11 @@ export class SuspensionSection implements Section {
     const slider = this.$<HTMLInputElement>('susp-travel');
     if (Number(slider.value) !== mm) slider.value = String(mm);
     this.readout();
+  }
+
+  /** The rough road and the shaker, for checks in the browser. */
+  get ride(): { road: RoadScene; shaker: ShakerScene } {
+    return { road: this.road, shaker: this.shaker };
   }
 
   /** The run shown now and where its playback is: for checks in the browser. */
@@ -290,6 +313,7 @@ export class SuspensionSection implements Section {
     onSegment(this.$('susp-scene'), (v) => this.setScene(v as SceneId));
     onSegment(this.$('susp-obstacle'), (v) => this.editBump({ obstacle: v as ObstacleId }));
     onSegment(this.$('susp-wheel'), (v) => this.editBump({ wheel: v as WheelId }));
+    onSegment(this.$('susp-ride-mass'), (v) => this.setRideMass(Number(v)));
     this.$<HTMLInputElement>('susp-speed').addEventListener('input', (event) => this.editBump({ speedKmh: Number((event.target as HTMLInputElement).value) }));
     this.$('susp-punch').addEventListener('click', () => {
       this.editBump({ obstacle: BUMP_PUNCH.obstacle, speedKmh: BUMP_PUNCH.speedKmh });
@@ -312,6 +336,14 @@ export class SuspensionSection implements Section {
       if (this.onStage === 'roll') this.rollScene.current?.setView(mode);
       else this.model.setView(mode);
     });
+  }
+
+  /** The wheel's mass of the rough road and the shaker (their step 4). */
+  setRideMass(kg: number): void {
+    this.road.edit({ unsprungKg: kg });
+    this.shaker.setUnsprung(this.road.scene.unsprungKg);
+    setSegment(this.$('susp-ride-mass'), String(this.road.scene.unsprungKg));
+    this.dirty = true;
   }
 
   private editBump(patch: Partial<BumpScene>): void {
@@ -341,6 +373,10 @@ export class SuspensionSection implements Section {
    */
   private apply(): void {
     this.dirty = false;
+    if (isRideScene(this.scene)) {
+      this.applyRide(this.scene);
+      return;
+    }
     let resolved: ResolvedCorner;
     let untouched: ResolvedCorner | null = null;
     const corner = this.tieDzM === 0 ? this.pageCorner : { ...this.pageCorner, axle: withInnerToeShift(this.pageCorner.axle, this.tieDzM) };
@@ -387,6 +423,24 @@ export class SuspensionSection implements Section {
     this.model.setOverlays({ forces: !this.removed.length && this.$<HTMLInputElement>('susp-forces').checked, laser: this.$<HTMLInputElement>('susp-laser').checked });
     this.model.setLinksRemoved(this.removed);
     if (this.scene === 'bump') this.model.setRoad(new EventRoad(this.run?.trace.events ?? []));
+    // The rough road's run goes onto the new model on the next frame.
+    this.roadShown = null;
+  }
+
+  /** The rough road or the shaker resolves the corner on its own wheel; the model and the panel show that corner. */
+  private applyRide(scene: 'road' | 'shaker'): void {
+    const ride = scene === 'road' ? this.road : this.shaker;
+    const setup = this.setupPanel.current;
+    // Only the scene shown resolves now; each compares the setup with its own last one, so coming back costs nothing.
+    const resolved = ride.apply(setup);
+    if (!resolved) {
+      this.setupPanel.show(this.resolved);
+      return;
+    }
+    this.resolved = resolved;
+    if (cornerGeometryKey(resolved) === this.modelKey) this.model.setCorner(resolved);
+    else this.newModel(resolved);
+    this.setupPanel.show(resolved);
   }
 
   /** The scene's controls, the line in the dash, the numbers and the caption for the current run. */
@@ -461,14 +515,20 @@ export class SuspensionSection implements Section {
     this.scene = scene;
     const body = document.body;
     body.classList.toggle('susp-scene-bump', scene === 'bump');
+    body.classList.toggle('susp-scene-road', scene === 'road');
+    body.classList.toggle('susp-scene-shaker', scene === 'shaker');
     body.classList.toggle('susp-scene-travel', scene === 'travel');
     body.classList.toggle('susp-scene-roll', scene === 'roll');
     setSegment(this.$('susp-scene'), scene);
     this.$('susp-dash').hidden = scene !== 'bump';
     this.$('susp-travel-dash').hidden = scene !== 'travel';
     this.$('susp-roll-dash').hidden = scene !== 'roll';
+    this.$('susp-road-dash').hidden = scene !== 'road';
+    this.$('susp-shaker-dash').hidden = scene !== 'shaker';
     if (record) this.ctx.router.replace({ query: { s: scene === DEFAULT_SCENE ? null : scene } });
     if (!changed) return;
+    // Each scene resolves the corner its own way (the bump's wheels, the ride scenes' mass): again on the next frame.
+    this.dirty = true;
     // The roll scene has a model of its own: the corner waits off the stage, not disposed.
     if (scene === 'roll' && this.onStage === 'corner') {
       this.ctx.stage.release(this.model);
@@ -479,15 +539,24 @@ export class SuspensionSection implements Section {
       this.ctx.stage.setModel(this.model, { home: HOME });
       this.model.setView(this.ctx.view.mode);
     }
+    // The links taken away belong to the travel scene: the obstacle, the rough road and the shaker need the whole linkage.
+    if (scene !== 'travel' && this.removed.length) this.setLinks([]);
     if (scene === 'roll') {
       // The roll scene plays in true time; its sudden turn may be slowed down.
     } else if (scene === 'bump') {
-      // The links taken away belong to the travel scene: the obstacle needs the whole linkage.
-      if (this.removed.length) this.setLinks([]);
       this.model.setExplode(0);
       this.$<HTMLInputElement>('susp-explode').value = '0';
       this.model.setRoad(new EventRoad(this.run.trace.events));
       this.restart();
+    } else if (scene === 'road') {
+      this.model.setExplode(0);
+      this.$<HTMLInputElement>('susp-explode').value = '0';
+      this.model.setRoad(this.road.road);
+      this.road.restart();
+    } else if (scene === 'shaker') {
+      this.model.setExplode(0);
+      this.$<HTMLInputElement>('susp-explode').value = '0';
+      this.model.setRoad(null);
     } else {
       this.model.setRoad(null);
       this.readout();
@@ -550,6 +619,7 @@ export class SuspensionSection implements Section {
     const frozen = time.frozen;
     if (this.scene === 'bump') this.bumpFrame(frozen ? null : dt);
     else if (this.scene === 'roll') this.rollScene.frame(frozen ? 0 : dt);
+    else if (isRideScene(this.scene)) this.rideFrame(this.scene, frozen ? null : dt);
     else {
       rigFrame(this.resolved, this.travel, this.frameData);
       this.frameData.rack = this.rack;
@@ -565,6 +635,40 @@ export class SuspensionSection implements Section {
       this.ctx.stage.freeze({ quality: frozen.quality, orbit: frozen.orbit });
     }
     this.frameMs[this.frames++ % FRAME_WINDOW] = performance.now() - started;
+  }
+
+  /** The rough road plays its run, the shaker shakes its corner: `dt` real seconds, slowed by the factor. */
+  private rideFrame(scene: 'road' | 'shaker', dt: number | null): void {
+    const time = this.ctx.time;
+    const sim = dt === null ? null : dt * (time.mode === 'slowdown' ? time.factor : 1);
+    let shown: boolean;
+    let clock: number;
+    if (scene === 'road') {
+      this.road.compute();
+      // A new run swaps its road in when it is ready.
+      if (this.road.road !== this.roadShown) {
+        this.roadShown = this.road.road;
+        this.model.setRoad(this.roadShown);
+      }
+      shown = this.road.frame(sim, this.frameData);
+      clock = this.road.clockS;
+    } else {
+      this.shaker.compute();
+      shown = this.shaker.frame(sim, this.frameData);
+      clock = this.shaker.clockS;
+    }
+    if (!shown) {
+      rigFrame(this.resolved, this.resolved.staticTravelM, this.frameData);
+      this.frameData.roadLift = 0;
+    }
+    this.model.update(this.frameData);
+    this.clockAge += dt ?? CLOCK_EVERY_S;
+    const shownAt = Math.round(clock * 1000);
+    if (this.clockAge >= CLOCK_EVERY_S && shownAt !== this.clockShown) {
+      this.clockAge = 0;
+      this.clockShown = shownAt;
+      time.clock(shownAt / 1000);
+    }
   }
 
   /** Plays the run: `dt` real seconds, slowed by the factor; null holds the page at rest for a snapshot. */
@@ -604,7 +708,7 @@ export class SuspensionSection implements Section {
   }
 
   layout(viewport: Viewport): PanelSizes {
-    const px = this.scene === 'bump' ? DASH_PX : this.scene === 'roll' ? ROLL_DASH_PX : TRAVEL_DASH_PX;
+    const px = this.scene === 'bump' ? DASH_PX : this.scene === 'roll' ? ROLL_DASH_PX : isRideScene(this.scene) ? RIDE_DASH_PX[this.scene] : TRAVEL_DASH_PX;
     const dash = viewport.small ? px.small : px.wide;
     return { right: 380, left: 0, dash, rightLabel: t('Налаштувати') };
   }
@@ -612,12 +716,14 @@ export class SuspensionSection implements Section {
   laidOut(): void {
     this.strip.resize();
     this.travelScene.resize();
+    this.road.resize();
+    this.shaker.resize();
     this.rollScene.resize();
   }
 
   time(): TimeCapabilities {
     // The rig holds the wheel still: true time is all there is. The bump scene adds the slow-down ×k with its clock.
-    return this.scene === 'bump' || this.scene === 'roll' ? { modes: ['real', 'slowdown'], slowdown: SLOWDOWN } : { modes: ['real'] };
+    return this.scene === 'bump' || this.scene === 'roll' || isRideScene(this.scene) ? { modes: ['real', 'slowdown'], slowdown: SLOWDOWN } : { modes: ['real'] };
   }
 
   /** The numbers under the panel's heading and beside the slider, for the travel the rig holds. */
