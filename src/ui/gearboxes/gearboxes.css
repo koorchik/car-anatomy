@@ -2,6 +2,11 @@
  * shared widgets (start button, tachometer, pedal, figures) are styled by the engine pages' file, which the section
  * loads too. */
 
+/* An element of another gearbox page of the section (pages.ts): here, so that it holds before a page's chunk comes. */
+[data-gbx-page-away] {
+  display: none !important;
+}
+
 .gbx-title {
   display: flex;
   flex-direction: column;
@@ -33,6 +38,28 @@
   font-weight: 600;
 }
 
+/* Previous and next layout in the row of buttons, and the real gearboxes of this one below (the engine pages'
+ * variant list). */
+.gbx-steps {
+  display: contents;
+}
+
+.gbx-steps .btn {
+  text-decoration: none;
+}
+
+.gbx-nav {
+  pointer-events: auto;
+}
+
+.gbx-nav:empty {
+  display: none;
+}
+
+.gbx-variants {
+  margin-top: 2px;
+}
+
 .gbx-title-row {
   display: flex;
   flex-wrap: wrap;
@@ -40,15 +67,15 @@
   margin-top: 4px;
 }
 
-/* With the article hidden on a desktop, its button stands at the top right: the language switch moves aside. */
-@media (min-width: 861px) {
-  body.panel-closed:has(#gbx-title-block:not([style*='display'])) .lang-switch {
-    margin-right: 136px;
-  }
+/* The title block stands in the shell's .engine-name, which lets clicks through to the stage: its buttons and the
+ * engine's link take them, as .engine-nav does on the engine pages. */
+.gbx-title-row,
+.gbx-title a {
+  pointer-events: auto;
 }
 
 /* The dash of the table: start, tachometer, pedal, the gears and what the shafts do. */
-.dash:has(> .gbx-gears-col:not([style*='display'])) {
+.dash:has(> .gbx-gears-col:not([data-section-away])) {
   grid-template-columns: 172px 212px 108px minmax(240px, 1fr);
 }
 
@@ -62,6 +89,11 @@
 
 .gbx-shafts > div {
   display: contents;
+}
+
+/* The rows are display: contents, which the hidden attribute alone does not override. */
+.gbx-shafts > div[hidden] {
+  display: none;
 }
 
 .gbx-shafts dt {
@@ -112,6 +144,177 @@
   font-size: 13px;
   color: var(--bone-dim);
   line-height: 1.3;
+}
+
+/* The mode switch, «На столі» or «В авто», with a line on what the mode does. */
+.gbx-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.gbx-modes {
+  pointer-events: auto;
+}
+
+.gbx-modes button {
+  padding: 4px 12px;
+}
+
+.gbx-modes button[hidden] {
+  display: none;
+}
+
+/* The car's dash: the speed and the gear beside the tachometer, the brake beside the gas. */
+body.gbx-car .dash:has(> .gbx-gears-col:not([data-section-away])) {
+  grid-template-columns: 172px 212px 150px 150px minmax(220px, 1fr);
+}
+
+.gbx-speedo {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  border-right: 1px solid var(--rule);
+  padding: 8px;
+}
+
+.gbx-speedo[hidden] {
+  display: none;
+}
+
+.gbx-speedo p {
+  margin: 0;
+  text-align: center;
+}
+
+.gbx-kmh b {
+  display: block;
+  font-family: var(--display);
+  font-size: 54px;
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+}
+
+.gbx-kmh span,
+.gbx-gear-now span {
+  font-size: 13px;
+  color: var(--bone-dim);
+}
+
+.gbx-gear-now b {
+  font-family: var(--display);
+  font-size: 30px;
+  margin-left: 4px;
+}
+
+body.gbx-car .gbx-pedal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: stretch;
+  gap: 4px 6px;
+}
+
+body.gbx-car .gbx-pedal .pedal {
+  grid-row: 1;
+  width: auto;
+  height: 100%;
+}
+
+body.gbx-car .gbx-pedal .pedal-text {
+  font-size: 15px;
+}
+
+body.gbx-car .gbx-pedal .pedal-text small {
+  font-size: 10.5px;
+}
+
+/* What the table's figures say has no meaning in the car: its own figures stand there. */
+body.gbx-car #gbx-gear-text,
+body.gbx-car #gbx-gear-note {
+  display: none;
+}
+
+body.gbx-car .gbx-pedal .latch {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.gbx-brake[hidden] {
+  display: none;
+}
+
+.gbx-brake .pedal-fill {
+  background: linear-gradient(0deg, #c0392b, #e0614f);
+}
+
+/* The inset «Колесо й дорога»: a driven wheel on the road, at the stage's lower left. */
+.gbx-wheel-road {
+  position: absolute;
+  z-index: 5;
+  left: calc(var(--left-w, 0px) + 18px);
+  bottom: calc(var(--dash-h) + var(--tools-h, 74px) + 14px);
+  width: 210px;
+  margin: 0;
+  padding: 8px 8px 6px;
+  background: rgba(10, 32, 40, 0.82);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+.gbx-wheel-road[hidden] {
+  display: none;
+}
+
+.gbx-wheel-road figcaption {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.gbx-wheel-road canvas {
+  display: block;
+  width: 100%;
+  height: 84px;
+}
+
+.gbx-wheel-road p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--bone-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.gbx-wheel-road p.warm {
+  color: #f08a3c;
+}
+
+/* A short stage: the inset keeps its wheel and the slip, and gives up its caption and the two speeds. */
+@media (max-height: 820px), (max-width: 860px) {
+  .gbx-wheel-road {
+    width: 132px;
+    padding: 5px 6px 4px;
+  }
+
+  .gbx-wheel-road figcaption,
+  .gbx-wheel-road .gbx-wheel-speeds {
+    display: none;
+  }
+
+  .gbx-wheel-road canvas {
+    height: 58px;
+  }
+}
+
+/* On a short or narrow stage the first-visit note about parts stands where the inset does, as on the dyno: the car keeps
+   the inset. */
+@media (max-height: 820px), (max-width: 860px) {
+  body.gbx-car .parts-callout {
+    display: none;
+  }
 }
 
 /* A line of the figures can be a hair wider than the panel. */
@@ -333,14 +536,22 @@
 }
 
 @media (max-width: 1240px) {
-  .dash:has(> .gbx-gears-col:not([style*='display'])) {
+  .dash:has(> .gbx-gears-col:not([data-section-away])) {
     grid-template-columns: 158px 200px 100px minmax(200px, 1fr);
+  }
+
+  body.gbx-car .dash:has(> .gbx-gears-col:not([data-section-away])) {
+    grid-template-columns: 150px 180px 112px 150px minmax(200px, 1fr);
+  }
+
+  .gbx-kmh b {
+    font-size: 44px;
   }
 }
 
 @media (max-width: 860px) {
   /* A phone: the tachometer gives its column to the gears; the shafts' revs stand under the start button. */
-  .dash:has(> .gbx-gears-col:not([style*='display'])) {
+  .dash:has(> .gbx-gears-col:not([data-section-away])) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 76px;
   }
 
@@ -388,6 +599,16 @@
     gap: 4px;
   }
 
+  /* Seven speeds, reverse and neutral: two rows still, so the shafts' readouts keep their room. */
+  .gbx-gears:has(> button:nth-child(9)) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  /* A transaxle has a third readout, the differential: the buttons speak for themselves without their heading. */
+  .gbx-gears-col:has(#gbx-diff-row:not([hidden])) h4 {
+    display: none;
+  }
+
   .gbx-gears-col {
     gap: 5px !important;
   }
@@ -429,5 +650,48 @@
 
   .gbx-demo p {
     font-size: 13.5px;
+  }
+
+  /* The car on a phone: the speed and the gear under the start button, both pedals at the right, no figures. */
+  body.gbx-car .dash:has(> .gbx-gears-col:not([data-section-away])) {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) 112px;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  body.gbx-car .gbx-control {
+    grid-row: 1;
+  }
+
+  body.gbx-car .gbx-speedo {
+    grid-column: 1;
+    grid-row: 2;
+    border-right: 0;
+    padding: 0 4px 6px;
+    gap: 2px;
+  }
+
+  body.gbx-car .gbx-gears-col,
+  body.gbx-car .gbx-pedal {
+    grid-row: 1 / span 2;
+  }
+
+  body.gbx-car .gbx-kmh b {
+    font-size: 38px;
+  }
+
+  body.gbx-car .gbx-gear-now b {
+    font-size: 22px;
+  }
+
+  body.gbx-car #gbx-car-figures {
+    display: none;
+  }
+
+  body.gbx-car .gbx-pedal .pedal-text {
+    font-size: 12.5px;
+  }
+
+  body.gbx-car .gbx-pedal .pedal-text small {
+    display: none;
   }
 }

@@ -2,12 +2,13 @@
 // and runs its own copy of the simulation when it is not.
 
 import type { Engine } from '../engine/kinematics.ts';
-import type { AnyLoadReadings, LoadCommand, LoadReadings, LoadSpec } from '../engine/load.ts';
+import type { AnyLoadReadings, LoadCommand, LoadFrame, LoadReadings, LoadSpec } from '../engine/load.ts';
 import { LoadedCrank, type CrankReadings } from '../engine/loaded-crank.ts';
 import { createLoad } from '../engine/loads.ts';
 import { EngineSim, type EngineState } from '../engine/sim.ts';
 import type { EngineTorqueMap } from '../engine/torque-map.ts';
 import type { ValveState } from '../engine/valve-control.ts';
+import type { LoadMethod } from './process-meter.ts';
 import { synthConfig, type ListenPosition, type SynthConfig } from './synth.ts';
 import type { WorkletCommand, WorkletReport } from './worklet.ts';
 import workletUrl from './worklet.ts?worker&url';
@@ -22,6 +23,45 @@ export interface DriveSnapshot {
   boost: number;
   /** Phasers, cam profile, lift and resting cylinders, for engines with variable valve gear. */
   valves?: ValveState;
+  /**
+   * What a page shows of the load on the crank (a car's speed, gear, wheels and drivetrain angles), with its angles
+   * continued to this frame by their speeds, as the crank's. The same object every frame; absent without such a load.
+   */
+  vehicle?: LoadFrame;
+  /**
+   * The audio thread's time (process-meter.ts), while it runs: the share of the blocks' time process() took over the
+   * last second, how that was timed, and the samples per simulation step (16, or 32 while it runs short).
+   */
+  processShare?: number;
+  loadMethod?: LoadMethod;
+  stepSamples?: number;
+  /**
+   * The main thread's check of the same: the share of wall time the audio clock fell behind over the last second or
+   * more (AudioContext.getOutputTimestamp). Above 0 the output lost blocks, which is heard as crackle.
+   */
+  audioLag?: number;
+}
+
+/**
+ * Beyond a turn plus this long of the coordinate's own motion, s, the shown angles jump to the reported ones instead of
+ * easing: another car on the crank, or frames far apart. Ordinary jitter of the reports stays well inside it.
+ */
+const SNAP_S = 0.1;
+
+/** A frame continued toward the reported one: angles move on by their speeds and ease toward where they should be. */
+function continueAngles(shown: Float64Array, at: Float64Array, speed: Float64Array, age: number, dt: number): void {
+  const ahead = Math.min(age, 0.1);
+  for (let k = 0; k < shown.length; k++) {
+    if (Math.abs(at[k]! + speed[k]! * ahead - shown[k]!) <= 2 * Math.PI + Math.abs(speed[k]!) * SNAP_S) continue;
+    // All of them at once, so the members (P·φ) stay in mesh.
+    for (let j = 0; j < shown.length; j++) shown[j] = at[j]! + speed[j]! * ahead;
+    return;
+  }
+  for (let k = 0; k < shown.length; k++) {
+    const predicted = at[k]! + speed[k]! * ahead;
+    shown[k] = shown[k]! + speed[k]! * dt;
+    shown[k] = shown[k]! + (predicted - shown[k]!) * 0.25;
+  }
 }
 
 /** Short synthetic room so the engine isn't heard in a vacuum. */
@@ -71,6 +111,19 @@ export class Drive {
   private readingQueue: CrankReadings<AnyLoadReadings>[] = [];
   /** The last frame ran on the audio thread: when that stops, the local copy goes on from its last report. */
   private wasWorklet = false;
+  /**
+   * The last hand-over to the audio thread (loadRestore's seq). Its reports count only from the one that carries it:
+   * the ones before describe a car the local copy has driven on since (the sound was off, or the tab hidden).
+   */
+  private seq = 0;
+  /** A hand-over has been sent and its first report has not come yet: the local copy goes on meanwhile. */
+  private awaiting = false;
+  /** The load's frame as shown (DriveSnapshot.vehicle), and the local copy's, filled in place every frame. */
+  private shownFrame: LoadFrame | null = null;
+  private localFrame: LoadFrame | null = null;
+  /** The audio clock against the wall clock (DriveSnapshot.audioLag): where the window began, ms and s. */
+  private lagFrom = { wall: 0, audio: 0 };
+  private audioLag: number | undefined = undefined;
 
   constructor(engine: Engine) {
     this.config = synthConfig(engine);
@@ -164,7 +217,7 @@ export class Drive {
       if (this.torqueMap) this.post({ type: 'torqueMap', map: this.torqueMap });
       if (this.loadSpec) this.post({ type: 'load', spec: this.loadSpec });
       if (this.keptCommand) this.post({ type: 'loadCommand', command: this.keptCommand });
-      this.handOver();
+      // The hand-over (loadRestore) follows on the first frame with the context running (tick).
       await ctx.resume();
       return true;
     } catch (error) {
@@ -266,6 +319,9 @@ export class Drive {
   setLoad(spec: LoadSpec | null): void {
     this.loadSpec = spec;
     this.keptCommand = null;
+    // A new load starts at rest: its angles are not eased toward from the old one's (the box would spin back).
+    this.shownFrame = null;
+    this.localFrame = null;
     this.coupleLocal(true);
     this.post({ type: 'load', spec });
   }
@@ -302,11 +358,16 @@ export class Drive {
   }
 
   private usingWorklet(): boolean {
-    return this.node !== null && this.report !== null && this.ctx?.state === 'running';
+    return this.node !== null && this.report !== null && this.ctx?.state === 'running' && this.report.seq === this.seq;
   }
 
   /** Advance one frame and report the engine's state. */
   tick(dt: number): DriveSnapshot {
+    const audioRunning = this.node !== null && this.ctx?.state === 'running';
+    // The audio thread starts or comes back: it takes the state of the local copy, which runs on until it answers.
+    if (!audioRunning) this.awaiting = false;
+    else if (!this.wasWorklet && !this.awaiting) this.handOver();
+    this.measureLag(audioRunning);
     if (!this.usingWorklet()) {
       if (this.wasWorklet) this.takeOver();
       // A slow frame must not become one big step: the pedal's speed control would overshoot, and a car's drivetrain
@@ -316,13 +377,17 @@ export class Drive {
       for (let i = 0; i < steps; i++) this.local.step(dt / steps);
       this.shownAngle = this.local.angle;
       if (this.local.crank) this.queueReading(this.local.crank.readings());
+      const frame = this.local.crank?.load.frame?.(this.localFrame ?? undefined);
+      this.localFrame = frame ?? null;
+      this.continueFrame(frame, 0, dt);
       return this.snapshot();
     }
-    if (!this.wasWorklet) this.handOver();
+    this.awaiting = false;
     this.wasWorklet = true;
     const r = this.report!;
     const cycle = this.config.sim.cycle;
     const age = (performance.now() - this.reportAt) / 1000;
+    this.continueFrame(r.frame, age, dt);
     const predicted = r.angle + r.rpm * 6 * Math.min(age, 0.1);
     this.shownAngle += r.rpm * 6 * dt;
     // Ease toward the audio thread's angle rather than jumping on each message.
@@ -334,10 +399,70 @@ export class Drive {
     return this.snapshot();
   }
 
-  /** A load that hands its state over (a car) goes on, on the audio thread, from where the local copy has it. */
+  /**
+   * The audio thread takes over. A load that hands its state over (a car) goes on there from where the local copy has
+   * it; any other load and the engine alone go on with the audio thread's own state, as before.
+   */
   private handOver(): void {
-    const kept = this.local.crank?.load.snapshot?.();
-    if (kept) this.post({ type: 'loadRestore', snapshot: kept, state: this.local.state, rpm: this.local.rpm });
+    this.seq++;
+    this.awaiting = true;
+    const kept = this.local.crank?.load.snapshot?.() ?? null;
+    this.post({ type: 'loadRestore', snapshot: kept, state: this.local.state, rpm: this.local.rpm, seq: this.seq });
+  }
+
+  /** The shown frame of the load from the one reported `age` s ago (or from the local copy, age 0). */
+  private continueFrame(at: LoadFrame | undefined, age: number, dt: number): void {
+    const shown = this.shownFrame;
+    if (!at) {
+      this.shownFrame = null;
+      return;
+    }
+    if (!shown || shown.phi.length !== at.phi.length) {
+      // Another car, or the first frame: from where it is now.
+      const ahead = Math.min(age, 0.1);
+      this.shownFrame = {
+        ...at,
+        phi: at.phi.map((v, k) => v + at.phiDot[k]! * ahead),
+        phiDot: Float64Array.from(at.phiDot),
+        wheelAngle: at.wheelAngle.map((v, k) => v + at.wheelOmega[k]! * ahead),
+      };
+      return;
+    }
+    continueAngles(shown.phi, at.phi, at.phiDot, age, dt);
+    continueAngles(shown.wheelAngle, at.wheelAngle, at.wheelOmega, age, dt);
+    shown.phiDot.set(at.phiDot);
+    shown.wheelOmega = at.wheelOmega;
+    shown.wheelRadius = at.wheelRadius;
+    shown.speed = at.speed;
+    shown.distance = at.distance;
+    shown.gear = at.gear;
+    shown.selected = at.selected;
+    shown.lever = at.lever;
+    shown.shift = at.shift;
+    shown.clutch = at.clutch;
+    shown.clutchSlip = at.clutchSlip;
+    shown.brake = at.brake;
+  }
+
+  /** The audio clock against the wall clock over windows of a second or more (DriveSnapshot.audioLag). */
+  private measureLag(running: boolean): void {
+    const ctx = this.ctx;
+    const stamp = running && ctx && typeof ctx.getOutputTimestamp === 'function' ? ctx.getOutputTimestamp() : null;
+    if (!stamp?.performanceTime || stamp.contextTime === undefined) {
+      this.lagFrom.wall = 0;
+      return;
+    }
+    const from = this.lagFrom;
+    if (!from.wall) {
+      from.wall = stamp.performanceTime;
+      from.audio = stamp.contextTime;
+      return;
+    }
+    const wall = (stamp.performanceTime - from.wall) / 1000;
+    if (wall < 1) return;
+    this.audioLag = Math.max(0, 1 - (stamp.contextTime - from.audio) / wall);
+    from.wall = stamp.performanceTime;
+    from.audio = stamp.contextTime;
   }
 
   /**
@@ -357,7 +482,8 @@ export class Drive {
   }
 
   snapshot(): DriveSnapshot {
-    if (this.usingWorklet()) {
+    // Between the audio thread stopping and the next frame's take-over, its last report is still the newest state.
+    if (this.usingWorklet() || this.wasWorklet) {
       const r = this.report!;
       return {
         angle: this.shownAngle,
@@ -368,9 +494,25 @@ export class Drive {
         fuelCut: r.fuelCut,
         boost: r.boost,
         valves: r.valves,
+        vehicle: this.shownFrame ?? undefined,
+        processShare: r.processShare,
+        loadMethod: r.loadMethod,
+        stepSamples: r.stepSamples,
+        audioLag: this.audioLag,
       };
     }
     const s = this.local;
-    return { angle: s.angle, rpm: s.rpm, state: s.state, load: s.load, throttle: s.throttle, fuelCut: s.fuelCut, boost: s.boost, valves: s.valves.vvt ? s.valves.state : undefined };
+    return {
+      angle: s.angle,
+      rpm: s.rpm,
+      state: s.state,
+      load: s.load,
+      throttle: s.throttle,
+      fuelCut: s.fuelCut,
+      boost: s.boost,
+      valves: s.valves.vvt ? s.valves.state : undefined,
+      vehicle: this.shownFrame ?? undefined,
+      audioLag: this.audioLag,
+    };
   }
 }

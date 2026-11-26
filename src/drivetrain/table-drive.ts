@@ -30,7 +30,7 @@ export interface TablePose {
 }
 
 /** Which sleeve and side close an element, from the spec's sleeve places. */
-function sleeveSides(box: Gearbox): Map<string, { sleeve: SleevePlace; side: -1 | 1 }> {
+export function sleeveSides(box: Gearbox): Map<string, { sleeve: SleevePlace; side: -1 | 1 }> {
   const out = new Map<string, { sleeve: SleevePlace; side: -1 | 1 }>();
   for (const s of box.spec.sleeves ?? []) {
     if (s.front) out.set(s.front, { sleeve: s, side: -1 });

@@ -58,6 +58,10 @@ export interface SolidAxleIntent {
   driven: boolean;
   /** De Dion: lateral position of each differential output (the inner joint), m from the centre line. */
   diffOutputYM: number;
+  /** A steered front axle: the links run back from the axle to the body, and the Panhard rod sits ahead of the axle
+   *  with its body end on the left, the side of the steering box, so a drag link can run alongside it
+   *  (templates/steered-beam.ts). */
+  front?: boolean;
 }
 
 /** Typical leaf spring: an estimate, not a drawing. */
@@ -154,6 +158,8 @@ export function solidAxle(intent: SolidAxleIntent): AxleSpec<SolidAxleLinkage> {
   if (!(intent.rodStiffness > 0)) throw new Error('The rods need a stiffness');
   const half = trackM / 2;
   const W: Vec3 = [0, half, zW];
+  // A front axle's links run back to the body; the side-view slope keeps its sign (rising toward the front).
+  const ahead = intent.front ? -1 : 1;
 
   const link = (id: string, part: string, axle: Vec3, length: number, angleDeg: number, bodyY = axle[1]): Rod => {
     const a = angleDeg * DEG;
@@ -161,7 +167,7 @@ export function solidAxle(intent: SolidAxleIntent): AxleSpec<SolidAxleLinkage> {
     // length² = run² + dy² + (run·tan a)²: the side view shows the slope a whatever the link's angle in plan.
     const run = Math.cos(a) * Math.sqrt(length * length - dy * dy);
     if (!(run > 0)) throw new Error(`The ${id} link is too short for its run across the car`);
-    return { id, body: [run, bodyY, axle[2] + run * Math.tan(a)], knuckle: axle, part };
+    return { id, body: [ahead * run, bodyY, axle[2] + ahead * run * Math.tan(a)], knuckle: axle, part };
   };
   const rods: Rod[] = [];
   let lateral: SolidLateral;
@@ -187,16 +193,18 @@ export function solidAxle(intent: SolidAxleIntent): AxleSpec<SolidAxleLinkage> {
         rods.push(link('upper', 'susp.upper-link', [0, 0, zW + UPPER_DZ_M], upperLinkM, intent.upperAngleDeg));
       }
       const z = intent.lateralZM;
+      const x = ahead * LATERAL_X_M;
+      const side = intent.front ? -1 : 1;
       if (intent.lateral === 'panhard') {
-        lateral = { kind: 'panhard', body: [LATERAL_X_M, PANHARD_BODY_Y_M, z], axle: [LATERAL_X_M, PANHARD_AXLE_Y_M, z] };
+        lateral = { kind: 'panhard', body: [x, side * PANHARD_BODY_Y_M, z], axle: [x, side * PANHARD_AXLE_Y_M, z] };
       } else {
         const h = WATT_ROCKER_M / 2;
         lateral = {
           kind: 'watt',
           spec: {
-            pivotOnAxle: [LATERAL_X_M, 0, z],
-            upperBody: [LATERAL_X_M, WATT_ROD_M, z + h],
-            lowerBody: [LATERAL_X_M, -WATT_ROD_M, z - h],
+            pivotOnAxle: [x, 0, z],
+            upperBody: [x, WATT_ROD_M, z + h],
+            lowerBody: [x, -WATT_ROD_M, z - h],
             centreLinkM: WATT_ROCKER_M,
           },
         };

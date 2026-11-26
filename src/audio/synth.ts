@@ -224,6 +224,11 @@ const pulseScale = (count: number, cc: number): number => {
 
 export class EngineSynth {
   readonly sim: EngineSim;
+  /**
+   * Samples per simulation step: 16 (0.33 ms at 48 kHz), or 32 when the audio thread runs short of time and the load on
+   * the crank is stable at that step (the worklet's ProcessMeter decides).
+   */
+  stepSamples = 16;
   private cfg: SynthConfig;
   private readonly fs: number;
   private readonly noise = new Noise();
@@ -396,9 +401,10 @@ export class EngineSynth {
     const cycle = this.cfg.sim.cycle;
     const noise = this.noise;
 
+    const every = this.stepSamples;
     for (let s = 0; s < n; s++) {
-      if (s % 16 === 0) {
-        sim.step(dt * 16);
+      if (s % every === 0) {
+        sim.step(dt * every);
         if (this.cfg.valves) this.updateLive();
       }
       if (this.fadeRate > 0) {

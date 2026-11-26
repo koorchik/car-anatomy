@@ -9,19 +9,21 @@
 // layout chosen. No visitor-facing text here: names live in the presets and on the page.
 
 import type { DamperKind, KnuckleKind, LayoutId } from '../suspension/spec.ts';
+import type { SteeringAssist, SteeringGearKind } from '../suspension/steering.ts';
 import type { DamperPreset } from '../suspension/setup.ts';
 import type { SpringType } from '../suspension/spring-types.ts';
 import type { TyreChoice } from '../vehicle/tyre-data.ts';
 
-/** Layouts the designer builds: every axle whose core exists. A steered front axle has links (P13-core brings steered
- *  solid axles); the rear takes any. The pushrod is a double wishbone whose spring and damper a rocker works (P14-core). */
+/** Layouts the designer builds: every axle whose core exists. A steered front axle has links, or is a live axle steered
+ *  by a drag link (P13-core); the rear takes any. The pushrod is a double wishbone whose spring and damper a rocker
+ *  works (P14-core). */
 export type DesignLayout = Extract<
   LayoutId,
   | 'macpherson' | 'double-wishbone' | 'multilink' | 'pushrod' | 'trailing-arm' | 'semi-trailing' | 'swing-axle' | 'twist-beam'
   | 'live-axle' | 'de-dion'
 >;
 
-export const FRONT_LAYOUTS = ['macpherson', 'double-wishbone', 'multilink', 'pushrod'] as const satisfies readonly DesignLayout[];
+export const FRONT_LAYOUTS = ['macpherson', 'double-wishbone', 'multilink', 'pushrod', 'live-axle'] as const satisfies readonly DesignLayout[];
 export const REAR_LAYOUTS = [
   'double-wishbone', 'multilink', 'pushrod', 'trailing-arm', 'semi-trailing', 'swing-axle', 'twist-beam', 'live-axle', 'de-dion',
 ] as const satisfies readonly DesignLayout[];
@@ -48,6 +50,10 @@ export const SPRING_KINDS = ['coil', 'air', 'hydro'] as const satisfies readonly
 
 /** Dampers of the whole car (damper-control.ts): one system works all four corners. */
 export const DAMPER_KINDS = ['passive', 'adaptive', 'magneride', 'active'] as const satisfies readonly DamperKind[];
+
+export { STEERING_ASSISTS, STEERING_GEARS } from '../suspension/steering.ts';
+/** Gears that steer a solid axle: a box with a pitman arm (a rack would ride on the axle and fight the drag link). */
+export const BOX_GEARS = ['worm-roller', 'recirculating-ball'] as const satisfies readonly SteeringGearKind[];
 
 /** Everything one axle has. Which fields a layout reads is in AXLE_KEYS_OF (below). */
 export interface AxleParams {
@@ -157,6 +163,21 @@ export interface AxleParams {
   rimIn: number;
   /** Brakes on the differential, not in the wheel. */
   brakeInboard: boolean;
+
+  // Steering (the front axle; src/suspension/steering.ts).
+  steeringGear: SteeringGearKind;
+  /** Rack travel per turn of the steering wheel on centre, mm. */
+  rackMmPerRev: number;
+  /** Steering-wheel angle per pitman-arm angle of a box on centre. */
+  boxRatio: number;
+  /** Gain of the gear toward the lock over its gain on centre (1: a constant ratio). */
+  variableRatio: number;
+  assist: SteeringAssist;
+  /** Share of the Jeantaud angle the steering arms point at; null keeps the template's arms. */
+  ackermann: number | null;
+  /** Front-view angle of a steered solid axle's drag link to the road, degrees, positive with the pitman end higher
+   *  (0: level, parallel to the Panhard rod). */
+  dragLinkDeg: number;
 }
 
 type Suffixed<S extends string> = { [K in keyof AxleParams as `${K & string}${S}`]: AxleParams[K] };
@@ -198,7 +219,8 @@ export const AXLE_KEYS = [
   'upperLinkAngleDeg', 'lateralZMm', 'diffOutputYMm', 'diffOutputDzMm', 'camberDeg', 'toeDeg', 'springNmm', 'damper',
   'damperCompression', 'damperRebound', 'damperKneeMs', 'damperHighRatio', 'barMm', 'barWallMm', 'barArmMm',
   'unsprungKg', 'tyreWidthMm', 'tyreAspect', 'rimIn', 'brakeInboard', 'rockerRatio', 'rockerProgressionDeg',
-  'thirdSpringNmm', 'springKind',
+  'thirdSpringNmm', 'springKind', 'steeringGear', 'rackMmPerRev', 'boxRatio', 'variableRatio', 'assist', 'ackermann',
+  'dragLinkDeg',
 ] as const satisfies readonly AxleKey[];
 
 export const CAR_KEYS = [

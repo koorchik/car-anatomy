@@ -89,7 +89,7 @@ interface Remembered {
 
 export class RoadScene {
   private readonly root: HTMLElement;
-  private readonly corner: CornerSpec;
+  private corner: CornerSpec;
   private readonly chart: RideChart;
   private readonly sample = newBumpSample();
   scene: RoughScene = { ...ROUGH_DEFAULT };
@@ -129,6 +129,13 @@ export class RoadScene {
     this.dirty = true;
     this.writeControls();
     this.onChange();
+  }
+
+  /** Another page's corner: the next apply resolves and runs it afresh. */
+  setCorner(corner: CornerSpec): void {
+    if (corner === this.corner) return;
+    this.corner = corner;
+    this.dirty = true;
   }
 
   /** The run shown and the remembered one, for checks in the browser. */

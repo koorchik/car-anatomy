@@ -3,133 +3,25 @@
 // `bay` and the question "does this engine fit" give one answer. Front-axle frame (car.ts): x forward, y left, z up,
 // metres, origin on the road under the middle of the front axle.
 //
-// The engine box is the kinematics.ts envelope until the car builder (stage C4) adds engineEnvelope: crankshaft with
-// its pulley and flywheel, crankcase, block, heads with their cam covers and coil packs, and pan, in the proportions the
-// 3D model draws them (piston-engine.ts, systems/sump.ts; tests/packaging-model.test.ts holds the two together),
-// without manifolds, turbochargers or ancillaries. That makes it a lower bound: an engine that does not fit by it fits
-// by nothing. It reads the pan from systems/sump.ts, which brings three.js along, so the audio thread never imports it.
+// The engine box is engineEnvelope (src/engine/envelope.ts, stage C4): crankshaft with its pulley and flywheel,
+// crankcase, block, heads with their cam covers and coil packs, and pan, in the proportions the 3D model draws them
+// (piston-engine.ts, systems/sump.ts; tests/packaging-model.test.ts holds the two together), without manifolds,
+// turbochargers or ancillaries. That makes it a lower bound: an engine that does not fit by it fits by nothing. It reads
+// the pan from systems/sump.ts, which brings three.js along, so the audio thread never imports it.
 
-import { DEG, type Engine } from '../engine/kinematics.ts';
-import { systemsOf } from '../engine/systems-spec.ts';
-import { panShape } from '../systems/sump.ts';
+import { engineEnvelope, type Box3 } from '../engine/envelope.ts';
+import type { Engine } from '../engine/kinematics.ts';
 import { tyreRadiiM, type CarRecord, type PlacedPart, type Vec3 } from './car.ts';
 import type { EngineMount } from './vehicle.ts';
 
-export interface Box3 {
-  min: Vec3;
-  max: Vec3;
-}
+export {
+  COIL_BORES, COVER_BORES, CRANK_END_BORES, CRANKCASE_BORES, crankFrontZMm, FLYWHEEL_FACE_BORES, flywheelRadiusMm, HEAD_BORES,
+  HEAD_HALF_WIDTH_BORES, PULLEY_FACE_BORES, TIMING_COVER_BORES,
+} from '../engine/envelope.ts';
+export type { Box3 };
 
-/** The 3D model's proportions in bores (piston-engine.ts). The crank as drawn reaches this far past zMin and zMax. */
-export const CRANK_END_BORES = 0.3;
-/** The crank pulley's outer face past kinematics' zMax: the crankshaft's front end, where a record's crankFront sits. */
-export const PULLEY_FACE_BORES = 0.7;
-/** The flywheel's back face past kinematics' zMin. */
-export const FLYWHEEL_FACE_BORES = 0.55;
-/** Crankcase radius past the crank throw, in bores. */
-export const CRANKCASE_BORES = 0.55;
-/** Half width of a head across its bank, in bores, before a VR's zig-zag spread. */
-export const HEAD_HALF_WIDTH_BORES = 0.6;
-/** Head height above the deck, in bores: pushrod engines carry no cams up there. */
-export const HEAD_BORES = { ohv: 0.72, overhead: 0.92 } as const;
-/** Cam cover on top of the head, in bores: taller over twin cams. */
-export const COVER_BORES = { dohc: 0.36, other: 0.32 } as const;
-/** Coil-on-plug packs on the cover of a spark-ignition engine, in bores. */
-export const COIL_BORES = 0.07;
-/** The timing cover's reach round each sprocket's centre, in bores: the sprocket and the room round it. */
-export const TIMING_COVER_BORES = 0.4;
-
-/** systems/sump.ts works in scene units (1 = 100 mm) and kinematics.ts in millimetres. */
-const SCENE_MM = 100;
-const MM_M = 0.001;
-
-/** Flywheel radius, mm, as the 3D model draws it: a heavier flywheel is larger, within what fits under the engine. */
-export function flywheelRadiusMm(engine: Engine): number {
-  const b = engine.spec.bore;
-  const kg = engine.spec.tuning?.flywheelKg;
-  const scale = kg ? Math.min(1.25, Math.max(0.72, Math.cbrt(kg / 10))) : 1;
-  return Math.max(1.28 * b, engine.r + 1.05 * b) * scale;
-}
-
-/** Where a record's crankFront sits on the crank axis, engine-frame Z in mm: the crank pulley's outer face. */
-export const crankFrontZMm = (engine: Engine): number => engine.zMax + PULLEY_FACE_BORES * engine.spec.bore;
-
-/** Height of a bank's top above the crank axis along its cylinders, mm: block, head, cam cover and coil packs. */
-function bankTopMm(engine: Engine): number {
-  const { bore: b, valvetrain, fuel, systems } = engine.spec;
-  const head = (valvetrain === 'ohv' ? HEAD_BORES.ohv : HEAD_BORES.overhead) * b;
-  const cover = (valvetrain === 'dohc' ? COVER_BORES.dohc : COVER_BORES.other) * b;
-  const coils = fuel !== 'diesel' && (systems?.ignition ?? 'coil-on-plug') === 'coil-on-plug' ? COIL_BORES * b : 0;
-  return engine.deck + head + cover + coils;
-}
-
-/** A pushrod engine's block cam, mm (piston-engine.ts): over the crank in a vee or a flat engine, beside it in a row. */
-function blockCamMm(engine: Engine): { x: number; y: number } | null {
-  if (engine.spec.valvetrain !== 'ohv') return null;
-  const b = engine.spec.bore;
-  if (engine.banks.length !== 2) return { x: -0.78 * b, y: engine.r + 0.42 * b };
-  const flat = Math.abs(engine.banks[0]!.alpha - engine.banks[1]!.alpha) > 150;
-  return { x: 0, y: engine.r + (flat ? 0.55 : 0.85) * b };
-}
-
-/**
- * The engine's core in its own frame (kinematics.ts: crank on Z, its front +Z, Y up, X to the right seen from the
- * front), metres, with the origin at the crankshaft's front end (crankFrontZMm), so that a record's crankFront places it.
- */
-export function engineCoreBox(engine: Engine): Box3 {
-  if (engine.isRotary) throw new Error(`${engine.spec.id}: a rotary has no kinematic envelope yet; stage C4 adds engineEnvelope`);
-  const b = engine.spec.bore;
-  const min = [Infinity, Infinity, Infinity];
-  const max = [-Infinity, -Infinity, -Infinity];
-  const take = (x: number, y: number, z: number): void => {
-    const p = [x, y, z];
-    for (let k = 0; k < 3; k++) {
-      min[k] = Math.min(min[k]!, p[k]!);
-      max[k] = Math.max(max[k]!, p[k]!);
-    }
-  };
-  const front = crankFrontZMm(engine);
-  const nose = engine.zMax + CRANK_END_BORES * b;
-  const tail = engine.zMin - CRANK_END_BORES * b;
-  // Crankcase round the throws, the pulley ahead of it (smaller than the crankcase) and the flywheel behind it.
-  const rc = engine.r + CRANKCASE_BORES * b;
-  for (const z of [tail, nose]) {
-    take(-rc, -rc, z);
-    take(rc, rc, z);
-  }
-  take(0, 0, front);
-  const fly = flywheelRadiusMm(engine);
-  take(-fly, -fly, engine.zMin - FLYWHEEL_FACE_BORES * b);
-  take(fly, fly, tail);
-  // The timing cover round a pushrod engine's block cam; an overhead cam's sprocket stays under its cam cover.
-  const cam = blockCamMm(engine);
-  if (cam) {
-    const reach = TIMING_COVER_BORES * b;
-    take(cam.x - reach, cam.y - reach, nose);
-    take(cam.x + reach, cam.y + reach, nose);
-  }
-  // Each bank's block and head as a box along its cylinder axis, turned by the bank angle (clockwise from +Y).
-  const top = bankTopMm(engine);
-  for (const bank of engine.banks) {
-    const spread = bank.cylinders.reduce((m, n) => {
-      const cyl = engine.cylinders.find((c) => c.n === n)!;
-      return Math.max(m, Math.abs(Math.sin((cyl.alpha - bank.alpha) * DEG)) * engine.deck);
-    }, 0);
-    const halfW = HEAD_HALF_WIDTH_BORES * b + spread;
-    const a = bank.alpha * DEG;
-    for (const u of [-halfW, halfW]) {
-      for (const v of [0, top]) take(u * Math.cos(a) + v * Math.sin(a), -u * Math.sin(a) + v * Math.cos(a), nose);
-    }
-  }
-  // The pan the 3D model draws: the engine's own sump and oil.
-  const pan = panShape(engine, systemsOf(engine.spec));
-  take(-pan.halfW * SCENE_MM, pan.bottom * SCENE_MM, pan.zMin * SCENE_MM);
-  take(pan.halfW * SCENE_MM, pan.bottom * SCENE_MM, pan.zMax * SCENE_MM);
-  return {
-    min: [min[0]! * MM_M, min[1]! * MM_M, (min[2]! - front) * MM_M],
-    max: [max[0]! * MM_M, max[1]! * MM_M, (max[2]! - front) * MM_M],
-  };
-}
+/** The engine's core in its own frame, metres, origin at the crankshaft's front end: engineEnvelope with its own sump. */
+export const engineCoreBox = (engine: Engine): Box3 => engineEnvelope(engine);
 
 /** An engine-frame vector in the car frame: the inverse of carToEngine (mount.ts). */
 export function engineToCar(mount: EngineMount, [x, y, z]: Vec3): Vec3 {
@@ -176,6 +68,38 @@ export const containsBox = (outer: Box3, inner: Box3): boolean => containsPoint(
 
 /** Does the engine fit the car's bay? The shell builds its bonnet from the same bay, so the picture agrees. */
 export const fitsBay = (car: CarRecord, engine: Engine): boolean => containsBox(packagingOf(car).bay, engineBoxInCar(car, engine));
+
+/** Where an engine leaves its car's bay: metres past each face (0 inside) and the plan it comes up through the lid in. */
+export interface BayOverflow {
+  fits: boolean;
+  past: { front: number; rear: number; left: number; right: number; top: number; bottom: number };
+  /**
+   * Over this rectangle of the lid (front-axle frame, x0 < x1, y0 < y1) the engine stands above the bay's top, so it
+   * comes up through the lid built from the bay (body-shell.ts cuts it open there); null when it stays under the top.
+   */
+  throughLid: { x0: number; x1: number; y0: number; y1: number } | null;
+}
+
+/** The diagnosis behind fitsBay, said face by face; the overview's lid is cut where it says the engine comes through. */
+export function bayOverflow(car: CarRecord, engine: Engine): BayOverflow {
+  const bay = packagingOf(car).bay;
+  const box = engineBoxInCar(car, engine);
+  const over = (a: number, b: number): number => Math.max(0, a - b);
+  const past = {
+    front: over(box.max[0], bay.max[0]),
+    rear: over(bay.min[0], box.min[0]),
+    left: over(box.max[1], bay.max[1]),
+    right: over(bay.min[1], box.min[1]),
+    top: over(box.max[2], bay.max[2]),
+    bottom: over(bay.min[2], box.min[2]),
+  };
+  const x0 = Math.max(box.min[0], bay.min[0]);
+  const x1 = Math.min(box.max[0], bay.max[0]);
+  const y0 = Math.max(box.min[1], bay.min[1]);
+  const y1 = Math.min(box.max[1], bay.max[1]);
+  const throughLid = past.top > 0 && x0 < x1 && y0 < y1 ? { x0, x1, y0, y1 } : null;
+  return { fits: Object.values(past).every((v) => v === 0), past, throughLid };
+}
 
 /** The body's outer box: nose to tail, width without mirrors, road to roof. */
 export function bodyBox(car: CarRecord): Box3 {

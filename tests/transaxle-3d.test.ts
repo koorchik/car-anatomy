@@ -9,7 +9,8 @@ import { DRIVE_CARS } from '../src/data/drive-cars.ts';
 import { engineById } from '../src/data/engines.ts';
 import { gearboxById } from '../src/data/gearboxes.ts';
 import { gearboxSpec } from '../src/drivetrain/catalogue.ts';
-import { transaxleFrame, type GearboxPoint } from '../src/drivetrain/layouts/transaxle.ts';
+import { transaxleSetupModel } from '../src/drivetrain/layouts/setup-model.ts';
+import { transaxleFrame, transaxleSpec, type GearboxPoint, type TransaxleDesc } from '../src/drivetrain/layouts/transaxle.ts';
 import { poseAt } from '../src/drivetrain/table-drive.ts';
 import { buildGearbox, type Gearbox } from '../src/drivetrain/topology.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
@@ -282,9 +283,10 @@ function solids(model: TransaxleModel, box: Gearbox) {
   return out;
 }
 
-describe('no part runs into a part of another member', () => {
-  it.each(BOXES)('$id, in every state', ({ id }) => {
-    const box = boxOf(id);
+/** Parts of different members that overlap, in every state of the box. */
+function clashesOf(box: Gearbox): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  {
     const model = new TransaxleModel(box, { quality: 'low' });
     const meshing = new Set(box.meshes.map((m) => [m.a, m.b].sort().join('|')));
     for (const state of box.states) {
@@ -307,9 +309,57 @@ describe('no part runs into a part of another member', () => {
           if (depth > 0.05) clashes.push(`${p.part} ${p.gear ?? p.member} × ${q.part} ${q.gear ?? q.member}: ${depth.toFixed(1)} mm`);
         }
       }
-      expect(clashes, state.name).toEqual([]);
+      if (clashes.length) out[state.name] = clashes;
     }
     model.dispose();
+  }
+  return out;
+}
+
+describe('no part runs into a part of another member', () => {
+  it.each(BOXES)('$id, in every state', ({ id }) => {
+    expect(clashesOf(boxOf(id))).toEqual({});
+  });
+
+  // The settings panel of the page (stage K6a-geom): 4 and 7 speeds, the final drive at both ends of its slider, the
+  // speeds at both ends of theirs, and every speed as small as it goes with the final drive at its largest.
+  it.each(BOXES)('$id, as the settings panel changes it', ({ id }) => {
+    const factory = gearboxById(id)!.layout.desc as TransaxleDesc;
+    const model = transaxleSetupModel(factory);
+    const setups = [
+      model.setSpeeds(model.factory, 4),
+      model.setSpeeds(model.factory, 7),
+      model.setFinalDrive(model.factory, model.finalRange[0]),
+      model.setFinalDrive(model.factory, model.finalRange[1]),
+    ];
+    for (const end of model.ratioRange) {
+      let setup = model.setSpeeds(model.factory, 7);
+      for (let i = 0; i < 7; i++) {
+        const teeth = model.teethForRatio(model.desc(setup), i, end);
+        if (teeth) setup = model.setTeeth(setup, i, teeth);
+      }
+      setups.push(setup);
+    }
+    // Small loose gears next to a big ring gear: the thinnest rims the panel allows, under their sleeves' dog rings.
+    let thin = model.setFinalDrive(model.setSpeeds(model.factory, 7), model.finalRange[0]);
+    for (let i = 2; i < 7; i++) {
+      const teeth = model.teethForRatio(model.desc(thin), i, model.ratioRange[1]);
+      if (teeth) thin = model.setTeeth(thin, i, teeth);
+    }
+    setups.push(thin);
+    for (const setup of setups) {
+      const desc = model.desc(setup);
+      const box = buildGearbox(transaxleSpec(desc));
+      const name = `${desc.speeds.map((p) => p.teeth.join('/')).join(' ')}, final ${desc.final.teeth.join('/')}`;
+      expect(clashesOf(box), name).toEqual({});
+      // The draw budget of the factory boxes holds for whatever the panel sets.
+      const high = new TransaxleModel(box, { quality: 'high' });
+      for (const view of ['solid', 'xray', 'mechanism'] as const) {
+        high.setView(view);
+        expect(high.drawStats().draws, `${name}, ${view}`).toBeLessThanOrEqual(60);
+      }
+      high.dispose();
+    }
   });
 });
 

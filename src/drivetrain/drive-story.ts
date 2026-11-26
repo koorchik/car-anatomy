@@ -35,6 +35,11 @@ export interface StoryOptions {
   brake: number;
   /** Idle in neutral at the end, s. */
   endIdleS: number;
+  /**
+   * Shift down a gear at a time while braking, each once the engine would turn no faster than DOWN_SHARE of shiftRpm
+   * in the lower gear, down to second (the sound's test 7 hears shifts both ways). Off: the car brakes in top gear.
+   */
+  downshift?: boolean;
 }
 
 /** About the S14's power peak (6750 rpm) and 750 rpm under its limiter; a rule of thumb for any engine below. */
@@ -46,6 +51,8 @@ export const defaultStory = (cd: CarDrive): StoryOptions => ({
   endIdleS: 2,
 });
 
+/** A downshift while braking waits until the lower gear would turn the engine at this share of shiftRpm [estimate]. */
+const DOWN_SHARE = 0.7;
 /** The foot comes off before an upshift in this time, s [estimate]. */
 export const LIFT_S = 0.1;
 /** The lever waits this long in first before the pull-away, s [estimate]. */
@@ -89,6 +96,8 @@ export class DriveStory {
   phase: StoryPhase = 'start';
   time = 0;
   readonly shifts: ShiftRecord[] = [];
+  /** The downshifts while braking (StoryOptions.downshift), as 'from→to', with the time they were asked for, s. */
+  readonly downshifts: Array<{ shift: string; t: number }> = [];
   /** Highest road speed, m/s. */
   topSpeed = 0;
   private phaseTime = 0;
@@ -223,6 +232,15 @@ export class DriveStory {
       case 'brake':
         this.want = 0;
         if (this.phaseTime >= 0.3) load.command({ kind: 'vehicle', action: 'brake', value: o.brake });
+        if (o.downshift && this.gear > 1 && control.phase === 'engaged' && control.gearIn(solver) === this.gearName(this.gear)) {
+          const lower = cd.gears[this.gear - 1]!;
+          const wheel = cd.driven.reduce((sum, i) => sum + load.vehicle.bus.omega[i]!, 0) / cd.driven.length;
+          if (wheel * cd.axle.ratio * lower.ratio * RPM < DOWN_SHARE * o.shiftRpm) {
+            this.downshifts.push({ shift: `${this.gearName(this.gear)}→${lower.name}`, t: this.time });
+            this.gear--;
+            command(lower.name);
+          }
+        }
         if (this.phaseTime > 0.3 && v < 0.01) {
           command('N');
           load.command({ kind: 'vehicle', action: 'brake', value: 0.2 });

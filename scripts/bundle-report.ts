@@ -61,7 +61,7 @@ const PAGES: PagePath[] = [
   { id: 'systems', label: 'шари систем', exists: ENGINES, modules: [ENGINES, LAYERS], limit: P_D6, limitText: 'P_Д6' },
   { id: 'forces', label: 'сили й фази', exists: ENGINES, modules: [ENGINES, 'src/ui/balance-panel.ts', VALVES], limit: P_D6, limitText: 'P_Д6' },
   { id: 'sump', label: 'олива на треку', exists: ENGINES, modules: [ENGINES, 'src/ui/sump/sump-page.ts', LAYERS], limit: P_D6, limitText: 'P_Д6' },
-  { id: 'gearbox', label: 'коробка', exists: 'src/ui/gearboxes/section.ts', modules: ['src/ui/gearboxes/section.ts'], limit: 400, limitText: '400' },
+  { id: 'gearbox', label: 'коробка', exists: 'src/ui/gearboxes/pages.ts', modules: ['src/ui/gearboxes/pages.ts'], limit: 400, limitText: '400' },
   { id: 'suspension', label: 'підвіска', exists: 'src/ui/suspensions/section.ts', modules: ['src/ui/suspensions/section.ts'], limit: 400, limitText: '400' },
   { id: 'overview', label: 'огляд авто', exists: 'src/ui/car/section.ts', modules: ['src/ui/car/section.ts'], limit: 450, limitText: '450' },
 ];

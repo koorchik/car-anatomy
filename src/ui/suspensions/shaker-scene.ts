@@ -72,7 +72,7 @@ export const shakerDashHtml = (): string => `<footer class="susp-dash susp-shake
 
 export class ShakerScene {
   private readonly root: HTMLElement;
-  private readonly corner: CornerSpec;
+  private corner: CornerSpec;
   private readonly bodyChart: FrfChart;
   private readonly tyreChart: FrfChart;
   private readonly onChange: () => void;
@@ -135,6 +135,13 @@ export class ShakerScene {
     this.sliderAt = sliderOfHz(this.targetHz);
     this.slider.value = String(this.sliderAt);
     this.writeHz();
+  }
+
+  /** Another page's corner: the next apply draws and measures it afresh. */
+  setCorner(corner: CornerSpec): void {
+    if (corner === this.corner) return;
+    this.corner = corner;
+    this.dirty = true;
   }
 
   setUnsprung(kg: number): void {
