@@ -19,7 +19,9 @@ export const titleHtml = (): string => `<div class="gbx-title" id="gbx-title-blo
     <div class="gbx-title-row">
       <button class="btn" id="gbx-setup-toggle" type="button" aria-controls="results-panel">${t('Налаштувати')}</button>
       <button class="btn" id="gbx-demo-open" type="button">${t('Демонстрація')}<span class="gbx-long">: ${t('чому шестерні крутяться завжди')}</span></button>
+      <span class="gbx-steps" id="gbx-steps"></span>
     </div>
+    <div class="gbx-nav" id="gbx-nav"></div>
   </div>`;
 
 export const toolsHtml = (): string => `<label class="tool tool-slow" id="gbx-slow-tool" hidden>
@@ -64,6 +66,7 @@ export const dashHtml = (): string => `<section class="control-col gbx-control" 
       <dl class="gbx-shafts">
         <div><dt>${t('Первинний вал')}</dt><dd id="gbx-input-rpm"></dd></div>
         <div><dt>${t('Вторинний вал')}</dt><dd id="gbx-output-rpm"></dd></div>
+        <div id="gbx-diff-row" hidden><dt>${t('Диференціал')}</dt><dd id="gbx-diff-rpm"></dd></div>
       </dl>
       <p class="gbx-gear-note" id="gbx-gear-note"></p>
     </section>`;

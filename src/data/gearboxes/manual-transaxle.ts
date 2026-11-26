@@ -18,13 +18,14 @@
 // positions, face widths, hands, the sleeves' order and the differential's place are layout estimates.
 
 import { applyGearboxEnglish } from '../../i18n/en/apply-gearbox.ts';
-import { GEARBOX_MANUAL_TRANSAXLE_EN } from '../../i18n/en/gearbox-manual-transaxle.ts';
+import { GEARBOX_MANUAL_TRANSAXLE_ARTICLE_EN, GEARBOX_MANUAL_TRANSAXLE_EN } from '../../i18n/en/gearbox-manual-transaxle.ts';
 import { locale } from '../../i18n/locale.ts';
-import type { GearboxPage, GearboxRecord } from '../../drivetrain/catalogue.ts';
+import { GEARBOX_PAGE_NAMES } from '../gearbox-names.ts';
+import type { GearboxArticle, GearboxPage, GearboxRecord } from '../../drivetrain/catalogue.ts';
 
 const CIVIC_FK8: GearboxRecord = {
   id: 'manual-transaxle',
-  name: 'Honda 6MT',
+  name: GEARBOX_PAGE_NAMES['manual-transaxle']!,
   car: 'civic-type-r-fk8',
   layout: {
     kind: 'transaxle',
@@ -72,7 +73,7 @@ const CIVIC_FK8: GearboxRecord = {
 
 const PORSCHE_992_CARRERA_T: GearboxRecord = {
   id: 'manual-transaxle/porsche-911-carrera-t-992',
-  name: 'Porsche 7MT',
+  name: GEARBOX_PAGE_NAMES['manual-transaxle/porsche-911-carrera-t-992']!,
   car: 'porsche-911-carrera-t-992',
   layout: {
     kind: 'transaxle',
@@ -120,6 +121,42 @@ const PORSCHE_992_CARRERA_T: GearboxRecord = {
   unverified: ['teeth', 'module', 'helix', 'faceWidth', 'inputHand', 'centreMm', 'outputDeg', 'reverse', 'sleeves', 'final.teeth', 'final.module', 'final.shift', 'final.side'],
 };
 
-export const MANUAL_TRANSAXLE: GearboxPage = { id: 'manual-transaxle', base: CIVIC_FK8, variants: [PORSCHE_992_CARRERA_T] };
+// The article (stage K6a-geom). The layout, one mesh per speed and no direct drive: research §3.1; the helical final
+// drive of a transverse box and the bevel one of a longitudinal box: research §13; loaded meshes whine and an unloaded
+// direct drive does not: research §18.1; the cars: the records' sources (Honda Europe, Honda US for the FL5, Porsche);
+// the ZAZ-1102 Tavria's MeMZ-245 with its gearbox ratios and final drive in one table: the plant's data, build-order
+// document («Що відкладено»).
+const ARTICLE: GearboxArticle = {
+  lead:
+    'Двовальна механічна коробка стоїть там, де двигун і ведучі колеса поруч: за поперечним двигуном переднопривідного авто або між двигуном і колесами задньомоторного. ' +
+    'У ній лише два вали, первинний і вторинний, а головна передача й диференціал лежать у тому самому картері, тож з коробки одразу виходять піввісі до коліс.',
+  how:
+    'Кожна передача — одна пара шестерень: одна на первинному валу, друга на вторинному, і число передачі — це відношення їхніх зубців. ' +
+    'Як і в коробці з проміжним валом, усі пари постійно в зачепленні, а одна з шестерень кожної пари крутиться на своєму валу вільно, доки муфта синхронізатора не з’єднає її з валом. ' +
+    'Муфти стоять на обох валах: шестерню низької передачі на первинному валу роблять малою, просто на самому валу, тож вільною буває її пара на вторинному. ' +
+    'Шестерня на передньому кінці вторинного вала постійно крутить ведене колесо головної передачі на корпусі диференціала. У поперечній коробці це косозуба циліндрична пара, а коли вали коробки йдуть уздовж авто, як у Porsche 911, — конічна пара, бо піввісі йдуть поперек. ' +
+    'Тому в будь-якій передачі світяться дві пари: пара передачі й головна. Прямої передачі тут немає. Задній хід іде через проміжну шестерню, яка розвертає напрям.',
+  sound:
+    'Шестерні передач косозубі, тож пари тихіші за прямозубі. Завивають переважно навантажені зачеплення, а тут навантажені завжди дві пари, і тихої прямої передачі, як у коробці з проміжним валом, немає. ' +
+    'На цій сторінці поки чути лише двигун, звук шестерень з’явиться пізніше.',
+  pros: [
+    'Кожна передача проходить одне зачеплення, а не два, як непряма в коробці з проміжним валом',
+    'Коробка, головна передача й диференціал в одному картері: ні кардана, ні окремого моста',
+    'Пасує поперечному двигуну з переднім приводом і задньомоторному авто',
+  ],
+  cons: [
+    'Прямої передачі немає: навіть на найвищій момент іде через дві пари',
+    'Головну передачу не поміняти окремо від коробки, вона в тому самому картері',
+    'Поперечний двигун разом із коробкою мусить уміститися між колесами, тож шість передач на двох валах — це вже тісно',
+  ],
+  cars: [
+    'Honda Civic Type R (FK8), 2017–2021: шість передач, гвинтовий самоблок',
+    'Honda Civic Type R (FL5): той самий набір шестерень з головною передачею 3,842',
+    'Porsche 911 Carrera T (992): сім передач, конічна головна пара',
+    'ЗАЗ-1102 «Таврія»: поперечний МеМЗ-245, коробка з головною передачею в одному картері',
+  ],
+};
 
-if (locale === 'en') applyGearboxEnglish(MANUAL_TRANSAXLE, GEARBOX_MANUAL_TRANSAXLE_EN);
+export const MANUAL_TRANSAXLE: GearboxPage = { id: 'manual-transaxle', base: CIVIC_FK8, variants: [PORSCHE_992_CARRERA_T], article: ARTICLE };
+
+if (locale === 'en') applyGearboxEnglish(MANUAL_TRANSAXLE, GEARBOX_MANUAL_TRANSAXLE_EN, GEARBOX_MANUAL_TRANSAXLE_ARTICLE_EN);

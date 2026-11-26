@@ -78,4 +78,21 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   'Шини {tyre}, радіус кочення {mm} мм, без проковзування. Межа обертів двигуна {rpm} об/хв.': 'Tires {tyre}, rolling radius {mm} mm, no slip. Engine rev limit {rpm} rpm.',
   '{from}→{to}: {before} → {after} об/хв': '{from}→{to}: {before} → {after} rpm',
   'Передачі вже не йдуть від нижчої до вищої: на якомусь перемиканні оберти не падають, а ростуть.': 'The gears no longer run from low to high: at some shift the revs rise instead of falling.',
+  // The two-shaft transaxle page (stage K6a-geom) and the nav between the pages.
+  'Двовальна механічна коробка': 'Two-shaft manual transmission',
+  'Кожна передача — одна пара між первинним і вторинним валами за {a} мм. Пара лишається на цій міжосьовій зі своїм модулем: змінюються лише зубці, а кут нахилу зубців підлаштовується. Головна передача теж пара зубців у тому самому картері, тож інше число дає їй інші зубці. Зміни одразу видно в 3D, у числах і в таблиці.':
+    'Each speed is one pair between the input shaft and the output shaft, {a} mm apart. A pair keeps this center distance and its own module: only the tooth counts change, and the helix angle adjusts. The final drive is a pair of gears in the same case too, so another ratio gives it other tooth counts. Changes show at once in 3D, in the ratios and in the table.',
+  'шестерня первинного вала': 'input shaft gear',
+  'шестерня вторинного вала': 'output shaft gear',
+  'Задній хід: {ratio}, через подвійну проміжну шестерню': 'Reverse: {ratio}, through a compound idler',
+  'Диференціал': 'Differential',
+  'Шестерні крутяться, вторинний вал і диференціал стоять': 'The gears turn; the output shaft and the differential stand still',
+  'Два зачеплення: пара передачі й головна пара': 'Two meshes: the speed pair and the final drive',
+  '{n} зачеплення: пари заднього ходу через проміжну шестерню й головна пара, колеса крутяться назад':
+    '{n} meshes: the reverse pairs through the idler and the final drive; the wheels turn backward',
+  'Попередня': 'Previous',
+  'Наступна': 'Next',
+  'Попередня компоновка коробки': 'Previous transmission layout',
+  'Наступна компоновка коробки': 'Next transmission layout',
+  'Коробки цієї компоновки': 'Transmissions of this layout',
 };
