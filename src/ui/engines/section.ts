@@ -76,7 +76,8 @@ export class EnginesSection implements Section {
   private textFailed = false;
 
   mount(ctx: SectionContext): void {
-    this.owned = ownSlots(ctx.slots);
+    // The body classes its pages and features style the skeleton with: none of them may stay on under another section.
+    this.owned = ownSlots(ctx.slots, ['sump-mode', 'designer-mode', 'dyno-mode', 'forces-on']);
     this.ctx = ctx = { ...ctx, slots: this.owned.slots };
     // The engines' parts, with the dyno's and the valve gear's; the layers and the oil page add theirs as they load.
     registerParts(PARTS);

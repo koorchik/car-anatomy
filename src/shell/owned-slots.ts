@@ -5,6 +5,10 @@
 // parent (a switch into the row of tools, a card onto the page root); on leaving, every element under those parents
 // that was not there when the section mounted and that no other section owns becomes the leaving section's too.
 // An element keeps its own `hidden`: the section may have hidden one of them itself, and coming back must not show it.
+//
+// A section's pages may also style the shared skeleton through classes on <body> (the oil page hides the view tools and
+// the dash with `sump-mode`). The section names them, and the ones that are on go off while it is away and come back
+// with it, so the next section does not inherit a page it never showed.
 
 import type { ShellSlots, Slot } from './section.ts';
 
@@ -18,7 +22,9 @@ export interface OwnedSlots {
 /** Which section's content each element is. */
 const owners = new WeakMap<Element, OwnedSlots>();
 
-export function ownSlots(slots: ShellSlots): OwnedSlots {
+export function ownSlots(slots: ShellSlots, bodyClasses: readonly string[] = []): OwnedSlots {
+  /** The body classes that were on when the section left. */
+  let bodyOn: string[] = [];
   const parents = [...new Set([slots.root, slots.backdrop, slots.actions, slots.title, slots.tools, slots.status, slots.panel, slots.results, slots.dash, slots.afterDash, slots.table.head].map((s) => ('parent' in s ? s.parent : s)))];
   /** What stood in those places before this section came: the skeleton and other sections' content. */
   const before = new Set(parents.flatMap((p) => Array.from(p.children)));
@@ -75,6 +81,13 @@ export function ownSlots(slots: ShellSlots): OwnedSlots {
         }
       }
       for (const el of added) hide(el, next);
+      if (next) {
+        bodyOn = bodyClasses.filter((c) => document.body.classList.contains(c));
+        for (const c of bodyOn) document.body.classList.remove(c);
+      } else {
+        for (const c of bodyOn) document.body.classList.add(c);
+        bodyOn = [];
+      }
     },
   };
   return result;
