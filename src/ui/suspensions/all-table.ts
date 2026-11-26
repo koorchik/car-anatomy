@@ -13,7 +13,10 @@ import { frontViewSvg } from './front-view.ts';
 import { choiceHref, pageName, type PageChoice } from './pages.ts';
 
 const DEG = 180 / Math.PI;
-const fmt = (v: number, digits: number): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+/** Height of every glyph's box, px (suspensions.css gives .susp-glyph the same), so the names under them line up. */
+const GLYPH_H = 130;
+// A typographic minus, as the rest of the page writes it.
+const fmt = (v: number, digits: number): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).replace('-', '−');
 const signed = (v: number, digits: number): string => {
   const r = Number(v.toFixed(digits));
   return r > 0 ? `+${fmt(r, digits)}` : r < 0 ? `−${fmt(-r, digits)}` : fmt(0, digits);
@@ -38,7 +41,7 @@ function cardHtml(page: SuspensionPage, current: PageChoice): string {
   const radius = corner.tyreRadiusM ?? tyre.freeRadiusM;
   const glyph = frontViewSvg(
     { axle, pose, sample: s, rack: 0, radiusM: radius, tyreWidthM: tyre.widthM },
-    { width: 150, className: 'susp-glyph', label: t('Вид спереду: {name}', { name: pageName(page.id) }) },
+    { width: 150, height: GLYPH_H, className: 'susp-glyph', label: t('Вид спереду: {name}', { name: pageName(page.id) }) },
   );
   const row = (label: string, value: string): string => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
   const cars = page.cars

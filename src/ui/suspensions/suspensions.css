@@ -557,6 +557,12 @@ body.susp-scene-travel .susp-only-bump {
   font-weight: 600;
 }
 
+/* One box for every glyph, the drawing centred in it: the names under them line up (all-table.ts, GLYPH_H). */
+.susp-layout-head .susp-glyph {
+  width: 150px;
+  height: 130px;
+}
+
 .susp-layout-numbers {
   margin: 8px 0;
   font-size: 13px;

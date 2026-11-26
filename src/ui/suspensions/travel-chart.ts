@@ -25,7 +25,8 @@ const MIN_SPAN: Record<CurveId, number> = { camber: 3, toe: 1.5, halfTrack: 16, 
 export const curveTitle = (id: CurveId): string =>
   ({ camber: t('Розвал, °'), toe: t('Сходження, °'), halfTrack: t('Зсув плями вбік, мм'), rcHeight: t('Центр крену, мм') })[id];
 
-const fmt = (v: number, digits: number): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+// A typographic minus, as the rest of the page writes it.
+const fmt = (v: number, digits: number): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).replace('-', '−');
 
 /** A round scale that holds [lo, hi] and spans at least `span`. */
 function niceRange(lo: number, hi: number, span: number): [number, number] {
@@ -109,7 +110,9 @@ export class TravelChart {
     ctx.fillStyle = 'rgba(236, 230, 214, 0.85)';
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
-    ctx.fillText(curveTitle(id), left, y0 + 1);
+    // From the plot's left edge, past the scale's column, and squeezed into its own cell: two by two on a phone, the
+    // longer titles would run into the next plot's.
+    ctx.fillText(curveTitle(id), x0 + 4, y0 + 1, w - 8);
     // Frame, the zero lines, and the scale at both ends.
     ctx.strokeStyle = 'rgba(236, 230, 214, 0.16)';
     ctx.lineWidth = 1;

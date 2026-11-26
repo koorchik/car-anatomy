@@ -31,7 +31,8 @@ const WOBBLE_LEVER_M = 0.3;
 /** Roll centre heights kept for the trail on the front view. */
 const TRAIL = 24;
 
-const fmt = (v: number, digits: number): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+// A typographic minus, as the rest of the page writes it.
+const fmt = (v: number, digits: number): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).replace('-', '−');
 const signed = (v: number, digits: number): string => {
   const r = Number(v.toFixed(digits));
   return r > 0 ? `+${fmt(r, digits)}` : r < 0 ? `−${fmt(-r, digits)}` : fmt(0, digits);
