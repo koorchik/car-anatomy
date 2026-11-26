@@ -35,6 +35,9 @@ export interface BeamSample {
   tanBeta: number;
   tanThetaCP: number;
   tanThetaWC: number;
+  /** The arm's own point at the contact patch (it turns with the arm, unlike the wheel's lowest point): what outboard
+   *  brakes react through. */
+  tanThetaKP: number;
   camberGain: number;
   bumpSteer: number;
   /** The same per metre of the other wheel's travel, this wheel held. */
@@ -43,6 +46,7 @@ export interface BeamSample {
   tanBetaCross: number;
   tanThetaCPCross: number;
   tanThetaWCCross: number;
+  tanThetaKPCross: number;
   camberGainCross: number;
   bumpSteerCross: number;
   /** Roll centre of opposite travels at this state, above the road under the wheel: y_C·(tanβ − tanβ_cross). */
@@ -55,9 +59,9 @@ export interface BeamSample {
 
 const FIELDS = [
   'travel', 'otherTravel', 'camber', 'toe', 'contactX', 'contactY', 'contactZ', 'wheelX', 'wheelY', 'wheelZ',
-  'springLen', 'damperLen', 'mrSpring', 'mrDamper', 'tanBeta', 'tanThetaCP', 'tanThetaWC', 'camberGain', 'bumpSteer',
-  'mrSpringCross', 'mrDamperCross', 'tanBetaCross', 'tanThetaCPCross', 'tanThetaWCCross', 'camberGainCross',
-  'bumpSteerCross', 'rcHeight', 'beamTwist', 'twistRate',
+  'springLen', 'damperLen', 'mrSpring', 'mrDamper', 'tanBeta', 'tanThetaCP', 'tanThetaWC', 'tanThetaKP', 'camberGain',
+  'bumpSteer', 'mrSpringCross', 'mrDamperCross', 'tanBetaCross', 'tanThetaCPCross', 'tanThetaWCCross', 'tanThetaKPCross',
+  'camberGainCross', 'bumpSteerCross', 'rcHeight', 'beamTwist', 'twistRate',
 ] as const satisfies readonly (keyof BeamSample)[];
 
 /** Fields whose sign flips on the right wheel (lateral positions and slopes), as Axle.sample does. */
@@ -74,6 +78,7 @@ interface Slopes {
   tanBeta: number;
   tanThetaCP: number;
   tanThetaWC: number;
+  tanThetaKP: number;
   camberGain: number;
   bumpSteer: number;
   mrSpring: number;
@@ -97,7 +102,7 @@ export class TwistBeamAxle {
   private readonly s = new Float64Array(3);
   private readonly p = new Float64Array(3);
   private readonly slopes: Slopes = {
-    tanBeta: 0, tanThetaCP: 0, tanThetaWC: 0, camberGain: 0, bumpSteer: 0, mrSpring: 0, mrDamper: 0,
+    tanBeta: 0, tanThetaCP: 0, tanThetaWC: 0, tanThetaKP: 0, camberGain: 0, bumpSteer: 0, mrSpring: 0, mrDamper: 0,
   };
 
   constructor(spec: AxleSpec<TwistBeamLinkage>) {
@@ -177,6 +182,7 @@ export class TwistBeamAxle {
     out.tanBeta = k.tanBeta;
     out.tanThetaCP = k.tanThetaCP;
     out.tanThetaWC = k.tanThetaWC;
+    out.tanThetaKP = k.tanThetaKP;
     out.camberGain = k.camberGain;
     out.bumpSteer = k.bumpSteer;
     out.mrSpring = k.mrSpring;
@@ -185,6 +191,7 @@ export class TwistBeamAxle {
     out.tanBetaCross = k.tanBeta;
     out.tanThetaCPCross = k.tanThetaCP;
     out.tanThetaWCCross = k.tanThetaWC;
+    out.tanThetaKPCross = k.tanThetaKP;
     out.camberGainCross = k.camberGain;
     out.bumpSteerCross = k.bumpSteer;
     out.mrSpringCross = k.mrSpring;
@@ -228,6 +235,8 @@ export class TwistBeamAxle {
     out.tanBeta = v[1] - r * duy;
     out.tanThetaCP = v[0] - r * dux;
     out.tanThetaWC = v[0];
+    // The arm's point at the contact patch, W − r·u: its velocity is v_W + ω × (−r·u).
+    out.tanThetaKP = v[0] - r * (v[4] * uz - v[5] * uy);
     // γ = −asin(s_z), τ = atan2(s_x, s_y)
     out.camberGain = -dsz / Math.sqrt(Math.max(1e-300, 1 - sz * sz));
     out.bumpSteer = (sy * dsx - sx * dsy) / (sx * sx + sy * sy);

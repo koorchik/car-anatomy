@@ -11,7 +11,10 @@
 //   when the axis meets the road inboard of the contact patch, trail positive when it meets the road ahead of it. These
 //   are relative to the side of the car, so both wheels give the same numbers.
 //   Motion ratio mr = −dL/dq: shortening of the spring (or damper) per metre of bump. Positive, about 0.94 on a strut.
-//   tanβ = dC_y/dq (left corner: the contact point moving out in bump is positive), tanθ = dP_x/dq.
+//   tanβ = dC_y/dq (left corner: the contact point moving out in bump is positive), tanθ = dP_x/dq: tanθ_CP of the
+//   contact point (the wheel's lowest point, which does not turn with the knuckle), tanθ_WC of the wheel centre, and
+//   tanθ_KP of the knuckle's own point at the contact patch, which does turn with it: the line from the patch to the
+//   side-view instant centre, what outboard brakes react through (anti-dive, anti-lift).
 //   Camber gain dγ/dq and bump steer dτ/dq are per metre of travel; negative gain is more negative camber in bump,
 //   negative bump steer is toe-out. The roll centre of symmetric bump is y_C·tanβ above the road. Instant centres are
 //   those of the knuckle's motion seen from the front (plane x = W_x) and from the side (plane y = W_y), body frame,
@@ -57,6 +60,7 @@ export interface CornerSample {
   tanBeta: number;
   tanThetaCP: number;
   tanThetaWC: number;
+  tanThetaKP: number;
   caster: number;
   kpi: number;
   scrub: number;
@@ -81,8 +85,9 @@ export interface CornerSample {
 
 const FIELDS = [
   'camber', 'toe', 'contactX', 'contactY', 'contactZ', 'wheelX', 'wheelY', 'wheelZ', 'springLen', 'damperLen',
-  'mrSpring', 'mrDamper', 'tanBeta', 'tanThetaCP', 'tanThetaWC', 'caster', 'kpi', 'scrub', 'trail', 'plunge', 'cvInner',
-  'cvOuter', 'camberGain', 'bumpSteer', 'rcHeight', 'icFrontY', 'icFrontZ', 'icSideX', 'icSideZ', 'kingpinOffset',
+  'mrSpring', 'mrDamper', 'tanBeta', 'tanThetaCP', 'tanThetaWC', 'tanThetaKP', 'caster', 'kpi', 'scrub', 'trail',
+  'plunge', 'cvInner', 'cvOuter', 'camberGain', 'bumpSteer', 'rcHeight', 'icFrontY', 'icFrontZ', 'icSideX', 'icSideZ',
+  'kingpinOffset',
 ] as const;
 export type CornerField = (typeof FIELDS)[number];
 type Field = CornerField;
@@ -276,6 +281,8 @@ export class Axle<L extends AnyCornerLinkage = CornerLinkage> {
     const duy = (duy0 - uy * along) / un;
     out.tanBeta = v[1] - r * duy;
     out.tanThetaCP = v[0] - r * dux;
+    // The knuckle's point at the contact patch, W − r·u: its velocity is v_W + ω × (−r·u).
+    out.tanThetaKP = v[0] - r * (v[4] * uz - v[5] * uy);
     // γ = −asin(s_z), τ = atan2(s_x, s_y)
     out.camberGain = -dsz / Math.sqrt(Math.max(1e-300, 1 - sz * sz));
     out.bumpSteer = (sy * dsx - sx * dsy) / (sx * sx + sy * sy);

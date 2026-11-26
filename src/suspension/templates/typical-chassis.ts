@@ -2,9 +2,11 @@
 // P8a) gives the catalogue's cars as designs. Nothing here is a real car: the masses are the research's worked examples
 // (docs/research/suspensions.md, 3.3 and 13.2), the axles the templates' typical geometry, the springs set for a ride
 // frequency and the dampers for a damping ratio, and the anti-roll bars typical sizes. The inertias come from the NHTSA
-// regression (src/vehicle/body-estimate.ts). Every number is an estimate (docs/suspension-model.md).
+// regression (src/vehicle/body-estimate.ts). The brake balance is the research's working 0.7 in front, the road load
+// the generic car's of src/vehicle/constants.ts, the final drive and the drag's height estimates. Every number is an
+// estimate (docs/suspension-model.md).
 
-import type { AnyAxleLinkage, AxleSpec, ChassisSpec, SwayBarSpec, Vec3 } from '../spec.ts';
+import type { AnyAxleLinkage, AxleSpec, ChassisLongitudinal, ChassisSpec, SwayBarSpec, Vec3 } from '../spec.ts';
 import { Axle, newCornerSample } from '../kinematics.ts';
 import { TwistBeamAxle, newBeamSample } from '../beam-kinematics.ts';
 import { SolidAxle, newSolidSample } from '../solid-kinematics.ts';
@@ -18,6 +20,9 @@ import { SOLID_TYPICAL, solidAxle } from './solid-axle.ts';
 import { add, scale, sub, unit } from '../vec.ts';
 import { tyreVertical, type TyreChoice } from '../../vehicle/tyre-data.ts';
 import { estimateInertia } from '../../vehicle/body-estimate.ts';
+import { coeffsFromDrag } from '../../vehicle/road-load.ts';
+import { GENERIC_CAR } from '../../vehicle/constants.ts';
+import { AERO_HEIGHT_ESTIMATE_M } from '../wheel-forces.ts';
 
 export type TypicalFront = 'macpherson' | 'double-wishbone';
 export type TypicalRear = 'double-wishbone' | 'multilink' | 'semi-trailing' | 'swing-axle' | 'twist-beam' | 'live-axle';
@@ -28,6 +33,12 @@ const BAR_INSIDE_TRACK_M = 0.5;
 
 /** Damping ratio of the typical cars: the «comfort» preset of the bump scene (OptimumG). */
 const TYPICAL_ZETA = 0.25;
+
+/** Brake balance of a typical road car, share on the front axle: the working figure of docs/research/suspensions.md
+ *  (2.2, β_f ≈ 0.7), an estimate. */
+export const TYPICAL_BRAKE_FRONT = 0.7;
+/** Final drive of a typical car: an estimate, it only scales a live axle's propshaft torque. */
+export const TYPICAL_FINAL_DRIVE = 3.5;
 
 export interface ChassisIntent {
   id: string;
@@ -46,6 +57,21 @@ export interface ChassisIntent {
   zeta: number;
   tyre: TyreChoice;
   geometry: 'measured' | 'typical';
+  /** Brakes, drive and road load where they differ from the typical car's (typicalLongitudinal). */
+  longitudinal?: Partial<ChassisLongitudinal>;
+}
+
+/** A typical car's brakes, drive and road load: outboard brakes at the typical balance, the drive split evenly when both
+ *  axles are driven, the generic car's drag and rolling resistance, the drag at the estimated height. */
+export function typicalLongitudinal(massKg: number): ChassisLongitudinal {
+  return {
+    brakeFront: TYPICAL_BRAKE_FRONT,
+    brakeInboard: [false, false],
+    driveFront: 0.5,
+    finalDrive: TYPICAL_FINAL_DRIVE,
+    roadLoad: coeffsFromDrag(massKg, GENERIC_CAR.cdA, GENERIC_CAR.crr),
+    aeroHeightM: AERO_HEIGHT_ESTIMATE_M,
+  };
 }
 
 /** Spring and damper motion ratios of an axle at design, in heave of both wheels (on a corner just its own). */
@@ -110,6 +136,7 @@ export function chassisOf(it: ChassisIntent): ChassisSpec {
       tyreRadiusM: null,
     },
     tyre: it.tyre,
+    longitudinal: { ...typicalLongitudinal(it.massKg), ...it.longitudinal },
     geometry: it.geometry,
   };
 }
@@ -149,7 +176,11 @@ export function restWheelCentreZM(tyre: TyreChoice, cornerKg: number): number {
 
 /** A typical front axle on the given track, its wheel centre at the loaded radius. */
 export function typicalFront(layout: TypicalFront, trackM: number, wheelCentreZM: number, driven: boolean): AxleSpec<AnyAxleLinkage> {
-  if (layout === 'macpherson') return macphersonJtekt({ wheelCentreZM });
+  if (layout === 'macpherson') {
+    // The JTEKT corner is a driven one; on a rear-drive car its half-shaft goes.
+    const strut = macphersonJtekt({ wheelCentreZM });
+    return driven ? strut : { ...strut, driven: false, diff: 'none', halfshaft: null };
+  }
   return doubleWishbone({ ...wishboneDefaults('front'), trackM, wheelCentreZM, driven });
 }
 
@@ -184,6 +215,7 @@ export interface TypicalCar {
   barsMm: readonly [number | null, number | null];
   unsprungKg: readonly [number, number];
   rideHz: readonly [number, number];
+  longitudinal?: Partial<ChassisLongitudinal>;
 }
 
 export function typicalChassis(car: TypicalCar): ChassisSpec {
@@ -207,5 +239,6 @@ export function typicalChassis(car: TypicalCar): ChassisSpec {
     zeta: TYPICAL_ZETA,
     tyre,
     geometry: 'typical',
+    longitudinal: car.longitudinal,
   });
 }
