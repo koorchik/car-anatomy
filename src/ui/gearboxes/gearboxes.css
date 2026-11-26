@@ -40,15 +40,8 @@
   margin-top: 4px;
 }
 
-/* With the article hidden on a desktop, its button stands at the top right: the language switch moves aside. */
-@media (min-width: 861px) {
-  body.panel-closed:has(#gbx-title-block:not([style*='display'])) .lang-switch {
-    margin-right: 136px;
-  }
-}
-
 /* The dash of the table: start, tachometer, pedal, the gears and what the shafts do. */
-.dash:has(> .gbx-gears-col:not([style*='display'])) {
+.dash:has(> .gbx-gears-col:not([data-section-away])) {
   grid-template-columns: 172px 212px 108px minmax(240px, 1fr);
 }
 
@@ -333,14 +326,14 @@
 }
 
 @media (max-width: 1240px) {
-  .dash:has(> .gbx-gears-col:not([style*='display'])) {
+  .dash:has(> .gbx-gears-col:not([data-section-away])) {
     grid-template-columns: 158px 200px 100px minmax(200px, 1fr);
   }
 }
 
 @media (max-width: 860px) {
   /* A phone: the tachometer gives its column to the gears; the shafts' revs stand under the start button. */
-  .dash:has(> .gbx-gears-col:not([style*='display'])) {
+  .dash:has(> .gbx-gears-col:not([data-section-away])) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 76px;
   }
 
