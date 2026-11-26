@@ -224,6 +224,16 @@ export class Drive {
     this.post({ type: 'stop' });
   }
 
+  /**
+   * The engine stands still at once, with no run-down: for a section that silences the engine (ShellAudio.suspend).
+   * A stop would only freeze the run-down with the audio thread, and the visitor would hear the rest of it on coming back.
+   */
+  halt(): void {
+    this.wanted = false;
+    this.local.adopt('off', 0);
+    this.post({ type: 'halt' });
+  }
+
   /** Holds the crank at a fixed speed for slow motion. Null releases it. */
   lock(rpm: number | null): void {
     this.lockedRpm = rpm;

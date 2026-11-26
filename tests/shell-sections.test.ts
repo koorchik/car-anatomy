@@ -71,6 +71,7 @@ describe('the sound', () => {
       setPedal: () => calls.push('pedal 0'),
       lock: () => calls.push('unlock'),
       stop: () => calls.push('stop'),
+      halt: () => calls.push('halt'),
       tick: () => (calls.push('tick'), { state: 'off' }),
       snapshot: () => ({ state: 'off' }),
     };
@@ -82,7 +83,7 @@ describe('the sound', () => {
     const drive = fakeDrive();
     audio.current = drive as never;
     audio.suspend();
-    expect(drive.calls).toEqual(['load off', 'pedal 0', 'unlock', 'stop', 'pause true']);
+    expect(drive.calls).toEqual(['load off', 'pedal 0', 'unlock', 'stop', 'halt', 'pause true']);
     drive.calls.length = 0;
     // A second address of the same section changes nothing, and the local copy is not stepped.
     audio.suspend();

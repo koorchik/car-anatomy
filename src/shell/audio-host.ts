@@ -22,6 +22,8 @@ export class ShellAudio implements AudioHost {
     if (this.suspended) return;
     this.release();
     this.suspended = true;
+    // Off now rather than running down: the run-down would wait with the audio thread and play on coming back.
+    this.current?.halt();
     this.current?.pause(true);
   }
 
