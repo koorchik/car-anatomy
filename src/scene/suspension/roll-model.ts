@@ -29,6 +29,7 @@ import { bodySection, sectionTopM } from './body-section.ts';
 import { ChassisModel } from './chassis-model.ts';
 import { spacedKey } from './corner-model.ts';
 import { LoadBars } from './load-bars.ts';
+import { FORCE_SCALE } from './overlays.ts';
 
 export type RollView = 'front' | 'rear' | 'car';
 
@@ -54,6 +55,8 @@ export const JACK_SCALE = 10;
 const JACK_MIN_M = 0.0005;
 /** Farthest instant centre drawn, m from the middle of the car: beyond it the line runs to the roll centre only. */
 const IC_FAR_M = 6;
+/** Room the framing keeps over the load bars at rest, m (see the constructor). */
+const FRAME_HEADROOM_M = 0.5;
 
 interface Axis {
   k: 0 | 1;
@@ -87,6 +90,7 @@ export class RollModel implements SceneModel<RollState> {
   /** Which corners the bars stand for, in their order. */
   private readonly barCorners: number[];
   private readonly road: THREE.Mesh;
+  private readonly headroom: THREE.Mesh;
   private readonly jackMat = overlayMaterial('#ffffff');
   private readonly jackShaft = arrowShaftGeometry();
   private readonly jackHead = arrowHeadGeometry();
@@ -165,6 +169,13 @@ export class RollModel implements SceneModel<RollState> {
     }
     this.bars = new LoadBars(at);
     this.group.add(this.bars.group);
+    // Head room for the framing: the stage frames the model under the page's title, which overlays the top of the stage,
+    // and the bars stand highest. An invisible box over them keeps the bars below the title as they grow.
+    const barTop = Math.max(...at.map((p) => p.y)) + Math.max(...this.barCorners.map((i) => chassis.corners[i]!.staticN)) * FORCE_SCALE;
+    this.headroom = new THREE.Mesh(new THREE.BoxGeometry(0.1, FRAME_HEADROOM_M * 10, 0.1).translate(0, barTop + FRAME_HEADROOM_M * 5, at[0]!.z));
+    this.headroom.visible = false;
+    this.headroom.raycast = () => {};
+    this.group.add(this.headroom);
     this.jack = new Arrows(this.jackShaft, this.jackHead, this.jackMat, [ROLL_CENTRE.jack], [0.06]);
     this.jack.hide(0);
     this.jack.commit();
@@ -352,6 +363,7 @@ export class RollModel implements SceneModel<RollState> {
     this.dot.dispose();
     this.rcDot.dispose();
     this.road.geometry.dispose();
+    this.headroom.geometry.dispose();
     (this.road.material as THREE.Material).dispose();
   }
 }
