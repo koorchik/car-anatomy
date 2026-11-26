@@ -175,12 +175,31 @@ export class IntercoolerModel extends ExchangerModel {
   }
 }
 
-/** The fuel tank: a flat box under the rear seat, at the record's point. */
+/** Room between the exhaust pipe and the tank's tunnel over it, m. */
+const TUNNEL_GAP_M = 0.02;
+
+/**
+ * The fuel tank: a flat box under the rear seat, at the record's point. Where the exhaust runs under it (`tunnel`: the
+ * pipe's centre y, its top's height), the tank is a saddle with a tunnel over the pipe, as real tanks over a centre
+ * tunnel are; a flat bottom would sit on the pipe.
+ */
 export class FuelTankModel extends SimpleModel {
-  constructor(at: Vec3, highlight: THREE.ColorRepresentation) {
+  constructor(at: Vec3, highlight: THREE.ColorRepresentation, tunnel: { y: number; halfWidth: number; top: number } | null = null) {
     super(highlight);
     const { width, height, depth } = ANCILLARY.fuelTank;
-    const g = new THREE.BoxGeometry(width * 10, height * 10, depth * 10, 1, 1, 1);
+    const w = width / 2;
+    const h = height / 2;
+    // The cross-section across the car, relative to the tank's centre: scene x is the car's y, scene y its z.
+    const shape = new THREE.Shape().moveTo(-w * 10, -h * 10);
+    const ty = tunnel ? tunnel.y - at[1] : 0;
+    const tw = tunnel ? tunnel.halfWidth + TUNNEL_GAP_M : 0;
+    const tz = tunnel ? tunnel.top + TUNNEL_GAP_M - at[2] : -h;
+    if (tunnel && tz > -h && tz < h && Math.abs(ty) + tw < w) {
+      shape.lineTo((ty - tw) * 10, -h * 10).lineTo((ty - tw) * 10, tz * 10).lineTo((ty + tw) * 10, tz * 10).lineTo((ty + tw) * 10, -h * 10);
+    }
+    shape.lineTo(w * 10, -h * 10).lineTo(w * 10, h * 10).lineTo(-w * 10, h * 10).closePath();
+    const g = new THREE.ExtrudeGeometry(shape, { depth: depth * 10, bevelEnabled: false });
+    g.translate(0, 0, (-depth / 2) * 10);
     g.translate(...toScene(at).toArray());
     this.shell(g, this.material('#3a4247', 0.2, 0.7), this.glass('#d8e6c8', 0.06, 0.4), 'car.fuel-tank');
   }

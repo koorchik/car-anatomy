@@ -32,6 +32,9 @@ export const EXHAUST = {
   tailRoom: 0.45,
 } as const;
 
+/** The least room under a can of the line above the car's ground clearance, m. */
+const FLOOR_GAP_M = 0.01;
+
 /** The line as the scene draws it, in the front-axle frame. */
 export interface ExhaustRoute {
   /** Points the pipe's curve passes through, from the down-pipe's end to the tailpipe point. */
@@ -44,6 +47,10 @@ export interface ExhaustRoute {
   muffler: { s: number; at: Vec3; alongPipe: boolean };
   /** Further tailpipe points of a pair ('both'), each with a short pipe from the muffler. */
   tails: Vec3[];
+  /** Where the line runs along the floor's tunnel: its centre's y and height, front-axle frame. */
+  tunnel: { y: number; z: number };
+  /** The car's ground clearance: nothing of the line hangs lower. */
+  floorM: number;
 }
 
 /**
@@ -88,18 +95,25 @@ export function exhaustRoute(car: CarRecord, start: Vec3, pipeM: number): Exhaus
     catalyst: { s: catalystS, at: at(catalystS) },
     muffler: { s: mufflerS, at: at(mufflerS), alongPipe },
     tails: others,
+    tunnel: { y: tunnelY, z: under },
+    floorM: d.groundClearanceM,
   };
 }
 
-/** A body of revolution or an oval box lying along the curve at `s`. */
-function along(curve: THREE.CatmullRomCurve3, lengthM: number, s: number, geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+/**
+ * A body of revolution or an oval box lying along the curve at `s`, raised where it would hang under the car's ground
+ * clearance: a can is fatter than its pipe, and it tucks up into the floor instead of hanging below the car.
+ */
+function along(curve: THREE.CatmullRomCurve3, lengthM: number, s: number, geometry: THREE.BufferGeometry, halfHeightM: number, floorM: number): THREE.BufferGeometry {
   const u = Math.min(1, Math.max(0, s / lengthM));
   const tangent = curve.getTangentAt(u);
   // Level along the floor: the body lies flat even where the line climbs.
   const flat = new THREE.Vector3(tangent.x, 0, tangent.z);
   if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1);
   geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), flat.normalize()));
-  geometry.translate(...curve.getPointAt(u).toArray());
+  const at = curve.getPointAt(u);
+  at.y += Math.max(0, floorM + FLOOR_GAP_M - (at.y / 10 - halfHeightM)) * 10;
+  geometry.translate(...at.toArray());
   return geometry;
 }
 
@@ -123,9 +137,9 @@ export class ExhaustModel extends SimpleModel {
     const pipe = new THREE.TubeGeometry(curve, Math.max(64, Math.round(lengthM * 40)), EXHAUST.pipeR * 10, 12, false);
     this.solid(pipe, steel, 'car.exhaust-pipe');
     const can = this.material('#8f8a82', 0.8, 0.45);
-    const catalyst = along(curve, lengthM, route.catalyst.s, ovalBox(EXHAUST.catalystR * 10, EXHAUST.catalystR * 10, EXHAUST.catalystLength * 10));
+    const catalyst = along(curve, lengthM, route.catalyst.s, ovalBox(EXHAUST.catalystR * 10, EXHAUST.catalystR * 10, EXHAUST.catalystLength * 10), EXHAUST.catalystR, route.floorM);
     this.shell(catalyst, can, this.glass('#d9cfc0', 0.06, 0.42), 'car.catalyst');
-    const box = along(curve, lengthM, route.muffler.s, ovalBox(EXHAUST.mufflerHalfWidth * 10, EXHAUST.mufflerHalfHeight * 10, EXHAUST.mufflerLength * 10));
+    const box = along(curve, lengthM, route.muffler.s, ovalBox(EXHAUST.mufflerHalfWidth * 10, EXHAUST.mufflerHalfHeight * 10, EXHAUST.mufflerLength * 10), EXHAUST.mufflerHalfHeight, route.floorM);
     this.shell(box, can, this.glass('#d9cfc0', 0.06, 0.42), 'car.muffler');
     // A pair's second tailpipe leaves the muffler for its own side.
     const from = toScene(route.muffler.at);

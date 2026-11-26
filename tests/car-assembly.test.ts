@@ -179,6 +179,47 @@ describe('the car as the overview assembles it', () => {
       expect(pipes).toBeGreaterThan(0);
     });
 
+    it(`${id}: hangs nothing of the exhaust, the coolers or the tank under the car's ground clearance`, () => {
+      const floor = car.dimensions!.groundClearanceM;
+      for (const model of [assembly.exhaust, assembly.radiator, assembly.intercooler, assembly.fuelTank]) {
+        if (!model) continue;
+        let lowest = Infinity;
+        eachVertex(assembly, model.group, (p) => (lowest = Math.min(lowest, p[2])));
+        expect(lowest, model.group.userData.system).toBeGreaterThanOrEqual(floor);
+      }
+    });
+
+    it(`${id}: runs the exhaust under the fuel tank, not through it`, () => {
+      const tank = assembly.fuelTank;
+      if (!tank) return;
+      // Inside a closed mesh, a ray upward crosses its surface an odd number of times.
+      assembly.group.updateMatrixWorld(true);
+      const solids = tank.group.children.filter((o): o is THREE.Mesh => (o as THREE.Mesh).isMesh).map((m) => {
+        const copy = new THREE.Mesh(m.geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+        copy.matrixWorld.copy(m.matrixWorld);
+        copy.matrixAutoUpdate = false;
+        return copy;
+      });
+      const ray = new THREE.Raycaster();
+      const up = new THREE.Vector3(0, 1, 0);
+      const v = new THREE.Vector3();
+      let near = 0;
+      assembly.exhaust.group.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+        for (let i = 0; i < pos.count; i++) {
+          mesh.localToWorld(v.fromBufferAttribute(pos, i));
+          const p = fromScene(v);
+          if (Math.abs(p[0] - car.packaging!.fuelTank![0]) > 0.4) continue;
+          near++;
+          ray.set(v, up);
+          expect(ray.intersectObjects(solids, false).length % 2, `${mesh.userData.part} at ${p.join(', ')}`).toBe(0);
+        }
+      });
+      expect(near).toBeGreaterThan(0);
+    });
+
     it(`${id}: draws each model in its own renderOrder band, the body last`, () => {
       const bands: Array<[THREE.Object3D, number, number]> = [
         [assembly.engineModel.group, CAR_BANDS.engine, CAR_BANDS.engine + 9],

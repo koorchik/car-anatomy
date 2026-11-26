@@ -46,7 +46,7 @@ import type { LayerPlan } from '../systems/route.ts';
 import { FuelTankModel, IntercoolerModel, RadiatorModel, type HoseEnd } from './ancillaries.ts';
 import { attachGearbox } from './attach.ts';
 import { CAR_TO_SCENE, fromScene, toScene } from './car-frame.ts';
-import { ExhaustModel, exhaustRoute } from './exhaust.ts';
+import { EXHAUST, ExhaustModel, exhaustRoute } from './exhaust.ts';
 import { SYSTEM_CARDS, type CarSystem } from './parts.ts';
 
 export type { CarSystem } from './parts.ts';
@@ -175,7 +175,8 @@ export class CarAssembly implements SceneModel<CarFrame> {
     const ends = this.hoseEnds();
     this.radiator = packaging.radiator ? new RadiatorModel(packaging.radiator, ends.coolant, ancillary) : null;
     this.intercooler = packaging.intercooler ? new IntercoolerModel(packaging.intercooler, ends.air, ancillary, this.radiator?.boxes ?? []) : null;
-    this.fuelTank = packaging.fuelTank ? new FuelTankModel(packaging.fuelTank, ancillary) : null;
+    const tunnel = this.exhaust.route.tunnel;
+    this.fuelTank = packaging.fuelTank ? new FuelTankModel(packaging.fuelTank, ancillary, { y: tunnel.y, halfWidth: EXHAUST.pipeR, top: tunnel.z + EXHAUST.pipeR }) : null;
     for (const m of [this.radiator, this.intercooler, this.fuelTank]) if (m) this.group.add(m.group);
 
     // ---- Systems, bands and cards ----
