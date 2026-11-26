@@ -26,6 +26,7 @@ export const DICTIONARIES = {
   'suspension-macpherson': { module: 'src/i18n/en/suspension-macpherson.ts', load: () => import('./en/suspension-macpherson.ts').then((m) => m.SUSPENSION_MACPHERSON_EN) },
   'suspension-double-wishbone': { module: 'src/i18n/en/suspension-double-wishbone.ts', load: () => import('./en/suspension-double-wishbone.ts').then((m) => m.SUSPENSION_DOUBLE_WISHBONE_EN) },
   'suspension-multilink': { module: 'src/i18n/en/suspension-multilink.ts', load: () => import('./en/suspension-multilink.ts').then((m) => m.SUSPENSION_MULTILINK_EN) },
+  'suspension-pushrod': { module: 'src/i18n/en/suspension-pushrod.ts', load: () => import('./en/suspension-pushrod.ts').then((m) => m.SUSPENSION_PUSHROD_EN) },
   /** The gearbox pages: the table, its dash, the settings panel, the article's frame and the demonstrations. */
   gearboxes: { module: 'src/i18n/en/gearbox-ui.ts', load: () => import('./en/gearbox-ui.ts').then((m) => m.GEARBOX_UI_EN) },
   /** The planetary automatic's page: its dash, lever diagram, matrix, demonstration and part cards. */

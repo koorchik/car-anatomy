@@ -6,7 +6,7 @@
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
 import { onSegment, setSegment } from '../../shell/segmented.ts';
-import { DAMPER_PRESETS, SETUP_RANGES, type CornerSetup, type DamperPreset, type ResolvedCorner } from '../../suspension/setup.ts';
+import { DAMPER_PRESETS, SETUP_RANGES, springRangeNmm, type CornerSetup, type DamperPreset, type ResolvedCorner } from '../../suspension/setup.ts';
 
 const DEG = 180 / Math.PI;
 
@@ -57,6 +57,7 @@ export class SetupPanel {
     this.factory = factory;
     this.setup = { ...factory };
     this.onChange = onChange;
+    this.fitSpring();
     const input = (id: string, apply: (v: number) => Partial<CornerSetup>): void => {
       this.$<HTMLInputElement>(id).addEventListener('input', (event) => this.change(apply(Number((event.target as HTMLInputElement).value))));
     };
@@ -77,6 +78,12 @@ export class SetupPanel {
   setFactory(factory: CornerSetup): void {
     this.factory = factory;
     this.setup = { ...factory };
+    this.fitSpring();
+  }
+
+  /** The spring slider's top for this corner: past the usual one when the car's own spring is stiffer (setup.ts). */
+  private fitSpring(): void {
+    this.$<HTMLInputElement>('susp-spring').max = String(springRangeNmm(this.factory.springNmm)[1]);
   }
 
   /**

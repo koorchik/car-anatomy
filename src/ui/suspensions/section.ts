@@ -43,6 +43,7 @@ import { DEFAULT_SCENE, isRideScene, sceneOf, stepScene, type SceneId } from './
 import { ShakerScene } from './shaker-scene.ts';
 import { LOWER_M, TravelScene, travelDashHtml } from './travel-scene.ts';
 import { SetupPanel } from './setup-panel.ts';
+import { ThirdSpringPanel } from './third-spring-panel.ts';
 import { StripChart } from './strip-chart.ts';
 import './suspensions.css';
 
@@ -107,6 +108,7 @@ export class SuspensionSection implements Section {
   private resolved!: ResolvedCorner;
   private model!: CornerModel;
   private setupPanel!: SetupPanel;
+  private thirdSpring!: ThirdSpringPanel;
   private strip!: StripChart;
   /** The rough road and the shaker (stage P3): each resolves its own corner on the wheel the shared mass control picks. */
   private road!: RoadScene;
@@ -161,6 +163,8 @@ export class SuspensionSection implements Section {
     slots.table.head.add(allTableHeadHtml());
     this.strip = new StripChart(this.$<HTMLCanvasElement>('susp-strip'));
     this.setupPanel = new SetupPanel(this.$('susp-panel'), factory, () => (this.dirty = true));
+    this.thirdSpring = new ThirdSpringPanel(this.$('susp-panel'));
+    this.thirdSpring.setCorner(this.pageCorner);
     this.travelScene = new TravelScene((id) => this.$(id), {
       lower: (on) => this.setupPanel.edit({ rideHeightM: on ? -LOWER_M : 0 }),
       tie: (dz) => {
@@ -223,6 +227,7 @@ export class SuspensionSection implements Section {
     // The rough road and the shaker resolve the page's corner on their own wheel.
     this.road.setCorner(this.pageCorner);
     this.shaker.setCorner(this.pageCorner);
+    this.thirdSpring.setCorner(this.pageCorner);
     // Another corner has all its links: the model too, when it is kept for the same geometry.
     if (this.removed.length) this.setLinks([]);
     this.travelScene.resetLinks();

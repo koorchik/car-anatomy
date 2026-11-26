@@ -49,6 +49,8 @@ describe('the suspension pages', () => {
     (_name, page, car) => {
       const corner = pageCorner(page, car);
       const factory = factorySetup(corner);
+      // It runs on its own spring: a racing car's, stiffer than the usual slider reaches, is not clamped to a softer one.
+      expect(resolveCorner(corner, factory).setup.springNmm).toBe(factory.springNmm);
       expect(resolveCorner(corner, factory).staticTravelM).toBeCloseTo(0, 12);
       expect(resolveCorner(corner, { ...factory, rideHeightM: -0.04 }).staticTravelM).toBeCloseTo(0.04, 9);
     },

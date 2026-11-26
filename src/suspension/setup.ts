@@ -57,6 +57,16 @@ export const SETUP_RANGES = {
 const clamp = (v: number, [lo, hi]: readonly [number, number], fallback: number): number =>
   Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback;
 
+/**
+ * The spring's range for a corner whose factory spring is `factoryNmm`, N/mm: SETUP_RANGES.springNmm, reaching past its
+ * top to half again the factory rate (in tens) when the car's own spring is stiffer, as a racing car's is. Clamping at
+ * the fixed top would quietly run such a car on a softer spring than its own.
+ */
+export function springRangeNmm(factoryNmm: number): readonly [number, number] {
+  const [lo, hi] = SETUP_RANGES.springNmm;
+  return Number.isFinite(factoryNmm) && factoryNmm * 1.5 > hi ? [lo, Math.ceil((factoryNmm * 1.5) / 10) * 10] : [lo, hi];
+}
+
 /** The corner as it left the factory: its spring and damper, design height, the alignment as drawn, nominal pressure. */
 export function factorySetup(corner: CornerSpec): CornerSetup {
   return {
@@ -73,7 +83,7 @@ export function factorySetup(corner: CornerSpec): CornerSetup {
 const angle = (v: unknown, range: readonly [number, number]): 'factory' | number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(range[1], Math.max(range[0], v)) : 'factory';
 
-/** A setup with every field finite and inside SETUP_RANGES (a link from elsewhere may carry anything). */
+/** A setup with every field finite and inside SETUP_RANGES, the spring inside springRangeNmm (a link from elsewhere may carry anything). */
 export function clampSetup(setup: CornerSetup, factory: CornerSetup): CornerSetup {
   const d = setup.damper;
   const damper: CornerSetup['damper'] =
@@ -83,7 +93,7 @@ export function clampSetup(setup: CornerSetup, factory: CornerSetup): CornerSetu
         ? clamp(d, SETUP_RANGES.zeta, 0.25)
         : factory.damper;
   return {
-    springNmm: clamp(setup.springNmm, SETUP_RANGES.springNmm, factory.springNmm),
+    springNmm: clamp(setup.springNmm, springRangeNmm(factory.springNmm), factory.springNmm),
     damper,
     rideHeightM: clamp(setup.rideHeightM, SETUP_RANGES.rideHeightM, 0),
     camberDeg: angle(setup.camberDeg, SETUP_RANGES.camberDeg),

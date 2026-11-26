@@ -30,7 +30,7 @@ export function stepPage(id: string, direction: -1 | 1): SuspensionPage {
 }
 
 export const pageName = (id: SuspensionPageId): string =>
-  ({ macpherson: t('Стійка Макферсон'), 'double-wishbone': t('Подвійні поперечні важелі'), multilink: t('Багаторичажна підвіска') })[id];
+  ({ macpherson: t('Стійка Макферсон'), 'double-wishbone': t('Подвійні поперечні важелі'), multilink: t('Багаторичажна підвіска'), pushrod: t('Штовхач і коромисло') })[id];
 
 /** The line under a page's own name: where its corner sits and what kind of geometry it is. */
 const baseSubtitle = (id: SuspensionPageId): string =>
@@ -38,6 +38,7 @@ const baseSubtitle = (id: SuspensionPageId): string =>
     macpherson: t('Передня підвіска компактного передньопривідного авто'),
     'double-wishbone': t('Передня підвіска задньопривідного авто · типова геометрія'),
     multilink: t('Задня підвіска задньопривідного авто · п’ять тяг · типова геометрія'),
+    pushrod: t('Передня підвіска гоночного авто · пружина в кузові, третя пружина · типова геометрія'),
   })[id];
 
 export const endLabel = (end: 'F' | 'R'): string => (end === 'F' ? t('Передня підвіска') : t('Задня підвіска'));
@@ -72,6 +73,9 @@ const unverifiedName = (key: string): string =>
     'suspension layout': t('опис підвіски'),
     kingpinOffsetMmF: t('плече осі повороту кулака'),
     kpiDegF: t('нахил осі повороту кулака'),
+    wheelbaseMm: t('колісна база'),
+    springNmmF: t('пружини'),
+    thirdSpringNmmF: t('треті пружини'),
   })[key] ?? key;
 
 const source = (href: string): string => {

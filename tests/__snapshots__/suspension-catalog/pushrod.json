@@ -1,0 +1,102 @@
+{
+ "page": {
+  "layout": "pushrod",
+  "track": 1.6,
+  "travel": {
+   "bumpM": 0.11,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "lower-arm",
+    "front": [0.157, 0.3985, 0.1308],
+    "rear": [-0.122, 0.3985, 0.1552],
+    "ball": [0.0175, 0.7782, 0.13]
+   },
+   {
+    "id": "upper-arm",
+    "front": [0.1242, 0.4524, 0.4343],
+    "rear": [-0.1547, 0.4524, 0.4587],
+    "ball": [-0.0152, 0.7213, 0.47]
+   }
+  ],
+  "rods": [
+   {
+    "id": "tie-rod",
+    "body": [-0.1279, 0.4099, 0.2829],
+    "knuckle": [-0.1279, 0.7215, 0.29],
+    "steer": true
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.8, 0.3117],
+  "spring": {
+   "rate": 90000,
+   "body": [0.0175, 0.1859, 0.2857]
+  },
+  "halfshaft": null,
+  "sprungKg": 173,
+  "unsprungKg": 25,
+  "tyre": "slick",
+  "tyreRadiusM": 0.3214,
+  "curves": {
+   "camber": [-1.891, -2.321, -3, -3.934, -5.164],
+   "toe": [-0.042, -0.005, 0, 0.005, 0.047],
+   "halfTrack": [-13.813, -5.009, 0, 1.378, -0.793],
+   "rcHeight": [216.281, 139.377, 64.767, -8.255, -80.284]
+  },
+  "camberReversal": null,
+  "joints": null
+ },
+ "formula-1-2022": {
+  "layout": "pushrod",
+  "track": 1.695,
+  "travel": {
+   "bumpM": 0.11,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "lower-arm",
+    "front": [0.1591, 0.4432, 0.1308],
+    "rear": [-0.1199, 0.4432, 0.1552],
+    "ball": [0.0196, 0.8232, 0.1454]
+   },
+   {
+    "id": "upper-arm",
+    "front": [0.1278, 0.4999, 0.4343],
+    "rear": [-0.1511, 0.4999, 0.4587],
+    "ball": [-0.0117, 0.7688, 0.47]
+   }
+  ],
+  "rods": [
+   {
+    "id": "tie-rod",
+    "body": [-0.1243, 0.4528, 0.2766],
+    "knuckle": [-0.1243, 0.769, 0.29],
+    "steer": true
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.8475, 0.349],
+  "spring": {
+   "rate": 137821,
+   "body": [0.0196, 0.2308, 0.2988]
+  },
+  "halfshaft": null,
+  "sprungKg": 139.55,
+  "unsprungKg": 40,
+  "tyre": "slick",
+  "tyreRadiusM": 0.3598,
+  "curves": {
+   "camber": [0.56, 0.423, 0, -0.706, -1.731],
+   "toe": [-0.04, -0.005, 0, 0.005, 0.047],
+   "halfTrack": [-9.458, -2.936, 0, -0.553, -4.552],
+   "rcHeight": [175.165, 99.408, 24.99, -48.257, -120.541]
+  },
+  "camberReversal": null,
+  "joints": null
+ }
+}

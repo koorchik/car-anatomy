@@ -5,8 +5,9 @@ import type { PageCar, SuspensionPage } from '../suspension-designer/page-cars.t
 import { DOUBLE_WISHBONE_PAGE } from './suspensions/double-wishbone.ts';
 import { MACPHERSON_PAGE } from './suspensions/macpherson.ts';
 import { MULTILINK_PAGE } from './suspensions/multilink.ts';
+import { PUSHROD_PAGE } from './suspensions/pushrod.ts';
 
-export const SUSPENSION_PAGES: readonly SuspensionPage[] = [MACPHERSON_PAGE, DOUBLE_WISHBONE_PAGE, MULTILINK_PAGE];
+export const SUSPENSION_PAGES: readonly SuspensionPage[] = [MACPHERSON_PAGE, DOUBLE_WISHBONE_PAGE, MULTILINK_PAGE, PUSHROD_PAGE];
 
 export const suspensionPage = (id: string): SuspensionPage | undefined => SUSPENSION_PAGES.find((p) => p.id === id);
 

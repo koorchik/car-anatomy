@@ -2,11 +2,12 @@
 // the layout goes under a heading about the layout in general (pages.ts), as on the engine pages. Here is the macpherson page's
 // own article: what the strut is, how to read the scenes, what the setup changes, where the strut came from and where
 // the numbers come from. Each page's article has its own dictionary (src/i18n/en/suspension-<page>.ts); the double
-// wishbone's and the multilink's are in articles/.
+// wishbone's, the multilink's and the pushrod's are in articles/.
 
 import { t } from '../../i18n/t.ts';
 import { doubleWishboneArticleHtml } from './articles/double-wishbone.ts';
 import { multilinkArticleHtml } from './articles/multilink.ts';
+import { pushrodArticleHtml } from './articles/pushrod.ts';
 import { carBlockHtml, type PageChoice } from './pages.ts';
 
 const source = (href: string, text: string): string => `<a href="${href}" target="_blank" rel="noopener">${text}</a>`;
@@ -32,6 +33,10 @@ export const macphersonArticleHtml = (): string => `<section class="susp-article
 
 /** The article of a page or a car's page. */
 export function pageArticleHtml(c: PageChoice): string {
-  const own = c.page.id === 'double-wishbone' ? doubleWishboneArticleHtml() : c.page.id === 'multilink' ? multilinkArticleHtml() : macphersonArticleHtml();
+  const own =
+    c.page.id === 'double-wishbone' ? doubleWishboneArticleHtml()
+    : c.page.id === 'multilink' ? multilinkArticleHtml()
+    : c.page.id === 'pushrod' ? pushrodArticleHtml()
+    : macphersonArticleHtml();
   return c.car ? carBlockHtml(c.car) + own : own;
 }

@@ -12,6 +12,7 @@ import { shakerDashHtml, shakerPanelHtml } from './shaker-scene.ts';
 import { SCENES, sceneLabel } from './scenes.ts';
 import { setupPanelHtml } from './setup-panel.ts';
 import { stripLegendHtml } from './strip-chart.ts';
+import { thirdSpringHtml } from './third-spring-panel.ts';
 import { travelControlsHtml } from './travel-scene.ts';
 
 export const titleHtml = (): string => `<div class="susp-title">
@@ -124,6 +125,7 @@ export const panelHtml = (): string => `<div class="panel-scroll susp-panel" id=
       ${roadPanelHtml()}
       ${shakerPanelHtml()}
       ${rideWheelHtml()}
+      ${thirdSpringHtml()}
       ${setupPanelHtml()}
       ${rideArticleHtml()}
       <div id="susp-article"></div>
