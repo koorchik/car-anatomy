@@ -339,15 +339,16 @@ const nudged = (d: ChassisDesign, i: number): ChassisDesign =>
   withDesignOnlyGeometry(() => resolveChassis({ ...d, trackMmF: d.trackMmF + 0.3 * i, trackMmR: d.trackMmR + 0.3 * i }));
 
 describe('evaluateChassis', () => {
-  const solid = (d: ChassisDesign): boolean => d.layoutR === 'live-axle' || d.layoutR === 'de-dion';
-
-  it('takes under 5 ms for a design it has not seen (a solid axle under 15 ms)', () => {
-    for (const p of CHASSIS_PRESETS) {
-      const d = p.design();
-      const specs = Array.from({ length: 6 }, (_, i) => chassisToSpec(nudged(d, i + 1)));
-      // A solid axle's least-squares solves take 13–45 µs each (docs/suspension-model.md), and its window and its turn
-      // need a few dozen of them.
-      expect(bestOf(6, (i) => evaluateChassis(specs[i - 1])), p.id).toBeLessThan(solid(d) ? 15 : 5);
+  it('takes under 5 ms for a design it has not seen, a solid axle too', () => {
+    const rwd = editChassis(DEFAULT_CHASSIS, { drive: 'rwd' });
+    const designs: Array<[string, ChassisDesign]> = [
+      ...CHASSIS_PRESETS.map((p): [string, ChassisDesign] => [p.id, p.design()]),
+      ['de Dion', editChassis(rwd, { layoutR: 'de-dion' })],
+      ['live axle', editChassis(rwd, { layoutR: 'live-axle' })],
+    ];
+    for (const [id, d] of designs) {
+      const specs = Array.from({ length: 8 }, (_, i) => chassisToSpec(nudged(d, i + 1)));
+      expect(bestOf(8, (i) => evaluateChassis(specs[i - 1])), id).toBeLessThan(5);
     }
   }, 60_000);
 
@@ -508,9 +509,13 @@ describe('diagnoses', () => {
 
 describe('sensitivity', () => {
   it('a full pass over every control takes under 150 ms', () => {
-    for (const d of [DEFAULT_CHASSIS, ...CHASSIS_CATALOGUE.map((e) => e.design)]) {
+    const solid: Array<[string, ChassisDesign]> = [
+      ['leaf-offroader', chassisPreset('leaf-offroader')!.design()],
+      ['de Dion', editChassis(editChassis(DEFAULT_CHASSIS, { drive: 'rwd' }), { layoutR: 'de-dion' })],
+    ];
+    for (const [id, d] of [['default', DEFAULT_CHASSIS] as [string, ChassisDesign], ...CHASSIS_CATALOGUE.map((e): [string, ChassisDesign] => [e.id, e.design]), ...solid]) {
       sensitivityPass(d);
-      expect(bestOf(3, (i) => sensitivityPass(nudged(d, i))), d.car ?? 'default').toBeLessThan(150);
+      expect(bestOf(3, (i) => sensitivityPass(nudged(d, i))), id).toBeLessThan(150);
     }
   }, 60_000);
 

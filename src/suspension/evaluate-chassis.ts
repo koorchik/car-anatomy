@@ -39,8 +39,9 @@ import { inclinationOf, lateralPeakN, longitudinalPeakN, mfForces, newMfForces, 
 import { patchLengthM } from '../vehicle/tyre-data.ts';
 import { roadLoadN } from '../vehicle/road-load.ts';
 
-/** Travel the lite chassis tables cover each way from design, m: a node or two either side of rest. */
-export const LITE_WINDOW_M = 0.006;
+/** Travel the lite chassis tables cover each way from design, m: one node of a beam's 5 mm grid either side of rest,
+ *  which gives the full grid's numbers at rest (a wider window gives the same ones and costs a beam 25 solves, not 9). */
+export const LITE_WINDOW_M = 0.005;
 /** The camber and toe of a steady turn are solved at 0, this and twice this lateral acceleration (a share of g), and a
  *  parabola goes through the three. */
 const TURN_LEVEL_G = 0.6;
