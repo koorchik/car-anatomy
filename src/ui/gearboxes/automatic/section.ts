@@ -31,6 +31,7 @@ import { readableDegreesPerSecond } from '../../../shell/time.ts';
 import { Ignition } from '../../widgets/ignition.ts';
 import { Pedal } from '../../widgets/pedal.ts';
 import { Tacho } from '../../widgets/tacho.ts';
+import { gearboxKeys } from '../keys.ts';
 import { SLOW_RPM_DEFAULT, SVG_SOUND_OFF, SVG_SOUND_ON } from '../markup.ts';
 import { automaticArticleHtml } from './article.ts';
 import { matrixSteps, shiftChange, type MatrixStep } from './demo.ts';
@@ -41,6 +42,8 @@ import '../gearboxes.css';
 import './automatic.css';
 
 const PAGE_ID = 'automatic';
+/** The key context of this page (the shell's KeyMap): its own, so that the manual page's bindings never reach it. */
+const KEY_CONTEXT = 'gearboxes/automatic';
 const PHONE = 860;
 const BOTH_PANELS = 1200;
 /** The view from the model toward the camera: from the front left and above, so the sets show one behind another. */
@@ -120,6 +123,19 @@ export class AutomaticSection implements Section {
     this.pedal = new Pedal(this.el('gba-pedal-col'), { setThrottle: (value) => this.drive.setPedal(value), press: () => void this.pressThrottle() });
     this.ignition = new Ignition(this.el('gba-control'), () => void this.toggleIgnition());
     this.listen();
+    // The table's keys of the manual pages (gas, start, mute) under a context of its own: the manual page's bindings
+    // reach its own pedal and ignition. The digits stay the views, as on the manual table.
+    const keys = gearboxKeys({
+      gas: (on) => this.pedal.holdKey(on),
+      ignition: () => void this.toggleIgnition(),
+      mute: () => {
+        this.muted = !this.muted;
+        this.syncSound();
+      },
+      gear: (name) => this.select(name),
+      brake: () => {},
+    });
+    ctx.keys.bind(KEY_CONTEXT, keys.gearboxes);
     // The row of view tools wraps on a phone and in the longer language; the first-visit callout and the scale bar stand
     // above it through --tools-h, as on the manual page.
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.measureTools()).observe(slots.tools.parent);
@@ -228,7 +244,7 @@ export class AutomaticSection implements Section {
     panels.setOpen('right', !small && window.innerWidth >= BOTH_PANELS);
     panels.setOpen('left', !small);
     panels.relayout();
-    this.ctx.keys.use(['gearboxes']);
+    this.ctx.keys.use([KEY_CONTEXT]);
   }
 
   private buildModel(): void {
