@@ -118,7 +118,8 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   '{c} °C': '{c} °C',
   'Куліса: {pattern}': 'Shift gate: {pattern}',
   'З двигуном': 'With the engine',
-  'Дорога й графіки': 'Road and charts',
+  // The left panel's name, on a phone's top bar beside «About the transmission»: as short as «Setup» on the table.
+  'Дорога й графіки': 'Drive',
   'Щоб завести, вичавіть зчеплення (C) або поставте нейтраль (N).': 'To start the engine, press the clutch (C) or select neutral (N).',
   'Двигун заглух: зчеплення замкнулося, а обертів не вистачило. Вичавіть зчеплення (C) або поставте нейтраль і заведіть знову.':
     'The engine stalled: the clutch locked up without enough revs. Press the clutch (C) or select neutral, and start it again.',
@@ -165,7 +166,7 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   'Рушаємо': 'Pulling away',
   'Зчеплення відпускаємо повільно': 'Letting the clutch up slowly',
   'Автозчеплення вимкнено: педаль тепер у водія. Трохи газу, близько 2000 об/хв, і педаль повільно, за дві з половиною секунди, проходить місце, де диск починає тримати. Диск ковзає, оберти просідають, авто повзе, а лічильник енергії зчеплення в панелі «Дорога й графіки» росте.':
-    'The auto clutch is off: the pedal is the driver\'s now. A little gas, about 2000 rpm, and the pedal slowly, over two and a half seconds, passes the point where the disc starts to bite. The disc slips, the revs sag, the car creeps, and the clutch energy counter in the "Road and charts" panel climbs.',
+    'The auto clutch is off: the pedal is the driver\'s now. A little gas, about 2000 rpm, and the pedal slowly, over two and a half seconds, passes the point where the disc starts to bite. The disc slips, the revs sag, the car creeps, and the clutch energy counter in the "Drive" panel climbs.',
   'Оберти просіли до {rpm} об/хв, у диск пішло {kj} кДж.': 'The revs sagged to {rpm} rpm; {kj} kJ went into the disc.',
   'Різко й без газу': 'Abruptly, with no gas',
   'Та сама перша передача, але педаль кинуто одразу і без газу. Зчеплення замикається миттєво, двигун мусить одразу зрушити авто вагою понад тонну — і глухне.':

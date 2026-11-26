@@ -1000,3 +1000,26 @@ body.gbx-car .gbx-demo p {
     margin: auto;
   }
 }
+
+/*
+ * On a phone the car's title block carries the demonstrations' row as well: the scale bar goes under it, not over it.
+ * The left panel's button names the drive panel, longer than the table's «Налаштувати»: in English both buttons of the
+ * top bar did not fit and the article's went off the screen, so they shrink with an ellipsis, the drive panel's first.
+ */
+@media (max-width: 860px) {
+  body.gbx-car .scale-bar {
+    top: 206px;
+  }
+
+  body.gbx-car .topbar #results-open,
+  body.gbx-car .topbar #panel-open {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.gbx-car .topbar #results-open {
+    flex-shrink: 4;
+  }
+}
