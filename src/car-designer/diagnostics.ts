@@ -142,7 +142,16 @@ export function diagnoseBuild(p: CarPerformance): CarDiagnostic[] {
     add('donor-limit', 'note', t('Обмежувач швидкості не перенесено'), t('Заводське авто обмежене на {kmh} км/год електронікою; збірка показує, скільки дає сам опір.', { kmh: n0(p.donorLimitKmh) }));
   }
   if (p.build.lubrication) {
-    add('sump', 'note', t('Інший картер'), t('У двигуні {sump}: двигун сидить на {mm} мм нижче, центр мас зсунувся на {cg} мм.', { sump: SUMP_NAMES[p.build.lubrication.sump], mm: n0(p.fit.crankDropMm), cg: n0(p.cgShiftMm) }));
+    const sump = SUMP_NAMES[p.build.lubrication.sump];
+    const where =
+      p.fit.crankDropMm > 0
+        ? t('У двигуні {sump}: піддон мілкіший, тож двигун сидить на {mm} мм нижче.', { sump, mm: n0(p.fit.crankDropMm) })
+        : p.gearboxDesign.type === 'transaxle'
+          ? t('У двигуні {sump}. Двигун не опускається: до нього прикручено коробку з головною передачею, а її півосі мають лишатися на рівні маточин.', { sump })
+          : t('У двигуні {sump}.', { sump });
+    const cg = p.cgShiftMm;
+    const height = cg < 0 ? t('Центр мас опустився на {mm} мм.', { mm: n0(-cg) }) : cg > 0 ? t('Центр мас піднявся на {mm} мм.', { mm: n0(cg) }) : '';
+    add('sump', 'note', t('Інший картер'), height ? `${where} ${height}` : where);
   }
 
   const order: Record<Severity, number> = { fatal: 0, warning: 1, note: 2 };

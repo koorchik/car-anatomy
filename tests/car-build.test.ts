@@ -21,7 +21,8 @@ import { gearboxById } from '../src/data/gearboxes.ts';
 import { editDesign, designFromSpec } from '../src/designer/presets.ts';
 import { crankFrontZMm, engineEnvelope } from '../src/engine/envelope.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
-import { evaluateGearbox } from '../src/gearbox-designer/evaluate.ts';
+import { drivenGripN, evaluateGearbox } from '../src/gearbox-designer/evaluate.ts';
+import { designVehicle } from '../src/gearbox-designer/vehicle.ts';
 import { designFromRecord, withGearboxType } from '../src/gearbox-designer/presets.ts';
 import { lapFor } from '../src/lubrication/scenario.ts';
 import { MM } from '../src/scene/geometry.ts';
@@ -88,13 +89,27 @@ describe('the odd presets', () => {
     expect(w16.frontShare).toBeGreaterThan(w16.donor.body.frontShare);
     const d = diagnoseBuild(w16).map((x) => x.id);
     expect(d).toEqual(expect.arrayContaining(['gearbox-doomed', 'torque', 'clutch']));
-    // A dry sump's shallow pan lets the engine down; slicks brake shorter and lap faster.
+    // Four wheels' worth of power through two front tyres: from 80 to 120 km/h the car can gain speed no faster than
+    // the driven tyres pull, whatever the engine gives.
+    const grip = drivenGripN(designVehicle(w16.gearboxDesign), 0);
+    expect(w16.eightyTo120S!).toBeGreaterThan(((120 - 80) / 3.6) * w16.massKg / grip);
+    // Slicks brake shorter and lap faster.
     const slicks = evaluateBuild(odd[2]!.build);
     const civic = evaluateBuild(factoryBuild('civic-type-r-fk8'));
-    expect(slicks.fit.crankDropMm).toBeGreaterThan(30);
-    expect(slicks.cgHeightM).toBeLessThan(civic.cgHeightM);
     expect(slicks.lapTimeS).toBeLessThan(civic.lapTimeS);
     expect(slicks.chassis!.brakingM).toBeLessThan(civic.chassis!.brakingM);
+  });
+
+  it('let a dry sump lower the engine ahead of a separate gearbox, not behind a transaxle', () => {
+    // The E30's gearbox and final drive are apart, joined by a propshaft: a shallower pan lets the engine down.
+    const e30 = evaluateBuild(factoryBuild('bmw-m3-e30'));
+    const e30dry = evaluateBuild(resolveBuild({ ...factoryBuild('bmw-m3-e30'), lubrication: { sump: 'dry', oilL: 7 } }));
+    expect(e30dry.fit.crankDropMm).toBeGreaterThan(30);
+    expect(e30dry.cgHeightM).toBeLessThan(e30.cgHeightM);
+    // The Civic's transaxle bolts to the engine and its half-shafts stay level with the hubs: the crank stays put.
+    const civicDry = evaluateBuild(oddPresets()[2]!.build);
+    expect(civicDry.build.lubrication?.sump).toBe('dry');
+    expect(civicDry.fit.crankDropMm).toBe(0);
   });
 });
 

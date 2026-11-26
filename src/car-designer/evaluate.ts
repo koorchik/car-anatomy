@@ -6,10 +6,12 @@
 //   designer's model (the engine designer's estimate for both engines, the gearbox designer's for both gearboxes), so a
 //   difference of masses comes from one model; the change sits where the unit sits (the engine at its box's centre, the
 //   gearbox at the end of the donor engine's crank);
-// - centre of mass height: the donor's plus the engine's shift. The engine keeps its lowest point where the donor's
-//   engine had it, but never sits higher than the donor's crank, so a shallower (dry) pan lowers it;
+// - centre of mass height: the donor's plus the engine's shift. Ahead of a separate gearbox and final drive the engine
+//   keeps its lowest point where the donor's engine had it, but never sits higher than the donor's crank, so a
+//   shallower (dry) pan lowers it; behind a transaxle the axle line holds the crank where it was;
 // - 0–100, 0–400 m, v_max and its gear: the gearbox designer's quasi-static model (evaluateGearbox) with this engine's
-//   torque and this car's mass, tyres and road load; 80–120 km/h in fifth (or top) from its traction curves;
+//   torque and this car's mass, tyres and road load; 80–120 km/h in fifth (or top) and first-gear wheelspin from its
+//   traction curves and its tyres' grip (drivenGripN);
 // - lap time: the canonical lap (lap.ts);
 // - braking, skidpad, understeer, ride: the suspension designer's quick estimates (evaluateChassis) of the donor's
 //   chassis, or the chosen one, under this car's mass; the springs stay those of the car the chassis came from;
@@ -35,12 +37,12 @@ import type { EngineSpec } from '../engine/spec.ts';
 import { systemsOf, type SystemsSpec } from '../engine/systems-spec.ts';
 import { resolveGearboxDesign } from '../gearbox-designer/constraints.ts';
 import { DEFAULT_GEARBOX_DESIGN, type GearboxDesign, type GearboxType } from '../gearbox-designer/design.ts';
-import { evaluateGearbox, type GearboxPerformance } from '../gearbox-designer/evaluate.ts';
+import { drivenGripN, evaluateGearbox, type GearboxPerformance } from '../gearbox-designer/evaluate.ts';
 import { gearboxMass } from '../gearbox-designer/mass.ts';
 import { designFromRecord } from '../gearbox-designer/presets.ts';
 import { assessGearbox, type GearboxReliability, type GearboxVerdictId } from '../gearbox-designer/reliability.ts';
 import { designBuild } from '../gearbox-designer/to-spec.ts';
-import type { DesignEngine } from '../gearbox-designer/vehicle.ts';
+import { designVehicle, type DesignEngine, type DesignVehicle } from '../gearbox-designer/vehicle.ts';
 import { DRIVELINE, oilRun } from '../lubrication/scenario.ts';
 import { lapTorqueCurve } from '../lubrication/torque.ts';
 import type { LubeSummary } from '../lubrication/run.ts';
@@ -48,14 +50,14 @@ import { catalogueChassis, catalogueEntry } from '../suspension-designer/catalog
 import { axleOf, withAxle, type AxleEnd, type ChassisDesign } from '../suspension-designer/design.ts';
 import { springRateNm } from '../suspension-designer/to-spec.ts';
 import { evaluateChassis, type ChassisPerformance } from '../suspension/evaluate-chassis.ts';
-import { cgHeightM, drivenShare, drivingMassKg, vehicleSpec, type CarRecord, type Vec3 } from '../vehicle/car.ts';
+import { cgHeightM, drivingMassKg, vehicleSpec, type CarRecord, type Vec3 } from '../vehicle/car.ts';
 import { AIR_DENSITY, G } from '../vehicle/constants.ts';
 import { CANONICAL_LAP_LEVEL, type LapLevel, type LapTrace } from '../vehicle/lap.ts';
 import { engineToCar } from '../vehicle/packaging.ts';
 import { topSpeed } from '../vehicle/powertrain.ts';
 import { roadLoadCoeffs, roadLoadN, type RoadLoadCoeffs } from '../vehicle/road-load.ts';
 import { parseTyreSize } from '../vehicle/tyre-size.ts';
-import { TYRES, type TyreId, type VehicleSpec } from '../vehicle/vehicle.ts';
+import type { TyreId, VehicleSpec } from '../vehicle/vehicle.ts';
 import { donorById, type CarBuild, type IdealGearbox } from './build.ts';
 import { buildLap, buildLapPowertrain, type LapBox } from './lap.ts';
 import { donorGearboxType, drivenTyreSize, resolveBuildWithNotes, type ResolveNote } from './resolve.ts';
@@ -168,7 +170,9 @@ export interface EngineFit {
 function fitOf(car: CarRecord, box: Box3, donorBox: Box3): EngineFit {
   const pack = car.packaging!;
   // The engine keeps its lowest point where the donor's engine had it, but never sits higher than the donor's crank.
-  const drop = Math.max(0, -donorBox.min[1] - -box.min[1]);
+  // Behind a transaxle the crank cannot go down at all: the box with the final drive bolts to the engine and its
+  // output shafts stay level with the wheel hubs, so the axle line holds the crank's height.
+  const drop = donorGearboxType(car) === 'layshaft' ? Math.max(0, -donorBox.min[1] - -box.min[1]) : 0;
   const at: Vec3 = [pack.crankFront[0], pack.crankFront[1], pack.crankFront[2] - drop];
   const placed = inCar(car, box, at);
   const bay = pack.bay;
@@ -258,8 +262,9 @@ function rebaseGearbox(g: GearboxDesign, car: CarRecord, rl: RoadLoadCoeffs, bui
   return changed ? resolveGearboxDesign({ ...g, ...patch }) : g;
 }
 
-/** 80–120 km/h at full load in one gear, s, from the gearbox model's traction curve; null if the gear cannot. */
-function elasticity(perf: GearboxPerformance, gear: number, massKg: number): number | null {
+/** 80–120 km/h at full load in one gear, s, from the gearbox model's traction curve, no more than the driven tyres
+ *  pull (drivenGripN); null if the gear cannot. */
+function elasticity(perf: GearboxPerformance, v: DesignVehicle, gear: number, massKg: number): number | null {
   const tr = perf.traction;
   const forces = tr.gears[gear - 1];
   if (!forces) return null;
@@ -273,7 +278,8 @@ function elasticity(perf: GearboxPerformance, gear: number, massKg: number): num
         const rb = tr.roadLoadN[i]!;
         if (a === null || a === undefined || b === null || b === undefined) return null;
         const s = (kmh - k[i - 1]!) / (k[i]! - k[i - 1]!);
-        return a - ra + (b - a - (rb - ra)) * s;
+        const road = ra + (rb - ra) * s;
+        return Math.min(a + (b - a) * s, drivenGripN(v, road)) - road;
       }
     }
     return null;
@@ -289,16 +295,13 @@ function elasticity(perf: GearboxPerformance, gear: number, massKg: number): num
 }
 
 /** Speed in first gear up to which the driven wheels spin at full throttle, km/h (0: they never do): the gearbox
- *  model's force at the wheels against the tyre's μ on the driven axle's static load. */
-export function spinSpeedKmh(car: CarRecord, massKg: number, perf: GearboxPerformance): number {
-  const grip = TYRES[car.tyre.id].mu * drivenShare(car) * massKg * G;
+ *  model's force at the wheels against the most its tyres pull there (drivenGripN, with the weight transfer). */
+export function spinSpeedKmh(v: DesignVehicle, perf: GearboxPerformance): number {
   const tr = perf.traction;
   let top = 0;
-  for (const gear of tr.gears.slice(0, 1)) {
-    gear.forEach((f, i) => {
-      if (f !== null && f > grip) top = Math.max(top, tr.kmh[i]!);
-    });
-  }
+  tr.gears[0]?.forEach((f, i) => {
+    if (f !== null && f > drivenGripN(v, tr.roadLoadN[i]!)) top = Math.max(top, tr.kmh[i]!);
+  });
   return top;
 }
 
@@ -554,6 +557,8 @@ export function* evaluateSteps(input: unknown): Generator<void, CarPerformance, 
   // The donor's own gearbox in the donor as made: what the new engine's torque and the verdict are measured against.
   const donorFactory = donorBox ? remember(gearboxes, JSON.stringify([donorBox, null]), () => evaluateGearbox(donorBox)) : gearbox;
   const elasticGear = Math.min(5, gearbox.gears.length);
+  // The car the gearbox model drove (cached by evaluateGearbox): its tyres and axle loads for the grip.
+  const gearboxVehicle = designVehicle(gearboxDesign, designEngine);
   const M = drivingMassKg(car);
   return {
     build,
@@ -591,9 +596,9 @@ export function* evaluateSteps(input: unknown): Generator<void, CarPerformance, 
     zeroTo100S: gearbox.zeroTo100S,
     zeroTo400mS: gearbox.zeroTo400mS,
     elasticGear,
-    eightyTo120S: elasticity(gearbox, elasticGear, M),
-    spinKmh: spinSpeedKmh(car, M, gearbox),
-    donorSpinKmh: spinSpeedKmh(donor, drivingMassKg(donor), donorFactory),
+    eightyTo120S: elasticity(gearbox, gearboxVehicle, elasticGear, M),
+    spinKmh: spinSpeedKmh(gearboxVehicle, gearbox),
+    donorSpinKmh: donorBox ? spinSpeedKmh(designVehicle(donorBox), donorFactory) : spinSpeedKmh(gearboxVehicle, gearbox),
     lap,
     lapTimeS: lap.lapTime,
     lapLevel: CANONICAL_LAP_LEVEL,

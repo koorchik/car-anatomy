@@ -95,8 +95,13 @@ export const CAR_DESIGNER_EN: Record<string, string> = {
   'Заводське авто обмежене на {kmh} км/год електронікою; збірка показує, скільки дає сам опір.':
     'The factory car is limited electronically to {kmh} km/h; the build shows what the drag alone allows.',
   'Інший картер': 'A different sump',
-  'У двигуні {sump}: двигун сидить на {mm} мм нижче, центр мас зсунувся на {cg} мм.':
-    'The engine has a {sump}: it sits {mm} mm lower, and the center of mass has moved by {cg} mm.',
+  'У двигуні {sump}: піддон мілкіший, тож двигун сидить на {mm} мм нижче.':
+    'The engine has a {sump}: its pan is shallower, so it sits {mm} mm lower.',
+  'У двигуні {sump}. Двигун не опускається: до нього прикручено коробку з головною передачею, а її півосі мають лишатися на рівні маточин.':
+    'The engine has a {sump}. It does not go any lower: the transaxle is bolted to it, and its half-shafts have to stay level with the hubs.',
+  'У двигуні {sump}.': 'The engine has a {sump}.',
+  'Центр мас опустився на {mm} мм.': 'The center of mass is {mm} mm lower.',
+  'Центр мас піднявся на {mm} мм.': 'The center of mass is {mm} mm higher.',
 
   // metrics.ts
   'с': 's',

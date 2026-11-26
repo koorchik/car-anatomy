@@ -255,6 +255,18 @@ function drivenAxleN(v: DesignVehicle, ax: number, grade = 0): number {
   return v.drive === 'rwd' ? rear : m * G * Math.cos(grade) - rear;
 }
 
+/**
+ * The most the driven tyres pull, N: their peak force under the weight transfer of the acceleration it gives against a
+ * road load `resistN`, with the tyre and axle loads of the standing start but without its careful driver's margin. The
+ * car builder (stage C4) reads it for wheelspin and for elasticity, so its grip is this model's.
+ */
+export function drivenGripN(v: DesignVehicle, resistN: number): number {
+  const peak = (ax: number): number => 2 * longitudinalPeakN(v.tyre.set, drivenAxleN(v, ax) / 2);
+  let f = peak(0);
+  for (let k = 0; k < 8; k++) f = peak(Math.max(0, (f - resistN) / v.massKg));
+  return f;
+}
+
 function buildModel(d: GearboxDesign, own?: DesignEngine): Model {
   const { box, teeth } = designBuild(d);
   const v = designVehicle(d, own);
