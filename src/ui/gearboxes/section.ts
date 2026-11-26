@@ -249,6 +249,8 @@ export class GearboxSection implements Section {
       } else {
         this.closeDemo();
         this.closeCarDemo();
+        // One asked for on a page without the car (the transaxle) is dropped with the address, not run later.
+        this.pendingCarDemo = null;
       }
     }
   }
