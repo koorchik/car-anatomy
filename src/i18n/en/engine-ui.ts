@@ -435,4 +435,5 @@ export const ENGINE_UI_EN: Record<string, string> = {
   '{rpm} об/хв: {value} {unit}, було {before}': '{rpm} rpm: {value} {unit}, was {before}',
   '{rpm} об/хв: {value} {unit}': '{rpm} rpm: {value} {unit}',
   'бар': 'bar',
+  'Коробка': 'Transmission',
 };

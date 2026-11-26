@@ -149,6 +149,8 @@ export class SystemsView {
       observer.observe(row);
       observer.observe(root);
       observer.observe(readout);
+      // Hidden while another section is shown, the switches measure nothing; they place themselves again on coming back.
+      observer.observe(tool);
     }
 
     try {
