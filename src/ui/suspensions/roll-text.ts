@@ -99,7 +99,10 @@ export function understeerCaption(u: UndersteerFacts): string {
       : ' ' + t('Авто повертає охочіше, а задня вісь ближча до заносу.')
     : '';
   const over = u.now < 0 ? ' ' + t('Від’ємне число — надмірна поворотність: задні шини потребують більшого кута, ніж передні.') : '';
-  return `${head} ${why}${turn}${over}`;
+  // The model's tyres are one set on both axles and it has no compliance, which gives a road car most of its understeer
+  // (docs/research/suspensions.md, GM do Brasil): only the change is the model's to tell.
+  const model = ' ' + t('Модель ставить однакові шини на обидві осі й не має податливості підвіски та керма, яка в серійного авто дає більшу частину недостатньої поворотності. Тож важить, як змінюється число, а не саме число.');
+  return `${head} ${why}${turn}${over}${model}`;
 }
 
 /** What happens to the inner wheels, if anything worth a line: off the road, or past what the tyres hold. */

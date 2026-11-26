@@ -486,6 +486,8 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Авто охочіше йде прямо, ніж повертає.': 'The car would rather go straight than turn.',
   'Авто повертає охочіше, а задня вісь ближча до заносу.': 'The car turns in more willingly, and the rear is closer to sliding out.',
   'Від’ємне число — надмірна поворотність: задні шини потребують більшого кута, ніж передні.': 'A negative number is oversteer: the rear tires need a larger angle than the front ones.',
+  'Модель ставить однакові шини на обидві осі й не має податливості підвіски та керма, яка в серійного авто дає більшу частину недостатньої поворотності. Тож важить, як змінюється число, а не саме число.':
+    'The model puts the same tires on both axles and has no suspension or steering compliance, which gives a production car most of its understeer. So what matters is how the number changes, not the number itself.',
   'Обидва внутрішні колеса в повітрі: авто стає на два колеса.': 'Both inner wheels are in the air: the car is up on two wheels.',
   'Внутрішнє заднє колесо в повітрі: задня вісь бере {share} % перенесення, а в статиці воно мало лише {kn} кН.': 'The inner rear wheel is in the air: the rear axle takes {share} % of the load transfer, and at rest that wheel carried only {kn} kN.',
   'Внутрішнє переднє колесо в повітрі: передня вісь бере {share} % перенесення, а в статиці воно мало {kn} кН.': 'The inner front wheel is in the air: the front axle takes {share} % of the load transfer, and at rest that wheel carried {kn} kN.',
