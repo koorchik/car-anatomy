@@ -1,20 +1,23 @@
 // The gearbox section as the shell sees it: one Section that hands each address to the page that shows it. The
 // manual pages (layshaft) are GearboxSection; a page with a section of its own (the planetary automatic, stage K11)
-// is listed in OWN_PAGES. Each is mounted the first time its address is opened, into the same slots, and what it put
-// there is hidden while another page of the section shows, the way the shell hides other sections (section-dom.ts):
-// a page gets its elements back exactly as it left them.
+// is listed in OWN_PAGES and loads as a chunk of its own the first time its address is opened. Each page is mounted
+// then, into the same slots, and what it put there is hidden while another page of the section shows, the way the
+// shell hides other sections (section-dom.ts): a page gets its elements back exactly as it left them.
 
+import { withDictionaries } from '../../i18n/dictionaries.ts';
 import { t } from '../../i18n/t.ts';
 import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
-import { AutomaticSection } from './automatic/section.ts';
 import { GearboxSection } from './section.ts';
 
 /** The attribute that hides an element of a gearbox page not shown (gearboxes.css). */
 export const PAGE_AWAY = 'data-gbx-page-away';
 
 /** Pages with a section of their own, by the id in `#/gearboxes/<page>`. */
-const OWN_PAGES: Record<string, () => GearboxPage> = {
-  automatic: () => new AutomaticSection(),
+const OWN_PAGES: Record<string, () => Promise<GearboxPage>> = {
+  automatic: async () => {
+    const { AutomaticSection } = await withDictionaries(['engines', 'gearboxes', 'gearbox-parts', 'gearbox-automatic'], () => import('./automatic/section.ts'));
+    return new AutomaticSection();
+  },
 };
 
 type GearboxPage = Section & { readonly drive?: unknown };
@@ -28,6 +31,9 @@ export class GearboxPages implements Section {
   private readonly foreign = new Set<Element>();
   private readonly owners = new Map<Element, string>();
   private readonly pages = new Map<string, GearboxPage>();
+  /** Pages whose chunk is on its way, and the address that asked last. */
+  private readonly loading = new Set<string>();
+  private wanted: { route: Route; from: Route | null } | null = null;
   private current: { key: string; page: GearboxPage } | null = null;
   /** The section is not shown: its page has left already. */
   private away = false;
@@ -54,12 +60,32 @@ export class GearboxPages implements Section {
 
   enter(route: Route, from: Route | null): void {
     const key = this.keyOf(route);
+    this.wanted = { route, from };
     let fromForPage = from;
     if (this.current?.key !== key) {
       if (this.current && !this.away) this.current.page.leave(route);
+      this.current = null;
       let page = this.pages.get(key);
+      if (!page && key !== 'manual') {
+        // The page's chunk first; the page shown meanwhile has left and its elements are hidden.
+        this.show(key);
+        this.away = false;
+        if (!this.loading.has(key)) {
+          this.loading.add(key);
+          void OWN_PAGES[key]!().then((loaded) => {
+            this.loading.delete(key);
+            this.pages.set(key, loaded);
+            loaded.mount(this.ctx);
+            this.claim(key);
+            const wanted = this.wanted;
+            if (wanted && !this.away && this.keyOf(wanted.route) === key) this.enter(wanted.route, wanted.from);
+            else this.show(this.current?.key ?? '');
+          });
+        }
+        return;
+      }
       if (!page) {
-        page = key === 'manual' ? (this.manual = new GearboxSection()) : OWN_PAGES[key]!();
+        page = this.manual = new GearboxSection();
         this.pages.set(key, page);
         page.mount(this.ctx);
         this.claim(key);

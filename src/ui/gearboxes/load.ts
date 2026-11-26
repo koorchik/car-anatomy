@@ -12,6 +12,6 @@ export const GEARBOX_PAGES_SHOWN: readonly string[] = ['manual-rwd', 'automatic'
 
 /** The engines' dictionary too: the page runs the car's engine from the engine catalogue, which brings its words. */
 export async function loadGearboxes(): Promise<Section> {
-  const { GearboxPages } = await withDictionaries(['engines', 'gearboxes', 'gearbox-parts', 'gearbox-automatic'], () => import('./pages.ts'));
+  const { GearboxPages } = await withDictionaries(['engines', 'gearboxes', 'gearbox-parts'], () => import('./pages.ts'));
   return new GearboxPages();
 }
