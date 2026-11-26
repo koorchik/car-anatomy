@@ -13,6 +13,7 @@ import { registerParts } from '../../scene/parts-registry.ts';
 import { PistonEngineModel } from '../../scene/piston-engine.ts';
 import { RotaryEngineModel } from '../../scene/rotary-engine.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
+import { ownSlots, type OwnedSlots } from '../../shell/owned-slots.ts';
 import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
 import { readableDegreesPerSecond } from '../../shell/time.ts';
 import { shownAdvance, type SystemsFrame } from '../../systems/sim.ts';
@@ -59,6 +60,10 @@ export class EnginesSection implements Section {
   private homedFor: FreezeOptions | null = null;
   /** Between leave() and the next enter(): another section is shown. */
   away = false;
+  /** What the section put into the skeleton, hidden while another section is shown. */
+  private owned!: OwnedSlots;
+  /** The panel's heading and the document's title as this section left them. */
+  private leftTitles = { panel: '', document: '' };
   /** Reused every frame: the systems step allocates nothing. */
   private readonly systemsFrame: SystemsFrame = { theta: 0, advance: 0, rpm: 0, load: 0, throttle: 0, boost: 0, running: false, cranking: false, fuelCut: true, live: false, dt: 0, timeScale: 1 };
   /** Valve events and firing cylinders for the systems layers, written in place each frame. */
@@ -72,7 +77,9 @@ export class EnginesSection implements Section {
   private textFailed = false;
 
   mount(ctx: SectionContext): void {
-    this.ctx = ctx;
+    // The body classes its pages and features style the skeleton with: none of them may stay on under another section.
+    this.owned = ownSlots(ctx.slots, ['sump-mode', 'designer-mode', 'dyno-mode', 'forces-on']);
+    this.ctx = ctx = { ...ctx, slots: this.owned.slots };
     // The engines' parts, with the dyno's and the valve gear's; the layers and the oil page add theirs as they load.
     registerParts(PARTS);
     const { slots } = ctx;
@@ -124,17 +131,27 @@ export class EnginesSection implements Section {
     this.ctx.keys.use([]);
     // The engine and what hangs on it (the layers, the oil page's scene) wait off the stage for coming back.
     if (this.model) this.ctx.stage.release(this.model);
+    this.leftTitles = { panel: this.ctx.slots.panelTitle.textContent ?? '', document: document.title };
+    this.owned.setAway(true);
   }
 
   /** Back from another section, which may have changed the shared view and time while this one was away. */
   private resume(): void {
     this.away = false;
-    const { view, time } = this.ctx;
-    this.useKeys();
+    const { view, time, slots } = this.ctx;
+    this.owned.setAway(false);
+    slots.panelTitle.textContent = this.leftTitles.panel;
+    document.title = this.leftTitles.document;
+    // The other section may have had the Drive play its own engine (the gearbox page runs its car's).
+    this.drive.setEngine(this.engine);
+    // The model waited off the stage (leave), with the layers still on it.
     if (this.model) {
       this.placeModel(this.model, false);
       if (this.sump.on) this.sump.lookAtOil();
     }
+    // The shell laid the page out while this section's content was still hidden: the charts measured nothing.
+    this.ctx.panels.relayout();
+    this.useKeys();
     this.applyView(view.mode);
     $('slow-tool').hidden = time.mode !== 'slow';
     // The oil page's lap holds the crank itself.

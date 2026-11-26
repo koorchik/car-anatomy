@@ -178,4 +178,18 @@ describe('the gearbox catalogue running in English', () => {
       vi.resetModules();
     }
   });
+
+  it('has no Ukrainian left in any page article', async () => {
+    vi.resetModules();
+    vi.stubGlobal('location', { search: '?lang=en' });
+    try {
+      await registerAll();
+      const { GEARBOX_PAGES } = await import('../src/data/gearboxes.ts');
+      for (const page of GEARBOX_PAGES) if (page.article) expect(CYRILLIC.test(JSON.stringify(page.article)), page.id).toBe(false);
+      expect(GEARBOX_PAGES.find((p) => p.id === 'manual-rwd')?.article?.lead).toMatch(/countershaft/);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+  });
 });
