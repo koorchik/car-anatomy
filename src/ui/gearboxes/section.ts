@@ -601,6 +601,7 @@ export class GearboxSection implements Section {
         this.demoMode = false;
         this.playback = { run, time: 0, gear: '', at };
       },
+      stopPlay: () => this.stopPlayback(),
     });
     this.el('gbd-params').append(page.controlsHost);
     this.el('gbd-results').append(page.results.root);

@@ -50,6 +50,8 @@ export interface GearboxDesignerHost {
   startEngine(): void;
   /** Plays the run back through the 3D box and the sound; `at` hears the time of every frame, and null at the end. */
   play(run: DesignRun, at: (time: number | null) => void): void;
+  /** The design the run was made for changed: stop playing it back. */
+  stopPlay(): void;
 }
 
 const typeWord = (d: GearboxDesign): string => (d.type === 'layshaft' ? t('з проміжним валом') : t('двовальна'));
@@ -80,6 +82,8 @@ export class GearboxDesignerPage {
   private drawRequested = false;
   private active = false;
   private running = false;
+  /** The design the shown run of "Drive" belongs to; its figures say nothing of another design. */
+  private runFor: GearboxDesign | null = null;
 
   constructor(host: GearboxDesignerHost) {
     this.host = host;
@@ -245,6 +249,7 @@ export class GearboxDesignerPage {
   }
 
   setDesign(design: GearboxDesign): void {
+    this.dropRun();
     this.before = null;
     this.controls.clearEffects();
     this.design = resolveGearboxDesign(design);
@@ -259,6 +264,10 @@ export class GearboxDesignerPage {
   private apply(patch: GearboxPatch, id: string): void {
     if (this.before?.id !== id) this.before = { id, metrics: this.metrics() };
     this.design = editGearboxDesign(this.design, patch);
+    // A new name keeps the run; anything else makes it another box's.
+    if (id === 'name') {
+      if (this.runFor) this.runFor = this.design;
+    } else this.dropRun();
     this.recompute();
     if (id !== 'name') this.controls.showEffects(id, compareGearboxMetrics(this.before.metrics, this.metrics()).slice(0, 6));
     this.requestDraw();
@@ -345,6 +354,14 @@ export class GearboxDesignerPage {
     this.requestDraw();
   }
 
+  /** The run shown belongs to a design no longer on the page: its chart, its figures and its playback go. */
+  private dropRun(): void {
+    if (!this.runFor) return;
+    this.runFor = null;
+    this.results.setRun(null, false);
+    this.host.stopPlay();
+  }
+
   /** "Drive": the whole core's run, computed after the button has shown it is busy, then played back. */
   private async drive(): Promise<void> {
     if (this.running) return;
@@ -354,13 +371,17 @@ export class GearboxDesignerPage {
     // Two frames, so the busy button is on screen before the run takes the main thread for a moment.
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     const design = this.design;
-    let run: DesignRun;
+    let run: DesignRun | null = null;
     try {
       run = designRun(design);
     } finally {
       this.running = false;
+      // A run that failed, or one made for a design changed meanwhile, is not shown; the button comes back.
+      if (!run || this.design !== design) this.results.setRun(null, false);
     }
-    this.results.setRun({ run, panel100: evaluateGearbox(design).zeroTo100S }, false);
+    if (this.design !== design) return;
+    this.runFor = design;
+    this.results.setRun({ run, panel100: this.perf.zeroTo100S }, false);
     if (this.active) this.host.play(run, (time) => this.results.playhead(time));
   }
 }
