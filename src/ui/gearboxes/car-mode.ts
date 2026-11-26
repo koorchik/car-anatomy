@@ -145,7 +145,7 @@ export class CarMode {
     };
     pedal.addEventListener('pointerdown', (event) => {
       pedal.setPointerCapture(event.pointerId);
-      this.takeClutch();
+      this.takeClutch(false);
       fromPointer(event);
     });
     pedal.addEventListener('pointermove', (event) => {
@@ -154,16 +154,19 @@ export class CarMode {
     // Let go with the pointer and the pedal springs up at once: that is how a car is stalled on purpose.
     const release = (): void => {
       this.clutchPointer = null;
+      if (!this.clutchKey) this.clutchKeyValue = 0;
     };
     pedal.addEventListener('pointerup', release);
     pedal.addEventListener('pointercancel', release);
   }
 
-  /** The driver's foot on the clutch: the auto clutch lets go of it. */
-  private takeClutch(): void {
+  /**
+   * The driver's foot on the clutch: the auto clutch lets go of it. The key's pedal starts where the auto clutch had
+   * it, so taking over does not slam it shut; the pointer sets the pedal where it presses.
+   */
+  private takeClutch(byKey: boolean): void {
     if (this.panel.settings.autoClutch) {
-      // The pedal starts where the auto clutch had it, so taking over does not slam it shut.
-      this.clutchKeyValue = Math.max(this.clutchKeyValue, this.autoPedal());
+      if (byKey) this.clutchKeyValue = Math.max(this.clutchKeyValue, this.autoPedal());
       this.panel.set({ autoClutch: false });
     }
   }
@@ -175,7 +178,7 @@ export class CarMode {
   }
 
   holdClutchKey(on: boolean): void {
-    if (on) this.takeClutch();
+    if (on) this.takeClutch(true);
     this.clutchKey = on;
   }
 
@@ -399,7 +402,7 @@ export class CarMode {
     else if (this.stalledFor > 0 && !running) text = t('Двигун заглух: зчеплення замкнулося, а обертів не вистачило. Вичавіть зчеплення (C) або поставте нейтраль і заведіть знову.');
     else if (this.panel.settings.hints && running && snap.vehicle && snap.vehicle.shift === 'engaged') {
       const hint = shiftHint(this.cd!, gear, snap.rpm, snap.vehicle.speed, snap.throttle);
-      if (hint) text = hint.direction === 'up' ? t('Час вище: {gear}', { gear: hint.to }) : t('Краще нижче: {gear}', { gear: hint.to });
+      if (hint) text = hint.direction === 'up' ? t('Перемкніть вище: {gear}', { gear: hint.to }) : t('Перемкніть нижче: {gear}', { gear: hint.to });
     }
     if (text === this.shown.hint) return;
     this.shown.hint = text;
