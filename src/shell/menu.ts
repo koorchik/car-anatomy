@@ -75,7 +75,10 @@ export class ShellMenu {
     if (open === this.sheetOpen) return;
     el.sheet.hidden = !open;
     el.sheetOpen.setAttribute('aria-expanded', String(open));
-    if (open) (el.sheetBody.querySelector<HTMLElement>('a.current, .current a, a') ?? el.sheetClose).focus();
+    // Focus goes to the page shown: its tab, else its section, else the first link. One selector list would take
+    // whichever comes first in the sheet, and that is the section above its tabs.
+    const body = el.sheetBody;
+    if (open) (body.querySelector<HTMLElement>('.sheet-tabs a.current') ?? body.querySelector<HTMLElement>('a.current') ?? body.querySelector<HTMLElement>('a') ?? el.sheetClose).focus();
     else el.sheetOpen.focus();
   }
 
