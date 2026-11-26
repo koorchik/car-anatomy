@@ -14,7 +14,7 @@ import { paintPatch, SLIDE_COLOR, STICK_COLOR } from '../../scene/suspension/pat
 import { TyreModel, type Carcass } from '../../scene/suspension/tyre-model.ts';
 import { onSegment, setSegment } from '../../shell/segmented.ts';
 import { tyreAt, type Tyre } from '../../vehicle/tyre.ts';
-import { aligningCurve, aligningPeak, camberNumbers, frictionEnvelope, lateralCurve, lateralPeak, longitudinalCurve, span, tyrePoint } from '../../vehicle/tyre-curves.ts';
+import { aligningCurve, aligningPeak, camberNumbers, frictionEnvelope, lateralCurve, lateralPeak, longitudinalCurve, span, tyrePoint, type CamberNumbers } from '../../vehicle/tyre-curves.ts';
 import { tyreVertical, verticalStiffness } from '../../vehicle/tyre-data.ts';
 import { contactPatch, type ContactPatch } from '../../vehicle/tyre-patch.ts';
 import { decodeSidewall, type SidewallCode } from '../../vehicle/tyre-sidewall.ts';
@@ -202,6 +202,8 @@ export class TyreScene {
   private patchSize = { w: 0, h: 0 };
   private dirty = true;
   private reading!: TyreReading;
+  /** Curves and peaks of the current tyre, load and camber: the slip sliders move only the point on them. */
+  private curves: Curves | null = null;
 
   /**
    * `root` holds tyrePanelHtml() and tyreDashHtml(); `pressure` reads and writes the corner's pressure as a change
@@ -233,11 +235,11 @@ export class TyreScene {
     });
     onSegment(this.$('tyre-choice'), (v) => this.edit({ tyre: v as TyreId }));
     onSegment(this.$('tyre-carcass'), (v) => this.edit({ carcass: v as Carcass }));
-    this.$<HTMLInputElement>('tyre-code').addEventListener('input', (e) => this.edit({ code: (e.target as HTMLInputElement).value }));
+    this.$<HTMLInputElement>('tyre-code').addEventListener('input', (e) => this.editCode((e.target as HTMLInputElement).value));
     this.$('tyre-code').closest('section')!.querySelectorAll<HTMLButtonElement>('[data-code]').forEach((b) =>
       b.addEventListener('click', () => {
         this.$<HTMLInputElement>('tyre-code').value = b.dataset.code!;
-        this.edit({ code: b.dataset.code! });
+        this.editCode(b.dataset.code!);
       }),
     );
     this.$('tyre-xray').addEventListener('click', onView);
@@ -265,6 +267,15 @@ export class TyreScene {
     if (next.tyre !== this.fitted.id) this.fitted = tyreAt(next.tyre, FIT_LOAD_N);
     this.state = next;
     this.dirty = true;
+  }
+
+  /**
+   * A new sidewall code. Its R or D also turns the cut tyre's carcass, so the 3D does not show a radial tyre for a
+   * code that reads «diagonal»; B (bias-belted) keeps the switch as it is, since it has a belt the bias drawing lacks.
+   */
+  editCode(code: string): void {
+    const c = decodeSidewall(code);
+    this.edit(c?.construction === 'radial' ? { code, carcass: 'radial' } : c?.construction === 'bias' ? { code, carcass: 'bias' } : { code });
   }
 
   /** The scene comes on: it takes the corner's pressure, which the Setup panel may have changed meanwhile. */
@@ -329,7 +340,7 @@ export class TyreScene {
     const text = (id: string, v: string): void => {
       this.$(id).textContent = v;
     };
-    text('tyre-r-fy', t('{value} кН', { value: fmt(r.fy / 1000, 2) }));
+    text('tyre-r-fy', t('{value} кН', { value: signed(r.fy / 1000, 2) }));
     text('tyre-r-fx', t('{value} кН', { value: signed(r.fx / 1000, 2) }));
     text('tyre-r-mz', t('{value} Н·м', { value: signed(r.mz, 0) }));
     text('tyre-r-stick', `${fmt(p.adhesion * 100, 0)} %`);
@@ -345,7 +356,7 @@ export class TyreScene {
     text('tyre-caption', caption);
     text('tyre-patch-note', t('Ковзає {slide} % плями', { slide: fmt((1 - p.adhesion) * 100, 0) }));
     // Camber in the model's numbers at this load.
-    const cam = camberNumbers(this.fitted.set, s.loadKn * 1000, 2);
+    const cam = this.curvesNow().camber;
     text('tyre-camber-note', t('1° розвалу дає стільки ж бічної сили, скільки {slip}° кута відведення. −2° на зовнішньому колесі, тобто нахил у бік сили: пік бічної сили {gain} %. Ті самі 2° від сили, як у внутрішнього колеса: {loss} %. На {load} кН, шина «{tyre}».', {
       slip: fmt(cam.slipPerCamber, 2),
       gain: signed(cam.gainPct, 1),
@@ -410,16 +421,40 @@ export class TyreScene {
     ctx.fill();
   }
 
+  /** The curves of this tyre, load and camber, computed again only when one of the three changes. */
+  private curvesNow(): Curves {
+    const s = this.state;
+    const key = `${s.tyre}|${s.loadKn}|${s.camberDeg}`;
+    if (this.curves?.key === key) return this.curves;
+    const set = this.fitted.set;
+    const camber = s.camberDeg * DEG;
+    const fz = s.loadKn * 1000;
+    const kn = (ys: number[]): number[] => ys.map((y) => y / 1000);
+    // Side force at the four loads, with the current load on top in white.
+    const lateral: Series[] = LOADS_KN.map((l, i) => ({ xs: ALPHAS, ys: kn(lateralCurve(set, l * 1000, camber, ALPHAS)), color: LOAD_COLORS[i]!, width: 1.6 }));
+    lateral.push({ xs: ALPHAS, ys: kn(lateralCurve(set, fz, camber, ALPHAS)), color: '#f1efe6', width: 2.2 });
+    this.curves = {
+      key,
+      lateral,
+      longitudinal: kn(longitudinalCurve(set, fz, camber, KAPPAS)),
+      envelope: frictionEnvelope(set, fz, camber, 48),
+      aligning: aligningCurve(set, fz, camber, ALPHAS),
+      aligningPeak: aligningPeak(set, fz, camber),
+      lateralPeak: lateralPeak(set, fz, camber),
+      camber: camberNumbers(set, fz, 2),
+    };
+    return this.curves;
+  }
+
   private drawCharts(): void {
     const s = this.state;
     const set = this.fitted.set;
     const camber = s.camberDeg * DEG;
     const fz = s.loadKn * 1000;
     const r = this.reading;
-    const kn = (ys: number[]): number[] => ys.map((y) => y / 1000);
-    // Side force at the four loads, with the current load on top in white and the point the sliders pick.
-    const series: Series[] = LOADS_KN.map((l, i) => ({ xs: ALPHAS, ys: kn(lateralCurve(set, l * 1000, camber, ALPHAS)), color: LOAD_COLORS[i]!, width: 1.6 }));
-    series.push({ xs: ALPHAS, ys: kn(lateralCurve(set, fz, camber, ALPHAS)), color: '#f1efe6', width: 2.2 });
+    const c = this.curvesNow();
+    // Side force at the four loads and the point the sliders pick.
+    const series = c.lateral;
     const top = Math.max(...series.flatMap((x) => x.ys)) * 1.08;
     this.charts.lateral.draw({
       x: [0, 15],
@@ -432,7 +467,7 @@ export class TyreScene {
       marks: [{ kind: 'dot', x: s.alphaDeg, y: tyrePoint(set, fz, s.alphaDeg * DEG, 0, camber).fy / 1000, color: '#f1efe6' }],
     });
     // Force along against slip.
-    const longYs = kn(longitudinalCurve(set, fz, camber, KAPPAS));
+    const longYs = c.longitudinal;
     const lt = Math.max(...longYs.map(Math.abs)) * 1.1;
     this.charts.long.draw({
       x: [-30, 30],
@@ -445,7 +480,7 @@ export class TyreScene {
       marks: [{ kind: 'dot', x: s.kappaPct, y: tyrePoint(set, fz, 0, s.kappaPct / 100, camber).fx / 1000, color: '#f1efe6' }],
     });
     // The friction ellipse with the point of both slips together.
-    const env = frictionEnvelope(set, fz, camber, 48);
+    const env = c.envelope;
     const loop = [...env, env[0]!];
     const et = Math.max(...env.map(([a, b]) => Math.max(Math.abs(a), Math.abs(b)))) / 1000 * 1.1;
     this.charts.ellipse.draw({
@@ -461,10 +496,10 @@ export class TyreScene {
       square: true,
     });
     // Aligning moment, with the angles of its peak and of the side force's.
-    const mz = aligningCurve(set, fz, camber, ALPHAS);
+    const mz = c.aligning;
     const mzTop = Math.max(10, Math.max(...mz) * 1.15);
-    const mzPeak = aligningPeak(set, fz, camber);
-    const fyPeak = lateralPeak(set, fz, camber);
+    const mzPeak = c.aligningPeak;
+    const fyPeak = c.lateralPeak;
     this.charts.mz.draw({
       x: [0, 15],
       y: [Math.min(0, Math.min(...mz) * 1.1), mzTop],
@@ -484,6 +519,18 @@ export class TyreScene {
       fy: fmt(fyPeak.alphaDeg, 1),
     });
   }
+}
+
+/** What the charts and the camber note draw for one tyre, load and camber. */
+interface Curves {
+  key: string;
+  lateral: Series[];
+  longitudinal: number[];
+  envelope: Array<[number, number]>;
+  aligning: number[];
+  aligningPeak: { alphaDeg: number; mz: number };
+  lateralPeak: { alphaDeg: number; fy: number };
+  camber: CamberNumbers;
 }
 
 /** A few round ticks from 0 (or from −top) to `top`. */

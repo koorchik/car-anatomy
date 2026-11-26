@@ -60,6 +60,10 @@ export function aligningPeak(set: MfSet, fz: number, camber = 0): { alphaDeg: nu
   return { alphaDeg: p.x, mz: p.y };
 }
 
+/** Steps of the envelope's coarse search along each slip direction, and of its fine search on each side of the best. */
+const ENVELOPE_COARSE = 25;
+const ENVELOPE_FINE = 5;
+
 /**
  * The friction envelope: for each direction of the slip vector, the largest force the tyre makes along any slip in
  * that direction. Slip directions run round the circle with α and κ scaled to their own saturation (`alphaSat` rad,
@@ -71,13 +75,24 @@ export function frictionEnvelope(set: MfSet, fz: number, camber: number, directi
     const th = (i / directions) * 2 * Math.PI;
     let best: [number, number] = [0, 0];
     let bestMag = -1;
-    for (let s = 0.01; s <= 1; s += 0.01) {
+    let bestS = 0;
+    const tryAt = (s: number): void => {
       const p = tyrePoint(set, fz, Math.sin(th) * alphaSat * s, Math.cos(th) * kappaSat * s, camber);
       const mag = Math.hypot(p.fx, p.fy);
       if (mag > bestMag) {
         bestMag = mag;
         best = [p.fx, p.fy];
+        bestS = s;
       }
+    };
+    // A coarse pass over the whole slip, then a fine one round its best: the scene redraws this on every change of
+    // load or camber, and a fine pass all along costs four times as much for the same envelope.
+    for (let k = 1; k <= ENVELOPE_COARSE; k++) tryAt(k / ENVELOPE_COARSE);
+    const coarseBest = bestS;
+    const step = 1 / ENVELOPE_COARSE;
+    for (let k = -ENVELOPE_FINE; k <= ENVELOPE_FINE; k++) {
+      const s = coarseBest + (k / ENVELOPE_FINE) * step;
+      if (k !== 0 && s > 0 && s <= 1) tryAt(s);
     }
     out.push(best);
   }
