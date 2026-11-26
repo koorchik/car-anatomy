@@ -6,7 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { CARS } from '../src/data/cars.ts';
 import { DRIVE_CARS } from '../src/data/drive-cars.ts';
 import { gearboxById } from '../src/data/gearboxes.ts';
-import { buildCarDrive } from '../src/data/car-drive.ts';
+import { buildCarDrive, buildPowerSplitDrive } from '../src/data/car-drive.ts';
+import { hybridLoadSpec } from '../src/drivetrain/power-split-car.ts';
+import { hybridRun } from '../src/drivetrain/power-split-runs.ts';
 import { carVehicle, CLUTCH, CRANK, type CarDrive } from '../src/drivetrain/car-model.ts';
 import { buildCore, elementIndex, memberIndex } from '../src/drivetrain/core.ts';
 import { nullSpace } from '../src/drivetrain/linalg.ts';
@@ -17,7 +19,7 @@ import { vehicleSpec, type CarRecord } from '../src/vehicle/car.ts';
 import type { ChassisPort } from '../src/vehicle/chassis-port.ts';
 import { G } from '../src/vehicle/constants.ts';
 import { LongitudinalChassis, longitudinalSpec } from '../src/vehicle/longitudinal.ts';
-import { nonEpaRule, roadLoadCoeffs, roadLoadN } from '../src/vehicle/road-load.ts';
+import { nonEpaRule, roadLoadCoeffs, roadLoadN, roadLoadRule } from '../src/vehicle/road-load.ts';
 import { longitudinalOf } from '../src/vehicle/tyre.ts';
 import { VehicleStep } from '../src/vehicle/vehicle-step.ts';
 import { FL, FR, newWheelBus, RL, RR, WHEELS, type WheelBus } from '../src/vehicle/wheel-bus.ts';
@@ -267,5 +269,34 @@ describe('8. the chassis port', () => {
       expect(Math.abs(momentum() - p0)).toBeLessThan(1e-9 * Math.max(1, Math.abs(p0)));
     }
     expect(swing).toBeGreaterThan(100);
+  });
+});
+
+describe('2–4. the Prius on its power-split box', () => {
+  const car = CARS['toyota-prius-xw30']!;
+  const pd = buildPowerSplitDrive(car.id);
+
+  it('2. limited: without the cap it passes the published 180 km/h, with it it stands there (±1 km/h); C_dA is not solved from it', () => {
+    expect(car.published.vmaxLimited).toBe(true);
+    expect(roadLoadRule(car)).toBe('epa');
+    expect(nonEpaRule(car)).not.toBe('vmax');
+    const free = hybridRun(pd, { cap: false, seconds: 60 });
+    expect(free.endKmh).toBeGreaterThanOrEqual(car.published.vmaxKmh);
+    const capped = hybridRun(pd, { cap: true, seconds: 60 });
+    expect(Math.abs(capped.endKmh - car.published.vmaxKmh)).toBeLessThan(1);
+    expect(Math.abs(capped.driftKmh)).toBeLessThan(0.5);
+  });
+
+  it('3. 0–100 km/h within ±25 % of the published 10.4 s (its top speed is limited, so the ±7 % check of v_max does not apply)', () => {
+    const run = hybridRun(pd, { seconds: 15 });
+    expect(Math.abs(run.zeroTo100S! / car.published.zeroTo100S! - 1)).toBeLessThan(0.25);
+  });
+
+  it('4. the chassis pushes against the EPA row of vehicle 10-ZW1H: 20.234 + 0.01993·v + 0.01874·v² lbf, ±1 N at 100 km/h', () => {
+    const rl = hybridLoadSpec(pd).chassis.core.roadLoad;
+    expect(rl).toEqual(roadLoadCoeffs(car));
+    const mph = 100 / 1.609344;
+    const epaN = (20.234 + 0.01993 * mph + 0.01874 * mph * mph) * 4.4482216152605;
+    expect(Math.abs(roadLoadN(rl, 100 / KMH, 0) - epaN)).toBeLessThan(1);
   });
 });
