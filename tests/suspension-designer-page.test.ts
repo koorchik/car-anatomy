@@ -7,7 +7,7 @@ import { SpecChassisModel, drawsAxle } from '../src/scene/suspension/spec-chassi
 import { evaluateChassis } from '../src/suspension/evaluate-chassis.ts';
 import { evaluateSteering } from '../src/suspension/evaluate-steering.ts';
 import { G } from '../src/suspension/forces.ts';
-import { factorySetup } from '../src/suspension/setup.ts';
+import { DAMPER_PRESETS, factorySetup } from '../src/suspension/setup.ts';
 import { encodeChassis } from '../src/suspension-designer/codec.ts';
 import { cornerSprungKg, resolveChassis, sameDesign } from '../src/suspension-designer/constraints.ts';
 import { rollCentreCurve, travelCurves, turnCurves, understeerParts } from '../src/suspension-designer/curves.ts';
@@ -161,6 +161,18 @@ describe('from a suspension page into the designer', () => {
     // The damping ratio asked for is what the evaluated axle has, near enough for a damper of two slopes.
     expect(evaluateChassis(chassisToSpec(d)).axles[0].body.zeta).toBeGreaterThan(0.3);
     expect(sameDesign(resolveChassis(d), d)).toBe(true);
+  });
+
+  it('a damping ratio carried with a new spring damps the body as the designer\'s preset of that ratio does', () => {
+    // The ratio belongs to the body frequency on the visitor's spring: a stiffer spring needs a stiffer damper for the
+    // same ζ (c = 4π·ζ·f·m), as the Setup panel itself computes it.
+    const corner = designCorner(DEFAULT_CHASSIS, 'F');
+    const factory = factorySetup(corner);
+    const spring = factory.springNmm * 1.4;
+    const carried = designWithSetup(DEFAULT_CHASSIS, 'F', { ...factory, springNmm: spring, damper: DAMPER_PRESETS.sport }, factory).design;
+    const preset = editChassis(DEFAULT_CHASSIS, { springNmmF: spring, damperF: 'sport' } as Partial<ChassisDesign>);
+    const zeta = (d: ChassisDesign): number => evaluateChassis(chassisToSpec(d)).axles[0].body.zeta;
+    expect(zeta(carried) / zeta(preset)).toBeCloseTo(1, 2);
   });
 
   it('hands its note to the designer once', () => {

@@ -30,8 +30,10 @@ export function designWithSetup(base: ChassisDesign, end: AxleEnd, setup: Corner
   const patch: Record<string, unknown> = {};
   if (Math.abs(setup.springNmm - factory.springNmm) > 1e-9) patch[axleKey('springNmm', end)] = setup.springNmm;
   if (typeof setup.damper === 'number') {
-    const g = axleGeometry(base, end);
-    const own = dampingFromZeta(setup.damper, rideHz(base, end, g), cornerSprungKg(base, end), g.mrDamper);
+    // ζ belongs to the body frequency on the visitor's spring (setup.ts does the same), not on the factory one.
+    const sprung = axleKey('springNmm', end) in patch ? editChassis(base, patch as Partial<ChassisDesign>) : base;
+    const g = axleGeometry(sprung, end);
+    const own = dampingFromZeta(setup.damper, rideHz(sprung, end, g), cornerSprungKg(sprung, end), g.mrDamper);
     patch[axleKey('damper', end)] = 'custom';
     patch[axleKey('damperCompression', end)] = Math.round(own.compression);
     patch[axleKey('damperRebound', end)] = Math.round(own.rebound);
