@@ -288,6 +288,7 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Типова': 'Typical',
   'маса': 'mass',
   'розподіл ваги між осями': 'weight split between the axles',
+  'висота центра мас': 'center of mass height',
   'колія спереду': 'front track',
   'колія ззаду': 'rear track',
   'розмір шин': 'tire size',

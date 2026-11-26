@@ -57,7 +57,7 @@ const SUPRA_A90: PageCar = {
   }),
   facts: [t('Спереду стійка Макферсон із подвійним шарніром унизу, ззаду п’ять тяг, важелі алюмінієві.')],
   sources: ['https://en.wikipedia.org/wiki/Toyota_GR_Supra'],
-  unverified: ['frontShare', 'trackMmF', 'trackMmR', 'tyre size', 'suspension layout'],
+  unverified: ['frontShare', 'cgHeightMm', 'trackMmF', 'trackMmR', 'tyre size', 'suspension layout'],
 };
 
 const GOLF_7: PageCar = {
@@ -81,7 +81,7 @@ const GOLF_7: PageCar = {
     'https://www.volkswagen-newsroom.com/en/the-new-golf-das-auto-international-driving-presentation-2797/the-new-golf-running-gear-suspensions-2847',
     'https://en.wikipedia.org/wiki/Volkswagen_Golf_Mk7',
   ],
-  unverified: ['massKg', 'frontShare', 'trackMmF', 'trackMmR', 'tyre size'],
+  unverified: ['massKg', 'frontShare', 'cgHeightMm', 'trackMmF', 'trackMmR', 'tyre size'],
 };
 
 export const MULTILINK_PAGE: SuspensionPage = {

@@ -21,8 +21,9 @@ const CIVIC_FK8: PageCar = {
     'https://hondanews.eu/eu/en/cars/media/pressreleases/108909/2017-honda-civic-type-r1',
     'https://www.honda.co.jp/auto-archive/civic/type-r/2021/common/pdf/civictype-r_spec_list.pdf',
   ],
-  // The knuckle's own axis: Honda gives no figures, the split axis is the template's (SPLIT_KNUCKLE_DEFAULTS).
-  unverified: ['kingpinOffsetMmF', 'kpiDegF'],
+  // The shared record's own: the weight split and the centre of mass. The knuckle's own axis: Honda gives no figures,
+  // the split axis is the template's (SPLIT_KNUCKLE_DEFAULTS).
+  unverified: ['frontShare', 'cgHeightMm', 'kingpinOffsetMmF', 'kpiDegF'],
 };
 
 export const MACPHERSON_PAGE: SuspensionPage = {

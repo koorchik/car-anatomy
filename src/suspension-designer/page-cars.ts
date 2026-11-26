@@ -9,7 +9,7 @@
 
 import type { CornerSpec, KnuckleKind } from '../suspension/spec.ts';
 import { SPLIT_KNUCKLE_DEFAULTS } from '../suspension/templates/macpherson.ts';
-import { drivingMassKg, type CarRecord } from '../vehicle/car.ts';
+import { CG_HEIGHT_ESTIMATE_M, drivingMassKg, type CarRecord } from '../vehicle/car.ts';
 import { parseTyreSize } from '../vehicle/tyre-size.ts';
 import { CARS } from '../data/cars.ts';
 import { BAR_TYPICAL_MM, catalogueChassis } from './catalogue.ts';
@@ -23,7 +23,7 @@ export interface CarFigures {
   /** The shared car id (src/data/cars.ts when the car has a record there). */
   car: string;
   /** Mass on the road with a driver, kg; share of it on the front axle; centre of mass above the road, mm (null:
-   *  the typical 0.52 m of CG_HEIGHT_ESTIMATE_M). */
+   *  the typical CG_HEIGHT_ESTIMATE_M, and the car lists 'cgHeightMm' in its `unverified`). */
   massKg: number;
   frontShare: number;
   cgHeightMm: number | null;
@@ -38,8 +38,6 @@ export interface CarFigures {
   /** Which axles carry an anti-roll bar (the typical size when the maker gives none); both when left out. */
   bars?: readonly [boolean, boolean];
 }
-
-const CG_TYPICAL_MM = 520;
 
 /** One axle of the figures: the layout's typical geometry on the car's track and tyres. */
 function figureAxle(f: CarFigures, end: AxleEnd): AxleParams {
@@ -66,7 +64,7 @@ function figureAxle(f: CarFigures, end: AxleEnd): AxleParams {
 export function figuresDesign(f: CarFigures): ChassisDesign {
   // Resolved here, so the design the page holds is the one the designer opens (a small wheel moves the ball joints).
   return resolveChassis(designOf(
-    { ...DEFAULT_CAR, car: Object.hasOwn(CARS, f.car) ? f.car : null, massKg: f.massKg, frontShare: f.frontShare, cgHeightMm: f.cgHeightMm ?? CG_TYPICAL_MM, wheelbaseMm: f.wheelbaseMm, drive: f.drive },
+    { ...DEFAULT_CAR, car: Object.hasOwn(CARS, f.car) ? f.car : null, massKg: f.massKg, frontShare: f.frontShare, cgHeightMm: f.cgHeightMm ?? Math.round(CG_HEIGHT_ESTIMATE_M * 1000), wheelbaseMm: f.wheelbaseMm, drive: f.drive },
     figureAxle(f, 'F'),
     figureAxle(f, 'R'),
   ));

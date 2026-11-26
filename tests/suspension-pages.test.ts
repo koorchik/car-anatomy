@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { CARS } from '../src/data/cars.ts';
+import { CG_HEIGHT_ESTIMATE_M } from '../src/vehicle/car.ts';
 import { engineById } from '../src/data/engines.ts';
 import { SUSPENSION_CAR_LINKS } from '../src/data/suspension-links.ts';
 import { pageCar, SUSPENSION_PAGES, suspensionPage } from '../src/data/suspensions.ts';
@@ -37,6 +38,8 @@ describe('the suspension pages', () => {
     expect(corner.axle.layout).toBe(link.page);
     if (link.engine !== null) expect(engineById(link.engine), link.engine).toBeDefined();
     for (const key of car.unverified) expect(DESIGN_KEYS.has(key) || SUBJECTS.has(key), key).toBe(true);
+    // A centre of mass nobody measured is the typical estimate, and the article says so.
+    if (car.design.cgHeightMm === Math.round(CG_HEIGHT_ESTIMATE_M * 1000)) expect(car.unverified).toContain('cgHeightMm');
     expect(car.sources.length).toBeGreaterThan(0);
     expect(car.facts.length).toBeGreaterThan(0);
   });

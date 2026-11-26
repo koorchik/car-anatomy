@@ -44,7 +44,7 @@ const MX5_ND: PageCar = {
     'https://integrityexports.com/wp-content/uploads/2015/06/2016-mazda-mx-5-miata-club-test-review',
     'https://en.wikipedia.org/wiki/Mazda_MX-5_(ND)',
   ],
-  unverified: ['frontShare', 'trackMmF', 'trackMmR', 'tyre size'],
+  unverified: ['frontShare', 'cgHeightMm', 'trackMmF', 'trackMmR', 'tyre size'],
 };
 
 const GT3_992: PageCar = {
@@ -70,7 +70,7 @@ const GT3_992: PageCar = {
     'https://en.wikipedia.org/wiki/Porsche_911_GT3',
   ],
   // The tracks are the 992 Carrera's (auto motor und sport), not the GT3's.
-  unverified: ['frontShare', 'trackMmF', 'trackMmR'],
+  unverified: ['frontShare', 'cgHeightMm', 'trackMmF', 'trackMmR'],
 };
 
 const CORVETTE: PageCar = {
@@ -81,7 +81,7 @@ const CORVETTE: PageCar = {
     t('Ззаду гвинтові пружини на амортизаторах замість поперечної ресори, яку мали попередні Corvette. На Z06 адаптивні магнітні амортизатори стоять серійно.'),
   ],
   sources: ['https://en.wikipedia.org/wiki/Chevrolet_Corvette_(C8)'],
-  unverified: ['massKg', 'frontShare', 'trackMmF', 'trackMmR'],
+  unverified: ['massKg', 'frontShare', 'cgHeightMm', 'trackMmF', 'trackMmR'],
 };
 
 const BRZ_ZD8: PageCar = {
@@ -99,7 +99,7 @@ const BRZ_ZD8: PageCar = {
   }),
   facts: [t('Спереду стійки Макферсон, ззаду подвійні поперечні важелі: сторінка показує задню вісь. Те саме шасі має Toyota GR86.')],
   sources: ['https://en.wikipedia.org/wiki/Toyota_86'],
-  unverified: ['frontShare', 'trackMmF', 'trackMmR', 'tyre size'],
+  unverified: ['frontShare', 'cgHeightMm', 'trackMmF', 'trackMmR', 'tyre size'],
 };
 
 export const DOUBLE_WISHBONE_PAGE: SuspensionPage = {

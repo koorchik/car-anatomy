@@ -65,6 +65,7 @@ const unverifiedName = (key: string): string =>
   ({
     massKg: t('маса'),
     frontShare: t('розподіл ваги між осями'),
+    cgHeightMm: t('висота центра мас'),
     trackMmF: t('колія спереду'),
     trackMmR: t('колія ззаду'),
     'tyre size': t('розмір шин'),
