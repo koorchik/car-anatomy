@@ -27,7 +27,9 @@ export const DICTIONARIES = {
   gearboxes: { module: 'src/i18n/en/gearbox-ui.ts', load: () => import('./en/gearbox-ui.ts').then((m) => m.GEARBOX_UI_EN) },
   /** The planetary automatic's page: its dash, lever diagram, matrix, demonstration and part cards. */
   'gearbox-automatic': { module: 'src/i18n/en/gearbox-automatic-ui.ts', load: () => import('./en/gearbox-automatic-ui.ts').then((m) => m.GEARBOX_AUTOMATIC_UI_EN) },
+  'suspension-macpherson': { module: 'src/i18n/en/suspension-macpherson.ts', load: () => import('./en/suspension-macpherson.ts').then((m) => m.SUSPENSION_MACPHERSON_EN) },
   'gearbox-designer': { module: 'src/i18n/en/gearbox-designer.ts', load: () => import('./en/gearbox-designer.ts').then((m) => m.GEARBOX_DESIGNER_EN) },
+  car: { module: 'src/i18n/en/car.ts', load: () => import('./en/car.ts').then((m) => m.CAR_EN) },
   'suspension-designer': { module: 'src/i18n/en/suspension-designer.ts', load: () => import('./en/suspension-designer.ts').then((m) => m.SUSPENSION_DESIGNER_EN) },
 } satisfies Record<string, DictionaryModule>;
 

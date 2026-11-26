@@ -15,7 +15,7 @@ import type { SceneModel, ViewMode } from '../model-types.ts';
 import type { PartInfo } from '../parts-info.ts';
 import { factorySetup, resolveCorner } from '../../suspension/setup.ts';
 import type { CarChassis, ChassisAxle } from '../../suspension/car-chassis.ts';
-import { archFor, BodyShell } from '../car/body-shell.ts';
+import { archFor, BodyShell, type LidCutout } from '../car/body-shell.ts';
 import { axleFrame, IndependentAxleModel, towerTop, type AxleFrame, type AxleModel } from './axle-model.ts';
 
 export interface ChassisFrame {
@@ -31,6 +31,8 @@ export const BODY_BAND = 60;
 export interface ChassisModelOptions {
   /** Build the body shell. Default true. */
   body?: boolean;
+  /** Holes in the body's bay lid where an engine comes up through it (the car overview). */
+  lidCutouts?: readonly LidCutout[];
 }
 
 /** An independent axle of the chassis, from its resolved left corner. */
@@ -66,7 +68,7 @@ export class ChassisModel implements SceneModel<ChassisFrame> {
         const t = towerTop(axle.corner.axle);
         return archFor(x, axle.corner.axle.wheelCentre[2], axle.sweep.reachM, axle.sweep.innerY, { ...t, x: t.x + x });
       };
-      this.shell = new BodyShell(car, [arch(chassis.front, 0), arch(chassis.rear, -car.body.wheelbaseM)]);
+      this.shell = new BodyShell(car, [arch(chassis.front, 0), arch(chassis.rear, -car.body.wheelbaseM)], { lidCutouts: options.lidCutouts ?? [] });
       // The shell is built in the front-axle frame: its origin goes where carFrameToCg takes the front axle's.
       const origin = chassis.toCg([0, 0, 0]);
       this.shell.group.position.set(origin[1] * 10, origin[2] * 10, origin[0] * 10);

@@ -937,6 +937,7 @@ export class CornerModel implements SceneModel<CornerFrame> {
     if (this.laserOn && assembled) {
       const camber = -Math.atan2(this.axis.y, Math.hypot(this.axis.x, this.axis.z));
       this.laser.update(this.contact, this.wheelCentre, this.inPlaneUp, this.axis, camber);
+      this.laser.setToe(this.contact, this.axis);
     }
     if (mech) this.updateSchematic(f);
   }

@@ -177,6 +177,38 @@ export const containsBox = (outer: Box3, inner: Box3): boolean => containsPoint(
 /** Does the engine fit the car's bay? The shell builds its bonnet from the same bay, so the picture agrees. */
 export const fitsBay = (car: CarRecord, engine: Engine): boolean => containsBox(packagingOf(car).bay, engineBoxInCar(car, engine));
 
+/** Where an engine leaves its car's bay: metres past each face (0 inside) and the plan it comes up through the lid in. */
+export interface BayOverflow {
+  fits: boolean;
+  past: { front: number; rear: number; left: number; right: number; top: number; bottom: number };
+  /**
+   * Over this rectangle of the lid (front-axle frame, x0 < x1, y0 < y1) the engine stands above the bay's top, so it
+   * comes up through the lid built from the bay (body-shell.ts cuts it open there); null when it stays under the top.
+   */
+  throughLid: { x0: number; x1: number; y0: number; y1: number } | null;
+}
+
+/** The diagnosis behind fitsBay, said face by face; the overview's lid is cut where it says the engine comes through. */
+export function bayOverflow(car: CarRecord, engine: Engine): BayOverflow {
+  const bay = packagingOf(car).bay;
+  const box = engineBoxInCar(car, engine);
+  const over = (a: number, b: number): number => Math.max(0, a - b);
+  const past = {
+    front: over(box.max[0], bay.max[0]),
+    rear: over(bay.min[0], box.min[0]),
+    left: over(box.max[1], bay.max[1]),
+    right: over(bay.min[1], box.min[1]),
+    top: over(box.max[2], bay.max[2]),
+    bottom: over(bay.min[2], box.min[2]),
+  };
+  const x0 = Math.max(box.min[0], bay.min[0]);
+  const x1 = Math.min(box.max[0], bay.max[0]);
+  const y0 = Math.max(box.min[1], bay.min[1]);
+  const y1 = Math.min(box.max[1], bay.max[1]);
+  const throughLid = past.top > 0 && x0 < x1 && y0 < y1 ? { x0, x1, y0, y1 } : null;
+  return { fits: Object.values(past).every((v) => v === 0), past, throughLid };
+}
+
 /** The body's outer box: nose to tail, width without mirrors, road to roof. */
 export function bodyBox(car: CarRecord): Box3 {
   const d = car.dimensions;

@@ -41,6 +41,10 @@ export interface QuarterLinear {
   /** The damper along its axis and its motion ratio at rest, for the statistical linearisation. */
   damper: DamperCoeffs;
   mrDamper: number;
+  /** A controlled damper (damper-control.ts): skyhook damping on the body's absolute speed, N·s/m at the wheel, and
+   *  the bandwidth of the actuator that makes it, Hz (absent: ideal). */
+  skyNsm?: number;
+  skyHz?: number;
 }
 
 /** Linearises a resolved corner about rest, with the same tables and stops the quarter car runs on. */
@@ -98,6 +102,7 @@ export const newQuarterGains = (): QuarterGains => ({ bodyAcc: 0, tyreForce: 0, 
 
 /** Frequency response of the linear quarter car at `hz` into `out` (magnitudes). `c` overrides the damping. */
 export function quarterGains(lin: QuarterLinear, hz: number, out: QuarterGains, c = lin.c): QuarterGains {
+  if (lin.skyNsm) return controlledGains(lin, hz, c, out);
   const w = TAU * hz;
   const w2 = w * w;
   const { ms, mu, k, kt, ct } = lin;
@@ -125,6 +130,83 @@ export function quarterGains(lin: QuarterLinear, hz: number, out: QuarterGains, 
   return out;
 }
 
+/** The squares of quarterGains' body acceleration, tyre force and travel at `hz` into out[0..2], without a square root:
+ *  the sums over a road's band square them anyway, and Math.hypot would take most of their time. */
+function quarterGainsSquared(lin: QuarterLinear, hz: number, c: number, out: Float64Array): void {
+  if (lin.skyNsm) {
+    const g = controlledGains(lin, hz, c, SCRATCH_GAINS);
+    out[0] = g.bodyAcc * g.bodyAcc;
+    out[1] = g.tyreForce * g.tyreForce;
+    out[2] = g.travel * g.travel;
+    return;
+  }
+  const w = TAU * hz;
+  const w2 = w * w;
+  const { ms, mu, k, kt, ct } = lin;
+  const pi = c * w;
+  const ti = ct * w;
+  const br = k - ms * w2;
+  const ar = k + kt - mu * w2;
+  const ai = (c + ct) * w;
+  const dr = ar * br - ai * pi - (k * k - pi * pi);
+  const di = ar * pi + ai * br - 2 * k * pi;
+  const d2 = dr * dr + di * di;
+  const t2 = kt * kt + ti * ti;
+  const fr = -mu * ms * w2 + (mu + ms) * k;
+  const fi = (mu + ms) * pi;
+  const w4 = w2 * w2;
+  out[0] = (w4 * (k * k + pi * pi) * t2) / d2;
+  out[1] = (w4 * t2 * (fr * fr + fi * fi)) / d2;
+  out[2] = (ms * ms * w4 * t2) / d2;
+}
+
+const SCRATCH_GAINS = newQuarterGains();
+
+/**
+ * Gains with a skyhook force S·Z_s = −c_sky·H(s)·s·Z_s on the body, H = 1/(1 + s/ω_b) the actuator's lag (1 without
+ * one). The damper or actuator that makes it sits between the body and the wheel, so the wheel takes the reaction:
+ *   B = m_s·s² + P + S,  A = m_u·s² + P + T,  Δ = A·B − P·(P + S)
+ *   Z_s = P·T·Y/Δ,  Z_u = T·B·Y/Δ,  travel = (B − P)·T·Y/Δ,  tyre force = T·(Δ − T·B)·Y/Δ
+ * which are the passive formulas when c_sky = 0. With the reaction the body keeps its invariant point at the wheel-hop
+ * frequency, as the quarter car in time does (a skyhook to an inertial frame would not).
+ */
+function controlledGains(lin: QuarterLinear, hz: number, c: number, out: QuarterGains): QuarterGains {
+  const w = TAU * hz;
+  const w2 = w * w;
+  const { ms, mu, k, kt, ct } = lin;
+  const cs = lin.skyNsm ?? 0;
+  // c_sky·H·s at s = iω: H = 1/(1 + iω/ω_b).
+  const wb = lin.skyHz ? TAU * lin.skyHz : Infinity;
+  const r = w / wb;
+  const hRe = 1 / (1 + r * r);
+  const hIm = -r / (1 + r * r);
+  const skyRe = -cs * w * hIm;
+  const skyIm = cs * w * hRe;
+  const pr = k;
+  const pi = c * w;
+  const tr = kt;
+  const ti = ct * w;
+  const br = k - ms * w2 + skyRe;
+  const bi = pi + skyIm;
+  const ar = k + kt - mu * w2;
+  const ai = (c + ct) * w;
+  // Δ = A·B − P·(P + S)
+  const qr = pr + skyRe;
+  const qi = pi + skyIm;
+  const dr = ar * br - ai * bi - (pr * qr - pi * qi);
+  const di = ar * bi + ai * br - (pr * qi + pi * qr);
+  const dAbs = Math.hypot(dr, di);
+  const tAbs = Math.hypot(tr, ti);
+  // Δ − T·B
+  const er = dr - (tr * br - ti * bi);
+  const ei = di - (tr * bi + ti * br);
+  out.bodyAcc = (w2 * Math.hypot(pr, pi) * tAbs) / dAbs;
+  out.travel = (Math.hypot(br - pr, bi - pi) * tAbs) / dAbs;
+  out.tyreForce = (tAbs * Math.hypot(er, ei)) / dAbs;
+  out.wheel = (tAbs * Math.hypot(br, bi)) / dAbs;
+  return out;
+}
+
 /** A mode of the quarter car: the undamped frequency of its pair of roots and its damping ratio. */
 export interface QuarterMode {
   hz: number;
@@ -134,7 +216,16 @@ export interface QuarterMode {
 /** Body and wheel-hop modes from the four roots of Δ(s) = 0. With heavy damping a pair may be real (ζ > 1). */
 export function quarterModes(lin: QuarterLinear, c = lin.c): { body: QuarterMode; hop: QuarterMode } {
   const { ms, mu, k, kt, ct } = lin;
-  const poly = [mu * ms, mu * c + (c + ct) * ms, mu * k + ct * c + (k + kt) * ms, ct * k + kt * c, k * kt];
+  // A skyhook adds c_sky on the body's absolute speed, with its reaction on the wheel (Δ = A·B − P·(P + S), see
+  // controlledGains; its actuator's lag is left out of the modes).
+  const cs = lin.skyNsm ?? 0;
+  const poly = [
+    mu * ms,
+    mu * (c + cs) + (c + ct) * ms,
+    mu * k + ct * (c + cs) + (k + kt) * ms,
+    ct * k + kt * (c + cs),
+    k * kt,
+  ];
   const roots = polyRoots(poly);
   // Pair each complex root with its conjugate; the real ones pair among themselves.
   const complex = roots.filter((r) => Math.abs(r[1]) > 1e-9 * Math.hypot(r[0], r[1])).filter((r) => r[1] > 0);
@@ -262,6 +353,46 @@ function patchGain(n: number, patchM: number): number {
   return Math.abs(Math.sin(width * x) / (width * Math.sin(x)));
 }
 
+interface RoadGrid {
+  freq: Float64Array;
+  share: Float64Array;
+  wk2: Float64Array;
+}
+
+/** The last few grids of roughRoadEstimate: the designer asks about the same roads and tyres over and over. */
+const ROAD_GRIDS = new Map<string, RoadGrid>();
+const ROAD_GRID_CACHE = 16;
+
+/**
+ * The road's share of each frequency of the logarithmic grid (S(f)·df with Simpson's weights) and the comfort
+ * weighting there. They do not depend on the corner, so the linearisation loop only recomputes the gains.
+ */
+function roadGrid(gd0: number, v: number, patchM: number, intervals: number): RoadGrid {
+  const key = `${gd0}|${v}|${patchM}|${intervals}`;
+  const hit = ROAD_GRIDS.get(key);
+  if (hit) return hit;
+  const f1 = ISO_8608_BAND[0] * v;
+  const f2 = ISO_8608_BAND[1] * v;
+  const h = Math.log(f2 / f1) / intervals;
+  const freq = new Float64Array(intervals + 1);
+  const share = new Float64Array(intervals + 1);
+  const wk2 = new Float64Array(intervals + 1);
+  for (let i = 0; i <= intervals; i++) {
+    const f = f1 * Math.exp(i * h);
+    const n = f / v;
+    const pg = patchGain(n, patchM);
+    // S(f)·df = G_d(n)/v · f·d(ln f), Simpson weights 1, 4, 2, …, 4, 1.
+    const weight = (i === 0 || i === intervals ? 1 : i % 2 === 1 ? 4 : 2) * (h / 3);
+    freq[i] = f;
+    share[i] = ((roadPsd(gd0, n) * pg * pg) / v) * f * weight;
+    wk2[i] = weightingGain('Wk', f) ** 2;
+  }
+  const grid = { freq, share, wk2 };
+  ROAD_GRIDS.set(key, grid);
+  if (ROAD_GRIDS.size > ROAD_GRID_CACHE) ROAD_GRIDS.delete(ROAD_GRIDS.keys().next().value!);
+  return grid;
+}
+
 /** Comfort, grip and travel of a linear quarter car on an ISO 8608 road (see the head of the file). */
 export function roughRoadEstimate(lin: QuarterLinear, road: RoughRoad, o: RoughRoadOptions): RoughRoadEstimate {
   const gd0 = typeof road.roadClass === 'number' ? road.roadClass : ISO_8608_CLASSES[road.roadClass];
@@ -276,25 +407,8 @@ export function roughRoadEstimate(lin: QuarterLinear, road: RoughRoad, o: RoughR
     };
   }
   const intervals = o.intervals ?? 300;
-  const f1 = ISO_8608_BAND[0] * v;
-  const f2 = ISO_8608_BAND[1] * v;
-  const h = Math.log(f2 / f1) / intervals;
-  // The road's share of each frequency (S(f)·df with Simpson's weights) and the comfort weighting do not depend on
-  // the damping, so the linearisation loop below only recomputes the gains.
-  const freq = new Float64Array(intervals + 1);
-  const share = new Float64Array(intervals + 1);
-  const wk2 = new Float64Array(intervals + 1);
-  for (let i = 0; i <= intervals; i++) {
-    const f = f1 * Math.exp(i * h);
-    const n = f / v;
-    const pg = patchGain(n, o.patchM);
-    // S(f)·df = G_d(n)/v · f·d(ln f), Simpson weights 1, 4, 2, …, 4, 1.
-    const weight = (i === 0 || i === intervals ? 1 : i % 2 === 1 ? 4 : 2) * (h / 3);
-    freq[i] = f;
-    share[i] = ((roadPsd(gd0, n) * pg * pg) / v) * f * weight;
-    wk2[i] = weightingGain('Wk', f) ** 2;
-  }
-  const gains = newQuarterGains();
+  const { freq, share, wk2 } = roadGrid(gd0, v, o.patchM, intervals);
+  const gains = new Float64Array(3);
   const integrate = (c: number) => {
     let aw = 0;
     let acc = 0;
@@ -303,12 +417,12 @@ export function roughRoadEstimate(lin: QuarterLinear, road: RoughRoad, o: RoughR
     let rate = 0;
     for (let i = 0; i <= intervals; i++) {
       const s = share[i];
-      quarterGains(lin, freq[i], gains, c);
-      const a2 = gains.bodyAcc * gains.bodyAcc * s;
-      const t2 = gains.travel * gains.travel * s;
+      quarterGainsSquared(lin, freq[i], c, gains);
+      const a2 = gains[0] * s;
+      const t2 = gains[2] * s;
       aw += a2 * wk2[i];
       acc += a2;
-      force += gains.tyreForce * gains.tyreForce * s;
+      force += gains[1] * s;
       travel += t2;
       rate += t2 * (TAU * freq[i]) ** 2;
     }
@@ -317,12 +431,23 @@ export function roughRoadEstimate(lin: QuarterLinear, road: RoughRoad, o: RoughR
   let c = lin.c;
   let r = integrate(c);
   if (!o.smallSine) {
-    // A fixed point: the damping sets the damper's RMS speed, which sets the damping. It converges in a few rounds
-    // because the RMS changes much less than the damping does.
+    // A fixed point: the damping sets the damper's RMS speed, which sets the damping. Plain iteration converges
+    // because the RMS changes much less than the damping does, but slowly on a damper far past its knee; a secant step
+    // on F(c) − c reaches the same point in a few sums.
+    let cPrev = NaN;
+    let gPrev = NaN;
     for (let it = 0; it < 50; it++) {
       const next = equivalentDamping(lin.damper, lin.mrDamper, r.rate * lin.mrDamper);
-      const done = Math.abs(next - c) <= 1e-7 * c;
-      c = next;
+      const gap = next - c;
+      const done = Math.abs(gap) <= 1e-7 * c;
+      let step = next;
+      if (!done && Number.isFinite(gPrev) && gap !== gPrev) {
+        const secant = c - (gap * (c - cPrev)) / (gap - gPrev);
+        if (secant > 0) step = secant;
+      }
+      cPrev = c;
+      gPrev = gap;
+      c = step;
       r = integrate(c);
       if (done) break;
     }

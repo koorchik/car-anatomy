@@ -217,14 +217,22 @@ export class ChassisAxle {
   private readonly rowL = new Float64Array(NF);
   private readonly rowR = new Float64Array(NF);
 
-  constructor(spec: AxleSpec<AnyAxleLinkage>, bar: SwayBarSpec | null) {
+  /**
+   * With `windowM` the tables cover only ±windowM of travel around design, on the same grid steps (the nodes of a beam
+   * are the full grid's own, a corner's are as long as the full table's at the usual 2 mm), so everything read at
+   * design matches the full tables while the axle costs a handful of solves: the designer's quick estimates
+   * (evaluate-chassis.ts). Past the window the tables extrapolate linearly, as past the end stops.
+   */
+  constructor(spec: AxleSpec<AnyAxleLinkage>, bar: SwayBarSpec | null, options: { windowM?: number } = {}) {
     this.spec = spec;
     this.bar = bar;
     const link = spec.linkage;
+    const w = options.windowM;
+    const travel = w === undefined ? spec.travel : { droopM: Math.min(w, spec.travel.droopM), bumpM: Math.min(w, spec.travel.bumpM) };
     if (link.kind === 'twist-beam' || link.kind === 'solid') {
       this.kind = 'beam';
       this.corner = null;
-      const { droopM, bumpM } = spec.travel;
+      const { droopM, bumpM } = travel;
       const h = BEAM_GRID_STEP_M;
       const down = Math.ceil(droopM / h - 1e-9);
       const up = Math.ceil(bumpM / h - 1e-9);
@@ -236,7 +244,7 @@ export class ChassisAxle {
       this.right = pack(tables.right, this.n * this.n);
     } else {
       this.kind = 'corner';
-      const corner = new Axle(spec as AxleSpec<CornerLinkage | PivotLinkage>);
+      const corner = new Axle({ ...spec, travel } as AxleSpec<CornerLinkage | PivotLinkage>);
       this.corner = corner;
       const t = corner.table;
       this.travel0 = t.travel0;

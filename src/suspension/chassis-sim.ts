@@ -58,7 +58,7 @@
 
 import type { Chassis } from './chassis.ts';
 import { newWheelSample, type WheelSample } from './chassis-axle.ts';
-import { bumpStopForce, coilForce, damperForce, G, tyreNormalForce } from './forces.ts';
+import { bumpStopForce, damperForce, G, springForce, tyreNormalForce } from './forces.ts';
 import { brakesOnKnuckle, newTyreShare, WheelForces, type TyreShare } from './wheel-forces.ts';
 
 /** Fixed physics step, s. */
@@ -253,8 +253,10 @@ export class ChassisSim {
       const kb = c.beamTorsion[ax];
       const beamL = kb * L.beamTwist * L.twistRate;
       const beamR = kb * R.beamTwist * R.twistRate;
-      sEl[iL] = fs[iL] * L.mrSpring + fs[iR] * R.mrSpringCross + eL * L.mrDamper + eR * R.mrDamperCross + barL + beamL;
-      sEl[iR] = fs[iR] * R.mrSpring + fs[iL] * L.mrSpringCross + eR * R.mrDamper + eL * L.mrDamperCross + barR + beamR;
+      // Third spring: both wheels get k₃·mr₃²·(q_L + q_R).
+      const third = c.thirdRates[ax] * (q[iL] + q[iR]);
+      sEl[iL] = fs[iL] * L.mrSpring + fs[iR] * R.mrSpringCross + eL * L.mrDamper + eR * R.mrDamperCross + barL + beamL + third;
+      sEl[iR] = fs[iR] * R.mrSpring + fs[iL] * L.mrSpringCross + eR * R.mrDamper + eL * L.mrDamperCross + barR + beamR + third;
       // Side forces: the axle's share of m·a_y (wheel-forces.ts shared it by load).
       const fyAxle = c.massKg * ay * c.lateralShare[ax];
       const mu = c.corners[iL].unsprungKg;
@@ -366,7 +368,7 @@ export class ChassisSim {
   /** Spring force and stop force of corner i at its sample, into this.fs and this.fst. */
   private springAndStop(i: number, s: WheelSample): void {
     const k = this.chassis.corners[i];
-    this.fs[i] = coilForce(k.spring.rate, k.spring.freeM, s.springLen, k.spring.rate2, k.spring.fromM);
+    this.fs[i] = springForce(k.spring, s.springLen);
     const b = k.bumpStop;
     this.fst[i] =
       s.damperLen < b.contactM

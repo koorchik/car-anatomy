@@ -17,6 +17,7 @@ import type { DrivetrainCore } from '../drivetrain/core.ts';
 import { ManualControl, type ManualSpec, type ShiftPhase } from '../drivetrain/control/manual.ts';
 import type { CrankInput, CrankLoad, EngineRequest, LoadCommand, LoadSnapshot, LoadTorque } from '../engine/load.ts';
 import { LongitudinalChassis, type LongitudinalSpec } from './longitudinal.ts';
+import { vehicleFrame, type VehicleFrame } from './vehicle-frame.ts';
 import { longitudinalOf, type Tyre } from './tyre.ts';
 import { VehicleStep } from './vehicle-step.ts';
 import { WHEELS } from './wheel-bus.ts';
@@ -189,6 +190,11 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
     };
     this.sum = { samples: 0, seconds: 0, crankNm: 0, wheelNm: 0 };
     return reading;
+  }
+
+  /** The dash's figures and the angles of the drivetrain and the wheels (vehicle-frame.ts), new or into `into`. */
+  frame(into?: VehicleFrame): VehicleFrame {
+    return vehicleFrame(this, into);
   }
 
   private size(): number {
