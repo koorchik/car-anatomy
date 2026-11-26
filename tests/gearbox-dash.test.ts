@@ -183,6 +183,17 @@ describe('the full dash in the car', () => {
     expect(blipped).toBe(true);
     const shaft = (r.load.vehicle.solver.memberSpeed(r.load.control.spec.input) * 30) / Math.PI;
     expect(Math.abs(r.sim.rpm - shaft) / shaft).toBeLessThan(0.1);
+    // A shift made without the clutch is over once its gear holds: pressing the pedal afterwards is not a shift.
+    r.command({ action: 'clutch', pedal: 0 });
+    r.run(1);
+    r.command({ action: 'gear', gear: '3' });
+    r.run(2);
+    expect(r.load.control.gearIn(r.load.vehicle.solver)).toBe('3');
+    r.command({ action: 'clutch', pedal: 1 });
+    blipped = false;
+    r.run(2, () => (blipped ||= r.load.control.blip > 0));
+    expect(blipped).toBe(false);
+    expect(r.sim.rpm).toBeLessThan(1.3 * idle);
   }, 60_000);
 
   it('takes the pedal over from the auto clutch where its clamp is: the pedal for a clamp gives that clamp back', () => {

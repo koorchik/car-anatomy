@@ -13,7 +13,8 @@
 // Rev matching (the pages' rev-matching helper, stage K3b; Honda's Rev-Match on the Civic Type R): once the lever has
 // asked for another gear, while the clutch is (nearly) open and that gear needs the engine faster than it turns, the
 // control asks for throttle (`blip`, read by VehicleLoad.engineRequest) until the engine meets the input speed that
-// gear will have. It lets go when the clutch closes again: a clutch held down in the same gear gets no blip.
+// gear will have. It lets go when the clutch closes again, or when the gear went in with the clutch closed: a clutch held
+// down in the same gear gets no blip.
 //
 // It steps on the audio thread inside VehicleLoad: plain numbers, no allocation, no text.
 
@@ -195,6 +196,9 @@ export class ManualControl {
     if (this.clamp <= BLIP_CLAMP) {
       if (this.matching === 1) this.matching = 2;
     } else if (this.matching === 2) this.matching = 0;
+    // A gear the driver got in without the clutch (the auto clutch off, the lever moved with the pedal up): the shift
+    // is over, so a later press of the pedal in that gear is not one.
+    else if (this.matching === 1 && this.sleeve === this.target && s.state[sp.gears[this.target]!.element] === LOCKED) this.matching = 0;
     this.blip = this.revMatch ? this.blipFor(s, input, dt) : 0;
     this.lastOmega = input.omega;
 
