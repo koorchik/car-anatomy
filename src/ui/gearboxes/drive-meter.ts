@@ -120,6 +120,8 @@ export class DriveStrip {
   private readonly last = new Float64Array(STRIP_KEYS.length);
   private hasLast = false;
   private readonly now = new Float64Array(STRIP_KEYS.length);
+  /** The simulation's clock on the last frame, s; NaN before the first. */
+  private lastClock = Number.NaN;
 
   constructor() {
     this.series = Object.fromEntries(STRIP_KEYS.map((k) => [k, new Float32Array(this.size)])) as Record<StripKey, Float32Array>;
@@ -133,14 +135,19 @@ export class DriveStrip {
     this.lastAccel = 0;
     this.jerk = 0;
     this.hasLast = false;
+    this.lastClock = Number.NaN;
   }
 
   /**
-   * Takes the frame shown now; a sample is kept every 1/STRIP_RATE s of the page's time. A frame longer than that (a
-   * slow device draws 20 frames a second or fewer) fills every sample it spans, along the line from the last frame, so
-   * the strip always spans STRIP_SECONDS. True when a sample was kept.
+   * Takes the frame shown now, `dt` s of the page's time after the last one; a sample is kept every 1/STRIP_RATE s of
+   * the frame's own clock, as DriveMeter times by it (`dt` stands in only where that clock went back). A frame longer
+   * than that (a slow device draws 20 frames a second or fewer) fills every sample it spans, along the line from the
+   * last frame, so the strip always spans STRIP_SECONDS of the car's time. True when a sample was kept.
    */
   step(f: VehicleFrame, rpm: number, dt: number): boolean {
+    const clock = f.time - this.lastClock;
+    this.lastClock = f.time;
+    if (clock >= 0) dt = clock;
     if (!(dt > 0)) return false;
     const k = Math.min(1, dt / JERK_S);
     this.accel += (f.accel - this.accel) * k;
