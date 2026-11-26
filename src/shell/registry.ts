@@ -7,6 +7,7 @@
 import { DEFAULT_ENGINE } from '../ui/engines/routes.ts';
 import { loadEngines } from '../ui/engines/load.ts';
 import { GEARBOX_PAGES_SHOWN, loadGearboxes } from '../ui/gearboxes/load.ts';
+import { SUSPENSION_PAGE_IDS } from '../data/suspension-links.ts';
 import { loadSuspensions } from '../ui/suspensions/load.ts';
 import { loadCar } from '../ui/car/load.ts';
 import type { Route, SectionId } from './routes.ts';
@@ -56,9 +57,7 @@ export const SECTIONS: readonly SectionEntry[] = [
     openPages: GEARBOX_PAGES_SHOWN,
     pages: [{ key: 'catalogue', href: `#/gearboxes/${GEARBOX_PAGES_SHOWN[0]!}` }],
   },
-  // In the menu since P1d, but its page does not read a suspension type or a car from the address yet (P4), so no link
-  // from another section (#/suspensions/<type>/<car>) leads there.
-  { id: 'suspensions', load: loadSuspensions, openPages: [], pages: [{ key: 'catalogue', href: '#/suspensions' }] },
+  { id: 'suspensions', load: loadSuspensions, openPages: SUSPENSION_PAGE_IDS, pages: [{ key: 'catalogue', href: '#/suspensions' }] },
   // The overview of a car, at its address without a menu item until stage C1c gives it a page.
   { id: 'car', load: loadCar, openPages: [] },
 ];
