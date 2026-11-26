@@ -1,6 +1,7 @@
 // Inertia force arrows on the model, one view of them at a time: the switch under the stage, and a card with the
-// choice of view, its switches, a line of figures and what is left of the whole engine. The arrows themselves are in
-// src/scene/balance-arrows.ts, the views in src/engine/balance-phasors.ts and the physics in src/engine/balance-forces.ts.
+// choice of view, its switches, the force polygon, a line of figures and what is left of the whole engine. The arrows
+// themselves are in src/scene/balance-arrows.ts, the polygon in balance-diagram.ts, the views in
+// src/engine/balance-phasors.ts and the physics in src/engine/balance-forces.ts.
 
 import { engineById, pageChoices } from '../data/engines.ts';
 import { DEFAULT_DESIGN } from '../designer/design.ts';
@@ -13,6 +14,7 @@ import { t } from '../i18n/t.ts';
 import { BalanceOverlay, FORCE_COLORS, colorOf } from '../scene/balance-arrows.ts';
 import type { EngineModel } from '../scene/model-types.ts';
 import type { ViewControl } from '../shell/section.ts';
+import { DiagramSheet, ForceDiagram } from './balance-diagram.ts';
 import { forcesToggle } from './forces-toggle.ts';
 import './balance-panel.css';
 
@@ -108,7 +110,7 @@ export class BalancePanel {
   private xrayed = false;
   private settingView = false;
   /** Height of the full card when it last showed, to tell whether it fits before showing it full again. */
-  private fullHeight = 270;
+  private fullHeight = 470;
   /** Viewport y the full card has to end above: other overlays on the right of the stage live under it. */
   private room: () => number = () => Infinity;
   private refit: () => void = () => {};
@@ -121,6 +123,12 @@ export class BalancePanel {
   private rpm = 0;
   private shownRpm = -1;
   private lastText = 0;
+  /** The force polygon in the card, a button that opens it large (the sheet, made on the first tap). */
+  private readonly diagram = new ForceDiagram();
+  private readonly diagramButton = document.createElement('button');
+  private sheet: DiagramSheet | null = null;
+  /** Crank angle of the last frame, so a polygon drawn between frames shows the same as the model. */
+  private theta = 0;
 
   /**
    * @param tools Row of view options under the stage, where the switch goes.
@@ -159,6 +167,10 @@ export class BalancePanel {
       this.applyView();
       this.card.querySelector<HTMLInputElement>(`input[data-option="${key}"]`)?.focus();
     });
+    this.diagramButton.type = 'button';
+    this.diagramButton.className = 'forces-diagram-open';
+    this.diagramButton.append(this.diagram.element);
+    this.diagramButton.addEventListener('click', () => this.openSheet());
     this.stageBox.className = 'forces-stage';
     this.stageBox.append(this.card);
     host.append(this.stageBox);
@@ -212,9 +224,12 @@ export class BalancePanel {
     const compact = this.card.classList.contains('compact');
     const full = !this.card.hidden && !compact;
     const height = full ? this.card.offsetHeight : 0;
+    // A full card that came out taller than the fit assumed (a new view, a longer legend) may no longer fit: ask again.
+    const grew = height > this.fullHeight + 1;
     if (height > 0) this.fullHeight = height;
     document.documentElement.style.setProperty('--forces-card-h', `${height}px`);
     document.documentElement.style.setProperty('--forces-compact-w', `${!this.card.hidden && compact ? this.card.offsetWidth : 0}px`);
+    if (grew) this.refit();
   }
 
   /**
@@ -257,6 +272,7 @@ export class BalancePanel {
     this.on = on;
     this.checkbox.checked = on;
     this.card.hidden = !on;
+    if (!on) this.sheet?.close();
     document.body.classList.toggle('forces-on', on);
     if (on && !was) this.toXray();
     if (!on && was) this.fromXray();
@@ -307,8 +323,11 @@ export class BalancePanel {
   /** Every frame: the crank angle on screen and the speed the figures are for. */
   frame(theta: number, rpm: number): void {
     this.rpm = rpm;
+    this.theta = theta;
     if (!this.on || !this.overlay) return;
     this.overlay.update(theta);
+    this.diagram.draw(theta);
+    this.sheet?.draw(theta);
     const now = performance.now();
     if (Math.abs(rpm - this.shownRpm) > Math.max(1, rpm * 0.01) && now - this.lastText > 250) {
       this.lastText = now;
@@ -334,6 +353,16 @@ export class BalancePanel {
       coupleMax: num(atRpm(couple, limit)),
     });
     line.parentElement!.title = t('Найбільша сума за оберт: зараз на {rpm} об/хв, на межі на {limit} об/хв', { rpm: num(rpm), limit: num(limit) });
+  }
+
+  /** The polygon large: on a phone the card has room only for a small one. */
+  private openSheet(): void {
+    const view = this.currentView();
+    if (!view || !this.phasors) return;
+    this.sheet ??= new DiagramSheet();
+    this.sheet.set(this.phasors, view, viewName(view.view, this.phasors.forces.engine.isRotary));
+    this.sheet.open();
+    this.sheet.draw(this.theta);
   }
 
   private build(): void {
@@ -386,12 +415,22 @@ export class BalancePanel {
       <h2 class="forces-title">${t('Сили інерції')}</h2>
       <div class="segmented forces-views" role="group" aria-label="${t('Які сили показати')}">${views.join('')}</div>
       ${options ? `<div class="forces-options">${options}</div>` : ''}
+      <div class="forces-diagram-slot"></div>
       <p class="forces-line">${swatch(FORCE_COLORS.net)}<span class="forces-line-text"></span></p>
       <p class="forces-about">${aboutView(view, rotary)}</p>
       <p class="forces-legend">${legend.join('')}</p>
       ${verdict || note ? `<p class="forces-verdict">${[verdict, note].filter(Boolean).join(' ')}</p>` : ''}
-      <details class="forces-note"${this.noteOpen ? ' open' : ''}><summary>${t('Як читати стрілки')}</summary>${t('Тонкі стрілки — сили вибраного виду там, де вони діють, а велика біла стрілка в центрі колінвала — їхня сума. Дуга моменту така, як сила, що дала б цей момент на плечі між сусідніми циліндрами. Довжина стрілок від обертів не залежить: усі сили ростуть із квадратом обертів однаково. Три види разом — уся сила інерції двигуна, крім слабких вищих порядків, яких не показує жоден. Маси деталей оцінено за їхніми розмірами.')}</details>`;
+      <details class="forces-note"${this.noteOpen ? ' open' : ''}><summary>${t('Як читати стрілки')}</summary>${t('Тонкі стрілки — сили вибраного виду там, де вони діють, а велика біла стрілка в центрі колінвала — їхня сума. Дуга моменту така, як сила, що дала б цей момент на плечі між сусідніми циліндрами. Довжина стрілок від обертів не залежить: усі сили ростуть із квадратом обертів однаково. Три види разом — уся сила інерції двигуна, крім слабких вищих порядків, яких не показує жоден. Маси деталей оцінено за їхніми розмірами.')} ${t('Схема під перемикачем складає сили вибраного виду голова до хвоста, як видно спереду: замкнувся многокутник — вони гасять одна одну. Натисни на схему, щоб розгорнути її.')}</details>`;
     this.card.querySelector('details')!.addEventListener('toggle', (event) => (this.noteOpen = (event.target as HTMLDetailsElement).open));
+    // The polygon keeps its nodes from view to view: only its paths change, every frame.
+    this.diagram.set(ph, view);
+    this.diagramButton.setAttribute('aria-label', `${this.diagram.label} ${t('Натисни, щоб розгорнути.')}`);
+    this.card.querySelector('.forces-diagram-slot')!.replaceWith(this.diagramButton);
+    this.diagram.draw(this.theta);
+    if (this.sheet?.isOpen) {
+      this.sheet.set(ph, view, viewName(view.view, rotary));
+      this.sheet.draw(this.theta);
+    }
     this.updateNow();
   }
 }
