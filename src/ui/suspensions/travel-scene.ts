@@ -11,11 +11,10 @@ import { Axle, newCornerSample } from '../../suspension/kinematics.ts';
 import type { ResolvedCorner } from '../../suspension/setup.ts';
 import { POSE_SIZE } from '../../suspension/solve.ts';
 import {
-  bumpSteerPer25, camberGainLeft, camberReversal, curveAt, freeMotions, jointRange, linkRows, sceneRackRange, travelCurves,
+  bumpSteerPer25, camberGainLeft, camberReversal, curveAt, freeMotions, jackingLift, jointRange, linkRows, sceneRackRange, travelCurves,
   type JointRange, type TravelCurves,
 } from '../../suspension/travel-curves.ts';
 import { pivotLayout } from '../../suspension/templates/pivot.ts';
-import { jackingLift } from '../../scene/suspension/jacking-arrows.ts';
 import { frontViewSvg } from './front-view.ts';
 import { pageName, type PageChoice } from './pages.ts';
 import { TravelChart, type ChartSeries } from './travel-chart.ts';
@@ -317,7 +316,7 @@ export class TravelScene {
     }
     // A single pivot arm: the body lift a sideways force of 1 kN on the tyre gives through the force line (jacking).
     if (this.own.axle.spec.linkage.rigidArm) {
-      rows.push([t('Підйом кузова від 1 кН бічної сили'), t('{value} Н', { value: fmt(jackingLift(1000, s.rcHeight, s.contactY), 0) }), false]);
+      rows.push([t('Підйом кузова від 1 кН бічної сили'), t('{value} Н', { value: fmt(jackingLift(1000, s.tanBeta), 0) }), false]);
     }
     if (this.choice.page.id === 'multilink') rows.push([t('Ступенів свободи кулака'), String(this.motions.length || 1), this.removed.length > 0]);
     const html = rows.map(([label, value, alarm]) => `<div class="susp-number${alarm ? ' alarm' : ''}"><dt>${label}</dt><dd>${value}</dd></div>`).join('');

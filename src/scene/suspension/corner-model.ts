@@ -22,7 +22,7 @@ import { merge } from '../geometry.ts';
 import { G } from '../../suspension/forces.ts';
 import { rotateQuatBy } from '../../suspension/vec.ts';
 import { KnuckleStatics } from '../../suspension/knuckle-statics.ts';
-import type { Axle } from '../../suspension/kinematics.ts';
+import { newCornerSample, type Axle } from '../../suspension/kinematics.ts';
 import type { QuarterOut } from '../../suspension/quarter.ts';
 import type { RoadProfile } from '../../suspension/road.ts';
 import type { ResolvedCorner } from '../../suspension/setup.ts';
@@ -46,6 +46,12 @@ import { ROAD_SAMPLES, roadPressUniforms, type RoadPressUniforms } from './tyre-
 import { caliperGeometry, discGeometry, wheelGeometry } from './wheel-geometry.ts';
 
 export { DRAWING, springWireM } from './drawing.ts';
+
+/**
+ * The sideways force the jacking arrows of a single pivot arm show, as a share of the tyre's load: a turn at about 0.6 g,
+ * where NHTSA's 1972 report put the early Corvair's limit of control. An illustration, not a run of the car.
+ */
+export const JACKING_SHARE = 0.6;
 export type { DrawnLink } from './link-builder.ts';
 
 /** What the corner shows this frame. Lengths in metres, forces in newtons along their elements (QuarterOut). */
@@ -233,6 +239,7 @@ export class CornerModel implements SceneModel<CornerFrame> {
   private readonly rigidArm: string | null;
 
   // Scratch, so update() allocates nothing.
+  private readonly jackSample = newCornerSample();
   private readonly v1 = new THREE.Vector3();
   private readonly v2 = new THREE.Vector3();
   private readonly v3 = new THREE.Vector3();
@@ -583,7 +590,7 @@ export class CornerModel implements SceneModel<CornerFrame> {
     const tyreHalf = (resolved.tyre.widthM / 2) * 10;
     this.road = new RoadStrip(m.road, spec.wheelCentre[0], this.c0.x - tyreHalf - 2.2, this.c0.x + tyreHalf + 1.6);
     if (options.road !== false) this.group.add(this.road.mesh);
-    this.forces = new ForceArrows(this.linkSet.arms.length + this.linkSet.rods.length);
+    this.forces = new ForceArrows(this.linkSet.arms.length + this.linkSet.rods.length, this.rigidArm !== null);
     this.body.add(this.forces.group, this.laser.group);
     this.schematicPoints = this.schematicLayout(!!strut);
     this.schematic = new CornerSchematic(m, this.schematicPoints);
@@ -1050,6 +1057,11 @@ export class CornerModel implements SceneModel<CornerFrame> {
     else arrows.hide('stop');
     const weight = this.resolved.unsprungKg * G;
     arrows.set('weight', this.wheelCentre, v.set(0, -weight, 0));
+    // A single pivot arm's jacking: the tyre in a turn at JACKING_SHARE of its load sideways, and the lift it gives.
+    if (this.rigidArm !== null) {
+      this.axle.measure(this.pose, f.travel, f.rack, this.jackSample);
+      arrows.setJacking(this.contact, JACKING_SHARE * Math.max(0, f.tyreN), this.jackSample.tanBeta);
+    }
 
     // Statics of the knuckle under those forces, in the ISO body frame, metres: ISO (x, y, z) = scene (z, x, y)/10.
     const s = this.statics;

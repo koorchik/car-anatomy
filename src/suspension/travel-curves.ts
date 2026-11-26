@@ -170,6 +170,15 @@ export function jointRange(axle: Axle, rackM: number): JointRange | null {
   return out;
 }
 
+/**
+ * The body lift from a sideways force on the tyre (jacking): the linkage takes the force to the body along the line from
+ * the contact patch through the front-view instant centre, so the body is pushed up by Fy·tanβ, tanβ being that line's
+ * slope (CornerSample.tanBeta: the roll centre's height over the patch's distance from the centre line). A trailing
+ * arm's line lies on the road and lifts nothing; a swing axle's climbs steeply to its joint. The inner wheel pulls the
+ * body down by its own share; with less weight on it in a turn, it pulls less.
+ */
+export const jackingLift = (lateralN: number, tanBeta: number): number => lateralN * tanBeta;
+
 /** Whether a joint range leaves the maker's limits anywhere. */
 export const jointsOver = (r: JointRange): boolean =>
   r.plunge[0] < r.limits.plunge[0] || r.plunge[1] > r.limits.plunge[1] || r.innerDeg > r.limits.innerDeg || r.outerDeg > r.limits.outerDeg;

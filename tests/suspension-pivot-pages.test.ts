@@ -4,14 +4,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { SUSPENSION_PAGES } from '../src/data/suspensions.ts';
-import { jackingLift } from '../src/scene/suspension/jacking-arrows.ts';
 import { pageCorner, designCorner } from '../src/suspension-designer/page-cars.ts';
 import { designSweep, morphCorner, morphDesign, rollCentreBySweep } from '../src/suspension-designer/pivot-morph.ts';
 import { catalogueChassis } from '../src/suspension-designer/catalogue.ts';
 import { Axle, newCornerSample } from '../src/suspension/kinematics.ts';
 import { asLinksCorner } from '../src/suspension/pivot-links.ts';
 import type { AxleSpec, PivotLinkage } from '../src/suspension/spec.ts';
-import { travelCurves } from '../src/suspension/travel-curves.ts';
+import { curveAt, jackingLift, travelCurves } from '../src/suspension/travel-curves.ts';
+import { semiTrailingArticleHtml } from '../src/ui/suspensions/articles/semi-trailing.ts';
+import { swingAxleArticleHtml } from '../src/ui/suspensions/articles/swing-axle.ts';
 
 const PIVOT_PAGES = SUSPENSION_PAGES.filter((p) => p.id === 'trailing-arm' || p.id === 'semi-trailing' || p.id === 'swing-axle');
 const designs = PIVOT_PAGES.flatMap((p) => [
@@ -78,10 +79,39 @@ describe('the pivot-axis pages', () => {
   });
 
   it('lifts the body by the sideways force times the slope of the force line, none on a trailing arm', () => {
-    expect(jackingLift(3000, 0, 0.7)).toBe(0);
-    expect(jackingLift(3000, 0.35, 0.7)).toBeCloseTo(1500, 9);
-    const d = PIVOT_PAGES[2]!.base.design!();
-    const [trailing, swing] = rollCentreBySweep(d, 'R', [0, 90]);
-    expect(jackingLift(3000, swing!.rcMm / 1000, 0.7)).toBeGreaterThan(jackingLift(3000, trailing!.rcMm / 1000, 0.7) + 1000);
+    const s = newCornerSample();
+    // A trailing arm's force line lies on the road.
+    new Axle(pageCorner(PIVOT_PAGES[0]!, null).axle).measureAt(0, s);
+    expect(Math.abs(jackingLift(3000, s.tanBeta))).toBeLessThan(1);
+    // A swing axle's instant centre is its joint: the force line runs from the patch through it, whatever the solver.
+    const swing = catalogueChassis(PIVOT_PAGES[2]!.base.design!()).rear.axle as AxleSpec<PivotLinkage>;
+    const [, jointY, jointZ] = swing.linkage.axisA;
+    new Axle(asLinksCorner(swing)).measureAt(0, s);
+    const slope = (jointZ - s.contactZ) / (s.contactY - jointY);
+    expect(jackingLift(3000, s.tanBeta)).toBeCloseTo(3000 * slope, 3);
+    expect(jackingLift(3000, s.tanBeta)).toBeGreaterThan(1000);
+  });
+
+  it('quote in the articles what the pages\' own corners give', () => {
+    const uk = (v: number, digits: number): string => v.toFixed(digits).replace('.', ',').replace('-', '−');
+    const at = (id: string): { axle: Axle; curves: ReturnType<typeof travelCurves> } => {
+      const axle = new Axle(pageCorner(PIVOT_PAGES.find((p) => p.id === id)!, null).axle);
+      return { axle, curves: travelCurves(axle) };
+    };
+    const s = newCornerSample();
+    const semi = at('semi-trailing');
+    semi.axle.measureAt(0, s);
+    const plunge0 = s.plunge;
+    const semiText = semiTrailingArticleHtml();
+    expect(semiText).toContain(`центр крену близько ${Math.round(s.rcHeight * 1000)} мм`);
+    expect(semiText).toContain(`${uk((s.camberGain * 180) / Math.PI, 1)}° на метр ходу`);
+    expect(semiText).toContain(`розвал ${uk(curveAt(semi.curves, 'camber', 0.12), 1)}°`);
+    semi.axle.measureAt(0.12, s);
+    expect(semiText).toContain(`на ${uk(Math.abs(s.plunge - plunge0) * 1000, 1)} мм`);
+    const swing = at('swing-axle');
+    const swingText = swingAxleArticleHtml();
+    expect(swingText).toContain(`${uk(curveAt(swing.curves, 'camber', 0.12), 1)}° на +120 мм`);
+    expect(swingText).toContain(`+${uk(curveAt(swing.curves, 'camber', -0.1), 1)}° на −100 мм`);
+    expect(swingText).toContain(`колія ${uk(swing.axle.spec.wheelCentre[1] * 2, 2)} м`);
   });
 });
