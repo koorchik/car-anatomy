@@ -17,7 +17,7 @@ import { forceFromInput } from '../src/drivetrain/runs.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import { LoadedCrank } from '../src/engine/loaded-crank.ts';
 import { EngineSim } from '../src/engine/sim.ts';
-import { pullAwayDemo, shiftDrop, shiftingDemo, SHIFT_DEMO_RPM, type CarDemo, type DemoControls, type DemoView } from '../src/ui/gearboxes/car-demos.ts';
+import { bitePedal, pullAwayDemo, shiftDrop, shiftingDemo, SHIFT_DEMO_RPM, type CarDemo, type DemoControls, type DemoView } from '../src/ui/gearboxes/car-demos.ts';
 import { DriveMeter, DriveStrip, STRIP_RATE, STRIP_SECONDS } from '../src/ui/gearboxes/drive-meter.ts';
 import { DEFAULT_DRIVE_SETTINGS, gradeRad } from '../src/ui/gearboxes/drive-panel.ts';
 import { constrain, gateLayout } from '../src/ui/gearboxes/gate.ts';
@@ -94,7 +94,7 @@ describe('the full dash in the car', () => {
       const core = load.vehicle.solver.energy[clutch]!;
       expect(f.clutchJ).toBe(core);
       // The meter's pull-away heat is the core's counter since the car last stood with the clutch at rest.
-      if (Math.abs(f.speed) < 0.15 && Math.abs(f.clutchSlip) < 0.5) base = core;
+      if (Math.abs(f.speed) < 0.15 && (f.clutch <= 0 || Math.abs(f.clutchSlip) < 0.5)) base = core;
       const fig = meter.step(structuredClone(f), 100 * DT);
       expect(fig.launchJ).toBeCloseTo(core - base, 6);
       checked++;
@@ -324,6 +324,46 @@ describe('the full dash in the car', () => {
     expect(shiftHint(cd, '3', cd.map.idleRpm * 1.2, 8, 0.3)).toEqual({ direction: 'down', to: '2' });
     expect(shiftHint(cd, '5', 3000, 30, 0.3)).toBeNull();
   });
+
+  it('counts a pull-away from the last stop, even when the car stood in gear with the pedal down and the engine idling', () => {
+    const r = rig();
+    const meter = new DriveMeter();
+    r.sim.start();
+    r.run(1.5);
+    r.command({ action: 'autoClutch', on: false });
+    const drive = (s: number, each: () => void) => {
+      for (let t = 0; t < s; t += 1 / 30) {
+        each();
+        r.run(1 / 30);
+        meter.step(r.load.frame(), 1 / 30);
+      }
+    };
+    // A pull-away as demonstration 2 drives it, the revs held near 2500 by the gas, then a stop with the clutch down,
+    // standing in first as at a light.
+    r.command({ action: 'clutch', pedal: 1 });
+    r.command({ action: 'gear', gear: '1' });
+    drive(0.6, () => {});
+    const gas = () => (r.sim.pedal = Math.min(0.8, Math.max(0, (2500 - r.sim.rpm) / 1500)));
+    let time = 0;
+    drive(4, () => {
+      gas();
+      r.command({ action: 'clutch', pedal: bitePedal(time, 2.5) });
+      time += 1 / 30;
+    });
+    expect(r.sim.state).toBe('running');
+    expect(meter.figures.launchJ).toBeGreaterThan(1000);
+    drive(3, () => {
+      r.sim.pedal = 0;
+      r.command({ action: 'clutch', pedal: 1 });
+      r.command({ action: 'brake', value: 1 });
+    });
+    const f = r.load.frame();
+    expect(Math.abs(f.speed)).toBeLessThan(0.01);
+    expect(Math.abs(f.clutchSlip)).toBeGreaterThan(50);
+    expect(r.sim.state).toBe('running');
+    // The heat of the last pull-away is behind: the next one starts from nothing.
+    expect(meter.figures.launchJ).toBe(0);
+  }, 60_000);
 
   it('times 0–100 km/h by the simulation\'s clock, not by how often the page draws', () => {
     const { load } = rig();

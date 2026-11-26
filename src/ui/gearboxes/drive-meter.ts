@@ -15,7 +15,7 @@ const HUNDRED = 100 / 3.6;
 const SPRINT_M = 400;
 
 export interface LaunchFigures {
-  /** Heat into the clutch since the car last stood with the clutch at rest, J. */
+  /** Heat into the clutch since the car last stood with the clutch at rest (open, or not slipping), J. */
   launchJ: number;
   /** Seconds from the last standstill to 100 km/h and to 400 m, null until reached. */
   to100: number | null;
@@ -53,8 +53,9 @@ export class DriveMeter {
     this.lastClock = f.time;
     if (clock >= 0) dt = clock;
     const still = Math.abs(f.speed) < STILL;
-    if (still && Math.abs(f.clutchSlip) < NO_SLIP) {
+    if (still && (f.clutch <= 0 || Math.abs(f.clutchSlip) < NO_SLIP)) {
       // Standing with the clutch at rest (open, or closed on a stalled engine): the next pull-away counts from here.
+      // An open clutch passes no heat however far apart its two sides turn: the engine idling with the pedal down.
       this.baseJ = f.clutchJ;
       this.started = false;
     }
