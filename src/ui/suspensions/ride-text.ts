@@ -107,12 +107,16 @@ export const sweepCaption = (s: RoughSweep): string =>
 
 /** The caption of the invariant point: how far the three curves of the body are from one point there, and why. */
 export function invariantCaption(c: InvariantCheck, tyreDamping: boolean): string {
-  const head = t('На {hz} Гц кузов рухається майже однаково з будь-яким амортизатором: три криві для ζ 0,1, 0,3 і 0,7 відходять від однієї точки щонайбільше на {spread}.', {
-    hz: fmt(c.hz, 1),
-    spread: percent(c.spread),
-  });
+  const values = { hz: fmt(c.hz, 1), spread: percent(c.spread) };
+  // Without tyre damping the spread is round-off: «almost the same … by 0,00 % at most» would contradict itself.
+  const head = tyreDamping
+    ? t('На {hz} Гц кузов рухається майже однаково з будь-яким амортизатором: три криві для ζ 0,1, 0,3 і 0,7 відходять від однієї точки щонайбільше на {spread}.', values)
+    : t('На {hz} Гц кузов рухається однаково з будь-яким амортизатором: три криві для ζ 0,1, 0,3 і 0,7 проходять через одну точку, розкид {spread}.', values);
+  // At ω² = k_t/m_u the wheel's inertia m_u·ω²·z_u equals the tyre force its motion takes away, k_t·z_u, so the body
+  // gets k_t·y: the force of the tyre under a wheel that did not move. Tyre damping adds c_t·ż_u, which depends on
+  // the wheel's motion and so on the damper.
   const why = tyreDamping
     ? t('Точно в одну точку їм не дає зійтися шина: вона теж трохи гасить коливання, її сила залежить від того, як рухається колесо, а рух колеса залежить від амортизатора. Вимкни «Демпфування шини», і криві зійдуться.')
-    : t('Без демпфування шини криві сходяться точно: на частоті √(k_t/m_u) інерція колеса якраз урівноважує пружність шини, тож кузов отримує всю силу, з якою дорога тисне на шину, хоч який стоїть амортизатор.');
+    : t('Без демпфування шини криві сходяться точно. На частоті √(k_t/m_u) колесо гойдається на шині, як вантаж на пружині у власному резонансі: скільки сили його рух забирає в шини, рівно стільки йде на розгін самого колеса. Тож кузову дістається та сама сила, з якою шина тиснула б під нерухомим колесом, хоч який стоїть амортизатор.');
   return `${head} ${why} ${t('Тут не допоможе ні амортизатор, ні навіть активна підвіска між кузовом і колесом, лише легше колесо: воно зсуває точку на вищу частоту, а на графіку опускає її.')}`;
 }

@@ -132,10 +132,17 @@ describe('the stand', () => {
     }
   });
 
-  it('moves the invariant point up with a lighter wheel', () => {
-    const light = invariantCheck(resolveCorner({ ...corner, unsprungKg: 30 }, factory), false);
-    const heavy = invariantCheck(resolveCorner({ ...corner, unsprungKg: 50 }, factory), false);
+  it('moves the invariant point up and, on the chart, down with a lighter wheel', () => {
+    const [lightRc, heavyRc] = [30, 50].map((kg) => resolveCorner({ ...corner, unsprungKg: kg }, factory));
+    const light = invariantCheck(lightRc, false);
+    const heavy = invariantCheck(heavyRc, false);
     expect(light.hz).toBeGreaterThan(heavy.hz);
+    // At ω = √(k_t/m_u) the body's acceleration is (m_u/m_s)·ω²·Y with Y = v/ω: √(k_t·m_u)/m_s·v, less for a lighter
+    // wheel, as the caption says.
+    const expected = (rc: typeof lightRc): number => (Math.sqrt(rc.tyre.kt * rc.unsprungKg) / rc.sprungKg) * SHAKER_VELOCITY_MS;
+    expect(light.bodyAcc / expected(lightRc)).toBeCloseTo(1, 6);
+    expect(heavy.bodyAcc / expected(heavyRc)).toBeCloseTo(1, 6);
+    expect(light.bodyAcc).toBeLessThan(heavy.bodyAcc);
   });
 
   it('keeps the phase of the post across a change of frequency, at the same velocity amplitude', () => {
@@ -175,6 +182,9 @@ describe('what the scenes say', async () => {
   it('explains why the curves meet nearly or exactly, with the spread measured', () => {
     const rc = resolveCorner(corner, factory);
     expect(invariantCaption(invariantCheck(rc, true), true)).toMatch(/щонайбільше на 6,0 %.*Вимкни «Демпфування шини»/);
-    expect(invariantCaption(invariantCheck(rc, false), false)).toMatch(/0,00 %.*сходяться точно/);
+    const exact = invariantCaption(invariantCheck(rc, false), false);
+    expect(exact).toMatch(/0,00 %.*сходяться точно/);
+    // Exactly one point is not «almost».
+    expect(exact).not.toMatch(/майже/);
   });
 });
