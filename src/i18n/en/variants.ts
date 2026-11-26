@@ -183,6 +183,15 @@ export const VARIANT_TEXT_EN: Record<string, FactsTextEn> = {
     cars: ['Toyota Corolla E150', 'Toyota Corolla E170', 'Toyota Auris E150'],
     years: '2007-2019',
   },
+  'i4/prius-2zr-fxe': {
+    name: 'Toyota Prius 1.8 (XW30)',
+    note:
+      'The same block as the Corolla 1.8, built for a hybrid: a 13 : 1 compression ratio and a late-closing intake, so the piston pushes part of the charge back out and the engine compresses less than it expands. This is the Atkinson cycle: 98 hp at 5200 rpm versus 133 for the 2ZR-FE, but a higher efficiency. ' +
+      'There is no starter, and the water pump is electric, with no belt. The generator starts and stops the engine and also sets its speed, so the revs are not tied to road speed. At 5200 rpm that is about 173 firing events per second. ' +
+      'The model underestimates how much charge the late closing pushes back at high revs, and without being tied to Toyota’s figures it gives about 115 hp.',
+    cars: ['Toyota Prius XW30'],
+    years: '2009-2015',
+  },
   'i4/bmw-m3-e30-s14': {
     name: 'BMW M3 E30 (S14)',
     note: 'A cast-iron block, a large 93.4 mm bore, and an individual throttle plate for each cylinder. The peak is lower than the K20A at 225 firing events per second, but the individual throttles add a sharp intake noise, and each firing pulse is stronger because of the larger 2302 cc displacement.',
