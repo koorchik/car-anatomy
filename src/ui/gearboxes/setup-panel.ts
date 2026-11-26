@@ -11,6 +11,7 @@ import {
   isFactory,
   pairHelix,
   RATIO_RANGE,
+  sameBox,
   SETUP_SPEEDS,
   setFinalDrive,
   setSpeeds,
@@ -74,9 +75,11 @@ export class SetupPanel {
     this.render();
   }
 
+  /** A new setup; the box is derived again only when its teeth or speeds changed, so the final drive keeps the same box. */
   private apply(setup: LayshaftSetup): void {
+    if (setup === this.setup) return;
+    if (!sameBox(setup, this.setup)) this.desc = setupDesc(this.ctx.factory, setup);
     this.setup = setup;
-    this.desc = setupDesc(this.ctx.factory, setup);
     this.changed(setup, this.desc);
   }
 

@@ -135,10 +135,15 @@ export function stepTeeth(desc: LayshaftDesc, index: number, which: 0 | 1, delta
   return pick ? [pick.teeth[0], pick.teeth[1]] : null;
 }
 
-/** The setup with a speed's teeth set; teeth equal to the factory pair's drop the entry. */
+/**
+ * The setup with a speed's teeth set; teeth equal to the factory pair's drop the entry. A change that changes nothing
+ * gives the same setup back, so a slider moved within one pair's ratio does not rebuild the box.
+ */
 export function setTeeth(factory: LayshaftDesc, setup: LayshaftSetup, index: number, teeth: readonly [number, number]): LayshaftSetup {
   const own = factory.speeds[index];
   const same = own && own !== 'direct' && own.teeth[0] === teeth[0] && own.teeth[1] === teeth[1];
+  const was = setup.teeth[index];
+  if (same ? was === undefined : was !== undefined && was[0] === teeth[0] && was[1] === teeth[1]) return setup;
   const next: Record<number, readonly [number, number]> = { ...setup.teeth };
   if (same) delete next[index];
   else next[index] = [teeth[0], teeth[1]];
@@ -146,10 +151,13 @@ export function setTeeth(factory: LayshaftDesc, setup: LayshaftSetup, index: num
 }
 
 /** The setup with another speed count. Teeth set on speeds above it are kept for when they come back. */
-export const setSpeeds = (setup: LayshaftSetup, speeds: number): LayshaftSetup => ({ ...setup, speeds });
+export const setSpeeds = (setup: LayshaftSetup, speeds: number): LayshaftSetup => (speeds === setup.speeds ? setup : { ...setup, speeds });
 
-/** The setup with another final drive, held to the panel's range. */
-export const setFinalDrive = (setup: LayshaftSetup, ratio: number): LayshaftSetup => ({
-  ...setup,
-  finalDrive: Math.min(FINAL_DRIVE_RANGE[1], Math.max(FINAL_DRIVE_RANGE[0], ratio)),
-});
+/** The setup with another final drive, held to the panel's range. The teeth stay the same object: the box is the same. */
+export function setFinalDrive(setup: LayshaftSetup, ratio: number): LayshaftSetup {
+  const finalDrive = Math.min(FINAL_DRIVE_RANGE[1], Math.max(FINAL_DRIVE_RANGE[0], ratio));
+  return finalDrive === setup.finalDrive ? setup : { ...setup, finalDrive };
+}
+
+/** Whether two setups give the same box (the final drive aside), so a page need not rebuild it. */
+export const sameBox = (a: LayshaftSetup, b: LayshaftSetup): boolean => a.speeds === b.speeds && a.teeth === b.teeth;

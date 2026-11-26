@@ -76,6 +76,8 @@ export class GearboxSection implements Section {
   private root!: HTMLElement;
   private data!: PageData;
   private box!: Gearbox;
+  /** The description the box was built from: a panel change that keeps it (the final drive) leaves the box alone. */
+  private desc!: LayshaftDesc;
   private table!: TableDrive;
   private model: GearboxModel | null = null;
   /** The settings panel of the page shown. */
@@ -264,6 +266,7 @@ export class GearboxSection implements Section {
       engine: car ? { href: `#/engines/${car.engine}`, name: engineName, powerHp: facts?.powerHp ?? null } : null,
       rollingRadiusMm: d.radiusM * 1000,
     });
+    this.desc = d.factory;
     this.box = buildGearbox(layshaftSpec(d.factory));
     this.table = new TableDrive(this.box, 'N');
     this.renderGears();
@@ -300,12 +303,19 @@ export class GearboxSection implements Section {
 
   /** A box from the panel: the numbers now, the model on the next rebuild. */
   private boxChanged(desc: LayshaftDesc): void {
+    if (desc === this.desc) return;
+    this.desc = desc;
     const box = buildGearbox(layshaftSpec(desc));
+    // Another speed count has other members: the old model cannot draw the new pose, so it goes on the next frame.
+    const sameMembers = box.members.length === this.box.members.length && box.meshes.length === this.box.meshes.length;
     this.box = box;
     const gear = this.table.selected;
-    this.table = new TableDrive(box, box.states.some((s) => s.name === gear) ? gear : 'N');
+    const table = new TableDrive(box, box.states.some((s) => s.name === gear) ? gear : 'N');
+    table.continueFrom(this.table);
+    this.table = table;
     this.renderGears();
     this.rebuildDue = true;
+    if (!sameMembers) this.sinceRebuild = REBUILD_S;
     if (this.demo) this.demo.steps = alwaysTurningSteps(box, this.data.engine.spec.idleRpm);
     this.showDemoStep();
   }

@@ -12,6 +12,7 @@ import {
   pairFits,
   pairHelix,
   RATIO_RANGE,
+  sameBox,
   setFinalDrive,
   setSpeeds,
   setTeeth,
@@ -129,6 +130,18 @@ describe('the gearbox settings', () => {
   it('hold the final drive to 2.0–5.5', () => {
     expect(setFinalDrive(start, 1).finalDrive).toBe(2);
     expect(setFinalDrive(start, 9).finalDrive).toBe(5.5);
+  });
+
+  it('leave the box alone when a move changes no teeth: the page then rebuilds nothing', () => {
+    // The final drive is behind the box.
+    expect(sameBox(setFinalDrive(start, 4.1), start)).toBe(true);
+    // A slider moved within the ratio of one tooth pair, a count already set, the factory teeth asked again.
+    const second = teethForRatio(factory, 1, 2.6)!;
+    const set = setTeeth(factory, start, 1, second);
+    expect(setTeeth(factory, set, 1, [second[0], second[1]])).toBe(set);
+    expect(setSpeeds(set, 5)).toBe(set);
+    expect(setTeeth(factory, start, 1, (factory.speeds[1] as PairDesc).teeth)).toBe(start);
+    expect(sameBox(setTeeth(factory, set, 1, (factory.speeds[1] as PairDesc).teeth), set)).toBe(false);
   });
 });
 
