@@ -8,6 +8,7 @@ import { DEFAULT_ENGINE } from '../ui/engines/routes.ts';
 import { loadEngines } from '../ui/engines/load.ts';
 import { GEARBOX_PAGES_SHOWN, loadGearboxes } from '../ui/gearboxes/load.ts';
 import { loadSuspensions } from '../ui/suspensions/load.ts';
+import { loadCar } from '../ui/car/load.ts';
 import type { Route, SectionId } from './routes.ts';
 import type { Section } from './section.ts';
 
@@ -22,8 +23,9 @@ export interface MenuPage {
 export interface SectionEntry {
   readonly id: SectionId;
   /**
-   * The catalogue pages a visitor can open, by the id in their address (`#/gearboxes/<page>`). Left out for a section
-   * whose every page is open. A link from another section goes only to a page listed here.
+   * The pages a link from another section may lead to, by the id in their address (`#/gearboxes/<page>`). Left out for
+   * a section whose every page is open; empty for a section whose addresses open but are not shown yet (a hidden page
+   * in the making). The menu goes by `pages` below.
    */
   readonly openPages?: readonly string[];
   /** Fetches the section's code (after its English, in English) and what the route needs of it, and makes the section. */
@@ -52,9 +54,13 @@ export const SECTIONS: readonly SectionEntry[] = [
     id: 'gearboxes',
     load: loadGearboxes,
     openPages: GEARBOX_PAGES_SHOWN,
-    pages: [{ key: 'catalogue', href: `#/gearboxes/${GEARBOX_PAGES_SHOWN[0]}` }],
+    pages: [{ key: 'catalogue', href: `#/gearboxes/${GEARBOX_PAGES_SHOWN[0]!}` }],
   },
-  { id: 'suspensions', load: loadSuspensions },
+  // In the menu since P1d, but its page does not read a suspension type or a car from the address yet (P4), so no link
+  // from another section (#/suspensions/<type>/<car>) leads there.
+  { id: 'suspensions', load: loadSuspensions, openPages: [], pages: [{ key: 'catalogue', href: '#/suspensions' }] },
+  // The overview of a car, at its address without a menu item until stage C1c gives it a page.
+  { id: 'car', load: loadCar, openPages: [] },
 ];
 
 /** The entry of the section a route belongs to. */
@@ -62,11 +68,8 @@ export function sectionEntry(route: Route): SectionEntry {
   return SECTIONS.find((s) => s.id === route.section) ?? SECTIONS[0]!;
 }
 
-/**
- * Whether a page of a section can be opened from a link: the section is in the menu (lists pages) and the page is in
- * its `openPages`, or the section has every page open.
- */
+/** Whether a link may lead to a page of a section: listed in its entry's openPages, or the section has every page open. */
 export function pageShown(section: SectionId, page: string): boolean {
   const entry = SECTIONS.find((s) => s.id === section);
-  return !!entry?.pages?.length && (entry.openPages === undefined || entry.openPages.includes(page));
+  return entry !== undefined && (entry.openPages === undefined || entry.openPages.includes(page));
 }

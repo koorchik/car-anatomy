@@ -9,7 +9,7 @@
 // weight); its drag stays the car's, the body being the same. The inertias are estimated from the mass and sizes
 // (src/vehicle/body-estimate.ts), or the car's measured ones scaled to the design's mass.
 
-import type { ChassisAxleSpec, ChassisLongitudinal, ChassisSpec, SolidAxleLinkage, SwayBarSpec } from '../suspension/spec.ts';
+import type { AxleSpec, ChassisAxleSpec, ChassisLongitudinal, ChassisSpec, SolidAxleLinkage, SwayBarSpec } from '../suspension/spec.ts';
 import { barLinkOf, typicalLongitudinal } from '../suspension/templates/typical-chassis.ts';
 import { dampingFromZeta } from '../suspension/forces.ts';
 import { DAMPER_PRESETS } from '../suspension/setup.ts';
@@ -21,6 +21,7 @@ import { CARS } from '../data/cars.ts';
 import { axleOf, isDriven, TYPICAL_RIDE_HZ, type AxleEnd, type ChassisDesign } from './design.ts';
 import { axleGeometry, freeRadiusM, type AxleGeometry } from './geometry.ts';
 import { cornerSprungKg, springForRideHz } from './constraints.ts';
+import { thirdSpringRate } from '../suspension/templates/pushrod.ts';
 
 /** Twisting section of a bar: the track less 0.5 m for the bushes and the frame rails (typical-chassis.ts). */
 const BAR_INSIDE_TRACK_M = 0.5;
@@ -35,9 +36,12 @@ export function springRateNm(d: ChassisDesign, end: AxleEnd, g: AxleGeometry = a
   return springForRideHz(cornerSprungKg(d, end), tyreVertical(d.tyre).ktNm, g.mrSpring, TYPICAL_RIDE_HZ[end]);
 }
 
-/** Body ride frequency over the axle at design, Hz, from the spring at the wheel in series with the tyre. */
+/** Body ride frequency over the axle at design, Hz, from the spring at the wheel (and a pushrod's third spring) in
+ *  series with the tyre. */
 export function rideHz(d: ChassisDesign, end: AxleEnd, g: AxleGeometry = axleGeometry(d, end)): number {
-  const wheel = springRateNm(d, end, g) * g.mrSpring * g.mrSpring;
+  const a = axleOf(d, end);
+  const third = a.layout === 'pushrod' ? a.thirdSpringNmm * 1000 : 0;
+  const wheel = springRateNm(d, end, g) * g.mrSpring * g.mrSpring + third;
   const kt = tyreVertical(d.tyre).ktNm;
   return Math.sqrt((wheel * kt) / (wheel + kt) / cornerSprungKg(d, end)) / (2 * Math.PI);
 }
@@ -58,12 +62,25 @@ function axleSpec(d: ChassisDesign, end: AxleEnd): ChassisAxleSpec {
     const solid: SolidAxleLinkage = { ...linkage, lateral: { kind: 'leaf', spec: { ...linkage.lateral.spec, rateNmm: rate / 1000 } } };
     linkage = solid;
   }
+  // A leaf is its own spring; elsewhere the design's kind (an air spring or a hydropneumatic strut has the same rate at
+  // design and its own law around it, forces.ts).
+  const leaf = linkage.kind === 'solid' && linkage.lateral.kind === 'leaf';
+  const kind = leaf || a.springKind === 'coil' ? base.spring.kind : a.springKind;
   const axle = {
     ...base,
     linkage,
-    spring: { ...base.spring, rate },
-    damper: { ...base.damper, compression: coeffs.compression, rebound: coeffs.rebound, kneeMs: coeffs.kneeMs, highRatio: coeffs.highRatio },
+    spring: { ...base.spring, kind, rate },
+    damper: {
+      ...base.damper,
+      kind: d.dampers,
+      compression: coeffs.compression,
+      rebound: coeffs.rebound,
+      kneeMs: coeffs.kneeMs,
+      highRatio: coeffs.highRatio,
+    },
   };
+  const third = base.thirdSpring;
+  if (third) axle.thirdSpring = { ...third, rate: thirdSpringRate(base as AxleSpec, third.rockerPoint, a.thirdSpringNmm * 1000) };
   const swayBar: SwayBarSpec | null =
     a.barMm > 0
       ? {

@@ -34,6 +34,9 @@ export interface AxleLite {
   steerPerRack: number;
   /** Exact solves it took. */
   solves: number;
+  /** One more exact solve of the left corner at `travel` (rack 0), from design with the first-order predictor; throws
+   *  where the corner does not solve. */
+  at: (travel: number) => CornerSample;
 }
 
 export interface RolledRollCentre {
@@ -137,5 +140,6 @@ export function buildAxleLite(spec: AxleSpec): AxleLite {
     rolled,
     steerPerRack,
     solves,
+    at,
   };
 }

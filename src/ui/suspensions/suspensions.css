@@ -1,14 +1,25 @@
 /* The suspension pages, under body.section-suspensions (suspensions plan, what the section needs of the shell). The
- * section's chunk loads it after the shell's styles. */
+ * section's chunk loads it after the shell's styles. Each scene adds its class (susp-scene-bump, susp-scene-travel). */
 
 body.section-suspensions {
   --dash-h: 0px;
 }
 
-/* No dash, no engine hints and, while the rig holds the wheel still, no choice of time. */
+/* The bump scene's own dash; SuspensionSection.layout gives the stage the same height. */
+body.section-suspensions.susp-scene-bump {
+  --dash-h: 156px;
+}
+
+/* No shared dash and no engine hints; the rig holds the wheel still, so it offers no choice of time. */
 body.section-suspensions .dash,
 body.section-suspensions #hint,
-body.section-suspensions .view-tools .tool:has(#speed) {
+body.section-suspensions.susp-scene-travel .view-tools .tool:has(#speed) {
+  display: none;
+}
+
+/* What belongs to one scene only. */
+body.susp-scene-bump .susp-only-travel,
+body.susp-scene-travel .susp-only-bump {
   display: none;
 }
 
@@ -47,7 +58,165 @@ body.section-suspensions .view-tools .tool:has(#speed) {
   gap: 4px 14px;
 }
 
+/* Panel: the scene's controls, the setup, the article. */
+.susp-panel .segmented {
+  flex-wrap: wrap;
+}
+
+.susp-bump-controls,
+.susp-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.susp-bump-controls h3,
+.susp-setup h3 {
+  margin-bottom: 0;
+}
+
+.susp-ctl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.susp-ctl-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.susp-ctl-head output {
+  color: var(--bone-dim);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.susp-ctl input[type='range'] {
+  width: 100%;
+}
+
+.susp-caption {
+  margin: 0;
+  font-size: 14px;
+  color: var(--bone-dim);
+}
+
+.susp-setup-sum {
+  font-size: 13.5px;
+  margin: 2px 0 0;
+}
+
+.susp-setup-reset,
+#susp-punch {
+  align-self: flex-start;
+}
+
+/* The bump scene's dash: event, strip chart, numbers. */
+.susp-dash {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--dash-h);
+  background: linear-gradient(180deg, #0f2e38, #0b222a);
+  border-top: 1px solid var(--rule);
+  z-index: 7;
+  display: grid;
+  grid-template-columns: 150px minmax(240px, 1fr) minmax(250px, 340px);
+}
+
+.susp-dash[hidden] {
+  display: none;
+}
+
+.susp-dash > section {
+  padding: 10px 12px;
+  border-right: 1px solid var(--rule);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.susp-dash > section:last-of-type {
+  border-right: 0;
+}
+
+.susp-dash-event .btn {
+  width: 100%;
+}
+
+.susp-dash-what {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--bone-dim);
+}
+
+.susp-dash-chart canvas {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: block;
+}
+
+.susp-strip-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 12px;
+  color: var(--bone-dim);
+}
+
+.susp-strip-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  margin-right: 5px;
+  vertical-align: middle;
+  background: var(--c);
+}
+
+.susp-numbers {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+  overflow: auto;
+}
+
+.susp-number {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.susp-number dt {
+  color: var(--bone-dim);
+  white-space: nowrap;
+}
+
+.susp-number dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.susp-number.alarm dd {
+  color: #ffb36b;
+}
+
 @media (max-width: 860px) {
+  body.section-suspensions.susp-scene-bump {
+    --dash-h: 188px;
+  }
+
   /* Two sliders side by side would read as one with two thumbs: on a phone each keeps its name. */
   .susp-travel-tool .tool-label,
   .susp-explode-tool .tool-label {
@@ -56,5 +225,72 @@ body.section-suspensions .view-tools .tool:has(#speed) {
 
   .susp-travel-tool input[type='range'] {
     width: min(200px, calc(100vw - 170px));
+  }
+
+  /* The clock of the slow-down stays on screen: on the narrowest phones it goes under the modes. */
+  body.section-suspensions .time-row {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  /* Two rows: the chart and the numbers on top, the buttons and the obstacle under them. */
+  .susp-dash {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    grid-template-rows: minmax(0, 1fr) 44px;
+  }
+
+  .susp-dash > section {
+    padding: 6px 8px;
+    border-right: 0;
+  }
+
+  .susp-dash-chart {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .susp-dash-numbers {
+    grid-column: 2;
+    grid-row: 1;
+    border-left: 1px solid var(--rule);
+  }
+
+  .susp-dash > .susp-dash-event {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .susp-dash-event .btn {
+    width: auto;
+    padding: 4px 12px;
+  }
+
+  .susp-dash-what {
+    font-size: 11.5px;
+    line-height: 1.2;
+  }
+
+  .susp-strip-legend {
+    font-size: 10.5px;
+    gap: 0 8px;
+  }
+
+  .susp-numbers {
+    font-size: 11px;
+    line-height: 1.25;
+    gap: 1px;
+  }
+
+  .susp-number {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .susp-number dd {
+    text-align: left;
   }
 }

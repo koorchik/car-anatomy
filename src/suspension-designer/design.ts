@@ -8,20 +8,22 @@
 // in the design with its value, so switching back restores it; editChassis (edit.ts) sets the typical values of the
 // layout chosen. No visitor-facing text here: names live in the presets and on the page.
 
-import type { KnuckleKind, LayoutId } from '../suspension/spec.ts';
+import type { DamperKind, KnuckleKind, LayoutId } from '../suspension/spec.ts';
 import type { DamperPreset } from '../suspension/setup.ts';
+import type { SpringType } from '../suspension/spring-types.ts';
 import type { TyreChoice } from '../vehicle/tyre-data.ts';
 
 /** Layouts the designer builds: every axle whose core exists. A steered front axle has links (P13-core brings steered
- *  solid axles); the rear takes any. The pushrod has no core yet. */
+ *  solid axles); the rear takes any. The pushrod is a double wishbone whose spring and damper a rocker works (P14-core). */
 export type DesignLayout = Extract<
   LayoutId,
-  'macpherson' | 'double-wishbone' | 'multilink' | 'trailing-arm' | 'semi-trailing' | 'swing-axle' | 'twist-beam' | 'live-axle' | 'de-dion'
+  | 'macpherson' | 'double-wishbone' | 'multilink' | 'pushrod' | 'trailing-arm' | 'semi-trailing' | 'swing-axle' | 'twist-beam'
+  | 'live-axle' | 'de-dion'
 >;
 
-export const FRONT_LAYOUTS = ['macpherson', 'double-wishbone', 'multilink'] as const satisfies readonly DesignLayout[];
+export const FRONT_LAYOUTS = ['macpherson', 'double-wishbone', 'multilink', 'pushrod'] as const satisfies readonly DesignLayout[];
 export const REAR_LAYOUTS = [
-  'double-wishbone', 'multilink', 'trailing-arm', 'semi-trailing', 'swing-axle', 'twist-beam', 'live-axle', 'de-dion',
+  'double-wishbone', 'multilink', 'pushrod', 'trailing-arm', 'semi-trailing', 'swing-axle', 'twist-beam', 'live-axle', 'de-dion',
 ] as const satisfies readonly DesignLayout[];
 
 export type Drive = 'fwd' | 'rwd' | 'awd';
@@ -39,6 +41,13 @@ export type DamperChoice = DamperPreset | 'custom';
 export const DAMPER_CHOICES = ['worn', 'comfort', 'sport', 'track', 'custom'] as const satisfies readonly DamperChoice[];
 
 export const TYRES = ['street', 'semi', 'slick', 'classic'] as const satisfies readonly TyreChoice[];
+
+/** Springs the designer offers: a steel coil, an air spring or a hydropneumatic strut, both levelled (spring-types.ts).
+ *  A leaf-sprung axle keeps its leaves. */
+export const SPRING_KINDS = ['coil', 'air', 'hydro'] as const satisfies readonly SpringType[];
+
+/** Dampers of the whole car (damper-control.ts): one system works all four corners. */
+export const DAMPER_KINDS = ['passive', 'adaptive', 'magneride', 'active'] as const satisfies readonly DamperKind[];
 
 /** Everything one axle has. Which fields a layout reads is in AXLE_KEYS_OF (below). */
 export interface AxleParams {
@@ -93,6 +102,14 @@ export interface AxleParams {
   /** Torsional stiffness of the beam, N·m/rad. */
   beamTorsionNmRad: number;
 
+  // Pushrod (templates/pushrod.ts).
+  /** The rocker's spring arm over its rod arm. */
+  rockerRatio: number;
+  /** How far short of square to the coilover the rocker's spring arm sits at design, degrees: a rising rate. */
+  rockerProgressionDeg: number;
+  /** Rate the third (heave) spring adds at each wheel in heave, N/mm (0: none). */
+  thirdSpringNmm: number;
+
   // Solid axle (live axle, de Dion).
   solidLateral: SolidLateralChoice;
   solidLinks: (typeof SOLID_LINKS)[number];
@@ -117,6 +134,8 @@ export interface AxleParams {
   // Spring, damper, anti-roll bar.
   /** Rate along the spring, N/mm; null: the typical rate, the one that gives the body TYPICAL_RIDE_HZ over this axle. */
   springNmm: number | null;
+  /** Steel coil, air spring or hydropneumatic strut (levelled); a leaf-sprung axle ignores it. */
+  springKind: SpringType;
   damper: DamperChoice;
   /** Own damper, N·s/m along the damper below the knee (with `damper: 'custom'`). */
   damperCompression: number;
@@ -157,6 +176,8 @@ export interface CarParams {
   driveFront: number;
   finalDrive: number;
   tyre: TyreChoice;
+  /** The damper system of the whole car: passive, adaptive, MagneRide (semi-active skyhook) or active. */
+  dampers: DamperKind;
 }
 
 export type ChassisDesign = CarParams & Suffixed<'F'> & Suffixed<'R'>;
@@ -176,22 +197,41 @@ export const AXLE_KEYS = [
   'beamBushDzMm', 'beamTorsionNmRad', 'solidLateral', 'solidLinks', 'lowerLinkMm', 'upperLinkMm', 'linkAngleDeg',
   'upperLinkAngleDeg', 'lateralZMm', 'diffOutputYMm', 'diffOutputDzMm', 'camberDeg', 'toeDeg', 'springNmm', 'damper',
   'damperCompression', 'damperRebound', 'damperKneeMs', 'damperHighRatio', 'barMm', 'barWallMm', 'barArmMm',
-  'unsprungKg', 'tyreWidthMm', 'tyreAspect', 'rimIn', 'brakeInboard',
+  'unsprungKg', 'tyreWidthMm', 'tyreAspect', 'rimIn', 'brakeInboard', 'rockerRatio', 'rockerProgressionDeg',
+  'thirdSpringNmm', 'springKind',
 ] as const satisfies readonly AxleKey[];
 
 export const CAR_KEYS = [
   'car', 'massKg', 'frontShare', 'cgHeightMm', 'wheelbaseMm', 'drive', 'brakeFront', 'driveFront', 'finalDrive', 'tyre',
+  'dampers',
 ] as const satisfies readonly (keyof CarParams)[];
 
 /** The key of an axle parameter on one end: axleKey('springNmm', 'R') is 'springNmmR'. */
 export const axleKey = <K extends AxleKey>(key: K, end: AxleEnd): `${K}${AxleEnd}` & DesignKey => `${key}${end}` as `${K}${AxleEnd}` & DesignKey;
 
-/** One axle's parameters without the suffix. */
-export function axleOf(d: ChassisDesign, end: AxleEnd): AxleParams {
+/** The suffixed keys of each end, in AXLE_KEYS order: built once, since axleOf runs thousands of times a second. */
+const SUFFIXED: Record<AxleEnd, readonly string[]> = { F: AXLE_KEYS.map((k) => `${k}F`), R: AXLE_KEYS.map((k) => `${k}R`) };
+
+/** Axles already read from a design: designs are never changed once made (every edit makes a new one), and the
+ *  model reads the same axle of the same design many times over. */
+const AXLES = new WeakMap<ChassisDesign, { F?: Readonly<AxleParams>; R?: Readonly<AxleParams> }>();
+
+/** One axle's parameters without the suffix. The object is shared and frozen: copy it to change it. */
+export function axleOf(d: ChassisDesign, end: AxleEnd): Readonly<AxleParams> {
+  let seen = AXLES.get(d);
+  const hit = seen?.[end];
+  if (hit) return hit;
   const out = {} as Record<AxleKey, unknown>;
   const src = d as unknown as Record<string, unknown>;
-  for (const key of AXLE_KEYS) out[key] = src[`${key}${end}`];
-  return out as unknown as AxleParams;
+  const keys = SUFFIXED[end];
+  for (let i = 0; i < AXLE_KEYS.length; i++) out[AXLE_KEYS[i]] = src[keys[i]];
+  const axle = Object.freeze(out) as unknown as Readonly<AxleParams>;
+  if (!seen) {
+    seen = {};
+    AXLES.set(d, seen);
+  }
+  seen[end] = axle;
+  return axle;
 }
 
 /** The design with some parameters of one axle replaced. */
@@ -211,7 +251,7 @@ const SOLID_LAYOUTS: readonly DesignLayout[] = ['live-axle', 'de-dion'];
 export const isPivot = (layout: DesignLayout): boolean => PIVOT_LAYOUTS.includes(layout);
 export const isSolid = (layout: DesignLayout): boolean => SOLID_LAYOUTS.includes(layout);
 /** Layouts built from the double wishbone template's intents. */
-export const isWishbone = (layout: DesignLayout): boolean => layout === 'double-wishbone' || layout === 'multilink';
+export const isWishbone = (layout: DesignLayout): boolean => layout === 'double-wishbone' || layout === 'multilink' || layout === 'pushrod';
 
 /** Whether an axle is driven by the car's drive. */
 export const isDriven = (drive: Drive, end: AxleEnd): boolean => drive === 'awd' || (drive === 'fwd') === (end === 'F');

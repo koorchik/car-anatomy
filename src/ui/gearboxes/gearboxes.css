@@ -33,6 +33,28 @@
   font-weight: 600;
 }
 
+/* Previous and next layout in the row of buttons, and the real gearboxes of this one below (the engine pages'
+ * variant list). */
+.gbx-steps {
+  display: contents;
+}
+
+.gbx-steps .btn {
+  text-decoration: none;
+}
+
+.gbx-nav {
+  pointer-events: auto;
+}
+
+.gbx-nav:empty {
+  display: none;
+}
+
+.gbx-variants {
+  margin-top: 2px;
+}
+
 .gbx-title-row {
   display: flex;
   flex-wrap: wrap;
@@ -55,6 +77,11 @@
 
 .gbx-shafts > div {
   display: contents;
+}
+
+/* The rows are display: contents, which the hidden attribute alone does not override. */
+.gbx-shafts > div[hidden] {
+  display: none;
 }
 
 .gbx-shafts dt {
@@ -558,6 +585,16 @@ body.gbx-car .gbx-pedal .latch {
   .gbx-gears {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
+  }
+
+  /* Seven speeds, reverse and neutral: two rows still, so the shafts' readouts keep their room. */
+  .gbx-gears:has(> button:nth-child(9)) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  /* A transaxle has a third readout, the differential: the buttons speak for themselves without their heading. */
+  .gbx-gears-col:has(#gbx-diff-row:not([hidden])) h4 {
+    display: none;
   }
 
   .gbx-gears-col {

@@ -59,8 +59,8 @@ declare global {
 }
 // The first section shown is the one these reach into; the engines' own features are there only when it is theirs.
 const engines = first as EnginesSection;
-// Another section first (#/suspensions) has no engine to hand over: window.__engine is there from the engine and the
-// gearbox pages, which share the one Drive.
+// A section without an engine first (#/suspensions) has none to hand over: window.__engine is there from the engine and
+// gearbox pages, which both run the one Drive.
 if (first.id === 'engines' || first.id === 'gearboxes') window.__engine = {
   get drive() {
     return (first as EnginesSection | GearboxSection).drive;

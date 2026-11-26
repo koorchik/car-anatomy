@@ -22,7 +22,7 @@
 import type { Chassis } from './chassis.ts';
 import { ChassisSim, CHASSIS_DOF } from './chassis-sim.ts';
 import { newWheelSample } from './chassis-axle.ts';
-import { coilForce, G } from './forces.ts';
+import { G, springForce } from './forces.ts';
 import { solveLinear } from './vec.ts';
 import { inclinationOf, mfForces, newMfForces, tyreAt, type Tyre } from '../vehicle/tyre.ts';
 
@@ -189,10 +189,12 @@ export function axleRollStiffness(chassis: Chassis, k: 0 | 1): AxleRollStiffness
   const kb = chassis.beamTorsion[k];
   const moment = (phi: number): AxleRollStiffness => {
     ax.sample(-cL.y * phi, -cR.y * phi, L, R);
-    const fL = coilForce(cL.spring.rate, cL.spring.freeM, L.springLen, cL.spring.rate2, cL.spring.fromM);
-    const fR = coilForce(cR.spring.rate, cR.spring.freeM, R.springLen, cR.spring.rate2, cR.spring.fromM);
-    const springL = fL * L.mrSpring + fR * R.mrSpringCross;
-    const springR = fR * R.mrSpring + fL * L.mrSpringCross;
+    const fL = springForce(cL.spring, L.springLen);
+    const fR = springForce(cR.spring, R.springLen);
+    // The third spring belongs with the springs; in roll its two terms cancel.
+    const third = chassis.thirdRates[k] * (-cL.y * phi - cR.y * phi);
+    const springL = fL * L.mrSpring + fR * R.mrSpringCross + third;
+    const springR = fR * R.mrSpring + fL * L.mrSpringCross + third;
     const torque = (bar.rate * (L.barZ - R.barZ)) / bar.armM;
     const barL = (torque * (L.mrBar - R.mrBarCross)) / bar.armM;
     const barR = (torque * (L.mrBarCross - R.mrBar)) / bar.armM;

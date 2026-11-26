@@ -1,4 +1,6 @@
-// The gearbox section (stage K1b): `#/gearboxes/<page>`, so far the manual layshaft box of the BMW M3 E30 on the table.
+// The gearbox section (stage K1b): `#/gearboxes/<page>[/<variant>]`, so far the manual layshaft box of the BMW M3 E30
+// and the two-shaft transaxles of the Civic Type R FK8 and the 911 Carrera T (stage K6a-geom) on the table. What
+// differs between the layouts (the box, its 3D model, the panel's model and words) is in table-layouts.ts.
 // The car's engine runs on its free path (the shared Drive, no load) and turns the input shaft; the output turns free;
 // the buttons pick N, the forward speeds and R, and the sleeves travel in 0.2 s (TableDrive). Beside it the article,
 // the settings panel (owner decision A3) and demonstration 1.
@@ -19,23 +21,20 @@ import { CARS } from '../../data/cars.ts';
 import { driveCarById } from '../../data/drive-cars.ts';
 import { engineById, engineFacts } from '../../data/engines.ts';
 import { GEARBOX_PAGES } from '../../data/gearboxes.ts';
-import type { GearboxPage } from '../../drivetrain/catalogue.ts';
+import type { GearboxPage, GearboxRecord } from '../../drivetrain/catalogue.ts';
 import type { LayshaftDesc } from '../../drivetrain/layouts/layshaft.ts';
-import { speedRatios } from '../../drivetrain/layouts/layshaft-setup.ts';
-import { layshaftSpec } from '../../drivetrain/layouts/layshaft.ts';
 import { TableDrive } from '../../drivetrain/table-drive.ts';
-import { buildGearbox, type Gearbox } from '../../drivetrain/topology.ts';
+import type { Gearbox } from '../../drivetrain/topology.ts';
 import { buildEngine, type Engine } from '../../engine/kinematics.ts';
 import { withDictionaries } from '../../i18n/dictionaries.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
-import { GearboxModel } from '../../scene/gearbox/gearbox-model.ts';
 import { GEARBOX_PARTS } from '../../scene/gearbox/parts.ts';
 import { registerParts } from '../../scene/parts-registry.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
 import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, TimeMode, Viewport } from '../../shell/section.ts';
 import { readableDegreesPerSecond } from '../../shell/time.ts';
-import { parseTyreSize, rollingRadiusM } from '../../vehicle/tyre-size.ts';
+import { drivenTyreRadiusM } from '../../vehicle/car.ts';
 import { Ignition } from '../widgets/ignition.ts';
 import { Pedal } from '../widgets/pedal.ts';
 import { Tacho } from '../widgets/tacho.ts';
@@ -45,7 +44,9 @@ import { alwaysTurningSteps, type DemoStep } from './demo.ts';
 import { GEARBOX_KEY_CONTEXTS, gearboxKeys } from './keys.ts';
 import { GEARBOX_PAGES_SHOWN } from './load.ts';
 import { dashHtml, panelHtml, resultsHtml, SLOW_RPM_DEFAULT, statusHtml, SVG_SOUND_OFF, SVG_SOUND_ON, titleHtml, toolsHtml } from './markup.ts';
+import { pageStepsHtml, variantListHtml } from './page-nav.ts';
 import { SetupPanel } from './setup-panel.ts';
+import { tableLayout, type TableDesc, type TableLayout, type TableModel } from './table-layouts.ts';
 import '../engines/engines.css';
 import './gearboxes.css';
 
@@ -73,8 +74,9 @@ const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { 
 /** Everything a page needs that does not change with the panel. */
 interface PageData {
   page: GearboxPage;
-  factory: LayshaftDesc;
-  finalDrive: number;
+  /** The page's base gearbox or the variant the address names. */
+  record: GearboxRecord;
+  layout: TableLayout;
   engine: Engine;
   radiusM: number;
   tyre: string;
@@ -88,11 +90,11 @@ export class GearboxSection implements Section {
   private data!: PageData;
   private box!: Gearbox;
   /** The description the box was built from: a panel change that keeps it (the final drive) leaves the box alone. */
-  private desc!: LayshaftDesc;
+  private desc!: TableDesc;
   private table!: TableDrive;
-  private model: GearboxModel | null = null;
+  private model: TableModel | null = null;
   /** The settings panel of the page shown. */
-  setup!: SetupPanel;
+  setup!: SetupPanel<TableDesc>;
   private tacho!: Tacho;
   private pedal!: Pedal;
   private ignition!: Ignition;
@@ -131,8 +133,10 @@ export class GearboxSection implements Section {
   private fitScaleBefore = 0.68;
   /** The --tools-h the page had before this section measured its own row, to give back on leave. */
   private toolsHBefore = '';
+  /** fitScaleBefore and toolsHBefore hold what the section found on coming: present() on another page keeps them. */
+  private holding = false;
   /** Last texts of the readouts, so the DOM is touched only when they change. */
-  private shown = { input: '', output: '', gear: '', note: '' };
+  private shown = { input: '', output: '', diff: '', gear: '', note: '' };
   /** What the readouts were last built from: the texts are built only when it changes, not every frame. */
   private readoutsFor = { rpm: NaN, engaged: '', selected: '', box: null as Gearbox | null };
   private readonly unlit = { angles: [] as ArrayLike<number>, sleeves: {} as Readonly<Record<string, number>>, meshPower: [] as number[] };
@@ -178,18 +182,27 @@ export class GearboxSection implements Section {
     // The row of view tools wraps on a phone and in the longer language; the first-visit callout and the scale bar stand
     // above it through --tools-h, which on the engine pages their systems view measures.
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.measureTools()).observe(slots.tools.parent);
+    // The list of variants is laid out only once the section shows and the panels take their room.
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.showVariant()).observe(this.el('gbx-nav'));
     this.showPage();
     this.present();
   }
 
   enter(route: Route, from: Route | null): void {
     if (this.away) this.resume();
-    const id = this.pageId(route);
+    let id = this.pageId(route);
     if (!id) {
-      // An address of a page not built yet, or of none: the first page, with the address saying so.
-      this.ctx.router.replace({ section: 'gearboxes', page: 'catalogue', path: [GEARBOX_PAGES_SHOWN[0]!] });
-    } else if (id !== this.data.page.id) {
+      // An address of a page not built yet, or of none: the first page, with the address saying so; an unknown
+      // variant of a page shown: that page. The address is only rewritten, so the page shown follows here.
+      const page = route.page === 'catalogue' && route.path[0] ? this.pageId({ ...route, path: [route.path[0]] }) : null;
+      id = page ?? GEARBOX_PAGES_SHOWN[0]!;
+      this.ctx.router.replace({ section: 'gearboxes', page: 'catalogue', path: [id] });
+    }
+    if (id !== this.data.record.id) {
       this.data = this.pageData(id);
+      // Another car of the page or another page: its own engine turns the box, running on if it ran.
+      this.drive.setEngine(this.data.engine);
+      this.tacho.configure(this.data.engine.spec.redlineRpm);
       this.showPage();
       this.present();
     }
@@ -216,6 +229,7 @@ export class GearboxSection implements Section {
     this.ctx.keys.use([]);
     this.ctx.slots.partCard.hidden = true;
     this.ctx.stage.fitScale = this.fitScaleBefore;
+    this.holding = false;
     // Off the stage before the next section's model comes; the box is rebuilt on return (present).
     if (this.model) {
       this.ctx.stage.release(this.model);
@@ -259,42 +273,50 @@ export class GearboxSection implements Section {
 
   // ---- The page ----
 
-  /** The page an address asks for, if it is one built so far. */
+  /** The gearbox record an address asks for (page or page/variant), if its page is one built so far. */
   private pageId(route: Route): string | null {
     // The gearbox designer's address (#/gearboxes/designer) comes with its own stage.
     if (route.page !== 'catalogue') return null;
     const id = route.path[0] ?? GEARBOX_PAGES_SHOWN[0]!;
-    return GEARBOX_PAGES_SHOWN.includes(id) && GEARBOX_PAGES.some((p) => p.id === id) ? id : null;
+    const page = GEARBOX_PAGES_SHOWN.includes(id) ? GEARBOX_PAGES.find((p) => p.id === id) : undefined;
+    if (!page) return null;
+    const variant = route.path[1];
+    if (variant === undefined) return page.id;
+    return page.variants.some((v) => v.id === `${page.id}/${variant}`) ? `${page.id}/${variant}` : null;
   }
 
   private pageData(id: string): PageData {
-    const page = GEARBOX_PAGES.find((p) => p.id === id)!;
-    const record = page.base;
-    if (record.layout.kind !== 'layshaft') throw new Error(`${id}: the table shows layshaft boxes so far`);
+    const page = GEARBOX_PAGES.find((p) => p.id === id.split('/')[0])!;
+    const record = [page.base, ...page.variants].find((r) => r.id === id)!;
     const car = record.car ? CARS[record.car] : undefined;
     const spec = car ? engineById(car.engine) : undefined;
     if (!car || !spec) throw new Error(`${id}: the page needs its car and the car's engine`);
     const driveCar = driveCarById(car.id);
     if (!driveCar) throw new Error(`${id}: the page needs the drive record of ${car.id} for its final drive`);
-    const size = parseTyreSize(car.tyre.size);
+    // The driven wheels' tyre: the 911's rear ones are bigger than its front ones.
+    const tyre = car.drive === 'fwd' ? car.tyre.size : (car.tyre.sizeRear ?? car.tyre.size);
     return {
       page,
-      factory: record.layout.desc,
-      finalDrive: driveCar.finalDrive.ratio,
+      record,
+      layout: tableLayout(record, driveCar.finalDrive.ratio),
       engine: buildEngine(spec),
-      radiusM: rollingRadiusM(size),
-      tyre: car.tyre.size,
+      radiusM: drivenTyreRadiusM(car),
+      tyre,
     };
   }
 
   /** What a page shows that the panel does not change: its title, article and settings, and the factory box. */
   private showPage(): void {
     const d = this.data;
-    const record = d.page.base;
+    const { record, layout } = d;
     const car = record.car ? CARS[record.car]! : null;
     const facts = car ? engineFacts(car.engine) : undefined;
     const engineName = facts?.engineCode ? facts.engineCode : d.engine.spec.example;
-    this.el('gbx-title').textContent = t('Механічна коробка з проміжним валом');
+    this.el('gbx-title').textContent = layout.title;
+    this.el('gbx-steps').innerHTML = pageStepsHtml(GEARBOX_PAGES.filter((p) => GEARBOX_PAGES_SHOWN.includes(p.id)), record.id);
+    this.el('gbx-nav').innerHTML = variantListHtml(d.page, record.id);
+    this.showVariant();
+    this.el('gbx-demo-open').hidden = !layout.demo;
     this.el('gbx-sub').innerHTML = car
       ? t('{gearbox} · на авто {car} · {engine}', {
           gearbox: record.name,
@@ -302,8 +324,9 @@ export class GearboxSection implements Section {
           engine: `<a href="#/engines/${car.engine}">${t('двигун {name}, {hp} к.с.', { name: engineName, hp: num(facts?.powerHp ?? 0) })}</a>`,
         })
       : record.name;
-    // The car mode drives the page's car: a box without one stays on the table.
-    this.el('gbx-modes').querySelector<HTMLElement>('[data-mode="drive"]')!.hidden = !car;
+    // The car mode drives the page's car: a box without one stays on the table, and so does a transaxle, whose final
+    // drive is in its own case and not yet on the car's drivetrain.
+    this.el('gbx-modes').querySelector<HTMLElement>('[data-mode="drive"]')!.hidden = !car || layout.kind !== 'layshaft';
     // A new panel in a fresh element: the last page's panel leaves with its listeners.
     const host = this.el('gbx-setup');
     const fresh = host.cloneNode(false) as HTMLElement;
@@ -311,26 +334,29 @@ export class GearboxSection implements Section {
     this.setup = new SetupPanel(
       fresh,
       {
-        factory: d.factory,
-        factoryFinal: d.finalDrive,
+        model: layout.setup,
+        labels: layout.labels,
         radiusM: d.radiusM,
         tyre: d.tyre,
         redlineRpm: d.engine.spec.redlineRpm,
-        reverse: this.reverseRatio(d.factory),
+        reverse: layout.reverse(layout.factory),
       },
-      (_setup, desc) => this.boxChanged(desc),
+      (desc) => this.boxChanged(desc),
     );
     this.el('gbx-article').innerHTML = gearboxArticleHtml({
       page: d.page,
+      record,
       car,
-      ratios: speedRatios(d.factory),
-      reverse: this.reverseRatio(d.factory),
-      finalDrive: d.finalDrive,
+      ratios: layout.ratios(layout.factory),
+      reverse: layout.reverse(layout.factory),
+      finalDrive: layout.finalDrive,
       engine: car ? { href: `#/engines/${car.engine}`, name: engineName, powerHp: facts?.powerHp ?? null } : null,
+      tyre: d.tyre,
       rollingRadiusMm: d.radiusM * 1000,
+      demo: layout.demo,
     });
-    this.desc = d.factory;
-    this.box = buildGearbox(layshaftSpec(d.factory));
+    this.desc = layout.factory;
+    this.box = layout.build(layout.factory);
     this.table = new TableDrive(this.box, 'N');
     this.renderGears();
   }
@@ -344,9 +370,13 @@ export class GearboxSection implements Section {
     this.lendHidden('#results-panel', false);
     this.lendHidden('#hint', true);
     slots.panelTitle.textContent = t('Про коробку');
-    document.title = t('{title}. Анатомія авто', { title: t('Механічна коробка з проміжним валом') });
-    this.fitScaleBefore = stage.fitScale;
-    this.toolsHBefore = document.documentElement.style.getPropertyValue('--tools-h');
+    document.title = t('{title}. Анатомія авто', { title: this.data.layout.title });
+    // Another page of the section shown in place keeps what the section found when it came.
+    if (!this.holding) {
+      this.holding = true;
+      this.fitScaleBefore = stage.fitScale;
+      this.toolsHBefore = document.documentElement.style.getPropertyValue('--tools-h');
+    }
     this.measureTools();
     this.buildModel(false);
     this.model?.setView(view.mode);
@@ -359,6 +389,13 @@ export class GearboxSection implements Section {
     this.ctx.keys.use(this.mode === 'drive' ? GEARBOX_KEY_CONTEXTS.drive : GEARBOX_KEY_CONTEXTS.table);
   }
 
+  /** On a phone the list of variants is a row: the chosen one may be out of sight. */
+  private showVariant(): void {
+    const list = this.root.querySelector<HTMLElement>('#gbx-nav .variant-list');
+    const active = list?.querySelector<HTMLElement>('.active');
+    if (list && active) list.scrollLeft = active.offsetLeft - list.offsetLeft - 8;
+  }
+
   /** The height the row of view tools takes above the dash, for what stands over it (--tools-h). */
   private measureTools(): void {
     if (this.away) return;
@@ -369,17 +406,11 @@ export class GearboxSection implements Section {
     document.documentElement.style.setProperty('--tools-h', `${Math.round(row.offsetHeight + (Number.isFinite(above) ? above : 12))}px`);
   }
 
-  /** Overall reverse of a description, the magnitude. */
-  private reverseRatio(desc: LayshaftDesc): number | null {
-    const r = desc.reverse;
-    return r ? (desc.main.teeth[1] / desc.main.teeth[0]) * (r.teeth[2] / r.teeth[0]) : null;
-  }
-
   /** A box from the panel: the numbers now, the model on the next rebuild. */
-  private boxChanged(desc: LayshaftDesc): void {
+  private boxChanged(desc: TableDesc): void {
     if (desc === this.desc) return;
     this.desc = desc;
-    const box = buildGearbox(layshaftSpec(desc));
+    const box = this.data.layout.build(desc);
     // Another speed count has other members: the old model cannot draw the new pose, so it goes on the next frame.
     const sameMembers = box.members.length === this.box.members.length && box.meshes.length === this.box.meshes.length;
     this.box = box;
@@ -397,7 +428,7 @@ export class GearboxSection implements Section {
   }
 
   private buildModel(keepCamera: boolean): void {
-    const model = new GearboxModel(this.box, { quality: window.innerWidth <= PHONE ? 'low' : 'high' });
+    const model = this.data.layout.model(this.box, window.innerWidth <= PHONE ? 'low' : 'high');
     this.ctx.stage.setModel(model, { home: HOME, keepCamera, keepScale: keepCamera, fitScale: window.innerWidth <= PHONE ? FIT_PHONE : FIT });
     this.model = model;
     model.setView(this.ctx.view.mode);
@@ -447,11 +478,11 @@ export class GearboxSection implements Section {
       this.closeDemo();
       const module = await loadCarMode();
       const record = this.data.page.base;
-      if (ticket !== this.modeTicket || this.away || !record.car) return;
+      if (ticket !== this.modeTicket || this.away || !record.car || this.data.layout.kind !== 'layshaft') return;
       this.car ??= new module.CarMode(this.root, () => this.drive);
       if (this.mode !== 'drive') this.timeBefore = time.mode;
       this.mode = 'drive';
-      this.car.enter(module.pageCarRecords(record.car, record, this.desc, this.setup.finalDrive));
+      this.car.enter(module.pageCarRecords(record.car, record, this.desc as LayshaftDesc, this.setup.finalDrive));
       this.demoMode = false;
       panels.setOpen('left', false);
       panels.relayout();
@@ -595,6 +626,10 @@ export class GearboxSection implements Section {
   }
 
   private startDemo(): void {
+    if (!this.data.layout.demo) {
+      this.closeDemo();
+      return;
+    }
     this.demo = { steps: alwaysTurningSteps(this.box, this.data.engine.spec.idleRpm), at: 0 };
     this.el('gbx-demo').hidden = false;
     this.showDemoStep();
@@ -706,15 +741,21 @@ export class GearboxSection implements Section {
     was.selected = this.table.selected;
     was.box = this.box;
     const state = this.box.states.find((s) => s.name === engaged);
-    const ratio = state?.kind === 'gear' ? state.ratio! : null;
+    const layout = this.data.layout;
+    const { output: own, diff: overall } = layout.shafts(this.box, state);
+    const speed = (ratio: number | null): string =>
+      ratio === null ? t('стоїть') : t('{rpm} об/хв', { rpm: num(Math.abs(rpm / ratio)) }) + (ratio < 0 ? ` ${t('назад')}` : '');
     const input = t('{rpm} об/хв', { rpm: num(rpm) });
-    const output = ratio === null ? t('стоїть') : t('{rpm} об/хв', { rpm: num(Math.abs(rpm / ratio)) }) + (ratio < 0 ? ` ${t('назад')}` : '');
-    const gear = ratio === null ? (this.table.selected === 'N' ? t('нейтраль') : '…') : t('число {ratio}', { ratio: num(Math.abs(ratio), 3) });
-    const direct = state?.kind === 'gear' && state.meshLoads?.every((m) => m.power === 0);
-    const note = ratio === null ? t('Шестерні крутяться, вторинний вал стоїть') : direct ? t('Пряма: момент іде крізь муфту, без зачеплень') : ratio < 0 ? t('Три зачеплення, вал крутиться назад') : t('Два зачеплення: головна пара й пара передачі');
+    const output = speed(own);
+    const gear = own === null ? (this.table.selected === 'N' ? t('нейтраль') : '…') : t('число {ratio}', { ratio: num(Math.abs(own), 3) });
+    const note = layout.note(this.box, state);
     const s = this.shown;
     if (input !== s.input) this.el('gbx-input-rpm').textContent = s.input = input;
     if (output !== s.output) this.el('gbx-output-rpm').textContent = s.output = output;
+    const diffRow = this.el('gbx-diff-row');
+    diffRow.hidden = !layout.finalInside;
+    const diff = layout.finalInside ? speed(overall) : '';
+    if (diff !== s.diff) this.el('gbx-diff-rpm').textContent = s.diff = diff;
     if (gear !== s.gear) this.el('gbx-gear-text').textContent = s.gear = gear;
     if (note !== s.note) this.el('gbx-gear-note').textContent = s.note = note;
   }

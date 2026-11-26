@@ -214,13 +214,15 @@ export class EngineFeatures {
     const valves = this.valves?.element ?? null;
     balance.shareStage(
       () => {
-        const shown = (e: HTMLElement): boolean => !e.hidden && e.offsetParent !== null;
+        // Not offsetParent: it is null for the fixed switches and card at the top right, which then never made room.
+        const shown = (e: HTMLElement): boolean => !e.hidden && e.getClientRects().length > 0;
         const tool = $('systems-tool');
         const readout = $('systems-readout');
         let limit = valves && shown(valves) ? valves.getBoundingClientRect().top : Infinity;
         if (shown(tool) && tool.classList.contains('aside')) {
           limit = Math.min(limit, app.getBoundingClientRect().bottom - parseFloat(getComputedStyle(app).getPropertyValue('--dash-h')) - 116);
-          return limit - SYSTEMS_ASIDE_ROOM;
+          // Until a system is on, only the switches go under the force card (18 px below it, as engines.css puts them).
+          return limit - (shown(readout) ? SYSTEMS_ASIDE_ROOM : tool.offsetHeight + 18);
         }
         if (shown(readout)) limit = Math.min(limit, readout.getBoundingClientRect().top);
         return limit;

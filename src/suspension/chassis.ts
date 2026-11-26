@@ -9,9 +9,10 @@
 // about it by the parallel-axis theorem. NHTSA measures the whole car, so this is how the body equations get theirs
 // (suspensions plan, the data types).
 
-import type { ChassisAxleSpec, ChassisSpec, SprungBody } from './spec.ts';
+import type { AnyAxleLinkage, AxleSpec, ChassisAxleSpec, ChassisSpec, SprungBody, SwayBarSpec } from './spec.ts';
 import { ChassisAxle, newWheelSample, type WheelSample } from './chassis-axle.ts';
-import { bumpStopForce, coilCompression, swayBarTorsionRate, G, type DamperCoeffs } from './forces.ts';
+import { bumpStopForce, coilCompression, gasSpringFor, swayBarTorsionRate, G, type DamperCoeffs, type GasSpring } from './forces.ts';
+import { thirdSpringRatio } from './rocker.ts';
 import { tyreVertical } from '../vehicle/tyre-data.ts';
 import { CG_HEIGHT_ESTIMATE_M } from '../vehicle/car.ts';
 import { bodyInertia, type BodyInertia } from '../vehicle/body-estimate.ts';
@@ -40,6 +41,9 @@ export interface ChassisCorner {
     /** Free length that holds the car at design height, m, and the force along the spring at rest, N. */
     freeM: number;
     staticN: number;
+    /** An air spring or hydropneumatic strut built for this static load at its design length (forces.ts); null for a
+     *  coil, a torsion bar or a leaf. Read through springForce. */
+    gas: GasSpring | null;
   };
   damper: DamperCoeffs;
   /** Damper length where the bump stop touches and where the damper tops out, m. */
@@ -69,6 +73,9 @@ export interface Chassis {
   bars: readonly [{ rate: number; armM: number }, { rate: number; armM: number }];
   /** Torsional rate of a twist beam (N·m/rad, 0 on other axles). */
   beamTorsion: readonly [number, number];
+  /** Third spring of each axle at the wheels, linearised at design: each wheel gets thirdRate·(q_L + q_R) of support,
+   *  N/m (k₃·mr₃², 0 without one). It adds 2·thirdRate per wheel in heave and nothing in roll. */
+  thirdRates: readonly [number, number];
   /** Each axle's share of the lateral force in a steady turn (the front's is b/L, the static front share). */
   lateralShare: readonly [number, number];
   /** The body at rest relative to design: heave of the sprung centre of mass, pitch (nose down positive), and the
@@ -83,8 +90,15 @@ function damperOf(axle: ChassisAxleSpec): DamperCoeffs {
   return { compression: d.compression, rebound: d.rebound, kneeMs: d.kneeMs, highRatio: d.highRatio };
 }
 
+/** How buildChassis makes its axles. `windowM` builds their tables only that far around design (ChassisAxle): enough
+ *  for everything read at rest, not for running the car. `axle` makes (or reuses) each axle instead. */
+export interface BuildChassisOptions {
+  windowM?: number;
+  axle?: (axle: AxleSpec<AnyAxleLinkage>, bar: SwayBarSpec | null) => ChassisAxle;
+}
+
 /** Builds the chassis; throws if an axle cannot assemble or cannot hold its load. */
-export function buildChassis(spec: ChassisSpec): Chassis {
+export function buildChassis(spec: ChassisSpec, options: BuildChassisOptions = {}): Chassis {
   const body = spec.body;
   const m = body.massKg;
   const fs = body.frontShare;
@@ -99,7 +113,8 @@ export function buildChassis(spec: ChassisSpec): Chassis {
   const b = L * fs;
   const h = body.cgHeightM ?? CG_HEIGHT_ESTIMATE_M;
   const axleSpecs = [spec.front, spec.rear] as const;
-  const axles = [new ChassisAxle(spec.front.axle, spec.front.swayBar), new ChassisAxle(spec.rear.axle, spec.rear.swayBar)] as const;
+  const makeAxle = options.axle ?? ((axle, bar) => new ChassisAxle(axle, bar, { windowM: options.windowM }));
+  const axles = [makeAxle(spec.front.axle, spec.front.swayBar), makeAxle(spec.rear.axle, spec.rear.swayBar)] as const;
   const axleX = [a, -b] as const;
   const tyreData = tyreVertical(spec.tyre);
 
@@ -159,7 +174,14 @@ export function buildChassis(spec: ChassisSpec): Chassis {
         sprungN,
         designWheelZM: s.wheelZ,
         restWheelZM,
-        spring: { rate, rate2, fromM, freeM: s.springLen + coilCompression(f, rate, rate2, fromM), staticN: f },
+        spring: {
+          rate,
+          rate2,
+          fromM,
+          freeM: s.springLen + coilCompression(f, rate, rate2, fromM),
+          staticN: f,
+          gas: spring.kind === 'air' || spring.kind === 'hydro' ? gasSpringFor(spring.kind, f, rate, s.springLen) : null,
+        },
         damper: damperOf(as),
         bumpStop: { contactM: stops[i].contactM, lengthM: bump.lengthM, rate: bump.rate },
         topOutM: stops[i].topOutM,
@@ -197,6 +219,13 @@ export function buildChassis(spec: ChassisSpec): Chassis {
   const bar = (as: ChassisAxleSpec): { rate: number; armM: number } =>
     as.swayBar ? { rate: swayBarTorsionRate(as.swayBar.diameterM, as.swayBar.wallM, as.swayBar.spanM), armM: as.swayBar.armM } : { rate: 0, armM: 1 };
   const torsion = (as: ChassisAxleSpec): number => (as.axle.linkage.kind === 'twist-beam' ? as.axle.linkage.torsionNmPerRad : 0);
+  const third = (as: ChassisAxleSpec, k: 0 | 1): number => {
+    const t = as.axle.thirdSpring;
+    if (!t || as.axle.linkage.kind !== 'links') return 0;
+    axles[k].sample(0, 0, sL, sR);
+    const mr3 = thirdSpringRatio(as.axle as AxleSpec, t.rockerPoint) * sL.mrSpring;
+    return t.rate * mr3 * mr3;
+  };
 
   return {
     spec,
@@ -214,6 +243,7 @@ export function buildChassis(spec: ChassisSpec): Chassis {
     sprung,
     bars: [bar(spec.front), bar(spec.rear)],
     beamTorsion: [torsion(spec.front), torsion(spec.rear)],
+    thirdRates: [third(spec.front, 0), third(spec.rear, 1)],
     lateralShare: [fs, 1 - fs],
     rest: { z, pitch, wheelZ: [corners[0].restWheelZM, corners[1].restWheelZM, corners[2].restWheelZM, corners[3].restWheelZM] },
     restSupportN: [restSupport[0], restSupport[1], restSupport[2], restSupport[3]],

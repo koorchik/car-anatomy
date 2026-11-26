@@ -32,7 +32,7 @@ import './engines.css';
 /** No cylinder resting, shared so that the frame does not make a new list each time. */
 const NONE_RESTING: number[] = [];
 
-/** The body classes the engines' pages and features style the shared skeleton with (the oil page hides the dash with `sump-mode`). */
+/** The classes on <body> with which the engine pages and features style the shared skeleton. */
 const BODY_CLASSES = ['sump-mode', 'designer-mode', 'dyno-mode', 'forces-on'];
 
 export class EnginesSection implements Section {
@@ -62,10 +62,10 @@ export class EnginesSection implements Section {
   private homedFor: FreezeOptions | null = null;
   /** Between leave() and the next enter(): another section is shown. */
   away = false;
+  /** The body classes of BODY_CLASSES that were on when the section left, put back when it returns. */
+  private leftBodyClasses: string[] = [];
   /** The panel's heading and the document's title as this section left them. */
   private leftTitles = { panel: '', document: '' };
-  /** The body classes of its pages that were on when the section left, to put back on its return. */
-  private leftBodyClasses: string[] = [];
   /** Reused every frame: the systems step allocates nothing. */
   private readonly systemsFrame: SystemsFrame = { theta: 0, advance: 0, rpm: 0, load: 0, throttle: 0, boost: 0, running: false, cranking: false, fuelCut: true, live: false, dt: 0, timeScale: 1 };
   /** Valve events and firing cylinders for the systems layers, written in place each frame. */
@@ -129,32 +129,34 @@ export class EnginesSection implements Section {
     this.drive.lock(null);
     this.drive.stop();
     this.ctx.keys.use([]);
+    // The engine and what hangs on it (the layers, the oil page's scene) wait off the stage for coming back.
+    if (this.model) this.ctx.stage.release(this.model);
     this.leftTitles = { panel: this.ctx.slots.panelTitle.textContent ?? '', document: document.title };
-    // The body classes its pages and features style the skeleton with: none of them may stay on under another section.
+    // Its pages style the shared skeleton through these (sump-mode hides the dash and the view tools): none stays on
+    // under another section. The shell hides the section's own markup (section-dom.ts).
     const body = document.body.classList;
     this.leftBodyClasses = BODY_CLASSES.filter((c) => body.contains(c));
     for (const c of this.leftBodyClasses) body.remove(c);
-    // The engine and what hangs on it (the layers, the oil page's scene) wait off the stage for coming back.
-    if (this.model) this.ctx.stage.release(this.model);
   }
 
   /** Back from another section, which may have changed the shared view and time while this one was away. */
   private resume(): void {
     this.away = false;
     const { view, time, slots } = this.ctx;
-    slots.panelTitle.textContent = this.leftTitles.panel;
-    document.title = this.leftTitles.document;
     for (const c of this.leftBodyClasses) document.body.classList.add(c);
     this.leftBodyClasses = [];
-    // Another section (the gearboxes) may have had the one Drive play its own car's engine.
+    slots.panelTitle.textContent = this.leftTitles.panel;
+    document.title = this.leftTitles.document;
+    // The other section may have had the Drive play its own engine (the gearbox page runs its car's).
     this.drive.setEngine(this.engine);
-    // The shell laid the page out with the body classes still off: the charts and the dash measure again.
-    this.ctx.panels.relayout();
-    this.useKeys();
+    // The model waited off the stage (leave), with the layers still on it.
     if (this.model) {
       this.placeModel(this.model, false);
       if (this.sump.on) this.sump.lookAtOil();
     }
+    // The shell laid the page out while this section's content was still hidden: the charts measured nothing.
+    this.ctx.panels.relayout();
+    this.useKeys();
     this.applyView(view.mode);
     $('slow-tool').hidden = time.mode !== 'slow';
     // The oil page's lap holds the crank itself.

@@ -109,6 +109,9 @@ describe('the gearbox settings', () => {
     expect(speedRatios(setupDesc(factory, withSixth))[5]).toBeCloseTo(0.84, 1);
     // Down to five and back to six: the sixth set on the panel is still there.
     expect(setupDesc(factory, setSpeeds(setSpeeds(withSixth, 5), 6))).toEqual(setupDesc(factory, withSixth));
+    // At five the waiting sixth changes nothing: the box is the factory's, and «Заводські» has nothing to give back.
+    expect(setupDesc(factory, setSpeeds(withSixth, 5))).toEqual(factory);
+    expect(isFactory(factory, finalDrive, setSpeeds(withSixth, 5))).toBe(true);
     for (const speeds of [4, 5, 6]) {
       const desc = setupDesc(factory, setSpeeds(start, speeds));
       expectCentre(desc);

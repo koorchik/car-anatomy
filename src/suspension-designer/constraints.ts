@@ -13,7 +13,8 @@
 import { CARS } from '../data/cars.ts';
 import { tyreVertical } from '../vehicle/tyre-data.ts';
 import {
-  AXLE_KEYS, CAR_KEYS, DAMPER_CHOICES, DRIVES, FRONT_LAYOUTS, KNUCKLES, REAR_LAYOUTS, SOLID_LATERALS, SOLID_LINKS, TYRES,
+  AXLE_KEYS, CAR_KEYS, DAMPER_CHOICES, DAMPER_KINDS, DRIVES, FRONT_LAYOUTS, KNUCKLES, REAR_LAYOUTS, SOLID_LATERALS,
+  SOLID_LINKS, SPRING_KINDS, TYRES,
   axleOf, isDriven, withAxle, type AxleEnd, type AxleKey, type AxleParams, type ChassisDesign,
   type DesignLayout,
 } from './design.ts';
@@ -111,9 +112,8 @@ function springRange(d: ChassisDesign, end: AxleEnd, g: AxleGeometry | Error): R
   return { min: at(RIDE_HZ[0]), max: at(RIDE_HZ[1]), minWhy: 'ride-frequency', maxWhy: 'ride-frequency' };
 }
 
-/** Limits of one axle parameter, given the others. */
-export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey): Range {
-  const a = axleOf(d, end);
+/** Limits of one axle parameter, given the others (`a` is the axle of `d` at `end`, when the caller has it). */
+export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey, a: AxleParams = axleOf(d, end)): Range {
   const front = end === 'F';
   const half = a.trackMm / 2;
   const rimMm = rimRadiusM(a) * 1000;
@@ -187,6 +187,12 @@ export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey): 
       return fixed(-80, 80);
     case 'beamTorsionNmRad':
       return fixed(0, 20000);
+    case 'rockerRatio':
+      return fixed(0.6, 1.6);
+    case 'rockerProgressionDeg':
+      return fixed(-20, 25);
+    case 'thirdSpringNmm':
+      return fixed(0, 150);
     case 'lowerLinkMm':
       return fixed(300, 900);
     case 'upperLinkMm':
@@ -244,7 +250,8 @@ const CLAMP_ORDER = [
   'trackMm', 'tyreWidthMm', 'rimIn', 'tyreAspect', 'kingpinOffsetMm', 'kpiDeg', 'casterDeg', 'scrubMm', 'lowerArmMm',
   'upperArmMm', 'upperAngleDeg', 'lowerBallZMm', 'upperBallZMm', 'lowerPivotZMm', 'svAngleDeg', 'tieRodDzMm',
   'sweepDeg', 'pivotArmMm', 'pivotYMm', 'pivotDzMm', 'pivotSvDeg', 'beamPos', 'shearDzMm', 'beamArmMm', 'beamBushInMm',
-  'beamBushDzMm', 'beamTorsionNmRad', 'lowerLinkMm', 'upperLinkMm', 'linkAngleDeg', 'upperLinkAngleDeg', 'lateralZMm',
+  'beamBushDzMm', 'beamTorsionNmRad', 'rockerRatio', 'rockerProgressionDeg', 'thirdSpringNmm', 'lowerLinkMm',
+  'upperLinkMm', 'linkAngleDeg', 'upperLinkAngleDeg', 'lateralZMm',
   'diffOutputYMm', 'diffOutputDzMm', 'camberDeg', 'toeDeg', 'damperCompression', 'damperRebound', 'damperKneeMs',
   'damperHighRatio', 'barMm', 'barWallMm', 'barArmMm', 'unsprungKg',
 ] as const satisfies readonly AxleNumericKey[];
@@ -270,6 +277,7 @@ function typed(input: unknown): ChassisDesign {
   out.car = typeof own(src, 'car') === 'string' && Object.hasOwn(CARS, own(src, 'car') as string) ? own(src, 'car') : null;
   out.drive = oneOf(DRIVES, own(src, 'drive'), DEFAULT_CHASSIS.drive);
   out.tyre = oneOf(TYRES, own(src, 'tyre'), DEFAULT_CHASSIS.tyre);
+  out.dampers = oneOf(DAMPER_KINDS, own(src, 'dampers'), DEFAULT_CHASSIS.dampers);
   for (const end of ['F', 'R'] as const) {
     const k = (key: AxleKey): string => `${key}${end}`;
     const layouts: readonly DesignLayout[] = end === 'F' ? FRONT_LAYOUTS : REAR_LAYOUTS;
@@ -278,6 +286,7 @@ function typed(input: unknown): ChassisDesign {
     out[k('solidLateral')] = oneOf(SOLID_LATERALS, own(src, k('solidLateral')), 'panhard');
     out[k('solidLinks')] = oneOf(SOLID_LINKS, own(src, k('solidLinks')), 'four');
     out[k('damper')] = oneOf(DAMPER_CHOICES, own(src, k('damper')), 'comfort');
+    out[k('springKind')] = oneOf(SPRING_KINDS, own(src, k('springKind')), 'coil');
     const spring = own(src, k('springNmm'));
     out[k('springNmm')] = isNumber(spring) ? spring : null;
   }
@@ -286,16 +295,23 @@ function typed(input: unknown): ChassisDesign {
 
 /** The axle's numbers clamped in CLAMP_ORDER (the spring is left for later). */
 function clampAxle(d: ChassisDesign, end: AxleEnd): ChassisDesign {
-  let out = d;
+  // The axle is clamped in place and written back once: every limit reads only the car and this axle.
+  const a = { ...axleOf(d, end) };
+  const patch: Partial<Record<AxleNumericKey, number>> = {};
+  let changed = false;
   for (const key of CLAMP_ORDER) {
-    const v = axleOf(out, end)[key];
+    const v = a[key];
     let next: number;
-    if (key === 'barMm') next = v < 5 ? 0 : clamp(v, axleRange(out, end, key));
-    else if (key === 'barWallMm') next = v < 0.75 ? 0 : clamp(v, axleRange(out, end, key));
-    else next = clamp(v, axleRange(out, end, key));
-    if (next !== v) out = withAxle(out, end, { [key]: next });
+    if (key === 'barMm') next = v < 5 ? 0 : clamp(v, axleRange(d, end, key, a));
+    else if (key === 'barWallMm') next = v < 0.75 ? 0 : clamp(v, axleRange(d, end, key, a));
+    else next = clamp(v, axleRange(d, end, key, a));
+    if (next !== v) {
+      a[key] = next;
+      patch[key] = next;
+      changed = true;
+    }
   }
-  return out;
+  return changed ? withAxle(d, end, patch) : d;
 }
 
 /** The axle clamped and built; falls back to typical geometry, then the typical tyre and track, then the end's typical
@@ -317,7 +333,8 @@ function buildable(d: ChassisDesign, end: AxleEnd): ChassisDesign {
   throw new Error(`The typical ${fallback} does not build on this car`);
 }
 
-/** A buildable design from anything: typed, clamped, every axle assembling over its travel. */
+/** A buildable design from anything: typed, clamped, every axle assembling over its travel. The design is frozen:
+ *  axleOf remembers the axles of each design object, so a design changed in place would keep its old axles. */
 export function resolveChassis(input: unknown): ChassisDesign {
   let d = typed(input);
   for (const key of Object.keys(CAR_RANGES) as CarNumericKey[]) {
@@ -334,7 +351,7 @@ export function resolveChassis(input: unknown): ChassisDesign {
       if (v !== spring) d = withAxle(d, end, { springNmm: v });
     }
   }
-  return d;
+  return Object.freeze(d);
 }
 
 /** Whether two designs are the same, field by field. */

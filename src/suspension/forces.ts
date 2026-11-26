@@ -96,3 +96,103 @@ export function swayBarTorsionRate(diameterM: number, wallM: number | null, span
   const di = wallM === null ? 0 : Math.max(0, diameterM - 2 * wallM);
   return (STEEL_SHEAR_MODULUS_PA * Math.PI * (diameterM ** 4 - di ** 4)) / (32 * spanM);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Gas springs (stage P14-core): an air spring and a hydropneumatic strut obey the same law along their axis. A piston of
+// effective area A shortens the element and squeezes a gas of volume V: p·V^n = const, F = (p − p_atm)·A. The air
+// spring's gas is the air in its bellows; the hydropneumatic strut pushes incompressible oil into a sphere whose
+// nitrogen sits behind a membrane. The rate along the element is k = n·p·A²/V (Firestone's form without the dA/dz term:
+// a straight piston, docs/research/suspensions.md 1.3). They part ways when the load changes: levelling keeps the ride
+// height by adding air to the bellows (the volume at ride height stays, the pressure follows the load) or oil to the
+// strut (the gas keeps its mass and shrinks), docs/suspension-model.md.
+
+/** Atmospheric pressure, Pa. */
+export const P_ATM_PA = 101325;
+
+/** Polytropic exponent of the gas in a working spring (Firestone, 1.38). */
+export const GAS_POLYTROPIC_N = 1.38;
+
+/**
+ * Gauge pressure of each kind at its static load, Pa: what sizes the piston (A = F/p). Estimates: an air spring of a
+ * car at about 6 bar, a hydropneumatic strut at about 50 bar, under the 75 bar its nitrogen is charged to at most
+ * (Citroën, docs/research/suspensions.md 1.3). The levelled hydropneumatic law does not depend on it (p ≫ p_atm); the
+ * levelled air spring's only through the p_atm term.
+ */
+export const GAS_STATIC_GAUGE_PA = { air: 6e5, hydro: 50e5 } as const;
+
+export type GasKind = keyof typeof GAS_STATIC_GAUGE_PA;
+
+/** A gas spring as built for a static load at its design length. */
+export interface GasSpring {
+  kind: GasKind;
+  /** Effective piston area, m². */
+  areaM2: number;
+  /** Gas volume and absolute pressure at `designLenM`, m³ and Pa. */
+  volumeM3: number;
+  pressurePa: number;
+  designLenM: number;
+  n: number;
+}
+
+/**
+ * The gas spring of `kind` that carries `staticN` along its axis at length `lenM` with rate `rateNm` along it there:
+ * the piston from the kind's static pressure, then the volume from k = n·p·A²/V.
+ */
+export function gasSpringFor(kind: GasKind, staticN: number, rateNm: number, lenM: number): GasSpring {
+  const gauge = GAS_STATIC_GAUGE_PA[kind];
+  const areaM2 = Math.max(staticN, 1) / gauge;
+  const pressurePa = gauge + P_ATM_PA;
+  const n = GAS_POLYTROPIC_N;
+  return { kind, areaM2, volumeM3: (n * pressurePa * areaM2 * areaM2) / rateNm, pressurePa, designLenM: lenM, n };
+}
+
+/** Smallest share of its design volume the gas may be squeezed to: past it the law is held linear (a stop takes over
+ *  long before on any real car). */
+const GAS_MIN_SHARE = 0.1;
+
+/** Force along a gas spring at length `lenM`, N (pushes apart; never pulls). */
+export function gasSpringForce(g: GasSpring, lenM: number): number {
+  const v = g.volumeM3 - g.areaM2 * (g.designLenM - lenM);
+  const vMin = GAS_MIN_SHARE * g.volumeM3;
+  let p: number;
+  if (v >= vMin) p = g.pressurePa * (g.volumeM3 / v) ** g.n;
+  else {
+    const pMin = g.pressurePa * (1 / GAS_MIN_SHARE) ** g.n;
+    p = pMin * (1 + (g.n * (vMin - v)) / vMin);
+  }
+  const f = (p - P_ATM_PA) * g.areaM2;
+  return f > 0 ? f : 0;
+}
+
+/** Rate along a gas spring at length `lenM`, N/m: n·p·A²/V (central difference past the volume floor). */
+export function gasSpringRate(g: GasSpring, lenM: number): number {
+  const v = g.volumeM3 - g.areaM2 * (g.designLenM - lenM);
+  if (v >= GAS_MIN_SHARE * g.volumeM3) return (g.n * g.pressurePa * (g.volumeM3 / v) ** g.n * g.areaM2 * g.areaM2) / v;
+  const h = 1e-5;
+  return (gasSpringForce(g, lenM - h) - gasSpringForce(g, lenM + h)) / (2 * h);
+}
+
+/**
+ * The same gas spring after levelling to a new static load `staticN` at its design length: air is added to the bellows
+ * (the volume stays, the pressure follows the load), oil to the hydropneumatic strut (the nitrogen keeps its mass:
+ * p·V^n stays). Unlevelled, the spring would instead sink until its force met the load (gasSpringForce).
+ */
+export function levelGasSpring(g: GasSpring, staticN: number): GasSpring {
+  const pressurePa = Math.max(staticN, 0) / g.areaM2 + P_ATM_PA;
+  const volumeM3 = g.kind === 'air' ? g.volumeM3 : g.volumeM3 * (g.pressurePa / pressurePa) ** (1 / g.n);
+  return { ...g, pressurePa, volumeM3 };
+}
+
+/** The force law of a chassis or corner spring: a coil (possibly progressive) or, when `gas` is set, a gas spring. */
+export interface SpringLaw {
+  rate: number;
+  rate2: number;
+  fromM: number;
+  freeM: number;
+  gas?: GasSpring | null;
+}
+
+/** Force along any spring at length `lenM`, N. */
+export function springForce(s: SpringLaw, lenM: number): number {
+  return s.gas ? gasSpringForce(s.gas, lenM) : coilForce(s.rate, s.freeM, lenM, s.rate2, s.fromM);
+}

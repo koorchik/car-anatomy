@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_CAR, OVERVIEW_CARS, overviewCarId } from '../src/ui/car/overview-cars.ts';
 import { CAR_LIST } from '../src/data/cars.ts';
 import { CATALOGUE, engineById, pageChoices } from '../src/data/engines.ts';
 import { GEARBOX_PAGES } from '../src/data/gearboxes.ts';
@@ -190,6 +191,22 @@ describe('routes', () => {
       expect(parseRoute(`#/gearboxes/${page.id}`), page.id).toMatchObject({ section: 'gearboxes', page: 'catalogue', path: [page.id] });
       for (const v of page.variants) expect(parseRoute(`#/gearboxes/${page.id}/${v.id}`), v.id).toMatchObject({ section: 'gearboxes', page: 'catalogue' });
     }
+  });
+
+  it('opens the car section on every car of the overview, and its first car on any other car address', async () => {
+    const { sectionEntry } = await import('../src/shell/registry.ts');
+    for (const id of OVERVIEW_CARS) {
+      const route = parseRoute(`#/car/${id}`);
+      expect(sectionEntry(route).id, id).toBe('car');
+      expect(overviewCarId(route.path), id).toBe(id);
+      expect(CAR_LIST.some((car) => car.id === id), id).toBe(true);
+    }
+    for (const hash of ['#/car', '#/car/no-such-car', '#/car/bmw-m3-e30', '#/car/__proto__']) {
+      const route = parseRoute(hash);
+      expect(sectionEntry(route).id, hash).toBe('car');
+      expect(overviewCarId(route.path), hash).toBe(DEFAULT_CAR);
+    }
+    for (const id of OVERVIEW_CARS) expect(RESERVED.car, id).not.toContain(id);
   });
 
   it('reads the dyno and the layers from an address', () => {

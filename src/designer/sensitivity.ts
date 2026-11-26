@@ -1,8 +1,12 @@
 // Cause and effect, computed rather than written down. Every statement of the form "this changes that" on the page
-// comes from running the same model twice, so it stays true for the engine actually on screen.
+// comes from running the same model twice, so it stays true for the engine actually on screen. The wording of a change
+// and the checks themselves are shared with the suspension designer (src/shared/sensitivity-core.ts).
 
-import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
+import {
+  causesOf as coreCausesOf, compareMetrics, previewEffects as corePreviewEffects, type Cause as CoreCause, type Effect,
+  type Metric, type Probe as CoreProbe, type SensitivityModel,
+} from '../shared/sensitivity-core.ts';
 import { paramRange, type NumericKey } from './constraints.ts';
 import type { Design } from './design.ts';
 import { evaluate, type Performance } from './physics.ts';
@@ -10,13 +14,7 @@ import { editDesign } from './presets.ts';
 import { assessReliability, type Reliability } from './reliability.ts';
 import { lubricationFigures } from './lubrication-figures.ts';
 
-export interface Metric {
-  id: string;
-  name: string;
-  value: number;
-  /** How the change is written. */
-  format: 'percent' | 'load' | 'rpm';
-}
+export { compareMetrics, type Effect, type Metric };
 
 export function metricsOf(perf: Performance, rel: Reliability): Metric[] {
   const metrics: Metric[] = [
@@ -33,43 +31,6 @@ export function metricsOf(perf: Performance, rel: Reliability): Metric[] {
   return metrics;
 }
 
-export interface Effect {
-  id: string;
-  name: string;
-  text: string;
-  /** Size of the change, to rank by. Percent of the old value, or load points. */
-  size: number;
-}
-
-const rpmText = (v: number): string => (Math.round(v / 50) * 50).toLocaleString(numberLocale);
-
-const describe = (before: Metric, after: Metric): Effect | null => {
-  const a = before.value;
-  const b = after.value;
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
-  if (before.format === 'load') {
-    const size = Math.abs(b - a) * 100;
-    if (size < 1) return null;
-    return { id: before.id, name: before.name, text: `${Math.round(a * 100)}→${Math.round(b * 100)}%`, size: size * 1.1 };
-  }
-  const size = (Math.abs(b - a) / Math.max(Math.abs(a), 1e-6)) * 100;
-  if (size < 1) return null;
-  if (before.format === 'rpm') return { id: before.id, name: before.name, text: `${rpmText(a)}→${rpmText(b)}`, size };
-  return { id: before.id, name: before.name, text: `${b > a ? '+' : '−'}${Math.round(size)}%`, size };
-};
-
-/** Differences worth showing, biggest first. */
-export function compareMetrics(before: Metric[], after: Metric[]): Effect[] {
-  const out: Effect[] = [];
-  for (const m of before) {
-    const other = after.find((x) => x.id === m.id);
-    if (!other) continue;
-    const effect = describe(m, other);
-    if (effect) out.push(effect);
-  }
-  return out.sort((x, y) => y.size - x.size);
-}
-
 /** The state with factory figures set aside, so that what's compared is the model's response alone. */
 export function snapshot(d: Design): Metric[] {
   const plain = d.factory ? { ...d, factory: null } : d;
@@ -82,12 +43,7 @@ export function snapshot(d: Design): Metric[] {
   ];
 }
 
-export interface Probe {
-  key: keyof Design;
-  name: string;
-  /** Values to try instead of the current one, each with how to say it. */
-  tries: (d: Design) => Array<{ value: unknown; label: string }>;
-}
+export type Probe = CoreProbe<Design>;
 
 /** A number can go both ways: tries ten percent of its range up and down, where there is room. */
 export function numberProbe(key: NumericKey, name: string): Probe {
@@ -115,35 +71,20 @@ export function choiceProbe(key: keyof Design, name: string, options: Array<[str
   };
 }
 
-export interface Cause {
-  key: keyof Design;
-  name: string;
-  label: string;
-  effect: Effect;
-}
+export type Cause = CoreCause<Design>;
+
+/** The engine model as the shared checks run it: the factory figures set aside, so only the model's response counts. */
+const MODEL: SensitivityModel<Design> = {
+  snapshot,
+  edit: (d, patch) => editDesign({ ...d, factory: null }, patch),
+};
 
 /** What moves one metric the most, for this engine, from where it stands. */
 export function causesOf(d: Design, metricId: string, probes: Probe[], limit = 5): Cause[] {
-  const base = snapshot(d).find((m) => m.id === metricId);
-  if (!base) return [];
-  const found: Cause[] = [];
-  for (const probe of probes) {
-    let best: Cause | null = null;
-    for (const attempt of probe.tries(d)) {
-      const changed = editDesign({ ...d, factory: null }, { [probe.key]: attempt.value } as Partial<Design>);
-      const after = snapshot(changed).find((m) => m.id === metricId);
-      if (!after) continue;
-      const effect = describe(base, after);
-      if (effect && (!best || effect.size > best.effect.size)) best = { key: probe.key, name: probe.name, label: attempt.label, effect };
-    }
-    if (best) found.push(best);
-  }
-  return found.sort((a, b) => b.effect.size - a.effect.size).slice(0, limit);
+  return coreCausesOf(MODEL, d, metricId, probes, limit);
 }
 
 /** A preview of moving one control, without moving it. */
 export function previewEffects(d: Design, key: keyof Design, value: unknown, limit = 5): Effect[] {
-  const before = snapshot(d);
-  const after = snapshot(editDesign({ ...d, factory: null }, { [key]: value } as Partial<Design>));
-  return compareMetrics(before, after).slice(0, limit);
+  return corePreviewEffects(MODEL, d, key, value, limit);
 }

@@ -44,3 +44,25 @@ export function surfaceSlope(mount: EngineMount, ax: number, ay: number, av: num
   out.z = -out.z / down;
   out.y = down;
 }
+
+/**
+ * Where an engine stands in its car (the whole-car plan, how the car goes together in 3D): the engine frame
+ * (kinematics.ts, metres, origin on the crank axis where kinematics has Z = 0) to the front-axle frame (car.ts). The
+ * turn is the inverse of carToEngine, a proper rotation (determinant +1, so nothing is mirrored or scaled), and the
+ * shift brings the crankshaft's front end, `crankFrontZM` along the crank, to the record's packaging.crankFront.
+ * Column-major 4×4, as THREE.Matrix4.fromArray reads it; plain numbers, so the shared core stays free of three.js.
+ */
+export function mountMatrix(mount: EngineMount, packaging: { crankFront: readonly [number, number, number] }, crankFrontZM: number): number[] {
+  // The car-frame images of the engine's X, Y and Z axes (engineToCar in packaging.ts).
+  const axes: Record<EngineMount['front'], [[number, number, number], [number, number, number]]> = {
+    forward: [[0, 1, 0], [1, 0, 0]],
+    rearward: [[0, -1, 0], [-1, 0, 0]],
+    right: [[1, 0, 0], [0, -1, 0]],
+    left: [[-1, 0, 0], [0, 1, 0]],
+  };
+  const [ex, ez] = axes[mount.front];
+  const ey: [number, number, number] = [0, 0, 1];
+  const [cx, cy, cz] = packaging.crankFront;
+  const t = [cx - crankFrontZM * ez[0], cy - crankFrontZM * ez[1], cz - crankFrontZM * ez[2]];
+  return [...ex, 0, ...ey, 0, ...ez, 0, t[0]!, t[1]!, t[2]!, 1];
+}

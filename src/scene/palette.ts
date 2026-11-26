@@ -62,9 +62,13 @@ export const POWER = '#ea6a15';
 
 /** Hover highlight of a whole system in the car overview, as each section tints its own materials. */
 export const HIGHLIGHT = {
+  /** The engine in the car overview. */
+  engine: '#ff7f50',
   gearbox: '#3d7fd9',
   /** A corner, an axle and the body shell the chassis stands in. */
   suspension: '#ffb35c',
+  /** The car's own bodies: exhaust, radiator, intercooler, fuel tank. */
+  ancillary: '#4fd1b0',
 } as const;
 
 /** Marks that read an angle or a position: the phaser's marks and the cam switch's pin. */
