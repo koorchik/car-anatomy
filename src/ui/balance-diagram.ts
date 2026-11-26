@@ -264,8 +264,13 @@ export class ForceDiagram {
     this.lastTheta = NaN;
   }
 
+  /** The diagram in words, with its legend of what cancels each half: the button's label hides the legend from a screen reader. */
   get label(): string {
-    return this.plans ? diagramLabel(this.plans.force, this.plans.couple) : '';
+    if (!this.plans) return '';
+    const legend = Array.from(this.note.childNodes, (n) => n.textContent?.trim() ?? '')
+      .filter(Boolean)
+      .map((piece) => (piece.endsWith('.') ? piece : `${piece}.`));
+    return [diagramLabel(this.plans.force, this.plans.couple), ...legend].join(' ');
   }
 
   draw(theta: number): void {
