@@ -24,8 +24,10 @@ import {
   BUMP_DEFAULT, BUMP_PUNCH, clampScene, newBumpSample, resolveBumpCorner, runBump, sampleTrace, traceSeconds, type BumpRun,
   type BumpScene, type ObstacleId, type WheelId,
 } from '../../suspension/bump.ts';
+import { newCornerSample } from '../../suspension/kinematics.ts';
 import { EventRoad } from '../../suspension/road.ts';
 import { factorySetup, type CornerSetup, type ResolvedCorner } from '../../suspension/setup.ts';
+import { POSE_SIZE } from '../../suspension/solve.ts';
 import type { CornerSpec } from '../../suspension/spec.ts';
 import { withInnerToeShift } from '../../suspension/travel-curves.ts';
 import { pageCorner } from '../../suspension-designer/page-cars.ts';
@@ -95,6 +97,9 @@ export class SuspensionSection implements Section {
   private modelKey = '';
   private modelPage: PageChoice | null = null;
   private readonly wobble = new Float64Array(6);
+  /** The pose and the angles of the readout on a steered wheel. */
+  private readonly rackPose = new Float64Array(POSE_SIZE);
+  private readonly rackSample = newCornerSample();
   private clock = 0;
   private resolved!: ResolvedCorner;
   private model!: CornerModel;
@@ -154,7 +159,10 @@ export class SuspensionSection implements Section {
         this.tieDzM = dz;
         this.dirty = true;
       },
-      rack: (m) => (this.rack = m),
+      rack: (m) => {
+        this.rack = m;
+        this.readout();
+      },
       links: (removed) => this.setLinks(removed),
     });
     this.listen();
@@ -559,8 +567,19 @@ export class SuspensionSection implements Section {
     const mm = t('{value} мм', { value: signed(q * 1000, 0) });
     this.$('susp-travel-value').textContent = mm;
     this.$('susp-r-travel').textContent = mm;
-    this.$('susp-r-camber').textContent = `${signed(axle.value('camber', q) * DEG, 2)}°`;
-    this.$('susp-r-toe').textContent = `${signed(axle.value('toe', q) * DEG, 2)}°`;
+    let camber = axle.value('camber', q);
+    let toe = axle.value('toe', q);
+    if (this.rack !== 0 && this.scene === 'travel') {
+      // The steering turns the wheel off the table's rack-0 values: the numbers say what the lasers show.
+      axle.tablePose(q, this.rackPose);
+      if (axle.solver.solve(this.rackPose, q, this.rack, 30).ok) {
+        axle.measure(this.rackPose, q, this.rack, this.rackSample);
+        camber = this.rackSample.camber;
+        toe = this.rackSample.toe;
+      }
+    }
+    this.$('susp-r-camber').textContent = `${signed(camber * DEG, 2)}°`;
+    this.$('susp-r-toe').textContent = `${signed(toe * DEG, 2)}°`;
     this.$('susp-r-spring-len').textContent = t('{value} мм', { value: plain(axle.value('springLen', q) * 1000, 0) });
     this.$('susp-r-spring').textContent = t('{value} кН', { value: plain(this.frameData.springN / 1000, 2) });
   }
