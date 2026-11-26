@@ -9,7 +9,7 @@ export const GEARBOX_AUTOMATIC_EN: Record<string, GearboxTextEn> = {
       'which cites a ZF repair manual for sets 1 and 2. These teeth reproduce every Toyota figure to the last digit. The 500 N·m torque rating is from Wikipedia too. ' +
       'The sources do not say how many planets each set has. They can be spaced evenly only if the sun and ring teeth add up to a multiple of the planet count: 144 allows 3, 4 or 6, 150 allows 3, 5 or 6, 156 allows 3, 4 or 6, 126 allows 3 or 6. ' +
       'We took the largest count up to five that leaves room for the carrier\'s posts between the planets: 4, 5, 4 and 3. The 1.75 mm module, the face widths, the straight-cut teeth and the places of the sets and plate packs along the axis are our estimates. ' +
-      'We found no primary source for the 8HP\'s stall speed. The torque converter has the shape of the measured GM 6T40 curve (EPA), and we chose its size, K = 100 rpm/√(N·m), so that the B58 engine stalls at about 2200 rpm. The 273 mm diameter and the lock-up clutch are estimates too.',
+      'We found no primary source for the 8HP\'s stall speed. The torque converter has the shape of the measured GM 6T40 curve (EPA), and we chose its size, K = 100 rpm/√(N·m), so that the B58 engine stalls at about 2200 rpm. The 273 mm diameter and the lockup clutch are estimates too.',
   },
 };
 
@@ -25,7 +25,7 @@ export const GEARBOX_AUTOMATIC_ARTICLE_EN: GearboxArticle = {
     'Neighboring gears differ by one element only, so a shift is one clutch letting go while another closes, and the torque never drops out.',
   sound:
     'Planetary gearsets are quiet: the torque is shared between several planets, and each set has many meshes. In sixth gear the whole mechanism turns as one piece, and no mesh rolls at all. ' +
-    'For now this page plays only the engine; the torque converter and automatic shifting come later.',
+    'For now this page plays only the engine: the torque converter works silently in the lab, and automatic shifting comes later.',
   pros: [
     'The gears are always in mesh and one clutch changes the gear: shifts without a break in pull',
     'Eight speeds with a ratio span of 8.2 from four gearsets, because each set works in several gears',

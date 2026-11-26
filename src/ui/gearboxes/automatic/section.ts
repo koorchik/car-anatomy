@@ -8,6 +8,10 @@
 // the input held (A+C+E) with the output rolling, or a jam. With the input held the engine cannot turn: a running
 // engine stalls, and the page says why. Time works as on the manual page: real revs, one slowing factor for the whole
 // box, or the crank held at walking pace.
+//
+// The torque converter's lab (stage K12a, demonstration 9, `?demo=converter`) replays a run computed ahead in first
+// gear with the shell's slow-down (converter-lab-ui.ts); while it is open the live engine is off and the page offers
+// only the slow-down and the real time.
 
 import type { Drive } from '../../../audio/drive.ts';
 import { AUTOMATIC_CAR } from '../../../data/gearboxes/automatic.ts';
@@ -18,12 +22,14 @@ import { gearboxSpec } from '../../../drivetrain/catalogue.ts';
 import type { PlanetaryDesc } from '../../../drivetrain/layouts/planetary.ts';
 import { PlanetaryTable } from '../../../drivetrain/planetary-table.ts';
 import { buildGearbox, type Gearbox, type StateInfo } from '../../../drivetrain/topology.ts';
+import type { ConverterLabRun } from '../../../drivetrain/converter-lab.ts';
+import { withDictionaries } from '../../../i18n/dictionaries.ts';
 import { buildEngine, type Engine } from '../../../engine/kinematics.ts';
 import { numberLocale } from '../../../i18n/locale.ts';
 import { t } from '../../../i18n/t.ts';
 import { elementColor } from '../../../scene/gearbox/element-colors.ts';
 import { PLANETARY_PARTS } from '../../../scene/gearbox/planetary-parts.ts';
-import { PlanetaryModel } from '../../../scene/gearbox/planetary-model.ts';
+import { PlanetaryModel, type PlanetaryFrame } from '../../../scene/gearbox/planetary-model.ts';
 import { registerParts } from '../../../scene/parts-registry.ts';
 import type { FreezeOptions } from '../../../shell/freeze.ts';
 import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../../shell/section.ts';
@@ -33,8 +39,9 @@ import { Pedal } from '../../widgets/pedal.ts';
 import { Tacho } from '../../widgets/tacho.ts';
 import { SLOW_RPM_DEFAULT, SVG_SOUND_OFF, SVG_SOUND_ON } from '../markup.ts';
 import { automaticArticleHtml } from './article.ts';
+import { ConverterLabUi } from './converter-lab-ui.ts';
 import { matrixSteps, shiftChange, type MatrixStep } from './demo.ts';
-import { dashHtml, panelHtml, resultsHtml, statusHtml, titleHtml, toolsHtml } from './markup.ts';
+import { dashHtml, labHtml, panelHtml, resultsHtml, statusHtml, titleHtml, toolsHtml } from './markup.ts';
 import { nomogramSvg } from './nomogram-svg.ts';
 import '../../engines/engines.css';
 import '../gearboxes.css';
@@ -46,6 +53,11 @@ const BOTH_PANELS = 1200;
 /** The view from the model toward the camera: from the front left and above, so the sets show one behind another. */
 const HOME: [number, number, number] = [-0.9, 0.45, 0.85];
 const DEMO_ID = 'matrix';
+const LAB_ID = 'converter';
+/** The lab's slow-down factors, and the one it opens with. */
+const LAB_SLOWDOWN = [0.5, 0.25, 0.1] as const;
+const LAB_START = 0.25;
+const loadLabRun = (): Promise<typeof import('./converter-lab-run.ts')> => withDictionaries(['engines', 'gearboxes', 'presets'], () => import('./converter-lab-run.ts'));
 const FIT = 0.82;
 const FIT_PHONE = 0.9;
 /** The output's speed while the input is held (A+C+E), as a share of the shown input speed: a car rolling. */
@@ -77,6 +89,12 @@ export class AutomaticSection implements Section {
   private muted = false;
   private homedFor: FreezeOptions | null = null;
   private demo: { steps: MatrixStep[]; at: number } | null = null;
+  private lab: ConverterLabUi | null = null;
+  private labRun: ConverterLabRun | null = null;
+  /** The elements closed before the lab put the box in first. */
+  private beforeLab: string[] | null = null;
+  /** The lab was asked for and its run is on its way. */
+  private labWanted = false;
   /** The last shift between two gears of the matrix, for the note under the buttons. */
   private lastShift: { from: string; to: string } | null = null;
   /** The engine was stalled by elements that hold the input. */
@@ -88,6 +106,7 @@ export class AutomaticSection implements Section {
   private readoutsFor = { rpm: NaN, key: '' };
   private drawnFor = '';
   private readonly unlit = { angles: [] as ArrayLike<number>, meshPower: [] as number[], closed: new Set<string>() as ReadonlySet<string> };
+  private readonly labPose: PlanetaryFrame = { angles: [], meshPower: [], closed: new Set<string>() };
 
   get drive(): Drive {
     return this.ctx.audio.drive(this.engine);
@@ -109,6 +128,7 @@ export class AutomaticSection implements Section {
     slots.title.add(titleHtml());
     slots.tools.add(toolsHtml());
     slots.status.add(statusHtml());
+    slots.status.add(labHtml());
     slots.panel.add(panelHtml());
     slots.results.add(resultsHtml());
     slots.dash.add(dashHtml(this.box.spec.elements.map((e) => e.id)));
@@ -130,6 +150,8 @@ export class AutomaticSection implements Section {
   enter(route: Route, from: Route | null): void {
     if (this.away) this.resume();
     if (from === null || route.query.demo !== from.query.demo) {
+      if (route.query.demo === LAB_ID) this.openLab();
+      else if (this.lab) this.closeLab();
       if (route.query.demo === DEMO_ID) this.startDemo();
       else if (this.demo) this.closeDemo();
     }
@@ -138,6 +160,7 @@ export class AutomaticSection implements Section {
   leave(): void {
     this.away = true;
     this.closeDemo();
+    this.closeLab();
     this.pedal.reset();
     const drive = this.drive;
     drive.lock(null);
@@ -178,6 +201,7 @@ export class AutomaticSection implements Section {
   }
 
   time(): TimeCapabilities {
+    if (this.lab) return { modes: ['slowdown', 'real'], slowdown: LAB_SLOWDOWN };
     return { modes: ['slow', 'readable', 'real'] };
   }
 
@@ -232,7 +256,7 @@ export class AutomaticSection implements Section {
   }
 
   private buildModel(): void {
-    const model = new PlanetaryModel(this.box, { quality: window.innerWidth <= PHONE ? 'low' : 'high' });
+    const model = new PlanetaryModel(this.box, { quality: window.innerWidth <= PHONE ? 'low' : 'high', converter: true });
     this.ctx.stage.setModel(model, { home: HOME, fitScale: window.innerWidth <= PHONE ? FIT_PHONE : FIT });
     this.model = model;
     model.setView(this.ctx.view.mode);
@@ -363,13 +387,17 @@ export class AutomaticSection implements Section {
     });
     this.el('gba-levers-toggle').addEventListener('click', () => this.toggleLevers());
     this.el('gba-demo-open').addEventListener('click', () => this.routeDemo(true));
+    this.el('gba-lab-open').addEventListener('click', () => this.routeLab(true));
+    this.el('gba-lab-close').addEventListener('click', () => this.routeLab(false));
     this.el('gba-article').addEventListener('click', (event) => {
-      if (!(event.target as HTMLElement).closest('[data-demo]')) return;
+      const button = (event.target as HTMLElement).closest<HTMLElement>('[data-demo]');
+      if (!button) return;
       if (window.innerWidth <= PHONE) {
         this.ctx.panels.setOpen('right', false);
         this.ctx.panels.relayout();
       }
-      this.routeDemo(true);
+      if (button.dataset.demo === LAB_ID) this.routeLab(true);
+      else this.routeDemo(true);
     });
     this.el('gba-demo-close').addEventListener('click', () => this.routeDemo(false));
     this.el('gba-demo-prev').addEventListener('click', () => this.stepDemo(-1));
@@ -393,6 +421,8 @@ export class AutomaticSection implements Section {
   }
 
   private async toggleIgnition(): Promise<void> {
+    // The lab replays its own engine; the live one starts only once it is closed.
+    if (this.lab) this.routeLab(false);
     const drive = this.drive;
     const state = drive.snapshot().state;
     if (state === 'running' || state === 'cranking') {
@@ -428,8 +458,65 @@ export class AutomaticSection implements Section {
 
   private routeDemo(on: boolean): void {
     this.ctx.router.replace({ query: { demo: on ? DEMO_ID : null } });
-    if (on) this.startDemo();
-    else this.closeDemo();
+    if (on) {
+      this.closeLab();
+      this.startDemo();
+    } else this.closeDemo();
+  }
+
+  // ---- Demonstration 9: the torque converter's lab ----
+
+  private routeLab(on: boolean): void {
+    this.ctx.router.replace({ query: { demo: on ? LAB_ID : null } });
+    if (on) this.openLab();
+    else this.closeLab();
+  }
+
+  private openLab(): void {
+    if (this.lab || this.labWanted) return;
+    this.labWanted = true;
+    if (this.labRun) {
+      this.showLab(this.labRun);
+      return;
+    }
+    void loadLabRun().then(({ automaticLabRun }) => {
+      this.labRun ??= automaticLabRun();
+      if (this.labWanted && !this.away) this.showLab(this.labRun);
+      else this.labWanted = false;
+    });
+  }
+
+  private showLab(run: ConverterLabRun): void {
+    this.closeDemo();
+    // The lab replays its own run: the live engine stops, the box goes into first.
+    this.pedal.reset();
+    const drive = this.drive;
+    drive.lock(null);
+    drive.stop();
+    this.ignition.show(false);
+    this.beforeLab = [...this.table.closed];
+    this.table.select('1');
+    this.lastShift = null;
+    this.el('gba-lab').hidden = false;
+    this.lab = new ConverterLabUi(this.el('gba-lab'), run);
+    const { time } = this.ctx;
+    time.refresh();
+    time.set('slowdown', LAB_START);
+    this.stateChanged();
+  }
+
+  private closeLab(): void {
+    this.labWanted = false;
+    if (!this.lab) return;
+    this.readoutsFor.key = '';
+    this.lab = null;
+    this.el('gba-lab').hidden = true;
+    if (this.beforeLab) this.table.set(this.beforeLab);
+    this.beforeLab = null;
+    const { time } = this.ctx;
+    time.clock(null);
+    time.refresh();
+    this.stateChanged();
   }
 
   private startDemo(): void {
@@ -478,6 +565,14 @@ export class AutomaticSection implements Section {
     this.pedal.frame(dt);
     const { stage, time } = this.ctx;
     const frozen = time.frozen;
+    if (this.lab) {
+      this.labFrame(frozen ? 0 : dt * (time.mode === 'slowdown' ? time.factor : 1));
+      if (frozen && frozen !== this.homedFor) {
+        this.homedFor = frozen;
+        stage.freeze({ quality: frozen.quality, orbit: frozen.orbit });
+      } else if (!frozen) this.homedFor = null;
+      return;
+    }
     const snap = this.ctx.audio.snapshot;
     const spec = this.engine.spec;
     const running = snap !== null && (snap.state === 'running' || snap.state === 'cranking');
@@ -506,6 +601,31 @@ export class AutomaticSection implements Section {
     this.tacho.update(this.demoMode ? (held ? 0 : spec.idleRpm) : engineRpm, running && snap!.fuelCut && engineRpm > spec.redlineRpm - 200);
     this.readouts(figuresRpm, held ? ROLL_SHARE * (time.mode === 'slow' ? this.slowRpm : spec.idleRpm) : 0);
     if (running !== this.ignition.on && !this.demoMode && !this.starting) this.ignition.show(running);
+  }
+
+  /** A frame of the lab: its run moves on by `dt` seconds of run time, the gearbox turns in first at its turbine's speed. */
+  private labFrame(dt: number): void {
+    const lab = this.lab!;
+    const shown = lab.frame(dt);
+    this.table.step(shown.moved, shown.turbineRpm);
+    if (this.model) {
+      const pose = this.table.frame();
+      this.labPose.angles = pose.angles;
+      this.labPose.closed = pose.closed;
+      this.labPose.meshPower = this.glow ? pose.meshPower : this.unlit.meshPower;
+      this.labPose.converter = shown.converter;
+      this.model.update(this.labPose);
+    }
+    this.tacho.update(shown.engineRpm, false);
+    this.ctx.time.clock(lab.seconds);
+    // The dash's shafts follow the lab: the turbine is the input, first gear the rest.
+    const s = this.shown;
+    const input = t('{rpm} об/хв', { rpm: num(Math.max(0, shown.turbineRpm)) });
+    const output = t('{rpm} об/хв', { rpm: num(Math.max(0, shown.turbineRpm) / (this.table.state.ratio ?? 1)) });
+    const note = t('Лабораторія гідротрансформатора: перша передача, вхідний вал крутить турбіна');
+    if (input !== s.input) this.el('gba-input-rpm').textContent = s.input = input;
+    if (output !== s.output) this.el('gba-output-rpm').textContent = s.output = output;
+    if (note !== s.note) this.el('gba-note').textContent = s.note = note;
   }
 
   private readouts(rpm: number, rollRpm: number): void {
