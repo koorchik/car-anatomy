@@ -1,5 +1,6 @@
-// The gearbox designer's model (gearbox plan, tests/gearbox-designer; stage K9a: tests 1, 2 and 7, with the catalogue
-// copies and the link). Strength, synchronisers' heat, the verdicts and "no control is dead" come with stage K9b.
+// The gearbox designer's model (gearbox plan, tests/gearbox-designer): stage K9a's tests 1, 2 and 7 with the catalogue
+// copies and the link; stage K9b's 3 (the bending calibration), 4 (no factory box is fatal), 6 (directions) and "no
+// control is dead" for both types, with the factory record's hand-over and the computed causes.
 import { describe, expect, it } from 'vitest';
 import { DRIVE_CARS } from '../src/data/drive-cars.ts';
 import { ALL_GEARBOXES, gearboxById } from '../src/data/gearboxes.ts';
@@ -19,6 +20,19 @@ import { catalogueTorqueMap } from '../src/designer/torque-map.ts';
 import { mapValue } from '../src/engine/torque-map.ts';
 import { catalogueGearboxPresets, designFromRecord, oddGearboxPresets, withGearboxType } from '../src/gearbox-designer/presets.ts';
 import { designBuild } from '../src/gearbox-designer/to-spec.ts';
+import { TR6060_MZ6 } from '../src/data/gearboxes/tr6060-mz6.ts';
+import { buildGearbox } from '../src/drivetrain/topology.ts';
+import { CONE_TEST_LIMITS } from '../src/drivetrain/synchro-math.ts';
+import { gearboxControls } from '../src/gearbox-designer/controls.ts';
+import { diagnoseGearbox } from '../src/gearbox-designer/diagnostics.ts';
+import { editGearboxDesign } from '../src/gearbox-designer/edit.ts';
+import { gearboxMass, TR6060_MASS_KG, tr6060Design } from '../src/gearbox-designer/mass.ts';
+import { assessGearbox } from '../src/gearbox-designer/reliability.ts';
+import { controlTries, gearboxCausesOf, gearboxSnapshot, previewGearboxEffects } from '../src/gearbox-designer/sensitivity.ts';
+import {
+  BENDING_LIMIT_MPA, CALIBRATION_CONTACT_LOAD, CALIBRATION_TORQUE_NM, gearboxStrength, startsAt, stateStrength,
+} from '../src/gearbox-designer/strength.ts';
+import { designDifferential } from '../src/gearbox-designer/vehicle.ts';
 
 const seeded = (seed: number) => () => {
   seed = (seed * 16807) % 2147483647;
@@ -442,5 +456,203 @@ describe('7. speed', () => {
       best = Math.min(best, (performance.now() - start) / 20);
     }
     expect(best).toBeLessThan(15);
+  });
+});
+
+describe('3. bending calibration', () => {
+  it('the TR-6060 MZ6 first pair 19/43 loads 1.0 in bending at its 580 N·m rating, about 1170 MPa (research §2.5)', () => {
+    const box = buildGearbox(gearboxSpec(TR6060_MZ6));
+    const first = stateStrength(box, '1', CALIBRATION_TORQUE_NM).find((m) => m.teeth[0] === 19 && m.teeth[1] === 43)!;
+    expect(first.bending).toBeCloseTo(1, 12);
+    expect(Math.abs(BENDING_LIMIT_MPA / 1170 - 1)).toBeLessThan(0.03);
+    // The same constant reaches the contact limit: the plan expects the pair's contact load in 0.7–1.3.
+    expect(CALIBRATION_CONTACT_LOAD).toBeGreaterThan(0.7);
+    expect(CALIBRATION_CONTACT_LOAD).toBeLessThan(1.3);
+  });
+
+  it('the designer, given the MZ6 teeth at 85 mm, loads its first pair 1.0 at 580 N·m and weighs the 66.3 kg of the TR-6060', () => {
+    const d = tr6060Design();
+    const { box } = designBuild(d);
+    const first = gearboxStrength(box, d.gears, CALIBRATION_TORQUE_NM)[0]!;
+    expect(first.weakest!.teeth).toEqual([19, 43]);
+    expect(first.bending).toBeCloseTo(1, 9);
+    expect(gearboxMass(d).totalKg).toBeCloseTo(TR6060_MASS_KG, 9);
+  });
+
+  it('the bending load is linear in torque, and past 1 the life falls with the curve anchored on TTAC (12 000 starts at 450 lb-ft)', () => {
+    const box = buildGearbox(gearboxSpec(TR6060_MZ6));
+    const at = (nm: number) => stateStrength(box, '1', nm).find((m) => m.teeth[0] === 19)!.bending;
+    expect(at(2 * CALIBRATION_TORQUE_NM)).toBeCloseTo(2, 12);
+    expect(startsAt(at(450 * 1.3558179483))).toBeCloseTo(12000, 6);
+    expect(startsAt(1)).toBe(Infinity);
+    expect(startsAt(1.2)).toBeGreaterThan(startsAt(1.3));
+  });
+});
+
+describe('4. verdicts on the catalogue', () => {
+  it.each(catalogueGearboxPresets().map((c) => [c.id, c.design] as const))('%s: no fatal diagnosis, and its figures say what they judge', (_id, d) => {
+    const e = evaluateGearbox(d);
+    const rel = assessGearbox(e);
+    const diagnoses = diagnoseGearbox(d, e, rel);
+    expect(diagnoses.filter((x) => x.severity === 'fatal')).toEqual([]);
+    expect(rel.verdict).not.toBe('doomed');
+    for (const item of rel.items) expect(Number.isFinite(item.load), item.id).toBe(true);
+    expect(e.clutch.margin).toBeGreaterThanOrEqual(1.2);
+    // The plan's hard shifts: 1→2 and 2→3 up, and back down from them.
+    expect(e.synchro.shifts.map((s) => `${s.from}${s.to}`)).toEqual(['12', '21', '23', '32']);
+    for (const s of e.synchro.shifts) expect(s.load).toBeCloseTo(Math.max(s.energyJPerMm2 / CONE_TEST_LIMITS.energyJPerMm2, s.powerWPerMm2 / CONE_TEST_LIMITS.powerWPerMm2), 12);
+    // A direct gear meshes nothing under load: no strength to judge and no whine.
+    if (d.directGear) {
+      expect(e.strength[d.directGear - 1]!.meshes).toEqual([]);
+      expect(e.tones[d.directGear - 1]!.db).toBeNull();
+    }
+  });
+
+  it('a clutch that slips at the peak torque and teeth that break within a hundred starts are fatal', () => {
+    const e30 = catalogueGearboxPresets().find((c) => c.id === 'manual-rwd')!.design;
+    const weak = resolveGearboxDesign({ ...e30, clampN: 2500 });
+    const e = evaluateGearbox(weak);
+    expect(e.clutch.margin).toBeLessThan(1);
+    const rel = assessGearbox(e);
+    expect(rel.verdict).toBe('doomed');
+    expect(diagnoseGearbox(weak, e, rel).map((x) => [x.id, x.severity])).toContainEqual(['clutch-slips', 'fatal']);
+    const thin = resolveGearboxDesign({ ...DEFAULT_GEARBOX_DESIGN, engine: 'b6/porsche-992-carrera-3-0', clampN: 20000, module: 1.5, lowModule: 1.5, faceWidth: 9 });
+    const te = evaluateGearbox(thin);
+    const tr = assessGearbox(te);
+    expect(startsAt(Math.max(...te.strength.map((g) => g.bending)))).toBeLessThan(100);
+    expect(diagnoseGearbox(thin, te, tr).find((x) => x.id === 'teeth-break')?.severity).toBe('fatal');
+  });
+});
+
+describe('6. directions', () => {
+  const own = editGearboxDesign(catalogueGearboxPresets().find((c) => c.id === 'manual-rwd')!.design, { synchroMaterial: 'brass' });
+  const base = evaluateGearbox(own);
+  const bending = (d: GearboxDesign, gear = 1) => evaluateGearbox(d).strength[gear - 1]!.bending;
+
+  it('a wider tooth lowers bending in every gear', () => {
+    const wide = evaluateGearbox(editGearboxDesign(own, { faceWidth: own.faceWidth + 4 }));
+    base.strength.forEach((g, i) => g.weakest && expect(wide.strength[i]!.bending).toBeLessThan(g.bending));
+  });
+
+  it('a larger centre distance lowers first gear\'s bending at the same ratios', () => {
+    const wide = editGearboxDesign(own, { centreMm: own.centreMm + 8 });
+    const e = evaluateGearbox(wide);
+    e.gears.forEach((g, i) => expect(Math.abs(g.ratio / base.gears[i]!.ratio - 1)).toBeLessThan(0.03));
+    expect(bending(wide)).toBeLessThan(base.strength[0]!.bending);
+  });
+
+  it('a coarser module on first lowers its bending', () => {
+    expect(bending(editGearboxDesign(own, { lowModule: own.lowModule + 0.25 }))).toBeLessThan(base.strength[0]!.bending);
+  });
+
+  it('more cones synchronise faster', () => {
+    const three = evaluateGearbox(editGearboxDesign(own, { cones: own.cones.map(() => 3) }));
+    three.synchro.shifts.forEach((s, i) => expect(s.timeS).toBeLessThan(base.synchro.shifts[i]!.timeS));
+  });
+
+  it('a longer final drive turns slower at 120 km/h', () => {
+    expect(evaluateGearbox(editGearboxDesign(own, { finalDrive: own.finalDrive - 0.4 })).topRpmAt120).toBeLessThan(base.topRpmAt120);
+  });
+
+  it('straight-cut teeth whine louder', () => {
+    const spur = evaluateGearbox(editGearboxDesign(own, { helix: 0 }));
+    const loudest = (e: typeof base) => Math.max(...e.tones.flatMap((g) => g.meshes.map((m) => m.db)));
+    expect(loudest(spur)).toBeGreaterThan(loudest(base) + 6);
+  });
+
+  it('a dual-mass flywheel moves the damper\'s mode below the firing frequency at idle; a disc damper has it above', () => {
+    const dmf = evaluateGearbox(editGearboxDesign(own, { damper: 'dmf' })).clutch;
+    expect(dmf.damperHz).toBeLessThan(dmf.idleFiringHz);
+    expect(base.clutch.damperHz).toBeGreaterThan(base.clutch.idleFiringHz);
+  });
+
+  it('a bigger clutch holds more, and a harder launch heats the plate more', () => {
+    const big = evaluateGearbox(editGearboxDesign(own, { clutchMm: own.clutchMm + 20 })).clutch;
+    expect(big.margin).toBeGreaterThan(base.clutch.margin);
+    const heavy = evaluateGearbox(editGearboxDesign(own, { massKg: own.massKg + 400 })).clutch;
+    expect(heavy.launchJ).toBeGreaterThan(base.clutch.launchJ);
+    expect(heavy.plateRiseK!).toBeGreaterThan(base.clutch.plateRiseK!);
+  });
+});
+
+describe('the factory record and edits', () => {
+  const e30 = catalogueGearboxPresets().find((c) => c.id === 'manual-rwd')!.design;
+
+  it('a renamed copy keeps its record; the first engineering change drops it', () => {
+    expect(editGearboxDesign(e30, { name: 'mine' }).factory).toEqual({ gearbox: 'manual-rwd' });
+    expect(editGearboxDesign(e30, { clampN: e30.clampN + 100 }).factory).toBeNull();
+    expect(editGearboxDesign(e30, { cones: e30.cones.map(() => 2) }).factory).toBeNull();
+  });
+
+  it('a change of module, helix or centre hands the copy\'s teeth back to the picker with their ratios', () => {
+    for (const patch of [{ module: e30.module + 0.25 }, { helix: e30.helix - 4 }, { centreMm: e30.centreMm + 6 }] as Array<Partial<GearboxDesign>>) {
+      const d = editGearboxDesign(e30, patch);
+      const before = evaluateGearbox(e30).gears;
+      evaluateGearbox(d).gears.forEach((g, i) => expect(Math.abs(g.ratio / before[i]!.ratio - 1), JSON.stringify(patch)).toBeLessThan(0.03));
+    }
+    // A wider face keeps the teeth and widens them.
+    const wide = editGearboxDesign(e30, { faceWidth: e30.faceWidth + 2 });
+    wide.pairs.forEach((p, i) => p && expect(p.teeth).toEqual(e30.pairs[i]!.teeth));
+    expect(wide.pairs[1]!.faceWidth).toBeGreaterThan(e30.pairs[1]!.faceWidth);
+  });
+
+  it('a new number of gears gives every gear its synchroniser, and edits stay resolved', () => {
+    const six = editGearboxDesign(e30, { gears: 6 });
+    expect(six.gears).toBe(6);
+    expect(six.cones).toHaveLength(6);
+    expect(six.directGear).toBe(6);
+    expect(resolveGearboxDesign(six)).toEqual(six);
+  });
+});
+
+describe('no control is dead', () => {
+  const copies = catalogueGearboxPresets();
+  const e30 = copies.find((c) => c.id === 'manual-rwd')!.design;
+  const civic = copies.find((c) => c.id === 'manual-transaxle')!.design;
+  const boxes: Array<[string, GearboxDesign]> = [
+    ['layshaft copy', e30],
+    ['layshaft of its own', resolveGearboxDesign({ ...DEFAULT_GEARBOX_DESIGN, diff: 'helical' })],
+    ['transaxle copy', civic],
+    ['transaxle of its own, rear drive', resolveGearboxDesign({ ...withGearboxType(e30, 'transaxle'), diff: 'plate' })],
+  ];
+  const figures = (d: GearboxDesign): string => JSON.stringify(gearboxSnapshot(d).map((m) => [m.id, Math.round(m.value * 1e4)]));
+  const drive = (d: GearboxDesign): string => JSON.stringify(designDifferential(d));
+
+  for (const [label, d] of boxes) {
+    for (const control of gearboxControls(d)) {
+      it(`${label}: ${control.id} changes something`, () => {
+        const tries = controlTries(d, control, 0.15);
+        if (!tries.length) return; // A single available option leaves nothing to move.
+        const read = control.only === 'drive' ? drive : figures;
+        expect(tries.some((x) => read(editGearboxDesign(d, x.patch)) !== read(d))).toBe(true);
+      });
+    }
+  }
+
+  it('both types are covered, with every group of controls', () => {
+    const types = new Set(boxes.map(([, d]) => d.type));
+    expect([...types].sort()).toEqual(['layshaft', 'transaxle']);
+    const groups = new Set(boxes.flatMap(([, d]) => gearboxControls(d).map((c) => c.group)));
+    expect(groups.size).toBe(7);
+  });
+});
+
+describe('computed causes', () => {
+  const e30 = catalogueGearboxPresets().find((c) => c.id === 'manual-rwd')!.design;
+
+  it('name what moves a figure, from two runs of the model', () => {
+    const teeth = gearboxCausesOf(e30, 'teeth', gearboxControls(e30), 20);
+    expect(teeth.length).toBeGreaterThan(0);
+    expect(teeth.every((c) => c.effect.size >= 1)).toBe(true);
+    expect(teeth.map((c) => c.control)).toEqual(expect.arrayContaining(['faceWidth']));
+    const sync = gearboxCausesOf(e30, 'sync12', gearboxControls(e30), 10);
+    expect(sync.map((c) => c.control)).toEqual(expect.arrayContaining(['shiftForceN', 'cones.2']));
+  });
+
+  it('do not change the design they look at', () => {
+    const copy = JSON.stringify(e30);
+    gearboxCausesOf(e30, 'zeroTo100', gearboxControls(e30));
+    previewGearboxEffects(e30, { firstRatio: 4 });
+    expect(JSON.stringify(e30)).toBe(copy);
   });
 });
