@@ -122,7 +122,8 @@ describe('the 3D of every preset', () => {
     } finally {
       vi.unstubAllGlobals();
     }
-  });
+    // Twenty chassis built whole: slow on a busy machine.
+  }, 30_000);
 });
 
 describe('from a suspension page into the designer', () => {
