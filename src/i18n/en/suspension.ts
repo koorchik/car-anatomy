@@ -435,4 +435,11 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Ступенів свободи: {value}': 'Degrees of freedom: {value}',
   'Про цю компоновку загалом': 'About this layout in general',
   '{value} мм рейки': '{value} mm of rack',
+  // The Setup panel's way into the designer, and what the designer says of a design carried from it (from-setup.ts).
+  'Авто зі сторінки підвіски з твоїм налаштуванням.': 'The car from the suspension page with your setup.',
+  'висоту кузова': 'the ride height',
+  'тиск у шині': 'the tire pressure',
+  'Конструктор поки не задає {settings}: тут стоять заводські значення.': 'The designer cannot set {settings} yet: the factory values stand here.',
+  ' і ': ' and ',
+  'Відкрити в конструкторі': 'Open in the designer',
 };
