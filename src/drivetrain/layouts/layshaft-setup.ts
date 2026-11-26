@@ -2,7 +2,7 @@
 // ratios, 4, 5 or 6 speeds and another final drive, seen at once in 3D and in the figures.
 //
 // The setup holds only what the visitor changed; the description the core and the 3D build from is derived from the
-// factory one each time (setupDesc), so «Заводські» is the empty setup and gives the factory box back exactly.
+// factory one each time (setupDesc), so the factory button is the empty setup and gives the factory box back exactly.
 //
 // Every pair keeps the box's centre distance, its own module and its pressure angle: only the teeth change, and the
 // helix angle is what closes the centre distance with them, within SETUP_HELIX. A ratio asked on the slider is

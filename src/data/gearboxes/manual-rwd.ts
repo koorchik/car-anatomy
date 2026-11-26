@@ -14,9 +14,9 @@
 // face widths, hands and the sleeves' order (1/R, 2/3, 4/5, which a dogleg pattern implies) are estimates.
 
 import { applyGearboxEnglish } from '../../i18n/en/apply-gearbox.ts';
-import { GEARBOX_MANUAL_RWD_EN } from '../../i18n/en/gearbox-manual-rwd.ts';
+import { GEARBOX_MANUAL_RWD_ARTICLE_EN, GEARBOX_MANUAL_RWD_EN } from '../../i18n/en/gearbox-manual-rwd.ts';
 import { locale } from '../../i18n/locale.ts';
-import type { GearboxPage, GearboxRecord } from '../../drivetrain/catalogue.ts';
+import type { GearboxArticle, GearboxPage, GearboxRecord } from '../../drivetrain/catalogue.ts';
 
 const GETRAG_265_M3: GearboxRecord = {
   id: 'manual-rwd',
@@ -77,6 +77,38 @@ const GETRAG_265_M3: GearboxRecord = {
   ],
 };
 
-export const MANUAL_RWD: GearboxPage = { id: 'manual-rwd', base: GETRAG_265_M3, variants: [] };
+// The article (stage K1b). The layout: research §3.1; Getrag 265 in the BMW E12, E28, E24 and E23 and its dogleg
+// pattern: auto motor und sport (the record's sources); the TR-6060 in the Corvette C6: Tremec (tr6060-mz6.ts);
+// helical against spur pairs: NASA TM-106511, research §18.1.
+const ARTICLE: GearboxArticle = {
+  lead:
+    'Механічна коробка з проміжним валом стоїть за поздовжнім двигуном задньопривідного авто. Первинний вал входить у неї з боку зчеплення, вторинний виходить з другого боку на тій самій осі, а під ними лежить проміжний вал. ' +
+    'Шестерні всіх передач увесь час у зачепленні, а передачу вмикає муфта синхронізатора: вона з’єднує одну з них із вторинним валом.',
+  how:
+    'Головна пара постійно крутить проміжний вал від первинного. Кожна шестерня проміжного вала зачеплена з шестернею своєї передачі, а та сидить на вторинному валу вільно, на голчастому підшипнику. ' +
+    'Тому в нейтралі крутиться все, крім самого вторинного вала. Непряма передача йде через два зачеплення, і її число — добуток чисел головної пари й пари передачі. ' +
+    'Пряма передача з’єднує первинний вал із вторинним напряму, без жодного зачеплення. Задній хід іде через проміжну шестерню на окремій осі: третє зачеплення розвертає напрям. ' +
+    'У Getrag 265 BMW M3 E30 пряма п’ята, а перша стоїть на кулісі ліворуч і назад, окремо від решти (схема «dogleg»), тож друга й третя лежать на одній прямій.',
+  sound:
+    'Шестерні передач косозубі: зуб входить у зачеплення поступово, а не вдаряє всією шириною, тому такі пари тихіші за прямозубі. На стенді NASA косозуба пара була тихішою за прямозубу в середньому на 9 дБ. ' +
+    'Найтихіша пряма передача: жодна пара не передає моменту. На цій сторінці поки чути лише двигун, звук шестерень з’явиться пізніше.',
+  pros: [
+    'Пряма передача обходиться без зачеплень: найменші втрати й найтихіша робота',
+    'Вали співвісні, тож коробка вузька й лягає в тунель за поздовжнім двигуном',
+    'Шестерні постійно в зачепленні, а перемикає лише муфта: просто й міцно',
+  ],
+  cons: [
+    'Непряма передача втрачає на двох зачепленнях, а не на одному',
+    'Усі пари стоять одна за одною вздовж вала, тому коробка довга',
+    'Поперечному двигуну з переднім приводом не пасує: там стоїть двовальна коробка',
+  ],
+  cars: [
+    'BMW M3 (E30), 1986–1989: Getrag 265/5',
+    'BMW серій E12, E28, E24 і E23: інші версії Getrag 265',
+    'Chevrolet Corvette C6: Tremec TR-6060, шість передач',
+  ],
+};
 
-if (locale === 'en') applyGearboxEnglish(MANUAL_RWD, GEARBOX_MANUAL_RWD_EN);
+export const MANUAL_RWD: GearboxPage = { id: 'manual-rwd', base: GETRAG_265_M3, variants: [], article: ARTICLE };
+
+if (locale === 'en') applyGearboxEnglish(MANUAL_RWD, GEARBOX_MANUAL_RWD_EN, GEARBOX_MANUAL_RWD_ARTICLE_EN);
