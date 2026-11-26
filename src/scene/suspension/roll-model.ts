@@ -112,7 +112,7 @@ export class RollModel implements SceneModel<RollState> {
     this.chassis = chassis;
     this.view = view;
     const shown: Array<0 | 1> = view === 'front' ? [0] : view === 'rear' ? [1] : [0, 1];
-    const models = options.axles.map((a) => new IndependentAxleModel({ which: a.which, corner: a.corner, antiRollBar: a.antiRollBar }));
+    const models = options.axles.map((a) => new IndependentAxleModel({ which: a.which, corner: a.corner, antiRollBar: a.antiRollBar, barStripe: true }));
     const shell = view === 'car' ? (options.shell ?? null) : null;
     this.chassisModel = shell ? new ChassisModel(shell, { axles: { front: models[0]!, rear: models[1]! } }) : null;
     if (this.chassisModel) this.body.add(this.chassisModel.group);

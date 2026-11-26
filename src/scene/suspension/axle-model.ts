@@ -9,8 +9,9 @@
 //
 // The subframe, the towers, the bar and the rack are typical drawing: the hardpoints say where links meet the body,
 // not what the body or the bar look like (docs/suspension-model.md, the chassis section). The bar's ends turn about its
-// torsion section to keep each link its length, so the links never stretch as a steered strut turns them; a stripe
-// along the section runs from one arm's turn to the other's, so the bar is seen to twist in roll and only turn in heave.
+// torsion section to keep each link its length, so the links never stretch as a steered strut turns them; in the roll
+// scene a stripe along the section runs from one arm's turn to the other's, so the bar is seen to twist in roll and only
+// turn in heave.
 //
 // Every axle is a SceneModel<AxleFrame> (model-types.ts) with all of its optional methods, as a chassis needs them.
 
@@ -71,6 +72,8 @@ export interface IndependentAxleOptions {
   /** The car's wheel (CornerModelOptions.wheel). */
   wheel?: CornerModelOptions['wheel'];
   antiRollBar: boolean;
+  /** A stripe along the bar that shows its twist (the roll scene); left off elsewhere, where the bar is just a part. */
+  barStripe?: boolean;
 }
 
 const X = new THREE.Vector3(1, 0, 0);
@@ -320,7 +323,7 @@ export class IndependentAxleModel implements AxleModel {
     this.addSides(this.towers, towerLeft, towerRight);
 
     // ---- Anti-roll bar ----
-    if (options.antiRollBar) this.buildBar(this.barLayout(options.corner), options.which, key);
+    if (options.antiRollBar) this.buildBar(this.barLayout(options.corner), options.which, key, options.barStripe ?? false);
 
     // ---- Rack ----
     if (steer) {
@@ -433,14 +436,14 @@ export class IndependentAxleModel implements AxleModel {
     return { top, end, bend, middle, seat };
   }
 
-  private buildBar(layout: BarLayout, which: 'front' | 'rear', key: (k: string) => string): void {
+  private buildBar(layout: BarLayout, which: 'front' | 'rear', key: (k: string) => string, stripe: boolean): void {
     const m = this.m;
     const r = (BAR.diameter[which] / 2) * 10;
     // The torsion section across the car, from bend to bend, and on each side the arm from its bend to its end.
     const middle = tag(new THREE.Mesh(rodBetween(new THREE.Vector3(-layout.bend.x, layout.bend.y, layout.bend.z), layout.bend, r, 14), m.bar), key('susp.anti-roll-bar'));
     middle.castShadow = true;
     this.barGroup.add(middle);
-    this.buildStripe(layout, r, key);
+    if (stripe) this.buildStripe(layout, r, key);
     const inward = new THREE.Vector3(-1, 0, 0);
     const armPath = roundedPath([layout.bend.clone().addScaledVector(inward, BAR.bendM * 10), layout.bend, layout.end], BAR.bendM * 10);
     const armGeo = merge([
