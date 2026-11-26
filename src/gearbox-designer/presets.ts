@@ -51,6 +51,7 @@ export function designFromRecord(record: GearboxRecord): GearboxDesign {
   const drive = driveCarById(record.car);
   if (!drive) throw new Error(`no DriveCar for ${record.car}`);
   const layout = record.layout;
+  if (layout.kind === 'planetary') throw new Error(`${record.id}: the designer has no planetary type`);
   const alpha = layout.desc.pressureAngle;
   const a = layout.desc.centreMm;
   const pair = (p: { teeth: [number, number]; module: number; faceWidth: number; shift?: [number, number] }): PairSetting => ({

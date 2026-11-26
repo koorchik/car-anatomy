@@ -1,5 +1,5 @@
 // The keys of the suspension pages, as bindings for the shell's KeyMap (the plan of the whole car, the keys): Space is
-// the scene's event, ↑ and ↓ go to another scene, since the section has no gas. The views are the shell's (1/2/3, V).
+// the scene's event, ↑ and ↓ go to another scene, since the section has no gas, ← and → to another type of suspension. The views are the shell's (1/2/3, V).
 // Without the DOM, so the test of the keys binds them as the section does.
 
 import { t } from '../../i18n/t.ts';
@@ -11,6 +11,8 @@ export interface SuspensionKeyActions {
   event(): boolean;
   /** The previous (-1) or the next (1) scene. */
   scene(direction: -1 | 1): void;
+  /** The previous (-1) or the next (1) type of suspension. */
+  page(direction: -1 | 1): void;
 }
 
 /** The section's contexts, the most specific first. */
@@ -37,6 +39,16 @@ export function suspensionKeys(actions: SuspensionKeyActions): KeyBinding[] {
         if (inside(event.target, '.panel-scroll')) return false;
         event.preventDefault();
         actions.scene(event.code === 'ArrowUp' ? -1 : 1);
+      },
+    },
+    {
+      codes: ['ArrowLeft', 'ArrowRight'],
+      label: t('Інший тип підвіски'),
+      down: (event) => {
+        // A slider takes the arrows itself, as a page's control does.
+        if (inside(event.target, 'input, .panel-scroll')) return false;
+        event.preventDefault();
+        actions.page(event.code === 'ArrowLeft' ? -1 : 1);
       },
     },
   ];

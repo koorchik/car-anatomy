@@ -3,11 +3,15 @@
 // different pages does not touch the same file.
 
 import { layshaftSpec, type LayshaftDesc } from './layouts/layshaft.ts';
+import { planetarySpec, type PlanetaryDesc } from './layouts/planetary.ts';
 import { transaxleSpec, type TransaxleDesc } from './layouts/transaxle.ts';
 import type { GearboxSpec } from './spec.ts';
 
 /** Grows with each layout: dct, sequential, planetary… */
-export type GearboxLayout = { kind: 'layshaft'; desc: LayshaftDesc } | { kind: 'transaxle'; desc: TransaxleDesc };
+export type GearboxLayout =
+  | { kind: 'layshaft'; desc: LayshaftDesc }
+  | { kind: 'transaxle'; desc: TransaxleDesc }
+  | { kind: 'planetary'; desc: PlanetaryDesc };
 
 /** Figures as published, to compare with what the teeth give. */
 export interface PublishedGearbox {
@@ -65,5 +69,7 @@ export function gearboxSpec(record: GearboxRecord): GearboxSpec {
       return layshaftSpec(record.layout.desc);
     case 'transaxle':
       return transaxleSpec(record.layout.desc);
+    case 'planetary':
+      return planetarySpec(record.layout.desc);
   }
 }
