@@ -11,7 +11,7 @@ export interface DemoStep {
   gear: string;
   title: string;
   text: string;
-  /** A gear the camera turns to, by its id in the spec. */
+  /** A gear the step lights up, by its id in the spec; the camera stays where the visitor put it. */
   focus?: string;
 }
 
