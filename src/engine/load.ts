@@ -1,6 +1,7 @@
 // What the crank can drive: a dyno absorber now, a clutch, gearbox and car later. Described by plain data so the
 // same load can be built on the audio thread and in the main-thread copy of the simulation.
 
+import type { VehicleFrame } from '../vehicle/vehicle-frame.ts';
 import type { VehicleCommand, VehicleLoadSpec, VehicleReadings, VehicleSnapshot } from '../vehicle/vehicle-load.ts';
 import type { DynoCommand, DynoReadings, DynoSpec } from './dyno-load.ts';
 import type { EngineState } from './sim.ts';
@@ -66,6 +67,11 @@ export interface CrankLoad<R extends AnyLoadReadings = AnyLoadReadings> {
   /** Flat state for the hand-over between the audio thread and the main-thread copy, both ways (loadRestore). */
   snapshot?(): LoadSnapshot;
   restore?(s: LoadSnapshot): void;
+  /**
+   * What a page shows of the load now (a car's speed, gear and angles), plain data sent in every report. A new object,
+   * or `into` filled in place when it is a frame of this load (the main-thread copy reuses one).
+   */
+  frame?(into?: LoadFrame): LoadFrame;
 }
 
 /** The car on its drivetrain (stage K2c) adds its kinds to these unions. */
@@ -79,3 +85,4 @@ export type LoadReadings = DynoReadings;
 /** Readings of any load; a page reads the kind it put on the crank. */
 export type AnyLoadReadings = DynoReadings | VehicleReadings;
 export type LoadSnapshot = VehicleSnapshot;
+export type LoadFrame = VehicleFrame;

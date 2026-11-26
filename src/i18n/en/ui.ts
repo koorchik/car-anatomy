@@ -39,6 +39,7 @@ export const UI_EN: Record<string, string> = {
 
   // Menu, keys, time and the lost address (src/shell/menu-model.ts, key-help.ts, time.ts, not-found.ts)
   'Авто': 'Cars',
+  'В авто': 'In the car',
   'Каталог': 'Catalog',
   'Своя коробка': 'Design your own',
   'Своя підвіска': 'Design your own',

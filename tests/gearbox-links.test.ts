@@ -15,6 +15,7 @@ describe('the gearbox section', () => {
   it('registers manual-rwd as its first page, so the menu has somewhere to go', () => {
     const entry = SECTIONS.find((s) => s.id === 'gearboxes')!;
     expect(entry.openPages?.[0]).toBe('manual-rwd');
+    // The menu's item leads there (O3 builds the menu from the registry).
     expect(entry.pages?.[0]?.href).toBe('#/gearboxes/manual-rwd');
     expect(pageShown('gearboxes', 'manual-rwd')).toBe(true);
     // The transaxle page (stage K6a-geom), with its variant at page/variant.

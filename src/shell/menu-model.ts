@@ -26,6 +26,8 @@ const TAB_LABELS: Record<string, () => string> = {
   'engines/sump': () => t('Олива на треку'),
   'gearboxes/catalogue': () => t('Каталог'),
   'gearboxes/designer': () => t('Своя коробка'),
+  // Not a tab: the car mode's keys in the help «?» (src/ui/gearboxes/keys.ts).
+  'gearboxes/drive': () => t('В авто'),
   'suspensions/catalogue': () => t('Каталог'),
   'suspensions/designer': () => t('Своя підвіска'),
   'car/overview': () => t('Огляд'),
