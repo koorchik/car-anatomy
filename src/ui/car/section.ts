@@ -45,6 +45,8 @@ export class CarSection implements Section {
   private shown = false;
   private borrowed: Array<() => void> = [];
   private homedFor: FreezeOptions | null = null;
+  /** The model last posed by frame(). */
+  private posed: CarAssembly | null = null;
 
   mount(ctx: SectionContext): void {
     this.ctx = ctx;
@@ -54,7 +56,10 @@ export class CarSection implements Section {
     ctx.slots.title.add(titleHtml());
     this.listen();
     ctx.view.onChange((mode) => {
-      if (this.shown) this.model?.setView(mode);
+      if (!this.shown) return;
+      this.model?.setView(mode);
+      // A view may hide or show what the models pose: pose them again on the next frame.
+      this.posed = null;
     });
     window.__car = { stage: ctx.stage, section: this };
   }
@@ -150,6 +155,7 @@ export class CarSection implements Section {
     const longest = Math.max(...OVERVIEW_CARS.map((id) => carById(id)!.dimensions!.lengthM));
     this.ctx.stage.setModel(model, { home: HOME, frameScale: longest / car.dimensions!.lengthM });
     model.setView(this.ctx.view.mode);
+    this.posed = null;
     this.ctx.slots.partCard.hidden = true;
   }
 
@@ -166,6 +172,7 @@ export class CarSection implements Section {
     const { stage, slots } = this.ctx;
     if (this.model) stage.release(this.model);
     this.model = null;
+    this.posed = null;
     slots.partCard.hidden = true;
     for (const giveBack of this.borrowed.reverse()) giveBack();
     this.borrowed = [];
@@ -175,8 +182,14 @@ export class CarSection implements Section {
     const model = this.model;
     if (!model) return;
     const frozen = this.ctx.time.frozen;
-    this.frameState.engine.theta = frozen ? frozen.theta : 0;
-    model.update(this.frameState);
+    const theta = frozen ? frozen.theta : 0;
+    // The car stands still: its models are posed again only when the pose changes, since the chassis alone costs about
+    // a millisecond a pose.
+    if (model !== this.posed || theta !== this.frameState.engine.theta) {
+      this.frameState.engine.theta = theta;
+      model.update(this.frameState);
+      this.posed = model;
+    }
     if (!frozen) {
       this.homedFor = null;
     } else if (frozen !== this.homedFor) {
