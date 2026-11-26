@@ -5,6 +5,8 @@ import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
 import { evaluate } from '../src/designer/physics.ts';
 import { designToSpec } from '../src/designer/to-spec.ts';
 import { ALL_LAYERS, BalanceForces, arrowScale, massesOf, type ForceLayers } from '../src/engine/balance-forces.ts';
+import { BalancePhasors, sumAt, type PhasorView, type ViewOptions } from '../src/engine/balance-phasors.ts';
+import { ShownForces, sumOf } from '../src/engine/balance-shown.ts';
 import { buildEngine, pistonAcceleration, vibrationTable, type Engine } from '../src/engine/kinematics.ts';
 
 const engine = (id: string): Engine => buildEngine(engineById(id)!);
@@ -317,5 +319,141 @@ describe('arrow scale', () => {
       const owner = engines.find((e) => Math.abs(new BalanceForces(e, massesOf(e.spec)).primary * scale - longest) < 1e-9)!;
       expect(longest).toBeCloseTo(owner.spec.bore, 6);
     }
+  });
+});
+
+describe('one view at a time: the arrows the 3D layer draws', () => {
+  const OPTIONS: ViewOptions[] = [
+    { counterweights: false, shafts: false },
+    { counterweights: true, shafts: false },
+    { counterweights: true, shafts: true },
+  ];
+  const DEG = Math.PI / 180;
+
+  /** Every view and switch of an engine, with the arrows of each at a few crank angles checked against its sum. */
+  const addsUp = (bf: BalanceForces): void => {
+    const phasors = new BalancePhasors(bf);
+    const shown = new ShownForces(phasors);
+    const tolerance = bf.primary * 1e-9;
+    for (const name of phasors.views) {
+      for (const options of OPTIONS) {
+        const view = phasors.view(name, options);
+        for (let theta = 0; theta < 720; theta += 25) {
+          const arrows = shown.at(view, theta);
+          expect(arrows).toHaveLength(view.elements.length);
+          const got = sumOf(arrows);
+          const want = sumAt(view, theta);
+          const at = `${name} ${JSON.stringify(view.options)} at ${theta}°`;
+          expect(Math.abs(got.fx - want.fx), `fx, ${at}`).toBeLessThan(tolerance);
+          expect(Math.abs(got.fy - want.fy), `fy, ${at}`).toBeLessThan(tolerance);
+          expect(Math.abs(got.mx - want.mx), `pitch, ${at}`).toBeLessThan(tolerance * bf.lever);
+          expect(Math.abs(got.my - want.my), `yaw, ${at}`).toBeLessThan(tolerance * bf.lever);
+          // Each arrow is drawn where BalanceForces puts its force at this angle.
+          for (const a of arrows) {
+            const from = bf.arrows[a.slot]!;
+            expect([a.x, a.y, a.z], at).toEqual([from.x, from.y, from.z]);
+          }
+        }
+      }
+    }
+  };
+
+  it.each(EVERY_ENGINE)('%s: in each view the arrows shown add up to its sum', (id) => addsUp(forces(id)));
+
+  it('with balance shafts too', () => {
+    for (const shafts of [1, 2] as const) {
+      for (const id of ['i3', 'i4', 'i1', 'v6-90']) addsUp(forces(id, shafts));
+    }
+  });
+
+  it("a piston's arrow acts along its cylinder axis, and in the first order it is the arrow of BalanceForces", () => {
+    for (const id of ['i4', 'v6-90', 'v8-cross', 'b6', 'w12', 'vr6']) {
+      const bf = forces(id);
+      const phasors = new BalancePhasors(bf);
+      const shown = new ShownForces(phasors);
+      for (const name of ['order1', 'order2'] as const) {
+        const view = phasors.view(name);
+        for (let theta = 0; theta < 360; theta += 20) {
+          shown.at(view, theta).forEach((a, i) => {
+            const el = view.elements[i]!;
+            const c = bf.engine.cylinders.find((x) => x.n === el.cylinder)!;
+            const across = a.fx * Math.cos(c.alpha * DEG) - a.fy * Math.sin(c.alpha * DEG);
+            expect(Math.abs(across), `${id} cylinder ${c.n}`).toBeLessThan(bf.primary * 1e-9);
+            if (name === 'order1') {
+              expect(a.fx).toBeCloseTo(bf.arrows[a.slot]!.fx, 9);
+              expect(a.fy).toBeCloseTo(bf.arrows[a.slot]!.fy, 9);
+            }
+          });
+        }
+      }
+    }
+  });
+
+  /** Sum and couple of a view over a turn. */
+  const turn = (view: PhasorView): Array<{ force: number; couple: number; fx: number; fy: number; mx: number; my: number }> =>
+    Array.from({ length: 36 }, (_, i) => {
+      const s = sumAt(view, i * 10);
+      return { ...s, force: Math.hypot(s.fx, s.fy), couple: Math.hypot(s.mx, s.my) };
+    });
+
+  it('inline four, 2nd order: four arrows in phase and a vertical sum four times as long', () => {
+    const bf = forces('i4');
+    const phasors = new BalancePhasors(bf);
+    const shown = new ShownForces(phasors);
+    const view = phasors.view('order2');
+    for (let theta = 5; theta < 180; theta += 20) {
+      const arrows = shown.at(view, theta);
+      expect(arrows).toHaveLength(4);
+      for (const a of arrows) {
+        expect(a.kind).toBe('piston');
+        expect(a.fx).toBeCloseTo(arrows[0]!.fx, 9);
+        expect(a.fy).toBeCloseTo(arrows[0]!.fy, 9);
+      }
+      const sum = sumAt(view, theta);
+      expect(Math.abs(sum.fx)).toBeLessThan(bf.primary * 1e-9);
+      expect(sum.fy).toBeCloseTo(4 * arrows[0]!.fy, 9);
+      expect(Math.hypot(sum.mx, sum.my)).toBeLessThan(bf.primary * bf.lever * 1e-9);
+    }
+  });
+
+  it('inline six: no sum and no couple in any view, with counterweights or without', () => {
+    const phasors = new BalancePhasors(forces('i6'));
+    for (const name of phasors.views) {
+      for (const options of OPTIONS) {
+        for (const s of turn(phasors.view(name, options))) {
+          expect(s.force).toBeLessThan(phasors.forces.primary * 1e-6);
+          expect(s.couple).toBeLessThan(phasors.forces.primary * phasors.forces.lever * 1e-6);
+        }
+      }
+    }
+  });
+
+  it('cross-plane V8: without counterweights the 1st order and the turning masses each rock it with a couple that turns; with them, nothing', () => {
+    const phasors = new BalancePhasors(forces('v8-cross'));
+    const unit = phasors.forces.primary * phasors.forces.lever;
+    for (const name of ['order1', 'rotating'] as const) {
+      const bare = turn(phasors.view(name, { counterweights: false, shafts: false }));
+      const biggest = Math.max(...bare.map((s) => s.couple));
+      expect(biggest, name).toBeGreaterThan(unit);
+      // A couple that turns: the same size all round, pointing round the clock.
+      for (const s of bare) expect(s.couple / biggest, name).toBeGreaterThan(0.999);
+      expect(Math.hypot(bare[0]!.mx - bare[9]!.mx, bare[0]!.my - bare[9]!.my) / biggest, name).toBeCloseTo(Math.SQRT2, 3);
+      for (const s of bare) expect(s.force, name).toBeLessThan(phasors.forces.primary * 1e-6);
+      for (const s of turn(phasors.view(name, { counterweights: true, shafts: false }))) {
+        expect(s.couple, name).toBeLessThan(unit * 1e-6);
+        expect(s.force, name).toBeLessThan(phasors.forces.primary * 1e-6);
+      }
+    }
+  });
+
+  it('single: with counterweights the first-order sum is half a piston, turning against the crank', () => {
+    const bf = forces('i1');
+    const phasors = new BalancePhasors(bf);
+    const sums = turn(phasors.view('order1', { counterweights: true, shafts: false }));
+    for (const s of sums) expect(s.force).toBeCloseTo(bf.primary / 2, 9);
+    // Angles clockwise from +Y, as the crank turns: the sum goes the other way, by as much as the crank.
+    const angle = (s: { fx: number; fy: number }): number => Math.atan2(s.fx, s.fy) / DEG;
+    const step = ((angle(sums[1]!) - angle(sums[0]!) + 540) % 360) - 180;
+    expect(step).toBeCloseTo(-10, 6);
   });
 });
