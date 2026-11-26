@@ -5,17 +5,19 @@
 //
 // Every control changes a figure of the model on the designs it applies to (tests: "no control is dead"); a control
 // that only changes the looks would carry `only: 'looks'`, and none does yet. `car` is not a control: it says which
-// real car the design started from (to-spec.ts).
+// real car the design started from (to-spec.ts). The steering group (P13-core) is the front axle's.
 
 import {
-  axleOf, DAMPER_CHOICES, DRIVES, FRONT_LAYOUTS, isDriven, isPivot, isSolid, isWishbone, KNUCKLES, REAR_LAYOUTS,
-  SOLID_LATERALS, SOLID_LINKS, TYRES, type AxleEnd, type AxleKey, type AxleParams, type ChassisDesign, type DesignKey,
+  axleOf, BOX_GEARS, DAMPER_CHOICES, DAMPER_KINDS, DRIVES, FRONT_LAYOUTS, isDriven, isPivot, isSolid, isWishbone, KNUCKLES,
+  REAR_LAYOUTS, SOLID_LATERALS, SOLID_LINKS, SPRING_KINDS, STEERING_ASSISTS, STEERING_GEARS, TYRES, type AxleEnd,
+  type AxleKey, type AxleParams, type ChassisDesign, type DesignKey,
 } from './design.ts';
 
 export interface ChassisControl {
   key: DesignKey;
-  /** 'spring' is a number that may be null (the typical rate). */
-  kind: 'number' | 'choice' | 'toggle' | 'spring';
+  /** 'spring' is a number that may be null (the typical rate); 'auto' too, null meaning what the template's geometry
+   *  gives (the Ackermann share of its steering arms). */
+  kind: 'number' | 'choice' | 'toggle' | 'spring' | 'auto';
   /** The values of a choice on this design. */
   options?: (d: ChassisDesign) => readonly (string | number)[];
   /** Whether the control means anything on this design; absent: always. */
@@ -36,6 +38,7 @@ const CAR_CONTROLS: readonly ChassisControl[] = [
   { key: 'driveFront', kind: 'number', applies: (d) => d.drive === 'awd' },
   { key: 'finalDrive', kind: 'number', applies: (d) => diffOnAxle(d, 'F') || diffOnAxle(d, 'R') },
   { key: 'tyre', kind: 'choice', options: () => TYRES },
+  { key: 'dampers', kind: 'choice', options: () => DAMPER_KINDS },
 ];
 
 type AxleRule = (a: AxleParams, end: AxleEnd, d: ChassisDesign) => boolean;
@@ -59,6 +62,9 @@ const adjustable: AxleRule = (a) => a.layout !== 'swing-axle';
  *  joint is its pivot). */
 const shafts: AxleRule = (a, end, d) => isDriven(d.drive, end) && a.layout !== 'swing-axle' && a.layout !== 'live-axle';
 const ownDamper: AxleRule = (a) => a.damper === 'custom';
+const rocker: AxleRule = (a) => a.layout === 'pushrod';
+/** Leaves are the spring of a leaf-sprung axle. */
+const springChoice: AxleRule = (a) => !(isSolid(a.layout) && a.solidLateral === 'leaf');
 const withBar: AxleRule = (a) => a.barMm > 0;
 /** Inboard brakes change where the brake torque reacts only where the hub and the differential are on different
  *  parts: not on a live axle (the differential turns with it) nor on a swing axle (the shaft is the arm). On a de Dion
@@ -106,18 +112,22 @@ const AXLE_CONTROLS: readonly AxleControl[] = [
   { key: 'beamBushInMm', kind: 'number', applies: beam, end: 'R' },
   { key: 'beamBushDzMm', kind: 'number', applies: beam, end: 'R' },
   { key: 'beamTorsionNmRad', kind: 'number', applies: beam, end: 'R' },
-  { key: 'solidLateral', kind: 'choice', options: () => SOLID_LATERALS, applies: solid, end: 'R' },
-  { key: 'solidLinks', kind: 'choice', options: () => SOLID_LINKS, applies: rodLateral, end: 'R' },
-  { key: 'lowerLinkMm', kind: 'number', applies: linked, end: 'R' },
-  { key: 'upperLinkMm', kind: 'number', applies: linked, end: 'R' },
-  { key: 'linkAngleDeg', kind: 'number', applies: linked, end: 'R' },
-  { key: 'upperLinkAngleDeg', kind: 'number', applies: linked, end: 'R' },
-  { key: 'lateralZMm', kind: 'number', applies: rodLateral, end: 'R' },
+  { key: 'solidLateral', kind: 'choice', options: () => SOLID_LATERALS, applies: solid },
+  { key: 'solidLinks', kind: 'choice', options: () => SOLID_LINKS, applies: rodLateral },
+  { key: 'lowerLinkMm', kind: 'number', applies: linked },
+  { key: 'upperLinkMm', kind: 'number', applies: linked },
+  { key: 'linkAngleDeg', kind: 'number', applies: linked },
+  { key: 'upperLinkAngleDeg', kind: 'number', applies: linked },
+  { key: 'lateralZMm', kind: 'number', applies: rodLateral },
   { key: 'diffOutputYMm', kind: 'number', applies: shafts },
   { key: 'diffOutputDzMm', kind: 'number', applies: shafts },
   { key: 'camberDeg', kind: 'number', applies: adjustable },
   { key: 'toeDeg', kind: 'number', applies: adjustable },
   { key: 'springNmm', kind: 'spring' },
+  { key: 'springKind', kind: 'choice', options: () => SPRING_KINDS, applies: springChoice },
+  { key: 'rockerRatio', kind: 'number', applies: rocker },
+  { key: 'rockerProgressionDeg', kind: 'number', applies: rocker },
+  { key: 'thirdSpringNmm', kind: 'number', applies: rocker },
   { key: 'damper', kind: 'choice', options: () => DAMPER_CHOICES },
   { key: 'damperCompression', kind: 'number', applies: ownDamper },
   { key: 'damperRebound', kind: 'number', applies: ownDamper },
@@ -131,6 +141,19 @@ const AXLE_CONTROLS: readonly AxleControl[] = [
   { key: 'tyreAspect', kind: 'number' },
   { key: 'rimIn', kind: 'number' },
   { key: 'brakeInboard', kind: 'toggle', applies: inboard },
+  // Steering. A solid axle takes a box; a box's ratio and a rack's travel each mean something only with their gear.
+  {
+    key: 'steeringGear',
+    kind: 'choice',
+    options: (d, end) => (axleOf(d, end).layout === 'live-axle' ? BOX_GEARS : STEERING_GEARS),
+    end: 'F',
+  },
+  { key: 'rackMmPerRev', kind: 'number', applies: (a) => a.steeringGear === 'rack', end: 'F' },
+  { key: 'boxRatio', kind: 'number', applies: (a) => a.steeringGear !== 'rack', end: 'F' },
+  { key: 'variableRatio', kind: 'number', end: 'F' },
+  { key: 'assist', kind: 'choice', options: () => STEERING_ASSISTS, end: 'F' },
+  { key: 'ackermann', kind: 'auto', end: 'F' },
+  { key: 'dragLinkDeg', kind: 'number', applies: (a) => a.layout === 'live-axle', end: 'F' },
 ];
 
 /** Every control of the designer: the car's, then the front axle's, then the rear's. */

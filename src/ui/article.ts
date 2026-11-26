@@ -60,7 +60,8 @@ const figures = (engine: Engine): Array<[string, string]> => {
 
 /** The gearbox row: the gearbox of each car with this engine, when its page can be opened (the whole-car plan's cross links). */
 const gearboxRows = (s: EngineSpec): string => {
-  const pages = pageIndex({ gearboxes: (page) => pageShown('gearboxes', page) });
+  // A variant's address (page/variant) opens with its page.
+  const pages = pageIndex({ gearboxes: (target) => pageShown('gearboxes', target.split('/')[0]!) });
   return carsWithEngine(s.id, CAR_LIST)
     .flatMap((car) =>
       carLinks(car, pages)

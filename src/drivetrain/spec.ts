@@ -152,6 +152,20 @@ export interface GearboxSpec {
    * output shaft and the final drive is the car's (DriveCar.finalDrive).
    */
   finalDrive?: FinalDriveDef;
+  /** Where the plate packs of an automatic's clutches and brakes sit, for the 3D. Layouts without packs leave it out. */
+  packs?: PackPlace[];
+}
+
+/** A clutch's or brake's plate pack round the axis (layouts/planetary.ts), in mm. */
+export interface PackPlace {
+  element: string;
+  /** Middle of the pack, mm behind the gearbox front face (like GearDef.z). */
+  z: number;
+  /** Inner and outer radius of the plates, mm. */
+  rIn: number;
+  rOut: number;
+  /** Friction plates; as many steel plates sit between them. */
+  plates: number;
 }
 
 export interface FinalDriveDef {

@@ -31,7 +31,8 @@
 // A split knuckle's pose carries its turn in the carrier as the eighth number; the strut and its spring sit on the
 // carrier, the wheel on the knuckle.
 
-import type { AnyCornerLinkage, AxleSpec, CornerLinkage, Vec3 } from './spec.ts';
+import type { AnyCornerLinkage, AxleSpec, CornerLinkage, RockerSpec, Vec3 } from './spec.ts';
+import { Rocker } from './rocker.ts';
 import { CornerSolver, POSE_SIZE, type SolveResult } from './solve.ts';
 import { PivotSolver } from './solve-pivot.ts';
 import { cross, dist, dot, nlerpInto, rotateQuatBy, scale, sub, unit } from './vec.ts';
@@ -127,7 +128,11 @@ type AxisSource =
 
 /** The wheel end of a spring or damper that is not on the strut: on the knuckle (or a split knuckle's carrier), on a
  *  wishbone (rigid with it, turning about its pivot axis), or on a rod's own line. */
-type Mount =
+/** Where a spring or damper's wheel end is, and the rocker between it and the element when there is one (a pushrod:
+ *  the wheel end is then the rod's outer end). */
+type Mount = MountPoint & { rocker: Rocker | null };
+
+type MountPoint =
   | { kind: 'knuckle'; body: Vec3; wheel: Vec3 }
   /** On a wishbone: its pivot `front` and unit `axis`, the ball joint at design, and at design the ball's arm square to
    *  the axis (r0), the wheel end from the pivot (q), axis × q and axis·q, so measuring allocates nothing. */
@@ -156,6 +161,8 @@ export class Axle<L extends AnyCornerLinkage = CornerLinkage> {
   private readonly u = new Float64Array(3);
   private readonly w = new Float64Array(3);
   private readonly pv = new Float64Array(3);
+  private readonly e = new Float64Array(3);
+  private readonly ev = new Float64Array(3);
 
   private tables: AxleTable | null = null;
 
@@ -202,8 +209,12 @@ export class Axle<L extends AnyCornerLinkage = CornerLinkage> {
                 upper: [rodIndex(links.virtualAxis.upper[0]), rodIndex(links.virtualAxis.upper[1])],
               }
             : null;
-    const mount = (body: Vec3, wheel: Vec3 | 'strut', on: string | undefined): Mount | null => {
+    const mount = (body: Vec3, wheel: Vec3 | 'strut', on: string | undefined, rockerSpec?: RockerSpec): Mount | null => {
       if (wheel === 'strut') return null;
+      const at = point(body, wheel, on);
+      return { ...at, rocker: rockerSpec ? new Rocker(rockerSpec, wheel) : null };
+    };
+    const point = (body: Vec3, wheel: Vec3, on: string | undefined): MountPoint => {
       if (!on) return { kind: 'knuckle', body, wheel };
       const arm = links.wishbones.find((w) => w.id === on);
       if (arm) {
@@ -218,8 +229,8 @@ export class Axle<L extends AnyCornerLinkage = CornerLinkage> {
       const d = sub(rod.knuckle, rod.body);
       return { kind: 'rod', body, rodBody: rod.body, rodKnuckle: rod.knuckle, along: dot(sub(wheel, rod.body), d) / dot(d, d) };
     };
-    this.springMount = mount(spec.spring.body, spec.spring.wheel, spec.spring.on);
-    this.damperMount = mount(spec.damper.body, spec.damper.wheel, spec.damper.on);
+    this.springMount = mount(spec.spring.body, spec.spring.wheel, spec.spring.on, spec.spring.rocker);
+    this.damperMount = mount(spec.damper.body, spec.damper.wheel, spec.damper.on, spec.damper.rocker);
     const seats = spec.spring.strutSeats;
     this.seats = seats ? seats.upperM + seats.lowerM : 0;
     const shaft = spec.halfshaft;
@@ -396,12 +407,15 @@ export class Axle<L extends AnyCornerLinkage = CornerLinkage> {
     this.solver.point(pose, b.knuckle, q);
     const ay = a.steer ? rack : 0;
     const by = b.steer ? rack : 0;
+    const rackX = this.solver.rackX(rack);
+    const ax = a.steer ? rackX : 0;
+    const bx = b.steer ? rackX : 0;
     // Lines P + s·d (from the rod's knuckle end to its body end) and Q + t·e, w = P − Q. Scalars: the 3D may call this
     // every frame.
-    const dx = a.body[0] - p[0];
+    const dx = a.body[0] + ax - p[0];
     const dy = a.body[1] + ay - p[1];
     const dz = a.body[2] - p[2];
-    const ex = b.body[0] - q[0];
+    const ex = b.body[0] + bx - q[0];
     const ey = b.body[1] + by - q[1];
     const ez = b.body[2] - q[2];
     const wx = p[0] - q[0];
@@ -479,11 +493,15 @@ export class Axle<L extends AnyCornerLinkage = CornerLinkage> {
       pv[1] = rate * (az * relx - ax * relz);
       pv[2] = rate * (ax * rely - ay * relx);
     }
-    const lx = p[0] - m.body[0];
-    const ly = p[1] - m.body[1];
-    const lz = p[2] - m.body[2];
+    // Through a rocker the element's end is the rocker's, moved by the rod from p.
+    const end = m.rocker ? this.e : p;
+    const endV = m.rocker ? this.ev : pv;
+    if (m.rocker) m.rocker.element(p, pv, this.e, this.ev);
+    const lx = end[0] - m.body[0];
+    const ly = end[1] - m.body[1];
+    const lz = end[2] - m.body[2];
     const L = Math.hypot(lx, ly, lz);
-    const mr = -(lx * pv[0] + ly * pv[1] + lz * pv[2]) / L;
+    const mr = -(lx * endV[0] + ly * endV[1] + lz * endV[2]) / L;
     if (which === 'spring') {
       out.springLen = L;
       out.mrSpring = mr;

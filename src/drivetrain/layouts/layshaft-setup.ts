@@ -45,7 +45,8 @@ export const factorySetup = (factory: LayshaftDesc, finalDrive: number): Layshaf
 
 /** Whether a setup changes nothing. */
 export const isFactory = (factory: LayshaftDesc, finalDrive: number, setup: LayshaftSetup): boolean =>
-  setup.speeds === factory.speeds.length && Object.keys(setup.teeth).length === 0 && setup.finalDrive === finalDrive;
+  // Teeth of an added speed wait in the setup after the count drops again; they change nothing then.
+  setup.speeds === factory.speeds.length && Object.keys(setup.teeth).every((i) => Number(i) >= setup.speeds) && setup.finalDrive === finalDrive;
 
 const withTeeth = (setup: LayshaftSetup, speed: PairDesc | 'direct', index: number): PairDesc | 'direct' => {
   const teeth = setup.teeth[index];

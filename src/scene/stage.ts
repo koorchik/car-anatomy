@@ -75,6 +75,43 @@ export interface PartPick {
   system: string | null;
 }
 
+/**
+ * The part a ray names among its hits, nearest first: a drilling drawn over everything as it is seen, then the first
+ * solid part, then the first glass one, and an outer shell that wraps everything (a car's body, userData.pickLast) only
+ * when no other glass answers. Hidden objects and parts without a card are passed over.
+ */
+export function pickFrom(hits: THREE.Intersection[], infoOf: (key: string) => PartInfo | null): PartPick | null {
+  const shown = (hit: THREE.Intersection): boolean => {
+    for (let obj: THREE.Object3D | null = hit.object; obj; obj = obj.parent) if (!obj.visible) return false;
+    return true;
+  };
+  const picked = (hit: THREE.Intersection, key: string, info: PartInfo): PartPick => ({ key, info, system: systemOf(hit.object) });
+  // Drillings inside a solid shaft are drawn over everything, so they are picked as they are seen.
+  for (const hit of hits) {
+    const key = hit.object.userData.overlay && shown(hit) ? partKeyOf(hit) : undefined;
+    const info = key ? infoOf(key) : null;
+    if (key && info) return picked(hit, key, info);
+  }
+  let fallback: PartPick | null = null;
+  // An outer shell that wraps everything (a car's body, userData.pickLast) answers only when no other glass does.
+  let last: PartPick | null = null;
+  for (const hit of hits) {
+    if (!shown(hit)) continue;
+    const key = partKeyOf(hit);
+    if (!key) continue;
+    const info = infoOf(key);
+    if (!info) continue;
+    const material = (hit.object as THREE.Mesh).material as THREE.Material;
+    if (material.transparent) {
+      if (hit.object.userData.pickLast) last ??= picked(hit, key, info);
+      else fallback ??= picked(hit, key, info);
+      continue;
+    }
+    return picked(hit, key, info);
+  }
+  return fallback ?? last;
+}
+
 /** How a model arrives on the stage. */
 export interface ModelOptions {
   /** Direction from the model toward the camera when the view is reset; the stage's own three-quarter view if left out. */
@@ -417,32 +454,7 @@ export class Stage {
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
     const hits = this.raycaster.intersectObjects([this.model.group, this.extras], true);
-    const shown = (hit: THREE.Intersection): boolean => {
-      for (let obj: THREE.Object3D | null = hit.object; obj; obj = obj.parent) if (!obj.visible) return false;
-      return true;
-    };
-    const picked = (hit: THREE.Intersection, key: string, info: PartInfo): PartPick => ({ key, info, system: systemOf(hit.object) });
-    // Drillings inside a solid shaft are drawn over everything, so they are picked as they are seen.
-    for (const hit of hits) {
-      const key = hit.object.userData.overlay && shown(hit) ? partKeyOf(hit) : undefined;
-      const info = key ? this.infoOf(key) : null;
-      if (key && info) return picked(hit, key, info);
-    }
-    let fallback: PartPick | null = null;
-    for (const hit of hits) {
-      if (!shown(hit)) continue;
-      const key = partKeyOf(hit);
-      if (!key) continue;
-      const info = this.infoOf(key);
-      if (!info) continue;
-      const material = (hit.object as THREE.Mesh).material as THREE.Material;
-      if (material.transparent) {
-        fallback ??= picked(hit, key, info);
-        continue;
-      }
-      return picked(hit, key, info);
-    }
-    return fallback;
+    return pickFrom(hits, (key) => this.infoOf(key));
   }
 
   render(dtSeconds: number): void {

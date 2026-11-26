@@ -9,6 +9,7 @@ import { loadEngines } from '../ui/engines/load.ts';
 import { GEARBOX_PAGES_SHOWN, loadGearboxes } from '../ui/gearboxes/load.ts';
 import { SUSPENSION_PAGE_IDS } from '../data/suspension-links.ts';
 import { loadSuspensions } from '../ui/suspensions/load.ts';
+import { loadCar } from '../ui/car/load.ts';
 import type { Route, SectionId } from './routes.ts';
 import type { Section } from './section.ts';
 
@@ -57,6 +58,8 @@ export const SECTIONS: readonly SectionEntry[] = [
     pages: [{ key: 'catalogue', href: `#/gearboxes/${GEARBOX_PAGES_SHOWN[0]!}` }],
   },
   { id: 'suspensions', load: loadSuspensions, openPages: SUSPENSION_PAGE_IDS, pages: [{ key: 'catalogue', href: '#/suspensions' }] },
+  // The overview of a car, at its address without a menu item until stage C1c gives it a page.
+  { id: 'car', load: loadCar, openPages: [] },
 ];
 
 /** The entry of the section a route belongs to. */

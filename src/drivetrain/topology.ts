@@ -10,10 +10,12 @@
 //    with the output reaction unknown. λ of a mesh is its tangential force (F_t = 2λ/m_t) and rolling power.
 // 7. Mesh phases: the starting angle of every gear so that no teeth overlap, from the formula of research §2.2.
 // 8. Pair geometry: every mesh's centre distance must match the axes in the data (profile shift included).
+// 9. Planets: a member with a carrier and a count stands for that many planets spaced evenly round the carrier's
+//    axis; every copy must mesh with the same sun and ring (the assembly condition) and clear its neighbours.
 //
 // The audio thread never calls this: it gets flat arrays from the solver stage. Kinematics only, no DOM, no text.
 
-import { direction, meshPhase, pairGeometry, type PairGeometry, wrap } from './gear-geometry.ts';
+import { direction, gearGeometry, internalMeshPhase, meshPhase, pairGeometry, type PairGeometry, wrap } from './gear-geometry.ts';
 import { type Matrix, multiply, nullSpace, solveMinNorm } from './linalg.ts';
 import type { GearboxSpec, GearDef } from './spec.ts';
 
@@ -22,6 +24,8 @@ const STEEL_DENSITY = 7850;
 const ZERO = 1e-9;
 /** How far the axes in the data may sit from a pair's working centre distance, mm. */
 const CENTRE_TOLERANCE = 1e-3;
+/** A ring gear's band outside its reference circle, in modules (an estimate for its inertia). */
+const RING_RIM = 4;
 
 /**
  * What a state does with the input and the output:
@@ -99,6 +103,21 @@ export interface Gearbox {
   states: StateInfo[];
   /** Angle of tooth 0 of every gear with every member at angle 0, rad. */
   phases: Record<string, number>;
+  /**
+   * Planets by member id: where each copy stands round its carrier's axis with the carrier at angle 0 (rad, the gear
+   * angle convention), and, per planet gear, each copy's tooth-0 angle with every member at angle 0. Copy 0 is the
+   * planet's axis in the data, so its phase is `phases[gear]`.
+   */
+  planets: Record<string, PlanetCopies>;
+}
+
+export interface PlanetCopies {
+  carrier: string;
+  /** Distance from the carrier's axis to the planets' axes, mm. */
+  radius: number;
+  /** Direction of each copy from the carrier's axis, rad. */
+  angles: number[];
+  phases: Record<string, number[]>;
 }
 
 const cache = new WeakMap<GearboxSpec, Gearbox>();
@@ -134,12 +153,27 @@ export function buildGearbox(spec: GearboxSpec): Gearbox {
     if (!(g.module > 0) || !(g.faceWidth > 0)) throw new Error(`${spec.id}: gear ${g.id} needs a positive module and face width`);
   }
 
-  // 1. Inertias.
+  // 1. Inertias. A planet member stands for `count` planets, and their mass orbits with the carrier.
   const inertia = spec.members.map((m) => m.inertia ?? 0);
   for (const g of spec.gears) {
     const r = (g.module * g.teeth) / Math.cos((g.helix * Math.PI) / 180) / 2000;
     const bore = (g.bore ?? 0) / 2000;
-    inertia[at(g.member, `gear ${g.id}`)]! += (STEEL_DENSITY * Math.PI * (g.faceWidth / 1000) * (r ** 4 - bore ** 4)) / 2;
+    const owner = spec.members[at(g.member, `gear ${g.id}`)]!;
+    const count = owner.carrier ? (owner.count ?? 1) : 1;
+    if (g.internal) {
+      // A ring: a steel band from its reference circle out to a rim of RING_RIM modules; its drum is member inertia.
+      const rOut = r + (RING_RIM * g.module) / 1000;
+      inertia[at(g.member, `gear ${g.id}`)]! += (STEEL_DENSITY * Math.PI * (g.faceWidth / 1000) * (rOut ** 4 - r ** 4)) / 2;
+      continue;
+    }
+    const spin = (STEEL_DENSITY * Math.PI * (g.faceWidth / 1000) * (r ** 4 - bore ** 4)) / 2;
+    inertia[at(g.member, `gear ${g.id}`)]! += count * spin;
+    if (owner.carrier) {
+      const mass = STEEL_DENSITY * Math.PI * (g.faceWidth / 1000) * (r ** 2 - bore ** 2);
+      const own = axisOf(owner.id);
+      const centre = axisOf(owner.carrier);
+      inertia[at(owner.carrier, `carrier of ${owner.id}`)]! += count * mass * ((Math.hypot(own.x - centre.x, own.y - centre.y) / 1000) ** 2);
+    }
   }
 
   // 2. Permanent links, with the geometry of every mesh checked against the axes.
@@ -164,7 +198,7 @@ export function buildGearbox(spec: GearboxSpec): Gearbox {
       throw new Error(`${spec.id}: mesh ${mesh.a}/${mesh.b}: only a bevel pair, and every bevel pair, has one axis across the shafts`);
     }
     const axisDistance = bevel ? 0 : Math.hypot(axisB.x - axisA.x, axisB.y - axisA.y);
-    if (internal) throw new Error(`${spec.id}: internal mesh ${mesh.a}/${mesh.b} needs the planetary stage`);
+    if (internal && !mesh.carrier) throw new Error(`${spec.id}: internal mesh ${mesh.a}/${mesh.b} needs its carrier`);
     const geometry = pairGeometry(a, b);
     if (!bevel && Math.abs(geometry.centre - axisDistance) > CENTRE_TOLERANCE) {
       throw new Error(`${spec.id}: mesh ${mesh.a}/${mesh.b} runs at ${geometry.centre.toFixed(4)} mm but its axes are ${axisDistance.toFixed(4)} mm apart`);
@@ -197,11 +231,13 @@ export function buildGearbox(spec: GearboxSpec): Gearbox {
     elementRows[e.id] = a.map((v, k) => v - (b ? b[k]! : 0));
   }
 
-  const box: Gearbox = { spec, members, inertia, links, P, basis, elementRows, meshes, states: [], phases: {} };
+  const box: Gearbox = { spec, members, inertia, links, P, basis, elementRows, meshes, states: [], phases: {}, planets: {} };
   // 5–6. States.
   box.states = spec.states.map((s) => analyseState(box, s.closed, s.name));
   // 7. Phases.
   box.phases = meshPhases(spec, meshes, gearOf);
+  // 9. Planets.
+  box.planets = planetCopies(spec, meshes, box.phases, gearOf, axisOf);
   cache.set(spec, box);
   return box;
 }
@@ -302,7 +338,7 @@ function meshPhases(spec: GearboxSpec, meshes: MeshInfo[], gearOf: (id: string) 
         const from = gearOf(id);
         const to = gearOf(mesh.a === id ? mesh.b : mesh.a);
         const phi = mesh.a === id ? mesh.direction : mesh.direction + Math.PI;
-        const theta = meshPhase(phases[id]!, from.teeth, to.teeth, phi);
+        const theta = mesh.internal ? internalMeshPhase(phases[id]!, from.teeth, to.teeth, phi, !!from.internal) : meshPhase(phases[id]!, from.teeth, to.teeth, phi);
         if (to.id in phases) {
           const pitch = (2 * Math.PI) / to.teeth;
           const off = wrap(theta - phases[to.id]!) % pitch;
@@ -316,6 +352,74 @@ function meshPhases(spec: GearboxSpec, meshes: MeshInfo[], gearOf: (id: string) 
     }
   }
   return phases;
+}
+
+/**
+ * Every planet member's copies round its carrier: copy k stands at 2πk/n from copy 0 (the planet's axis in the data).
+ * Its phase follows from its mesh with a gear on the carrier's axis (the sun, or the ring when there is no sun), and
+ * every other mesh of the planet must then agree to a tooth: for a simple set that is (z_s + z_r)/n whole. Neighbours
+ * must not touch tip to tip.
+ */
+function planetCopies(
+  spec: GearboxSpec,
+  meshes: MeshInfo[],
+  phases: Record<string, number>,
+  gearOf: (id: string) => GearDef,
+  axisOf: (member: string) => { x: number; y: number },
+): Record<string, PlanetCopies> {
+  const out: Record<string, PlanetCopies> = {};
+  for (const member of spec.members) {
+    if (!member.carrier) continue;
+    const n = member.count ?? 1;
+    if (!Number.isInteger(n) || n < 1) throw new Error(`${spec.id}: planet ${member.id} has a count of ${n}`);
+    const centre = axisOf(member.carrier);
+    const own = axisOf(member.id);
+    const radius = Math.hypot(own.x - centre.x, own.y - centre.y);
+    const first = direction(centre, own);
+    const angles = Array.from({ length: n }, (_, k) => wrap(first + (2 * Math.PI * k) / n));
+    const copies: PlanetCopies = { carrier: member.carrier, radius, angles, phases: {} };
+    for (const gear of spec.gears.filter((g) => g.member === member.id)) {
+      const own = meshes.filter((m) => m.a === gear.id || m.b === gear.id);
+      for (const m of own) {
+        const other = m.a === gear.id ? m.memberB : m.memberA;
+        if (spec.members.find((x) => x.id === other)?.carrier) throw new Error(`${spec.id}: planet ${gear.id} meshes with another planet, which is not modelled`);
+      }
+      if (n > 1) {
+        const tip = gearGeometry(gear).ra;
+        if (2 * radius * Math.sin(Math.PI / n) <= 2 * tip) {
+          throw new Error(`${spec.id}: ${n} planets ${gear.id} touch tip to tip on a ${radius.toFixed(2)} mm circle`);
+        }
+      }
+      const partnerOf = (m: MeshInfo) => gearOf(m.a === gear.id ? m.b : m.a);
+      const lead = own.find((m) => !partnerOf(m).internal) ?? own[0];
+      copies.phases[gear.id] = angles.map((angle, k) => {
+        if (!lead) return phases[gear.id] ?? 0;
+        const partner = partnerOf(lead);
+        // Direction from the partner's centre (on the carrier's axis) to this copy, and the copy's phase from it.
+        const theta =
+          k === 0
+            ? phases[gear.id]!
+            : partner.internal
+              ? internalMeshPhase(phases[partner.id]!, partner.teeth, gear.teeth, angle, true)
+              : meshPhase(phases[partner.id]!, partner.teeth, gear.teeth, angle);
+        for (const m of own) {
+          if (m === lead && k > 0) continue;
+          const mate = partnerOf(m);
+          const expected = mate.internal
+            ? internalMeshPhase(theta, gear.teeth, mate.teeth, angle + Math.PI, false)
+            : meshPhase(theta, gear.teeth, mate.teeth, angle + Math.PI);
+          const pitch = (2 * Math.PI) / mate.teeth;
+          const off = wrap(expected - phases[mate.id]!) % pitch;
+          if (Math.min(off, pitch - off) > 1e-6) {
+            throw new Error(`${spec.id}: ${n} planets ${gear.id} cannot all mesh with ${mate.id} (assembly condition)`);
+          }
+        }
+        return theta;
+      });
+    }
+    out[member.id] = copies;
+  }
+  return out;
 }
 
 /** The gear's angle when its member has turned by `memberAngle` (rad, positive in the crank's direction). */

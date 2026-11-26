@@ -29,6 +29,7 @@ import {
 } from '../src/suspension-designer/sensitivity.ts';
 import { withDesignOnlyGeometry } from '../src/suspension-designer/geometry.ts';
 import { G } from '../src/suspension/forces.ts';
+import { evaluateSteering } from '../src/suspension/evaluate-steering.ts';
 
 const DEG = Math.PI / 180;
 const KEYS = [...CAR_KEYS, ...AXLE_KEYS.flatMap((k) => [`${k}F`, `${k}R`])].sort();
@@ -543,6 +544,73 @@ describe('sensitivity', () => {
   });
 });
 
+describe('the steering group (P13-core)', () => {
+  it('turns the inner wheel to the lock on every front layout and gear, random designs too', () => {
+    const designs: ChassisDesign[] = [];
+    for (const layoutF of FRONT_LAYOUTS) {
+      const d = editChassis(DEFAULT_CHASSIS, { drive: 'rwd', layoutF });
+      designs.push(d, editChassis(d, { steeringGearF: 'worm-roller' }));
+    }
+    const random = seededRandom(13);
+    for (let i = 0; i < 20; i++) designs.push(randomChassis(random));
+    for (const d of designs) {
+      const s = evaluateSteering(chassisToSpec(d))!;
+      // The knuckle's stop, not where the walk out from straight ahead happened to give up.
+      expect(Math.max(s.lock.left, s.lock.right) / DEG, `${d.layoutF} ${d.steeringGearF}`).toBeCloseTo(38, 3);
+    }
+  });
+
+  it('steers a live axle with a box, whatever a link says, and takes only numbers or null for the arms', () => {
+    const d = resolveChassis({ ...DEFAULT_CHASSIS, drive: 'rwd', layoutF: 'live-axle', steeringGearF: 'rack', ackermannF: 'wide', assistF: 'magic' });
+    expect(d.layoutF).toBe('live-axle');
+    expect(['worm-roller', 'recirculating-ball']).toContain(d.steeringGearF);
+    expect(d.ackermannF).toBeNull();
+    expect(d.assistF).toBe(DEFAULT_CHASSIS.assistF);
+    const wild = resolveChassis({ ...DEFAULT_CHASSIS, ackermannF: 9, dragLinkDegF: -80, rackMmPerRevF: 1, variableRatioF: 5 });
+    expect(wild.ackermannF).toBe(1.5);
+    expect(wild.dragLinkDegF).toBe(-25);
+    expect(wild.rackMmPerRevF).toBe(30);
+    expect(wild.variableRatioF).toBe(1.8);
+    expect(sameDesign(resolveChassis(wild), wild)).toBe(true);
+  });
+
+  it('keeps a box when the front leaves a live axle: a centre link and an idler arm steer an independent axle too', () => {
+    const live = editChassis(editChassis(DEFAULT_CHASSIS, { drive: 'rwd' }), { layoutF: 'live-axle' });
+    expect(live.steeringGearF).toBe('recirculating-ball');
+    expect(editChassis(live, { layoutF: 'double-wishbone' }).steeringGearF).toBe('recirculating-ball');
+  });
+
+  it('derives the ratio from the gear and the linkage: a quicker rack, a lower ratio, the same road-wheel lock', () => {
+    const figure = (d: ChassisDesign, id: string): number => chassisSnapshot(d).find((m) => m.id === id)!.value;
+    const slow = editChassis(DEFAULT_CHASSIS, { rackMmPerRevF: 40 });
+    const quick = editChassis(DEFAULT_CHASSIS, { rackMmPerRevF: 60 });
+    expect(figure(slow, 'steerRatio') / figure(quick, 'steerRatio')).toBeCloseTo(1.5, 6);
+    expect(figure(slow, 'turningCircle')).toBeCloseTo(figure(quick, 'turningCircle'), 9);
+    expect(figure(slow, 'turns')).toBeGreaterThan(figure(quick, 'turns'));
+  });
+
+  it('warns of a steered axle whose drag link is not parallel to its Panhard rod, and not of a parallel one', () => {
+    const live = editChassis(editChassis(DEFAULT_CHASSIS, { drive: 'rwd' }), { layoutF: 'live-axle' });
+    const diagnosed = (d: ChassisDesign) => {
+      const spec = chassisToSpec(d);
+      return diagnoseChassis(d, evaluateChassis(spec), evaluateSteering(spec)).map((x) => x.id);
+    };
+    expect(diagnosed(live)).not.toContain('axle-steer');
+    expect(diagnosed(editChassis(live, { dragLinkDegF: 12 }))).toContain('axle-steer');
+    // An independent axle has no drag link to blame.
+    expect(diagnosed(DEFAULT_CHASSIS)).not.toContain('axle-steer');
+  });
+
+  it('keeps the catalogue\'s geometry: the template\'s arms until the share is set', () => {
+    for (const entry of CHASSIS_CATALOGUE) {
+      const d = resolveChassis(entry.design);
+      expect(d.ackermannF).toBeNull();
+      const shown = controlTries(d, CHASSIS_CONTROLS.find((c) => c.key === 'ackermannF')!);
+      expect(shown.length).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe('no control is dead', () => {
   const base = DEFAULT_CHASSIS;
   const designs: Array<[string, ChassisDesign]> = [
@@ -557,6 +625,19 @@ describe('no control is dead', () => {
     ['live axle on a Watt linkage', editChassis(editChassis(base, { drive: 'rwd', layoutR: 'live-axle' }), { solidLateralR: 'watt' })],
     ['triangulated live axle, all-wheel drive', editChassis(editChassis(base, { drive: 'awd', layoutR: 'live-axle' }), { solidLateralR: 'triangulated' })],
     ['multilink front, rear drive', editChassis(base, { layoutF: 'multilink', drive: 'rwd' })],
+    // Stage P14-core: rockers with third springs, gas springs and controlled dampers.
+    [
+      'pushrods with third springs, air springs, active dampers',
+      editChassis(editChassis(base, { drive: 'rwd', layoutF: 'pushrod', layoutR: 'pushrod' }), {
+        thirdSpringNmmF: 40, thirdSpringNmmR: 50, springKindF: 'air', springKindR: 'air', dampers: 'active',
+      }),
+    ],
+    ['hydropneumatic struts, MagneRide', editChassis(base, { springKindF: 'hydro', springKindR: 'hydro', dampers: 'magneride' })],
+    // The steering group (P13-core): a box with a centre link and an idler arm on a strut, quicker toward the lock, and
+    // a steered live axle with its drag link, on a Panhard rod and on leaves with four-wheel drive.
+    ['box on a strut, variable ratio', editChassis(base, { steeringGearF: 'recirculating-ball', variableRatioF: 1.3, assistF: 'hydraulic' })],
+    ['steered live axle', editChassis(editChassis(base, { drive: 'rwd' }), { layoutF: 'live-axle' })],
+    ['steered live axle on leaves, all-wheel drive', editChassis(editChassis(base, { drive: 'awd' }), { layoutF: 'live-axle', solidLateralF: 'leaf', dragLinkDegF: 8 })],
   ];
   const figures = (d: ChassisDesign): string => JSON.stringify(chassisSnapshot(d).map((m) => [m.id, Math.round(m.value * 1e4)]));
 
