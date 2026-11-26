@@ -802,3 +802,8 @@ input[type='range']::-moz-range-thumb {
 .segmented button:disabled:hover {
   background: none;
 }
+
+/* What another section put into the shared places (section-dom.ts) */
+[data-section-away] {
+  display: none !important;
+}
