@@ -9,7 +9,10 @@
 // `--designer` prints the gearbox designer's model instead (stage K9a): for each copy of a catalogue gearbox in its
 // car (and the odd presets with `--designer all`), the teeth it picks, the ratios against their targets and the
 // published ones, and the quasi-static figures: v_max, revs in top, the rev drops and synchronisers on the upshifts,
-// the start grade, 0–100 km/h and 0–400 m.
+// the start grade, 0–100 km/h and 0–400 m; then (stage K9b) the teeth's bending and contact loads in every gear, the
+// synchronisers' hard shifts, the clutch and damper, the mesh tones, the mass, the verdict and the diagnoses. It opens
+// with the bending calibration on the TR-6060 MZ6 and the rough check of Tremec's sets A–F, whose teeth the designer
+// reconstructs.
 import { carById } from '../src/data/cars.ts';
 import { DRIVE_CARS, driveCarById } from '../src/data/drive-cars.ts';
 import { engineById } from '../src/data/engines.ts';
@@ -35,6 +38,14 @@ import { staticWheelLoadN, tyreAt } from '../src/vehicle/tyre.ts';
 import { evaluateGearbox } from '../src/gearbox-designer/evaluate.ts';
 import { catalogueGearboxPresets, oddGearboxPresets, type GearboxPreset } from '../src/gearbox-designer/presets.ts';
 import { designVehicle } from '../src/gearbox-designer/vehicle.ts';
+import { diagnoseGearbox } from '../src/gearbox-designer/diagnostics.ts';
+import { tr6060Design } from '../src/gearbox-designer/mass.ts';
+import { assessGearbox } from '../src/gearbox-designer/reliability.ts';
+import { resolveGearboxDesign } from '../src/gearbox-designer/constraints.ts';
+import { designBuild } from '../src/gearbox-designer/to-spec.ts';
+import {
+  BENDING_LIMIT_MPA, CALIBRATION_CONTACT_LOAD, CALIBRATION_TORQUE_NM, CONTACT_LIMIT_MPA, FLANK_LIMIT_MPA, gearboxStrength,
+} from '../src/gearbox-designer/strength.ts';
 
 const DEG = 180 / Math.PI;
 const helix = (beta: number): string => (beta === 0 ? 'spur' : `${(Math.abs(beta) * DEG).toFixed(2)}° ${beta > 0 ? 'R' : 'L'}`);
@@ -198,11 +209,72 @@ function printDesigner(preset: GearboxPreset): void {
         .map((x) => `${x.from}→${x.to} ${x.rpmBefore.toFixed(0)} to ${x.rpmAfter.toFixed(0)} rpm${x.inBand ? '' : ' (below the band)'}, sync ${(x.syncS * 1000).toFixed(0)} ms, break ${(x.pauseS * 1000).toFixed(0)} ms`)
         .join('; '),
   );
+  console.log(`strength at ${e.peakTorqueNm.toFixed(0)} N·m (bending/contact load, weakest mesh):`);
+  console.log(
+    '  ' +
+      e.strength
+        .map((g) => (g.weakest ? `${g.gear}: ${g.bending.toFixed(2)}/${g.contact.toFixed(2)} ${g.weakest.teeth.join('/')} ${g.weakest.bendingMpa.toFixed(0)} MPa` : `${g.gear}: direct`))
+        .join('; '),
+  );
+  console.log(
+    `synchronisers (blocking margin ${e.synchro.blocking.toFixed(2)}${e.synchro.sticks ? ', ring sticks' : ''}): ` +
+      e.synchro.shifts
+        .map((x) => `${x.from}→${x.to} from ${x.rpm.toFixed(0)} rpm ${(x.timeS * 1000).toFixed(0)} ms, ${x.energyJPerMm2.toFixed(3)} J/mm², ${x.powerWPerMm2.toFixed(2)} W/mm², load ${x.load.toFixed(2)}`)
+        .join('; '),
+  );
+  const c = e.clutch;
+  console.log(
+    `clutch ${c.staticNm.toFixed(0)} N·m, margin ${c.margin.toFixed(2)}; launch at 2000 rpm ${(c.launchJ / 1000).toFixed(1)} kJ in ${c.launchS.toFixed(2)} s, ` +
+      `pressure plate +${c.plateRiseK === null ? '—' : c.plateRiseK.toFixed(1)} K; damper mode ${c.damperHz.toFixed(1)} Hz, firing at idle ${c.idleFiringHz.toFixed(1)} Hz`,
+  );
+  console.log(
+    `mesh tones at 3000 rpm: ` +
+      e.tones.map((g) => (g.db === null ? `${g.gear}: silent` : `${g.gear}: ${g.meshes.map((m) => `${m.hz.toFixed(0)} Hz`).join(' + ')} ${g.db.toFixed(1)} dB`)).join('; '),
+  );
+  console.log(`mass ${e.mass.totalKg.toFixed(1)} kg (gears ${e.mass.gearsKg.toFixed(1)}, shafts ${e.mass.shaftsKg.toFixed(1)}, case with oil ${e.mass.caseKg.toFixed(1)}; an estimate from the TR-6060)`);
+  const rel = assessGearbox(e);
+  console.log(`verdict: ${rel.verdictName}: ${rel.lifeText} (${rel.items.map((i) => `${i.id} ${i.load.toFixed(2)}`).join(', ')})`);
+  for (const x of diagnoseGearbox(d, e, rel)) console.log(`  [${x.severity}] ${x.title}. ${x.text}`);
+}
+
+/**
+ * Tremec TR-6060 sets A–F (Tremec, research §3.3): ratios and rated input torque. Their teeth are not published, so
+ * the designer picks them at the MZ6's centre, modules and faces; the first pair's bending load at the rating is a
+ * rough check within ±25 %, not a test.
+ */
+const TREMEC_SETS: Array<{ id: string; ratios: number[]; nm: number }> = [
+  { id: 'A', ratios: [3.01, 2.07, 1.43, 1.0, 0.84, 0.57], nm: 580 },
+  { id: 'B', ratios: [2.98, 1.78, 1.3, 1.0, 0.74, 0.5], nm: 680 },
+  { id: 'C', ratios: [2.66, 1.78, 1.3, 1.0, 0.8, 0.63], nm: 760 },
+  { id: 'D', ratios: [2.66, 1.82, 1.3, 1.0, 0.76, 0.5], nm: 810 },
+  { id: 'E', ratios: [2.29, 1.61, 1.21, 1.0, 0.82, 0.68], nm: 880 },
+  { id: 'F', ratios: [2.26, 1.58, 1.19, 1.0, 0.71, 0.5], nm: 880 },
+];
+
+function printCalibration(): void {
+  const mz6 = tr6060Design();
+  const first = gearboxStrength(designBuild(mz6).box, mz6.gears, CALIBRATION_TORQUE_NM)[0]!;
+  console.log(
+    `Bending calibration: TR-6060 MZ6 first pair ${first.weakest!.teeth.join('/')} at ${CALIBRATION_TORQUE_NM} N·m: ${first.weakest!.bendingMpa.toFixed(0)} MPa, ` +
+      `load ${first.bending.toFixed(3)} (limit ${BENDING_LIMIT_MPA.toFixed(0)} MPa); contact load ${CALIBRATION_CONTACT_LOAD.toFixed(2)} ` +
+      `(limit ${CONTACT_LIMIT_MPA.toFixed(0)} MPa, 0.7–1.3 expected; flanks judged against ${FLANK_LIMIT_MPA.toFixed(0)} MPa)`,
+  );
+  console.log('Tremec sets A–F, teeth reconstructed by the designer (rough check, ±25 %):');
+  for (const set of TREMEC_SETS) {
+    const d = resolveGearboxDesign({
+      ...mz6, firstRatio: set.ratios[0]!, topRatio: set.ratios[5]!, ratios: set.ratios.map((r, i) => (r === 1 || i === 0 ? null : r)),
+      pairs: set.ratios.map(() => null), mainPair: null, factory: null,
+    });
+    const g = gearboxStrength(designBuild(d).box, d.gears, set.nm)[0]!;
+    const ok = Math.abs(g.bending - 1) <= 0.25 ? 'within' : 'OUTSIDE';
+    console.log(`  ${set.id}: ${set.nm} N·m, first ${set.ratios[0]} with teeth ${g.weakest!.teeth.join('/')}: load ${g.bending.toFixed(2)} (${ok} ±25 %)`);
+  }
 }
 
 const ids = process.argv.slice(2);
 if (ids[0] === '--designer') {
   const presets = [...catalogueGearboxPresets(), ...(ids[1] === 'all' ? oddGearboxPresets() : [])];
+  printCalibration();
   for (const p of presets) printDesigner(p);
   process.exit(0);
 }

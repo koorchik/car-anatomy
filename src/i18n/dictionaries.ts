@@ -26,6 +26,7 @@ export const DICTIONARIES = {
   /** The gearbox pages: the table, its dash, the settings panel, the article's frame and the demonstrations. */
   gearboxes: { module: 'src/i18n/en/gearbox-ui.ts', load: () => import('./en/gearbox-ui.ts').then((m) => m.GEARBOX_UI_EN) },
   'gearbox-designer': { module: 'src/i18n/en/gearbox-designer.ts', load: () => import('./en/gearbox-designer.ts').then((m) => m.GEARBOX_DESIGNER_EN) },
+  'suspension-designer': { module: 'src/i18n/en/suspension-designer.ts', load: () => import('./en/suspension-designer.ts').then((m) => m.SUSPENSION_DESIGNER_EN) },
 } satisfies Record<string, DictionaryModule>;
 
 export type DictionaryName = keyof typeof DICTIONARIES;

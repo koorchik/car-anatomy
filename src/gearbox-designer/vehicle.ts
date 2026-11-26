@@ -7,9 +7,10 @@ import { CARS } from '../data/cars.ts';
 import { driveCarById } from '../data/drive-cars.ts';
 import { engineById } from '../data/engines.ts';
 import { catalogueTorqueMap } from '../designer/torque-map.ts';
+import { buildEngine } from '../engine/kinematics.ts';
 import { DISC_DAMPER, DMF_DAMPER, DRY_ORGANIC, DRY_STRIBECK, MANUAL_SPIN_LOSS, meanRadius, stiffDisc, WET_PACK } from '../drivetrain/elements.ts';
 import { CASE_INERTIA, FINAL_DRIVE_EFFICIENCY, PINION_INERTIA, PROPSHAFT_FITTINGS, SIDE_INERTIA, tubeInertia } from '../drivetrain/final-drive.ts';
-import type { DamperDef, FrictionDef, SpinLossDef } from '../drivetrain/spec.ts';
+import type { DamperDef, DifferentialDef, FrictionDef, SpinLossDef } from '../drivetrain/spec.ts';
 import type { EngineTorqueMap } from '../engine/torque-map.ts';
 import { cgHeightM, type CarRecord } from '../vehicle/car.ts';
 import { AIR_DENSITY, G } from '../vehicle/constants.ts';
@@ -57,6 +58,8 @@ export interface DesignVehicle {
   axleEfficiency: number;
   /** Inertia that turns with the wheels beyond the box, per unit wheel speed, kg·m²: axle parts and the propshaft. */
   axleInertia: number;
+  /** The engine's firing events per crank revolution (two for a four-stroke four). */
+  firingPerRev: number;
 }
 
 /** The design's clutch as the core's friction element: the inner diameter two thirds of the outer, as on the E30's 228/152. */
@@ -69,6 +72,19 @@ export function designClutch(d: GearboxDesign): FrictionDef {
 
 /** Kinetic capacity of the clutch, N·m: what it passes while it slips at the launch. */
 export const clutchKineticNm = (f: FrictionDef): number => f.muKinetic * f.clampN * meanRadius(f) * f.faces;
+
+/** The design's differential as the core takes it: the full run of the page drives with it (stage K10). */
+export function designDifferential(d: GearboxDesign): DifferentialDef {
+  switch (d.diff) {
+    case 'plate':
+      return { kind: 'plate', lockDrive: d.lockDrive, lockCoast: d.lockCoast, preloadNm: d.preloadNm };
+    case 'helical':
+      return { kind: 'helical', tbr: d.tbr, preloadNm: d.preloadNm };
+    case 'open':
+    case 'locked':
+      return { kind: d.diff };
+  }
+}
 
 export function designDamper(d: GearboxDesign, map: EngineTorqueMap): DamperDef {
   return d.damper === 'dmf' ? DMF_DAMPER : d.damper === 'stiff' ? stiffDisc(map.inertia) : DISC_DAMPER;
@@ -104,6 +120,7 @@ export function designVehicle(d: GearboxDesign): DesignVehicle {
     }
   }
   const layshaft = d.type === 'layshaft';
+  const engine = buildEngine(spec);
   const axleRatio = layshaft ? d.finalDrive : 1;
   v = {
     base,
@@ -127,6 +144,7 @@ export function designVehicle(d: GearboxDesign): DesignVehicle {
     // The pinion with its half of the propshaft and the propshaft's front half turn with the box's output; the case and
     // the side gears with the wheels (final-drive.ts). A transaxle's case is a member of the box.
     axleInertia: layshaft ? (PINION_INERTIA + propshaft) * axleRatio ** 2 + CASE_INERTIA + 2 * SIDE_INERTIA : 2 * SIDE_INERTIA,
+    firingPerRev: (engine.cylinders.length * 360) / engine.cycle,
   };
   if (vehicles.size > 32) vehicles.clear();
   vehicles.set(key, v);
