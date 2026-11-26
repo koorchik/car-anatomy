@@ -161,19 +161,15 @@ export const newAxleGrip = (): AxleGrip => ({ fz: [0, 0, 0, 0], lateralN: [0, 0]
  * μ·m·g less the tyre's convexity (the front and rear wheels carry other loads than the one the tyre is fitted to).
  */
 export function axleGripLimit(gc: GripChassis, v: number, ax: number, ay: number, n = G, out: AxleGrip = newAxleGrip()): AxleGrip {
-  wheelLoads(gc, v, ax, ay, n, out.fz);
+  const fz = out.fz;
+  wheelLoads(gc, v, ax, ay, n, fz);
   const p = gc.tyre.set;
-  for (const k of [0, 1] as const) {
-    const l = out.fz[2 * k]!;
-    const r = out.fz[2 * k + 1]!;
-    out.lateralN[k] = lateralPeakN(p, l) + lateralPeakN(p, r);
-    out.longitudinalN[k] = longitudinalPeakN(p, l) + longitudinalPeakN(p, r);
-  }
+  out.lateralN[0] = lateralPeakN(p, fz[0]!) + lateralPeakN(p, fz[1]!);
+  out.lateralN[1] = lateralPeakN(p, fz[2]!) + lateralPeakN(p, fz[3]!);
+  out.longitudinalN[0] = longitudinalPeakN(p, fz[0]!) + longitudinalPeakN(p, fz[1]!);
+  out.longitudinalN[1] = longitudinalPeakN(p, fz[2]!) + longitudinalPeakN(p, fz[3]!);
   return out;
 }
-
-/** The axles' static weight shares: their shares of the side force in a steady turn. */
-const sideShare = (gc: GripChassis, k: 0 | 1): number => (k === 0 ? gc.frontShare : 1 - gc.frontShare);
 
 /** The lap's grip limit from a chassis (src/vehicle/lap.ts, GripModel). */
 export function gripModel(gc: GripChassis): GripModel {
@@ -186,16 +182,16 @@ export function gripModel(gc: GripChassis): GripModel {
       let brake = 0;
       let drive = 0;
       let overfull = false;
-      for (const k of [0, 1] as const) {
-        const share = sideShare(gc, k);
-        const dy = g.lateralN[k];
+      for (let k = 0; k < 2; k++) {
+        const share = k === 0 ? gc.frontShare : 1 - gc.frontShare;
+        const dy = g.lateralN[k]!;
         ayMax = Math.min(ayMax, dy / (m * share));
         const lat = dy > 0 ? (m * Math.abs(ay) * share) / dy : Infinity;
         if (lat > 1) {
           overfull = true;
           continue;
         }
-        const left = g.longitudinalN[k] * Math.sqrt(1 - lat * lat);
+        const left = g.longitudinalN[k]! * Math.sqrt(1 - lat * lat);
         brake += left;
         if (gc.driven[k]) drive += left;
       }
@@ -221,46 +217,55 @@ export interface AxleUsage {
 
 export const newAxleUsage = (): AxleUsage => ({ fz: [0, 0, 0, 0], fy: [0, 0], fx: [0, 0], usage: [0, 0], worst: 0 });
 
+/** Force along the road the axles that take part make at a common usage u: Σ D_x·√(u² − lat²) over them, N. */
+function alongAt(g: AxleGrip, u: number, lat0: number, lat1: number, takes0: boolean, takes1: boolean): number {
+  let s = 0;
+  if (takes0 && u > lat0) s += g.longitudinalN[0] * Math.sqrt(u * u - lat0 * lat0);
+  if (takes1 && u > lat1) s += g.longitudinalN[1] * Math.sqrt(u * u - lat1 * lat1);
+  return s;
+}
+
+const usageGrip = newAxleGrip();
+
 /**
  * What a lap asks of each axle at speed `v`, accelerations `ax`, `ay` and normal acceleration `n`, by the rules of the
  * header: the side force by the axles' weight shares, the force along the road (m·a_x plus the road load) on the
- * driven axles or, braking, on all of them, shared so that the axles that take part use the same part of their
- * ellipses (the least that serves). A point lap asks more than the tyres have in its limit corners; an L2 lap never.
+ * driven axles or, braking, on all of them, shared so that the largest usage is the least that serves: the axles that
+ * take part fill up to one common usage, and an axle already past it across makes nothing along. A point lap asks
+ * more than the tyres have in its limit corners; an L2 lap never. Allocates nothing.
  */
 export function axleUsage(gc: GripChassis, v: number, ax: number, ay: number, n = G, out: AxleUsage = newAxleUsage()): AxleUsage {
-  const g = axleGripLimit(gc, v, ax, ay, n);
+  const g = axleGripLimit(gc, v, ax, ay, n, usageGrip);
   const m = gc.massKg;
-  out.fz = g.fz;
-  const lat = [0, 0];
-  for (const k of [0, 1] as const) {
-    out.fy[k] = m * ay * sideShare(gc, k);
-    lat[k] = g.lateralN[k] > 0 ? Math.abs(out.fy[k]) / g.lateralN[k] : Infinity;
-  }
+  for (let i = 0; i < 4; i++) out.fz[i] = g.fz[i]!;
+  out.fy[0] = m * ay * gc.frontShare;
+  out.fy[1] = m * ay * (1 - gc.frontShare);
+  const lat0 = g.lateralN[0] > 0 ? Math.abs(out.fy[0]) / g.lateralN[0] : Infinity;
+  const lat1 = g.lateralN[1] > 0 ? Math.abs(out.fy[1]) / g.lateralN[1] : Infinity;
   const force = m * ax + roadLoadN(gc.roadLoad, v, 0);
-  const takes = [force < 0 || gc.driven[0], force < 0 || gc.driven[1]];
-  // Along the road at a common usage u: Σ D_x·√(u² − lat²) over the axles that take part.
-  const along = (u: number): number => {
-    let s = 0;
-    for (const k of [0, 1] as const) if (takes[k] && u > lat[k]!) s += g.longitudinalN[k] * Math.sqrt(u * u - lat[k]! * lat[k]!);
-    return s;
-  };
+  const takes0 = force < 0 || gc.driven[0];
+  const takes1 = force < 0 || gc.driven[1];
   const need = Math.abs(force);
-  let lo = Math.max(lat[0]!, lat[1]!);
+  // The lowest usage at which a taking axle starts to make force along the road.
+  let lo = Math.min(takes0 ? lat0 : Infinity, takes1 ? lat1 : Infinity);
   let u = lo;
   if (need > 0 && Number.isFinite(lo)) {
     let hi = Math.max(lo, 1e-3) * 2;
-    for (let k = 0; k < 60 && along(hi) < need; k++) hi *= 2;
+    for (let k = 0; k < 60 && alongAt(g, hi, lat0, lat1, takes0, takes1) < need; k++) hi *= 2;
     for (let k = 0; k < 60; k++) {
       const mid = (lo + hi) / 2;
-      if (along(mid) >= need) hi = mid;
+      if (alongAt(g, mid, lat0, lat1, takes0, takes1) >= need) hi = mid;
       else lo = mid;
     }
     u = hi;
   }
-  for (const k of [0, 1] as const) {
-    const part = takes[k] && u > lat[k]! ? g.longitudinalN[k] * Math.sqrt(u * u - lat[k]! * lat[k]!) : 0;
-    out.fx[k] = need > 0 ? (Math.sign(force) * part * need) / Math.max(need, along(u)) : 0;
-    out.usage[k] = takes[k] && need > 0 && part > 0 ? u : lat[k]!;
+  const total = need > 0 ? Math.max(need, alongAt(g, u, lat0, lat1, takes0, takes1)) : 1;
+  for (let k = 0; k < 2; k++) {
+    const lat = k === 0 ? lat0 : lat1;
+    const takes = k === 0 ? takes0 : takes1;
+    const part = need > 0 && takes && u > lat ? g.longitudinalN[k]! * Math.sqrt(u * u - lat * lat) : 0;
+    out.fx[k] = (Math.sign(force) * part * need) / total;
+    out.usage[k] = part > 0 ? Math.sqrt((out.fx[k] / g.longitudinalN[k]!) ** 2 + lat * lat) : lat;
   }
   out.worst = Math.max(out.usage[0], out.usage[1]);
   return out;

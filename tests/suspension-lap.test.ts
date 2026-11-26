@@ -257,6 +257,30 @@ describe('wheel loads and axle usage at the limits', () => {
     }
   });
 
+  it('report each axle by its own ellipse, and their forces add up to what the lap asks', () => {
+    const c = SUMP_CARS.find((s) => recordOf(s).drive === 'rwd')!;
+    const gc = gripChassisFor(recordOf(c));
+    const lim = { ayMax: 0, brakeMax: 0, driveMax: 0 };
+    for (const [v, ax, ayShare] of [[20, 0.5, 0.9], [25, -2, 0.7], [30, 1.5, 0.5], [15, -6, 0.3], [35, 0.2, 0.95]] as const) {
+      gripModel(gc).limit(v, ax, 0, G, lim);
+      const ay = ayShare * lim.ayMax;
+      const u = axleUsage(gc, v, ax, ay, G);
+      const g = axleGripLimit(gc, v, ax, ay, G);
+      for (const k of [0, 1] as const) {
+        const own = Math.hypot(u.fx[k] / g.longitudinalN[k], u.fy[k] / g.lateralN[k]);
+        expect(u.usage[k], `${v} ${ax} ${ayShare} axle ${k}`).toBeCloseTo(own, 6);
+      }
+      const force = gc.massKg * ax + roadLoadN(gc.roadLoad, v, 0);
+      expect(u.fx[0] + u.fx[1]).toBeCloseTo(force, 3);
+    }
+    // Light throttle in a fast corner: the front only corners, the rear corners and pushes against the drag.
+    gripModel(gc).limit(30, 0, 0, G, lim);
+    const u = axleUsage(gc, 30, 0, 0.9 * lim.ayMax, G);
+    const g = axleGripLimit(gc, 30, 0, 0.9 * lim.ayMax, G);
+    expect(u.fx[0]).toBe(0);
+    expect(u.usage[1]).toBeGreaterThan(u.fy[1] / g.lateralN[1]);
+    expect(u.worst).toBe(Math.max(u.usage[0], u.usage[1]));
+  });
 });
 
 describe('time at distance', () => {
