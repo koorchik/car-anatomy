@@ -19,7 +19,7 @@ export const CONTROL_GROUPS: ReadonlyArray<{ id: ControlGroup; label: string }> 
   { id: 'synchro', label: t('Синхронізатори') },
   { id: 'clutch', label: t('Зчеплення') },
   { id: 'diff', label: t('Диференціал') },
-  { id: 'car', label: t('Авто') },
+  { id: 'car', label: t('Автомобіль') },
 ];
 
 interface ControlBase {
