@@ -10,6 +10,18 @@ body.section-suspensions.susp-scene-bump {
   --dash-h: 156px;
 }
 
+/* The travel scene's dash: curves, front view, numbers (travel-scene.ts). */
+body.section-suspensions.susp-scene-travel {
+  --dash-h: 188px;
+}
+
+/* A control or block the page hides keeps hidden whatever its display. */
+.susp-panel [hidden],
+.susp-title [hidden],
+.susp-dash [hidden] {
+  display: none !important;
+}
+
 /* No shared dash and no engine hints; the rig holds the wheel still, so it offers no choice of time. */
 body.section-suspensions .dash,
 body.section-suspensions #hint,
@@ -217,6 +229,7 @@ body.susp-scene-travel .susp-only-bump {
     --dash-h: 188px;
   }
 
+
   /* Two sliders side by side would read as one with two thumbs: on a phone each keeps its name. */
   .susp-travel-tool .tool-label,
   .susp-explode-tool .tool-label {
@@ -292,5 +305,366 @@ body.susp-scene-travel .susp-only-bump {
 
   .susp-number dd {
     text-align: left;
+  }
+}
+
+/* Title: the page's name, its line, the way to the other pages and its cars. */
+.susp-title h1 {
+  margin-bottom: 2px;
+}
+
+.susp-title p {
+  margin: 0 0 8px;
+}
+
+.susp-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  pointer-events: auto;
+}
+
+.susp-cars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  max-width: 560px;
+  pointer-events: auto;
+}
+
+.susp-car {
+  font-size: 13px;
+  padding: 2px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--bone-dim);
+  text-decoration: none;
+  background: rgba(11, 34, 42, 0.55);
+}
+
+.susp-car:hover {
+  color: var(--bone);
+}
+
+.susp-car.current {
+  color: #0b222a;
+  background: var(--bone);
+  border-color: var(--bone);
+}
+
+/* The travel scene's controls in the panel. */
+.susp-travel-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.susp-travel-controls > .btn {
+  align-self: flex-start;
+}
+
+.susp-travel-controls .btn[aria-pressed='true'] {
+  background: var(--bone);
+  color: #0b222a;
+}
+
+.susp-overlays {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.susp-overlays i {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top: 2px dashed var(--c);
+  margin: 0 6px 0 2px;
+  vertical-align: middle;
+}
+
+.susp-links h3 {
+  margin-bottom: 4px;
+}
+
+.susp-links p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.susp-links-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.susp-links-row output {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The travel scene's dash: the curves, the front view, the numbers. */
+.susp-travel-dash {
+  grid-template-columns: minmax(300px, 1fr) 170px minmax(260px, 330px);
+}
+
+.susp-strip-legend span.faint::before {
+  height: 0;
+  border-top: 2px dashed var(--c);
+  background: none;
+}
+
+.susp-strip-legend .susp-legend-dot::before {
+  display: none;
+}
+
+.susp-fv-box h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--bone-dim);
+}
+
+.susp-fv-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.susp-fv-host svg {
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
+}
+
+/* Front views and glyphs (front-view.ts). */
+.susp-fv .susp-fv-road {
+  stroke: rgba(236, 230, 214, 0.45);
+  stroke-width: 1.5;
+}
+
+.susp-fv .susp-fv-centre {
+  stroke: rgba(236, 230, 214, 0.35);
+  stroke-dasharray: 4 3;
+}
+
+.susp-fv .susp-fv-wheel {
+  fill: rgba(236, 230, 214, 0.08);
+  stroke: rgba(236, 230, 214, 0.55);
+  stroke-width: 1.2;
+}
+
+.susp-fv .susp-fv-link {
+  stroke: #ece6d6;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.susp-fv .susp-fv-tie {
+  stroke: #7fd3ff;
+}
+
+.susp-fv .susp-fv-strut {
+  stroke: #ffb36b;
+  stroke-width: 3;
+}
+
+.susp-fv .susp-fv-joint {
+  fill: #0b222a;
+  stroke: #ece6d6;
+  stroke-width: 1;
+}
+
+.susp-fv .susp-fv-ic-line {
+  stroke: rgba(181, 228, 140, 0.7);
+  stroke-dasharray: 3 3;
+}
+
+.susp-fv .susp-fv-ic {
+  fill: #b5e48c;
+}
+
+.susp-fv .susp-fv-rc-line {
+  stroke: rgba(255, 210, 90, 0.75);
+  stroke-dasharray: 5 3;
+}
+
+.susp-fv .susp-fv-rc {
+  fill: #ffd25a;
+  stroke: #0b222a;
+}
+
+.susp-fv .susp-fv-trail {
+  fill: rgba(255, 210, 90, 0.45);
+}
+
+/* The article's block about the car. */
+.susp-car-block h3 {
+  margin-bottom: 6px;
+}
+
+.susp-facts {
+  margin: 0 0 10px;
+  padding-left: 18px;
+}
+
+.susp-facts li {
+  margin-bottom: 6px;
+}
+
+.susp-general {
+  font-size: 18px;
+  margin: 22px 0 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+/* «Усі підвіски» (all-table.ts), in the shell's table overlay. */
+.susp-layout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.susp-layout-card {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(11, 34, 42, 0.5);
+}
+
+.susp-layout-card.current {
+  border-color: var(--bone);
+}
+
+.susp-layout-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  color: var(--bone);
+}
+
+.susp-layout-name {
+  font-weight: 600;
+}
+
+/* One box for every glyph, the drawing centred in it: the names under them line up (all-table.ts, GLYPH_H). */
+.susp-layout-head .susp-glyph {
+  width: 150px;
+  height: 130px;
+}
+
+.susp-layout-numbers {
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.susp-layout-numbers div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.susp-layout-numbers dt {
+  color: var(--bone-dim);
+}
+
+.susp-layout-numbers dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.susp-layout-cars {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+}
+
+.susp-travel-dash .susp-numbers {
+  overflow-x: hidden;
+}
+
+/* The dash's numbers again in the panel, for a phone whose dash has no room for them. */
+.susp-travel-numbers-phone {
+  display: none;
+}
+
+.susp-travel-dash .susp-number dt {
+  white-space: normal;
+}
+
+.susp-travel-dash .susp-number dd {
+  white-space: nowrap;
+}
+
+/* The pages' phone layout, after the rules it overrides. */
+@media (max-width: 860px) {
+  body.section-suspensions.susp-scene-travel {
+    --dash-h: 210px;
+  }
+
+  /* The curves two by two beside the front view; the numbers go to the panel. */
+  .susp-travel-dash {
+    grid-template-columns: minmax(0, 1fr) 116px;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .susp-travel-dash > .susp-dash-chart {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .susp-travel-dash > .susp-fv-box {
+    grid-column: 2;
+    grid-row: 1;
+    border-left: 1px solid var(--rule);
+  }
+
+  .susp-travel-dash > .susp-dash-numbers {
+    display: none;
+  }
+
+  .susp-travel-numbers-phone {
+    display: flex;
+    margin: 0 0 12px;
+    font-size: 13px;
+    gap: 3px;
+  }
+
+  .susp-travel-numbers-phone .susp-number {
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .susp-travel-numbers-phone .susp-number dt {
+    white-space: normal;
+  }
+
+  .susp-travel-numbers-phone .susp-number dd {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .susp-cars {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: calc(100vw - 32px);
+  }
+
+  .susp-car {
+    white-space: nowrap;
+  }
+
+  .susp-nav .btn {
+    padding: 3px 10px;
   }
 }

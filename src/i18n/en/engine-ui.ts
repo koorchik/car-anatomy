@@ -474,4 +474,11 @@ export const ENGINE_UI_EN: Record<string, string> = {
   '{rpm} об/хв: {value} {unit}': '{rpm} rpm: {value} {unit}',
   'бар': 'bar',
   'Коробка': 'Transmission',
+  // The suspension row of an engine article (src/ui/article.ts): the same words as the suspension pages'.
+  'Підвіска': 'Suspension',
+  'Стійка Макферсон': 'MacPherson strut',
+  'Подвійні поперечні важелі': 'Double wishbone',
+  'Багаторичажна підвіска': 'Multi-link suspension',
+  'спереду': 'at the front',
+  'ззаду': 'at the rear',
 };
