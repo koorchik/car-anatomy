@@ -102,7 +102,7 @@ export class GearboxSection implements Section {
   private markedGear: string | null = null;
   private demo: { steps: DemoStep[]; at: number } | null = null;
   /** Skeleton texts and states this section changes while it is shown, to give back on leave. */
-  private readonly lent = new Map<HTMLElement, { text?: string; hidden?: boolean; current?: boolean }>();
+  private readonly lent = new Map<HTMLElement, { text?: string; hidden?: boolean }>();
   private fitScaleBefore = 0.68;
   /** The --tools-h the page had before this section measured its own row, to give back on leave. */
   private toolsHBefore = '';
@@ -177,7 +177,6 @@ export class GearboxSection implements Section {
     for (const [el, was] of this.lent) {
       if (was.text !== undefined) el.textContent = was.text;
       if (was.hidden !== undefined) el.hidden = was.hidden;
-      if (was.current !== undefined) el.classList.toggle('current', was.current);
     }
     this.lent.clear();
     const root = document.documentElement.style;
@@ -289,7 +288,6 @@ export class GearboxSection implements Section {
     this.lend('#panel-toggle-closed', t('Про коробку'));
     this.lendHidden('#results-panel', false);
     this.lendHidden('#hint', true);
-    for (const link of this.root.querySelectorAll<HTMLElement>('.sections a.current')) this.lendCurrent(link, false);
     slots.panelTitle.textContent = t('Про коробку');
     document.title = t('{title}. Анатомія авто', { title: t('Механічна коробка з проміжним валом') });
     this.fitScaleBefore = stage.fitScale;
@@ -614,12 +612,5 @@ export class GearboxSection implements Section {
     if (was.hidden === undefined) was.hidden = el.hidden === true;
     this.lent.set(el, was);
     el.hidden = hidden;
-  }
-
-  private lendCurrent(el: HTMLElement, current: boolean): void {
-    const was = this.lent.get(el) ?? {};
-    if (was.current === undefined) was.current = el.classList.contains('current');
-    this.lent.set(el, was);
-    el.classList.toggle('current', current);
   }
 }
