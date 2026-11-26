@@ -23,6 +23,7 @@ import { multilink, multilinkDefaults } from '../suspension/templates/multilink.
 import { pivotAxle } from '../suspension/templates/pivot.ts';
 import { twistBeamAxle } from '../suspension/templates/twist-beam.ts';
 import { SOLID_TYPICAL, solidAxle } from '../suspension/templates/solid-axle.ts';
+import { withAckermann } from '../suspension/steering.ts';
 import { outerDiameterM, ROLLING_SHARE } from '../vehicle/tyre-size.ts';
 import { axleOf, isDriven, type AxleEnd, type AxleParams, type ChassisDesign, type Drive } from './design.ts';
 
@@ -66,8 +67,16 @@ function withDiffOutput<L extends AnyAxleLinkage>(spec: AxleSpec<L>, a: AxlePara
   return { ...spec, halfshaft: { ...spec.halfshaft, diffOutput: [d[0], a.diffOutputYMm / 1000, zW + a.diffOutputDzMm / 1000] } };
 }
 
+/** The axle's hardpoints from the design, with the front's steering arms turned to the design's Ackermann share. */
+function draw(a: AxleParams, end: AxleEnd, drive: Drive, wheelbaseMm: number): AxleSpec<AnyAxleLinkage> {
+  const spec = drawLayout(a, end, drive);
+  // A steered solid axle's arms are in its steering linkage (to-spec.ts), not in its spec.
+  if (end !== 'F' || a.ackermann === null || spec.linkage.kind !== 'links') return spec;
+  return withAckermann(spec as AxleSpec, a.ackermann, wheelbaseMm / 1000);
+}
+
 /** The axle's hardpoints from the design, before the proof that it travels. Throws where a template does. */
-function draw(a: AxleParams, end: AxleEnd, drive: Drive): AxleSpec<AnyAxleLinkage> {
+function drawLayout(a: AxleParams, end: AxleEnd, drive: Drive): AxleSpec<AnyAxleLinkage> {
   const zW = wheelCentreZM(a);
   const trackM = a.trackMm / 1000;
   const driven = isDriven(drive, end);
@@ -162,6 +171,7 @@ function draw(a: AxleParams, end: AxleEnd, drive: Drive): AxleSpec<AnyAxleLinkag
         leaf: { ...leaf, yM: Math.min(leaf.yM, trackM / 2 - LEAF_INSIDE_M) },
         driven,
         diffOutputYM: a.diffOutputYMm / 1000,
+        front: end === 'F',
       });
       return withDiffOutput(spec, a, zW);
     }
@@ -196,8 +206,8 @@ function prove(spec: AxleSpec<AnyAxleLinkage>): { mrSpring: number; mrDamper: nu
 }
 
 /** The axle of one end of a design: drawn, aligned and proven. Throws when it cannot assemble or travel. */
-export function buildAxleGeometry(a: AxleParams, end: AxleEnd, drive: Drive): AxleGeometry {
-  const drawn = draw(a, end, drive);
+export function buildAxleGeometry(a: AxleParams, end: AxleEnd, drive: Drive, wheelbaseMm: number): AxleGeometry {
+  const drawn = draw(a, end, drive, wheelbaseMm);
   const spec = { ...drawn, spinAxis: aligned(drawn.spinAxis, a.camberDeg, a.toeDeg) };
   const mr = prove(spec);
   if (!(mr.mrSpring > 0.05 && mr.mrDamper > 0.05)) throw new Error('The spring or the damper barely moves with the wheel');
@@ -211,18 +221,20 @@ const GEOMETRY_KEYS = [
   'pivotArmMm', 'pivotYMm', 'pivotDzMm', 'pivotSvDeg', 'beamPos', 'shearDzMm', 'beamArmMm', 'beamBushInMm',
   'beamBushDzMm', 'beamTorsionNmRad', 'solidLateral', 'solidLinks', 'lowerLinkMm', 'upperLinkMm', 'linkAngleDeg',
   'upperLinkAngleDeg', 'lateralZMm', 'diffOutputYMm', 'diffOutputDzMm', 'camberDeg', 'toeDeg', 'tyreWidthMm',
-  'tyreAspect', 'rimIn',
+  'tyreAspect', 'rimIn', 'ackermann',
 ] as const satisfies readonly (keyof AxleParams)[];
 
-/** What decides an axle's points: its geometry parameters, its end and whether it is driven. */
-export function geometryKey(a: AxleParams, end: AxleEnd, drive: Drive): string {
-  return JSON.stringify([end, isDriven(drive, end), ...GEOMETRY_KEYS.map((k) => a[k])]);
+/** What decides an axle's points: its geometry parameters, its end, whether it is driven, and the wheelbase when the
+ *  front's steering arms are turned for it. */
+export function geometryKey(a: AxleParams, end: AxleEnd, drive: Drive, wheelbaseMm: number): string {
+  const arms = end === 'F' && a.ackermann !== null ? wheelbaseMm : null;
+  return JSON.stringify([end, isDriven(drive, end), arms, ...GEOMETRY_KEYS.map((k) => a[k])]);
 }
 
 /** The axle of one end of a design drawn, aligned and solved at design only: what buildAxleGeometry gives for an axle
  *  that travels its range, without walking it. Throws when it does not assemble at design. */
-export function designAxleGeometry(a: AxleParams, end: AxleEnd, drive: Drive): AxleGeometry {
-  const drawn = draw(a, end, drive);
+export function designAxleGeometry(a: AxleParams, end: AxleEnd, drive: Drive, wheelbaseMm: number): AxleGeometry {
+  const drawn = draw(a, end, drive, wheelbaseMm);
   const spec = { ...drawn, spinAxis: aligned(drawn.spinAxis, a.camberDeg, a.toeDeg) };
   const link = spec.linkage;
   let mr: { mrSpring: number; mrDamper: number };
@@ -282,15 +294,15 @@ function remembered(store: Map<string, AxleGeometry | Error>, key: string, make:
 }
 
 /** buildAxleGeometry, remembered for the last few geometries; an axle that cannot be built is remembered as its error. */
-export function axleGeometryOf(a: AxleParams, end: AxleEnd, drive: Drive): AxleGeometry | Error {
-  const key = geometryKey(a, end, drive);
-  if (!proving) return cache.get(key) ?? remembered(designOnly, key, () => designAxleGeometry(a, end, drive));
-  return remembered(cache, key, () => buildAxleGeometry(a, end, drive));
+export function axleGeometryOf(a: AxleParams, end: AxleEnd, drive: Drive, wheelbaseMm: number): AxleGeometry | Error {
+  const key = geometryKey(a, end, drive, wheelbaseMm);
+  if (!proving) return cache.get(key) ?? remembered(designOnly, key, () => designAxleGeometry(a, end, drive, wheelbaseMm));
+  return remembered(cache, key, () => buildAxleGeometry(a, end, drive, wheelbaseMm));
 }
 
 /** The axle of a resolved design; throws if it cannot be built (resolveChassis guarantees it can). */
 export function axleGeometry(d: ChassisDesign, end: AxleEnd): AxleGeometry {
-  const g = axleGeometryOf(axleOf(d, end), end, d.drive);
+  const g = axleGeometryOf(axleOf(d, end), end, d.drive, d.wheelbaseMm);
   if (g instanceof Error) throw g;
   return g;
 }

@@ -28,6 +28,12 @@ import { EventRoad, RoadBuffer } from '../src/suspension/road.ts';
 import { estimateInertia, GYRATION_RATIOS, NHTSA_CARS } from '../src/vehicle/body-estimate.ts';
 import { tyreVertical } from '../src/vehicle/tyre-data.ts';
 import type { AxleSpec, ChassisLongitudinal, ChassisSpec, CornerLinkage, SolidAxleLinkage, TwistBeamLinkage } from '../src/suspension/spec.ts';
+import { evaluateSteering, ICE_MU } from '../src/suspension/evaluate-steering.ts';
+import { ASSIST_CURVES, ASSIST_THRESHOLD_NM, driverTorque, splitMuSteer, standstillMoment } from '../src/suspension/steering-forces.ts';
+import { STEERING_ASSISTS } from '../src/suspension/steering.ts';
+import { DEFAULT_CHASSIS } from '../src/suspension-designer/defaults.ts';
+import { editChassis } from '../src/suspension-designer/edit.ts';
+import { chassisToSpec } from '../src/suspension-designer/to-spec.ts';
 
 const DEG = Math.PI / 180;
 
@@ -1038,5 +1044,80 @@ describe('the propshaft’s reaction', () => {
     expect(sim.out.propNm).toBe(0);
     expect(Math.abs(s.fz[3] - s.fz[2])).toBeLessThan(1);
     expect(Math.abs(s.roll)).toBeLessThan(1e-9);
+  });
+});
+
+describe('the steering under braking, drive and in a bend (P13-core)', () => {
+  const wishbones = editChassis(DEFAULT_CHASSIS, { layoutF: 'double-wishbone' });
+  const withScrub = (mm: number, inboard = false): ChassisSpec => {
+    const spec = chassisToSpec(editChassis(wishbones, { scrubMmF: mm }));
+    return inboard ? { ...spec, longitudinal: { ...spec.longitudinal, brakeInboard: [true, false] } } : spec;
+  };
+
+  it('split μ: the brakes turn the wheels toward the grippy side with positive scrub, away with negative, not at all at zero', () => {
+    expect(splitMuSteer({ fz: 4000, muLow: 0.1, muHigh: 1, leverM: 0.02 }).kingpinNm).toBeCloseTo(3600 * 0.02, 9);
+    expect(splitMuSteer({ fz: 4000, muLow: 0.1, muHigh: 1, leverM: -0.02 }).kingpinNm).toBeCloseTo(-3600 * 0.02, 9);
+    const pos = evaluateSteering(withScrub(30))!;
+    const neg = evaluateSteering(withScrub(-20))!;
+    const zero = evaluateSteering(withScrub(0))!;
+    expect(pos.splitMuKingpinNm).toBeGreaterThan(0);
+    expect(neg.splitMuKingpinNm).toBeLessThan(0);
+    expect(Math.abs(zero.splitMuKingpinNm)).toBeLessThan(1e-6 * Math.abs(pos.splitMuKingpinNm) + 1e-9);
+    // What the driver holds has the same sign, and the moment is the brake forces' difference on the scrub radius.
+    expect(Math.sign(pos.splitMuTorqueNm)).toBe(1);
+    expect(Math.sign(neg.splitMuTorqueNm)).toBe(-1);
+    const spec = withScrub(30);
+    const fz = (spec.body.massKg * G * spec.body.frontShare) / 2;
+    const scrub = pos.splitMuKingpinNm / ((1 - ICE_MU) * fz);
+    expect(scrub).toBeGreaterThan(0.025);
+    expect(scrub).toBeLessThan(0.035);
+  });
+
+  it('split μ with inboard brakes: the force reaches the knuckle at the hub, on the kingpin offset there', () => {
+    const outboard = evaluateSteering(withScrub(-20))!;
+    const inboard = evaluateSteering(withScrub(-20, true))!;
+    // The scrub is negative, the kingpin offset at the hub positive: inboard brakes pull the other way.
+    expect(outboard.splitMuKingpinNm).toBeLessThan(0);
+    expect(inboard.splitMuKingpinNm).toBeGreaterThan(0);
+  });
+
+  it('under power the drive force tugs on the kingpin offset at the hub: a split strut knuckle about a third of a plain one', () => {
+    const plain = evaluateSteering(chassisToSpec(DEFAULT_CHASSIS))!;
+    const revo = evaluateSteering(chassisToSpec(editChassis(DEFAULT_CHASSIS, { knuckleF: 'revoknuckle' })))!;
+    expect(plain.spindleNm).toBeGreaterThan(0);
+    expect(revo.spindleNm / plain.spindleNm).toBeGreaterThan(0.25);
+    expect(revo.spindleNm / plain.spindleNm).toBeLessThan(0.5);
+    // A rear-driven car's fronts carry no drive force.
+    expect(Number.isNaN(evaluateSteering(chassisToSpec(editChassis(DEFAULT_CHASSIS, { drive: 'rwd' })))!.spindleNm)).toBe(true);
+  });
+
+  it('assist: the driver carries the first newton-metre alone and less of every one past it, up to the assist\'s limit', () => {
+    for (const assist of STEERING_ASSISTS) {
+      expect(driverTorque(assist, 0.5)).toBe(0.5);
+      expect(driverTorque(assist, -0.5)).toBe(-0.5);
+      let prev = 0;
+      for (const manual of [2, 5, 10, 30, 80, 200]) {
+        const felt = driverTorque(assist, manual);
+        expect(felt).toBeLessThanOrEqual(manual);
+        expect(felt).toBeGreaterThan(prev - 1e-12);
+        expect(manual - felt).toBeLessThanOrEqual(ASSIST_CURVES[assist].capacityNm + 1e-9);
+        expect(driverTorque(assist, -manual)).toBe(-felt);
+        prev = felt;
+      }
+    }
+    expect(driverTorque('none', 30)).toBe(30);
+    expect(driverTorque('hydraulic', 30)).toBeCloseTo(ASSIST_THRESHOLD_NM + 29 / 9, 12);
+    // Parking a heavy car: the column motor runs out first.
+    expect(driverTorque('electric-column', 120)).toBeGreaterThan(driverTorque('electric-rack', 120));
+  });
+
+  it('a bend and a parking turn need more torque without assist, and parking more than a 0.3 g bend', () => {
+    const s = evaluateSteering(chassisToSpec(editChassis(DEFAULT_CHASSIS, { assistF: 'none' })))!;
+    expect(s.torqueNm).toBe(s.manualTorqueNm);
+    expect(s.parkingManualNm).toBeGreaterThan(s.manualTorqueNm);
+    const assisted = evaluateSteering(chassisToSpec(DEFAULT_CHASSIS))!;
+    expect(assisted.parkingTorqueNm).toBeLessThan(assisted.parkingManualNm / 3);
+    // The standstill rule grows as F_z^1.5.
+    expect(standstillMoment(1, 8000) / standstillMoment(1, 2000)).toBeCloseTo(8, 9);
   });
 });

@@ -9,7 +9,9 @@
 // weight); its drag stays the car's, the body being the same. The inertias are estimated from the mass and sizes
 // (src/vehicle/body-estimate.ts), or the car's measured ones scaled to the design's mass.
 
-import type { ChassisAxleSpec, ChassisLongitudinal, ChassisSpec, SolidAxleLinkage, SwayBarSpec } from '../suspension/spec.ts';
+import type { AxleSpec, ChassisAxleSpec, ChassisLongitudinal, ChassisSpec, ChassisSteering, SolidAxleLinkage, SwayBarSpec } from '../suspension/spec.ts';
+import { ackermannArmShare } from '../suspension/steering.ts';
+import { STEERED_BEAM_TYPICAL, steeredBeam } from '../suspension/templates/steered-beam.ts';
 import { barLinkOf, typicalLongitudinal } from '../suspension/templates/typical-chassis.ts';
 import { dampingFromZeta } from '../suspension/forces.ts';
 import { DAMPER_PRESETS } from '../suspension/setup.ts';
@@ -27,6 +29,41 @@ const BAR_INSIDE_TRACK_M = 0.5;
 /** Damper knee of a preset: the templates' 0.1 m/s (the preset's slope past it comes from dampingFromZeta). An own
  *  damper takes the design's knee and slope. */
 const PRESET_KNEE_MS = 0.1;
+
+/** The inner wheel's steer at full lock, degrees: a typical figure for a road car, an estimate (the knuckle's stops). */
+export const LOCK_INNER_DEG = 38;
+/** Pitman arm of a box on an independent axle (with a centre link and an idler arm), m: an estimate. */
+export const IDLER_PITMAN_ARM_M = 0.14;
+
+/** The steering of a design's front axle. A solid one gets the typical linkage with the design's drag link and arms. */
+export function designSteering(d: ChassisDesign, front: ChassisAxleSpec['axle']): ChassisSteering {
+  const a = axleOf(d, 'F');
+  const link = front.linkage;
+  const beam =
+    link.kind === 'solid'
+      ? steeredBeam(front as AxleSpec<SolidAxleLinkage>, { dragLinkDeg: a.dragLinkDeg, ackermann: a.ackermann, wheelbaseM: d.wheelbaseMm / 1000 })
+      : null;
+  return {
+    gear: {
+      kind: a.steeringGear,
+      rackPerRevM: a.rackMmPerRev / 1000,
+      boxRatio: a.boxRatio,
+      pitmanArmM: beam ? STEERED_BEAM_TYPICAL.pitmanArmM : IDLER_PITMAN_ARM_M,
+      variable: a.variableRatio,
+    },
+    assist: a.assist,
+    lockInnerRad: (LOCK_INNER_DEG * Math.PI) / 180,
+    beam,
+  };
+}
+
+/** The Ackermann share the design's steering arms have: its own, or the template's when it keeps them (null). */
+export function ackermannShown(d: ChassisDesign): number {
+  const own = axleOf(d, 'F').ackermann;
+  if (own !== null) return own;
+  const spec = axleGeometry(d, 'F').spec;
+  return spec.linkage.kind === 'links' ? ackermannArmShare(spec as AxleSpec, d.wheelbaseMm / 1000) : STEERED_BEAM_TYPICAL.ackermann;
+}
 
 /** Spring rate along the spring, N/m: the design's, or the typical one for the axle's ride frequency. */
 export function springRateNm(d: ChassisDesign, end: AxleEnd, g: AxleGeometry = axleGeometry(d, end)): number {
@@ -129,5 +166,6 @@ export function chassisToSpec(d: ChassisDesign): ChassisSpec {
     tyre: d.tyre,
     longitudinal: designLongitudinal(d),
     geometry: 'typical',
+    steering: designSteering(d, front.axle),
   };
 }

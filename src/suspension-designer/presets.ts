@@ -1,6 +1,7 @@
 // Starting points of the suspension designer (suspensions plan, the designer's presets and links): the real cars of the catalogue,
 // typical cars of five kinds, deliberately odd ones that P8b's diagnoses should catch, and a random one from a seed.
-// Presets that need steering (P13-core) or other spring and damper kinds (P14-core) come with those stages.
+// Presets that need other spring and damper kinds (P14-core) come with that stage; the steering group (P13-core) brought
+// a steered live axle to the front, which the random designs pick too.
 //
 // The typical and odd presets are not real cars: masses, sizes and centres of mass are estimates of their class, the
 // geometry the templates' typical geometry, every number illustrative. The Corvair swing axle preset is a rear-engined car on
@@ -12,8 +13,8 @@ import { CARS } from '../data/cars.ts';
 import { resolveChassis } from './constraints.ts';
 import { DEFAULT_CAR, typicalAxle } from './defaults.ts';
 import {
-  DAMPER_CHOICES, designOf, FRONT_LAYOUTS, isDriven, KNUCKLES, REAR_LAYOUTS, SOLID_LATERALS, TYRES, type AxleEnd,
-  type AxleParams, type CarParams, type ChassisDesign, type DesignLayout, type Drive,
+  DAMPER_CHOICES, designOf, FRONT_LAYOUTS, isDriven, KNUCKLES, REAR_LAYOUTS, SOLID_LATERALS, STEERING_ASSISTS,
+  STEERING_GEARS, TYRES, type AxleEnd, type AxleParams, type CarParams, type ChassisDesign, type DesignLayout, type Drive,
 } from './design.ts';
 import { CHASSIS_CATALOGUE } from './catalogue.ts';
 
@@ -243,6 +244,14 @@ export function randomChassis(random: () => number = Math.random): ChassisDesign
       tyreAspect: k(25, 75),
       rimIn: Math.round(k(14, 21)),
       brakeInboard: random() < 0.1,
+      // A live axle's rack becomes a box in resolveChassis.
+      steeringGear: pick(STEERING_GEARS),
+      rackMmPerRev: k(35, 100),
+      boxRatio: k(12, 24),
+      variableRatio: random() < 0.6 ? 1 : k(0.8, 1.5),
+      assist: pick(STEERING_ASSISTS),
+      ackermann: random() < 0.5 ? null : k(-0.3, 1.3),
+      dragLinkDeg: random() < 0.5 ? 0 : k(-20, 20),
     };
   };
   return resolveChassis(
