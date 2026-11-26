@@ -28,7 +28,7 @@ export function gearboxArticleHtml(f: ArticleFacts): string {
   const p = record.published;
   const rows: Array<[string, string]> = [
     [t('Коробка'), escapeHtml(record.name)],
-    [t('Передачі'), f.ratios.map((r) => num(r, 3)).join(' · ')],
+    [t('Передаточні числа'), f.ratios.map((r) => num(r, 3)).join(' · ')],
   ];
   if (f.reverse !== null) rows.push([t('Задній хід'), num(f.reverse, 3)]);
   if (f.finalDrive !== null) rows.push([t('Головна передача'), num(f.finalDrive, 2)]);

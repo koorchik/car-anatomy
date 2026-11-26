@@ -202,7 +202,7 @@ export class SetupPanel {
         `<tr><th scope="row">${label}</th><td>${num(ratio, 3)}</td><td>${num(roadSpeedKmh(1000, ratio, setup.finalDrive, ctx.radiusM), 1)}</td><td>${num(roadSpeedKmh(ctx.redlineRpm, ratio, setup.finalDrive, ctx.radiusM))}</td></tr>`;
       table.innerHTML = `<table>
           <thead><tr><th scope="col">${t('Передача')}</th><th scope="col">${t('Число')}</th><th scope="col">${t('км/год на 1000 об/хв')}</th><th scope="col">${t('км/год на {rpm} об/хв', { rpm: num(ctx.redlineRpm) })}</th></tr></thead>
-          <tbody>${ratios.map((r, i) => row(String(i + 1), r)).join('')}${ctx.reverse === null ? '' : row(t('Задній'), ctx.reverse)}</tbody>
+          <tbody>${ratios.map((r, i) => row(String(i + 1), r)).join('')}${ctx.reverse === null ? '' : row(t('Задній хід'), ctx.reverse)}</tbody>
         </table>
         <p class="note small">${t('Шини {tyre}, радіус кочення {mm} мм, без проковзування. Межа обертів двигуна {rpm} об/хв.', { tyre: ctx.tyre, mm: num(ctx.radiusM * 1000), rpm: num(ctx.redlineRpm) })}</p>`;
     }

@@ -3,7 +3,7 @@
 
 export const GEARBOX_UI_EN: Record<string, string> = {
   'Коробка': 'Transmission',
-  'Передачі': 'Gear ratios',
+  'Передаточні числа': 'Gear ratios',
   'Задній хід': 'Reverse',
   'Міжосьова відстань': 'Center distance',
   '{mm} мм': '{mm} mm',
@@ -75,7 +75,6 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   'Число': 'Ratio',
   'км/год на 1000 об/хв': 'km/h per 1000 rpm',
   'км/год на {rpm} об/хв': 'km/h at {rpm} rpm',
-  'Задній': 'Reverse',
   'Шини {tyre}, радіус кочення {mm} мм, без проковзування. Межа обертів двигуна {rpm} об/хв.': 'Tires {tyre}, rolling radius {mm} mm, no slip. Engine rev limit {rpm} rpm.',
   '{from}→{to}: {before} → {after} об/хв': '{from}→{to}: {before} → {after} rpm',
   'Передачі вже не йдуть від нижчої до вищої: на якомусь перемиканні оберти не падають, а ростуть.': 'The gears no longer run from low to high: at some shift the revs rise instead of falling.',
