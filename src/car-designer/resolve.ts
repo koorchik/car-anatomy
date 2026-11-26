@@ -14,7 +14,8 @@
 import { engineById } from '../data/engines.ts';
 import { ALL_GEARBOXES, gearboxById } from '../data/gearboxes.ts';
 import { driveCarById } from '../data/drive-cars.ts';
-import { paramRange, resolveDesign } from '../designer/constraints.ts';
+import { designFromObject } from '../designer/codec.ts';
+import { paramRange } from '../designer/constraints.ts';
 import type { Design } from '../designer/design.ts';
 import { effectiveOilL, effectiveSump } from '../designer/lubrication.ts';
 import { designFromSpec } from '../designer/presets.ts';
@@ -72,8 +73,10 @@ function resolveEngine(raw: unknown, car: CarRecord, notes: ResolveNote[]): Buil
     if (typeof id === 'string') {
       if (engineById(id)) return { catalogue: id };
       notes.push({ id: 'engine', asked: id.slice(0, 40) });
-    } else if (isObject(own(raw, 'design'))) {
-      return { design: resolveDesign(own(raw, 'design') as Design) };
+    } else {
+      // Read the way the engine designer reads its links, so a design of any shape builds and links back unchanged.
+      const design = designFromObject(own(raw, 'design'));
+      if (design) return { design };
     }
   }
   return { catalogue: car.engine };

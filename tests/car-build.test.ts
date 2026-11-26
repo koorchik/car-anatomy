@@ -145,12 +145,19 @@ describe('links', () => {
       { donor: 'civic-type-r-fk8', finalDrive: 99, gearbox: { ideal: { gears: 40, spread: -1 } } },
       JSON.parse('{"donor":"civic-type-r-fk8","__proto__":{"polluted":true},"constructor":{"prototype":{"x":1}}}'),
       { donor: 'bmw-m3-e30', engine: { catalogue: 'r4' }, lubrication: { sump: 'dry', oilL: 6 } },
+      // An engine design with nothing in it, or nonsense, reads as the engine designer reads its links.
+      { donor: 'civic-type-r-fk8', engine: { design: {} } },
+      { donor: 'civic-type-r-fk8', engine: { design: { layout: 'nonsense', cylinders: 'x', bore: 'big' } } },
     ];
     for (const w of wrecks) {
       const b = decodeBuild(enc(w));
       expect(b, JSON.stringify(w)).not.toBeNull();
       expect(DONORS.map((c) => c.id)).toContain(b!.donor);
-      expect(Number.isFinite(evaluateBuild(b).lapTimeS)).toBe(true);
+      // A lap of a car that runs: between a racing car's minute and a crawl.
+      const lap = evaluateBuild(b).lapTimeS;
+      expect(lap, JSON.stringify(w)).toBeGreaterThan(40);
+      expect(lap, JSON.stringify(w)).toBeLessThan(200);
+      expect(decodeBuild(encodeBuild(b!)), JSON.stringify(w)).toEqual(b);
     }
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
