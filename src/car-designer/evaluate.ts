@@ -450,6 +450,8 @@ export function* evaluateSteps(input: unknown): Generator<void, CarPerformance, 
   const donorPlaced = inCar(donor, donorOwn.box, donor.packaging!.crankFront);
   const engineDelta = perf.massKg - donorPerf.massKg;
 
+  yield;
+
   // The gearbox: its own design first, for its mass.
   const type = donorGearboxType(donor);
   const donorBox = donorGearbox(donor);
@@ -526,6 +528,7 @@ export function* evaluateSteps(input: unknown): Generator<void, CarPerformance, 
   const ownChassis = build.suspension === null ? donorChassis(donor) : 'catalogue' in build.suspension ? (catalogueEntry(build.suspension.catalogue)?.design ?? null) : build.suspension.design;
   const chassisDesign = ownChassis ? rebaseChassis(ownChassis, car, tyre) : null;
   const chassis = chassisDesign ? chassisPerf(chassisDesign) : null;
+  yield;
   const donorOwnChassis = donorChassis(donor);
   const donorChassisPerf = donorOwnChassis ? chassisPerf(rebaseChassis(donorOwnChassis, donor, { id: donor.tyre.id, size: drivenTyreSize(donor) })) : null;
   yield;
@@ -545,6 +548,7 @@ export function* evaluateSteps(input: unknown): Generator<void, CarPerformance, 
     return cruiseFuel(parts.design, rpm, kw, kmh);
   };
   const fuel90 = cruise(90);
+  yield;
   const fuel120 = cruise(120);
 
   // The donor's own gearbox in the donor as made: what the new engine's torque and the verdict are measured against.

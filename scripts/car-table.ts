@@ -2,7 +2,7 @@
 // an id). For each donor as made, the model against the maker's figures within the bounds of tests/car-build
 // (src/car-designer/published.ts); for every build, what the sections' models give (mass and its split, the engine's
 // fit in the bay, 0–100 km/h, 80–120 km/h, v_max, the lap, braking and skidpad, cruise fuel) and its diagnoses. Ends
-// with the slices of one "what this changes" pass on the Civic, against the plan's 50 ms.
+// with the slices of two "what this changes" passes on the Civic, against the plan's 50 ms.
 
 import { factoryBuild } from '../src/car-designer/build.ts';
 import { diagnoseBuild } from '../src/car-designer/diagnostics.ts';
@@ -52,20 +52,23 @@ for (const preset of presets) {
   for (const d of diagnoses) console.log(`  [${d.severity}] ${d.title}: ${d.text}`);
 }
 
-// One "what this changes" pass on a warm Civic, slice by slice.
+// "What this changes" on the Civic, slice by slice: the first pass meets models not run yet (a new engine, chassis or
+// gearbox compiles and fills its caches), the second is what a page sees from then on.
 const civic = factoryBuild('civic-type-r-fk8');
 evaluateBuild(civic);
-const pass = sensitivityPass(civic);
-let longest = 0;
-let total = 0;
-let slices = 0;
-for (;;) {
-  const t0 = performance.now();
-  const r = pass.next();
-  const ms = performance.now() - t0;
-  longest = Math.max(longest, ms);
-  total += ms;
-  slices++;
-  if (r.done) break;
+for (const label of ['first', 'second']) {
+  const pass = sensitivityPass(civic);
+  let longest = 0;
+  let total = 0;
+  let slices = 0;
+  for (;;) {
+    const t0 = performance.now();
+    const r = pass.next();
+    const ms = performance.now() - t0;
+    longest = Math.max(longest, ms);
+    total += ms;
+    slices++;
+    if (r.done) break;
+  }
+  console.log(`${label === 'first' ? '\n' : ''}"What this changes" on the Civic, ${label} pass: ${slices} slices, the longest ${longest.toFixed(1)} ms (plan: 50 ms), ${total.toFixed(0)} ms in all`);
 }
-console.log(`\n"What this changes" on the Civic: ${slices} slices, the longest ${longest.toFixed(1)} ms (plan: 50 ms), ${total.toFixed(0)} ms in all`);
