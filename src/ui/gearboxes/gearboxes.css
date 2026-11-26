@@ -2,6 +2,11 @@
  * shared widgets (start button, tachometer, pedal, figures) are styled by the engine pages' file, which the section
  * loads too. */
 
+/* An element of another gearbox page of the section (pages.ts): here, so that it holds before a page's chunk comes. */
+[data-gbx-page-away] {
+  display: none !important;
+}
+
 .gbx-title {
   display: flex;
   flex-direction: column;

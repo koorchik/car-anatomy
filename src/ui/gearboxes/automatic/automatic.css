@@ -1,11 +1,6 @@
 /* The automatic's page: its gear and element buttons, the lever diagram and the shift matrix. Everything else is
  * styled as on the manual pages (gearboxes.css). */
 
-/* An element of another gearbox page of the section (pages.ts). */
-[data-gbx-page-away] {
-  display: none !important;
-}
-
 .gba-gears {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
