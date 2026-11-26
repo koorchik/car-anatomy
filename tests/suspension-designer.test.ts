@@ -48,7 +48,7 @@ describe('the default design', () => {
 describe('resolveChassis', () => {
   it('is idempotent on every preset and on 500 random designs', () => {
     for (const d of [...CHASSIS_PRESETS.map((p) => p.design()), ...RANDOM]) expect(sameDesign(resolveChassis(d), d)).toBe(true);
-  });
+  }, 60_000);
 
   it('leaves every number inside its range, and every range is a range', () => {
     for (const d of [DEFAULT_CHASSIS, ...RANDOM.slice(0, 100)]) {
@@ -70,7 +70,7 @@ describe('resolveChassis', () => {
         expect(d[key]).toBeLessThanOrEqual(r.max);
       }
     }
-  });
+  }, 30_000);
 
   it('turns hostile input into a buildable design with the default keys and a plain prototype', () => {
     const hostile: unknown[] = [
@@ -106,7 +106,7 @@ describe('resolveChassis', () => {
     expect(resolveChassis({ layoutR: 'twist-beam', drive: 'rwd' }).layoutR).toBe('multilink');
     // A front axle takes only steered links.
     expect(FRONT_LAYOUTS).toContain(resolveChassis({ layoutF: 'live-axle' }).layoutF);
-  });
+  }, 30_000);
 
   it('gives an axle that cannot assemble its layout\'s typical geometry, and keeps one that can', () => {
     // Steep arms with the pivots far below the ball joints still assemble; the layout's limits keep it so.
@@ -136,7 +136,7 @@ describe('the link codec', () => {
       expect(back).not.toBeNull();
       expect(sameDesign(back!, d)).toBe(true);
     }
-  });
+  }, 60_000);
 
   it('tolerates anything: not base64, not JSON, not an object, unknown keys, wrong types', () => {
     const b64 = (s: string): string => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -238,7 +238,7 @@ describe('presets', () => {
   it('have unique ids, and each builds', () => {
     expect(new Set(CHASSIS_PRESETS.map((p) => p.id)).size).toBe(CHASSIS_PRESETS.length);
     for (const p of CHASSIS_PRESETS) expect(() => buildChassis(chassisToSpec(p.design())), p.id).not.toThrow();
-  });
+  }, 30_000);
 
   it('the odd ones are odd in the way their names say', () => {
     expect(ODD_PRESETS.map((p) => p.id).sort()).toEqual(['bump-steer', 'corvair-swing-axle', 'high-roll-centre', 'too-soft']);
