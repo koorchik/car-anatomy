@@ -231,6 +231,9 @@ export class Shell {
     el.panel.classList.toggle('closed', !this.open.right);
     document.body.classList.toggle('panel-closed', !this.open.right);
     el.panelToggleClosed.hidden = this.open.right || small;
+    // The button that brings a closed panel back stands over the right end of the top bar, which keeps clear of it.
+    if (el.panelToggleClosed.hidden) css.removeProperty('--panel-toggle-w');
+    else css.setProperty('--panel-toggle-w', `${el.panelToggleClosed.offsetWidth + 14}px`);
     el.panelOpen.hidden = !small;
     el.panelClose.textContent = small ? t('Закрити') : t('Сховати');
     css.setProperty('--stage-right', `${panelW}px`);
