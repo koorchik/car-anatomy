@@ -313,19 +313,21 @@ export function sampleTrace(trace: BumpTrace, t: number, out: BumpSample): BumpS
   const u = Math.min(trace.n - 1, Math.max(0, t / trace.dt));
   const i = Math.min(trace.n - 2, Math.floor(u));
   const f = u - i;
-  const lerp = (a: Float32Array): number => a[i]! + (a[i + 1]! - a[i]!) * f;
-  out.x = lerp(trace.x);
-  out.roadZ = lerp(trace.roadZ);
-  out.bodyZ = lerp(trace.bodyZ);
-  out.wheelZ = lerp(trace.wheelZ);
-  out.travel = lerp(trace.travel);
-  out.bodyAcc = lerp(trace.bodyAcc);
-  out.tyreN = lerp(trace.tyreN);
-  out.springN = lerp(trace.springN);
-  out.damperN = lerp(trace.damperN);
-  out.stopN = lerp(trace.stopN);
+  // A plain function, not a closure over i and f: the page calls this every frame (CLAUDE.md, nothing allocated there).
+  out.x = lerp(trace.x, i, f);
+  out.roadZ = lerp(trace.roadZ, i, f);
+  out.bodyZ = lerp(trace.bodyZ, i, f);
+  out.wheelZ = lerp(trace.wheelZ, i, f);
+  out.travel = lerp(trace.travel, i, f);
+  out.bodyAcc = lerp(trace.bodyAcc, i, f);
+  out.tyreN = lerp(trace.tyreN, i, f);
+  out.springN = lerp(trace.springN, i, f);
+  out.damperN = lerp(trace.damperN, i, f);
+  out.stopN = lerp(trace.stopN, i, f);
   return out;
 }
+
+const lerp = (a: Float32Array, i: number, f: number): number => a[i]! + (a[i + 1]! - a[i]!) * f;
 
 /** Duration of a run, s. */
 export const traceSeconds = (trace: BumpTrace): number => (trace.n - 1) * trace.dt;
