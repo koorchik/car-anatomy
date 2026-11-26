@@ -106,14 +106,17 @@ describe('the address', () => {
 });
 
 describe('the 3D', () => {
-  it('rebuilds for a new geometry and not for a damper, a spring or a mass', () => {
-    const key = modelKey(DEFAULT_CHASSIS);
-    const same = (patch: Partial<ChassisDesign>): boolean => modelKey(editChassis(DEFAULT_CHASSIS, patch)) === key;
+  it('rebuilds for a new geometry or a visibly thicker coil, and not for a damper or a mass on its own springs', () => {
+    // Springs of their own, so the mass does not move the rate (a typical spring follows it).
+    const base = editChassis(DEFAULT_CHASSIS, { springNmmF: 32, springNmmR: 60 } as Partial<ChassisDesign>);
+    const key = modelKey(base);
+    const same = (patch: Partial<ChassisDesign>): boolean => modelKey(editChassis(base, patch)) === key;
     expect(same({ [axleKey('damper', 'F')]: 'track' } as Partial<ChassisDesign>)).toBe(true);
-    expect(same({ [axleKey('springNmm', 'R')]: 40 } as Partial<ChassisDesign>)).toBe(true);
-    expect(same({ massKg: DEFAULT_CHASSIS.massKg + 100 })).toBe(true);
-    expect(same({ wheelbaseMm: DEFAULT_CHASSIS.wheelbaseMm + 100 })).toBe(false);
+    expect(same({ massKg: base.massKg + 100 })).toBe(true);
+    expect(same({ wheelbaseMm: base.wheelbaseMm + 100 })).toBe(false);
     expect(same({ layoutR: 'twist-beam' } as Partial<ChassisDesign>)).toBe(false);
+    // The coil's wire is drawn from the rate (d ∝ k^¼): twice the rate is a wire 19% thicker.
+    expect(same({ springNmmR: 120 } as Partial<ChassisDesign>)).toBe(false);
   });
 });
 

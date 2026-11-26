@@ -31,7 +31,7 @@ import { takeNote } from '../../suspension-designer/from-setup.ts';
 import { geometryKey, rimRadiusM } from '../../suspension-designer/geometry.ts';
 import { chassisPreset, randomChassis } from '../../suspension-designer/presets.ts';
 import { chassisMetrics } from '../../suspension-designer/sensitivity.ts';
-import { chassisToSpec } from '../../suspension-designer/to-spec.ts';
+import { chassisToSpec, springRateNm } from '../../suspension-designer/to-spec.ts';
 import { fmt } from './charts.ts';
 import { ControlsPanel } from './controls.ts';
 import { optionLabel } from './params.ts';
@@ -75,11 +75,23 @@ function movedKeys(wanted: ChassisDesign, after: ChassisDesign, set: readonly st
   return Object.keys(b).filter((k) => !set.includes(k) && a[k] !== b[k]);
 }
 
-/** What the 3D draws of a design: both axles' points, where they stand, the wheels, the bars. */
+/** Steps of the spring rate the 3D tells apart: the coil's wire is drawn from the rate (d ∝ k^¼, drawing.ts), so a
+ *  rate 2^¼ (19%) stiffer draws a wire 4% thicker, about half a millimetre: a step the eye can see. */
+const WIRE_STEPS_PER_DOUBLING = 4;
+
+/** What the 3D draws of a design: both axles' points, where they stand, the wheels, the bars, the springs' wire (a
+ *  typical spring follows the mass, so a mass change can redraw it). */
 export function modelKey(d: ChassisDesign): string {
   const f = axleOf(d, 'F');
   const r = axleOf(d, 'R');
-  return JSON.stringify([geometryKey(f, 'F', d.drive, d.wheelbaseMm), geometryKey(r, 'R', d.drive, d.wheelbaseMm), d.wheelbaseMm, d.frontShare, f.barMm > 0, r.barMm > 0]);
+  const wire = (end: AxleEnd): number => {
+    try {
+      return Math.round(WIRE_STEPS_PER_DOUBLING * Math.log2(springRateNm(d, end)));
+    } catch {
+      return NaN;
+    }
+  };
+  return JSON.stringify([geometryKey(f, 'F', d.drive, d.wheelbaseMm), geometryKey(r, 'R', d.drive, d.wheelbaseMm), d.wheelbaseMm, d.frontShare, f.barMm > 0, r.barMm > 0, wire('F'), wire('R')]);
 }
 
 interface Evaluation {
