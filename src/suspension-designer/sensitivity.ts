@@ -71,6 +71,10 @@ export function chassisMetrics(perf: ChassisPerformance): Metric[] {
     val('reserveF', t('Запас ходу до відбійника спереду'), f.travelReserveM * 1000, mm, 0, 20),
     val('reserveR', t('Запас ходу до відбійника ззаду'), r.travelReserveM * 1000, mm, 0, 20),
     pct('unsprung', t('Непідресорена маса'), perf.unsprungShare),
+    pct('ladenRideF', t('Частота кузова з вантажем спереду'), f.laden.rideHz),
+    pct('ladenRideR', t('Частота кузова з вантажем ззаду'), r.laden.rideHz),
+    val('ladenSagF', t('Просідання з вантажем спереду'), f.laden.sagM * 1000, mm, 0, 10),
+    val('ladenSagR', t('Просідання з вантажем ззаду'), r.laden.sagM * 1000, mm, 0, 10),
     val('propUnload', t('Розвантаження заднього колеса під газом'), perf.propUnload * 100, share, 1, 5),
   ];
 }

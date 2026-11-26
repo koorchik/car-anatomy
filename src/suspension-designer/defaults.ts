@@ -6,6 +6,7 @@
 import { jtektKingpinOffsetM, SPLIT_KNUCKLE_DEFAULTS } from '../suspension/templates/macpherson.ts';
 import { multilinkDefaults } from '../suspension/templates/multilink.ts';
 import { wishboneDefaults } from '../suspension/templates/double-wishbone.ts';
+import { pushrodDefaults } from '../suspension/templates/pushrod.ts';
 import { PIVOT_TYPICAL } from '../suspension/templates/pivot.ts';
 import { TWIST_BEAM_TYPICAL } from '../suspension/templates/twist-beam.ts';
 import { SOLID_TYPICAL } from '../suspension/templates/solid-axle.ts';
@@ -23,9 +24,12 @@ export function layoutDefaults(layout: DesignLayout, end: AxleEnd): Partial<Axle
       return { knuckle: 'plain', kingpinOffsetMm: mm(split.kingpinOffsetM), kpiDeg: split.kpiDeg, diffOutputYMm: 250, diffOutputDzMm: 0, unsprungKg: 40 };
     }
     case 'double-wishbone':
-    case 'multilink': {
+    case 'multilink':
+    case 'pushrod': {
       const it = layout === 'multilink' ? multilinkDefaults(axle) : wishboneDefaults(axle);
+      const rocker = pushrodDefaults(axle);
       return {
+        ...(layout === 'pushrod' ? { rockerRatio: rocker.rockerRatio, rockerProgressionDeg: rocker.progressionDeg, thirdSpringNmm: 0 } : {}),
         lowerArmMm: mm(it.lowerArmM),
         upperArmMm: mm(it.upperArmM),
         upperAngleDeg: it.upperAngleDeg,
@@ -120,6 +124,9 @@ function baseAxle(end: AxleEnd): AxleParams {
     beamBushInMm: 100,
     beamBushDzMm: 0,
     beamTorsionNmRad: 2000,
+    rockerRatio: 1,
+    rockerProgressionDeg: 15,
+    thirdSpringNmm: 0,
     solidLateral: 'panhard',
     solidLinks: 'four',
     lowerLinkMm: 550,
@@ -132,6 +139,7 @@ function baseAxle(end: AxleEnd): AxleParams {
     camberDeg: 0,
     toeDeg: 0,
     springNmm: null,
+    springKind: 'coil',
     damper: 'comfort',
     // About what the «comfort» preset gives the default car (to-spec.ts), so switching to 'custom' starts near it.
     damperCompression: 2500,
@@ -169,6 +177,7 @@ export const DEFAULT_CAR: CarParams = {
   driveFront: 0.5,
   finalDrive: TYPICAL_FINAL_DRIVE,
   tyre: 'street',
+  dampers: 'passive',
 };
 
 export const DEFAULT_CHASSIS: ChassisDesign = Object.freeze(designOf(DEFAULT_CAR, typicalAxle('macpherson', 'F'), typicalAxle('multilink', 'R')));

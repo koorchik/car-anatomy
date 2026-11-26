@@ -20,6 +20,7 @@ import { widenCorner } from '../suspension/car-chassis.ts';
 import { macphersonJtekt } from '../suspension/templates/macpherson.ts';
 import { doubleWishbone } from '../suspension/templates/double-wishbone.ts';
 import { multilink, multilinkDefaults } from '../suspension/templates/multilink.ts';
+import { pushrod, pushrodDefaults } from '../suspension/templates/pushrod.ts';
 import { pivotAxle } from '../suspension/templates/pivot.ts';
 import { twistBeamAxle } from '../suspension/templates/twist-beam.ts';
 import { SOLID_TYPICAL, solidAxle } from '../suspension/templates/solid-axle.ts';
@@ -80,7 +81,8 @@ function draw(a: AxleParams, end: AxleEnd, drive: Drive): AxleSpec<AnyAxleLinkag
       return driven ? withDiffOutput(spec, a, zW) : { ...spec, driven: false, diff: 'none', halfshaft: null };
     }
     case 'double-wishbone':
-    case 'multilink': {
+    case 'multilink':
+    case 'pushrod': {
       // The multilink's intent is the double wishbone's with the gaps of its links (the double wishbone ignores them);
       // every field the two templates' defaults differ in is the design's.
       const base = multilinkDefaults(which);
@@ -103,7 +105,13 @@ function draw(a: AxleParams, end: AxleEnd, drive: Drive): AxleSpec<AnyAxleLinkag
         driven,
         diffOutputYM: a.diffOutputYMm / 1000,
       };
-      const spec = a.layout === 'multilink' ? multilink(it) : doubleWishbone(it);
+      // A pushrod is the double wishbone with a rocker; its third spring's rate is set later (to-spec.ts).
+      const spec =
+        a.layout === 'multilink'
+          ? multilink(it)
+          : a.layout === 'pushrod'
+            ? pushrod({ ...pushrodDefaults(which), ...it, rockerRatio: a.rockerRatio, progressionDeg: a.rockerProgressionDeg, thirdWheelRateNm: 0 })
+            : doubleWishbone(it);
       return withDiffOutput(spec, a, zW);
     }
     case 'trailing-arm':
@@ -211,7 +219,7 @@ const GEOMETRY_KEYS = [
   'pivotArmMm', 'pivotYMm', 'pivotDzMm', 'pivotSvDeg', 'beamPos', 'shearDzMm', 'beamArmMm', 'beamBushInMm',
   'beamBushDzMm', 'beamTorsionNmRad', 'solidLateral', 'solidLinks', 'lowerLinkMm', 'upperLinkMm', 'linkAngleDeg',
   'upperLinkAngleDeg', 'lateralZMm', 'diffOutputYMm', 'diffOutputDzMm', 'camberDeg', 'toeDeg', 'tyreWidthMm',
-  'tyreAspect', 'rimIn',
+  'tyreAspect', 'rimIn', 'rockerRatio', 'rockerProgressionDeg',
 ] as const satisfies readonly (keyof AxleParams)[];
 
 /** What decides an axle's points: its geometry parameters, its end and whether it is driven. */
