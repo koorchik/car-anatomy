@@ -1,6 +1,6 @@
 // The cars whose steering the steering scene (stage P13) shows beside the rack: an independent front axle steered by a
 // box with a pitman arm, a centre link and an idler arm, and a steered solid axle with a drag link (suspensions plan,
-// decision 20; build order, A1: the Mercedes-Benz 190 instead of the VAZ).
+// decision 20; build order, A1: the Mercedes-Benz 190 for the independent axle).
 //
 // What was checked (P13-core, 2026-11): no Mercedes-Benz document on the W201's steering gear was found. Two web
 // searches turned up only secondary pages: a workshop guide for the W201 that unhooks a tie rod from the idler arm, a
