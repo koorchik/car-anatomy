@@ -912,6 +912,12 @@ body.gbx-car .gbx-hint {
     font-size: 11.5px;
     text-align: center;
   }
+
+  /* The gas pedal is a third of the column here: its hold button reaches under the brake rather than off the screen. */
+  body.gbx-car .gbx-pedal .latch {
+    grid-column: 2 / span 2;
+    justify-self: end;
+  }
 }
 
 /*
