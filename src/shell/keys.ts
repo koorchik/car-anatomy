@@ -47,6 +47,14 @@ function focusOf(target: EventTarget | null): Focus {
   return el.type === 'range' || el.type === 'checkbox' ? 'control' : 'text';
 }
 
+/**
+ * The code a binding answers to. '?' is matched by what it types, not by where it sits: it is Shift+/ on an English
+ * layout but Shift+7 on the Ukrainian one, where the code alone would toggle the air layer instead of the help.
+ */
+function codeOf(event: KeyboardEvent): string {
+  return event.key === '?' ? 'Slash' : event.code;
+}
+
 function reaches(reach: KeyReach, focus: Focus, blocked: boolean): boolean {
   if (reach === 'always') return true;
   if (blocked) return false;
@@ -105,15 +113,17 @@ export class ShellKeys implements KeyMap {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
     const focus = focusOf(event.target);
     const blocked = this.blocked();
+    const code = codeOf(event);
     for (const binding of this.listening()) {
-      if (!binding.codes.includes(event.code) || !reaches(binding.reach ?? 'page', focus, blocked)) continue;
+      if (!binding.codes.includes(code) || !reaches(binding.reach ?? 'page', focus, blocked)) continue;
       if (binding.down(event) !== false) return;
     }
   }
 
   private up(event: KeyboardEvent): void {
+    const code = codeOf(event);
     for (const binding of this.listening()) {
-      if (binding.up && binding.codes.includes(event.code)) binding.up(event);
+      if (binding.up && binding.codes.includes(code)) binding.up(event);
     }
   }
 }
