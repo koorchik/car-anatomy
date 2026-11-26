@@ -16,6 +16,7 @@ import type * as THREE from 'three';
 import { HP_PER_KW, powerKw, type EngineTorqueMap } from '../../engine/torque-map.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { plural, t } from '../../i18n/t.ts';
+import type { RunStore } from '../../shell/section.ts';
 import { RpmChart, type ChartSeries } from '../designer/chart.ts';
 import { publishedText } from '../published.ts';
 import { RunRecorder, StepTest, peaksOf, shownPoint, turboSag, type Run, type RunKind } from './runs.ts';
@@ -26,6 +27,8 @@ export type EngineSource = { kind: 'catalogue' } | { kind: 'designer'; design: D
 
 export interface DynoHost {
   drive: Drive;
+  /** The shell's store, where the runs outlive the page (DYNO_RUNS). */
+  runs: RunStore;
   /** Where the rig goes in the scene: beside the engine, not shaking with it. */
   extras: THREE.Group;
   /** Lowers the shadow floor when the rig stands below the engine's base. */
@@ -40,6 +43,18 @@ export interface DynoHost {
   toggle?: HTMLButtonElement;
   column?: HTMLElement;
 }
+
+/** The latest run and the one before it. */
+export interface DynoRuns {
+  current: Run | null;
+  previous: Run | null;
+}
+
+/**
+ * Where the runs are kept in the shell's RunStore: they outlive a change of engine, a visit to the designer and a
+ * visit to another section, and another section (the gearboxes' traction chart) can read the latest.
+ */
+export const DYNO_RUNS = 'engines.dyno-runs';
 
 /** Lever arm from the absorber's axis to the load cell on this rig, m. */
 export const ARM_M = 0.35;
@@ -99,8 +114,7 @@ export class DynoPanel {
   private stepTest: StepTest | null = null;
   private sweeping = false;
   private sweepSeenRamp = false;
-  private current: Run | null = null;
-  private previous: Run | null = null;
+  private readonly runs: DynoRuns;
   private window: CrankReadings[] = [];
   private last: CrankReadings | null = null;
   private shown = { rpm: 0, nm: 0, absorber: 0, throttle: 0, manifold: 0 };
@@ -115,6 +129,8 @@ export class DynoPanel {
 
   constructor(host: DynoHost) {
     this.host = host;
+    this.runs = host.runs.get<DynoRuns>(DYNO_RUNS) ?? { current: null, previous: null };
+    host.runs.set(DYNO_RUNS, this.runs);
     host.extras.add(this.rig.group);
     this.toggleButton = host.toggle ?? dynoToggle();
     this.element = host.column ?? document.createElement('section');
@@ -438,6 +454,22 @@ export class DynoPanel {
   private engineName(): string {
     if (this.source.kind === 'designer') return this.source.design.name;
     return this.engine?.spec.example ?? '';
+  }
+
+  private get current(): Run | null {
+    return this.runs.current;
+  }
+
+  private set current(run: Run | null) {
+    this.runs.current = run;
+  }
+
+  private get previous(): Run | null {
+    return this.runs.previous;
+  }
+
+  private set previous(run: Run | null) {
+    this.runs.previous = run;
   }
 
   /** A new run moves the last one to "previous", so the two can be compared. */
