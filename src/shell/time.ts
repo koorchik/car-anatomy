@@ -28,6 +28,8 @@ export class ShellTime implements TimeControl {
   mode: TimeMode = 'readable';
   factor = 1;
   frozen: FreezeOptions | null = null;
+  /** The mode last chosen by the visitor or a page, which a fallback in refresh() does not replace. */
+  private chosen: { mode: TimeMode; factor: number } = { mode: 'readable', factor: 1 };
   private readonly group: HTMLElement;
   private readonly capabilities: () => TimeCapabilities;
   private readonly listeners = new Set<(mode: TimeMode) => void>();
@@ -40,6 +42,13 @@ export class ShellTime implements TimeControl {
   }
 
   set(mode: TimeMode, factor?: number): boolean {
+    if (!this.apply(mode, factor)) return false;
+    this.chosen = { mode, factor: this.factor };
+    return true;
+  }
+
+  /** set() without remembering the mode as chosen: a fallback for a page that does not offer the chosen one. */
+  private apply(mode: TimeMode, factor?: number): boolean {
     const offered = this.capabilities();
     if (!choosable(offered, mode)) return false;
     this.mode = mode;
@@ -65,7 +74,18 @@ export class ShellTime implements TimeControl {
     // or slow motion once the dyno is on: the visitor goes on in the readable or the real mode, else the page's first.
     if (choosable(offered, this.mode)) return;
     const next = FALLBACK.find((mode) => choosable(offered, mode)) ?? offered.modes.find((mode) => choosable(offered, mode));
-    if (next) this.set(next);
+    if (next) this.apply(next);
+  }
+
+  /**
+   * The shell shows another section: refresh(), and back to the mode the visitor chose if this page offers it. A
+   * section that offers fewer modes (the suspensions' rig, only the real time) does not take the engine pages' slow
+   * or readable mode away for good.
+   */
+  showSection(): void {
+    this.refresh();
+    const { mode, factor } = this.chosen;
+    if (mode !== this.mode || factor !== this.factor) this.apply(mode, factor);
   }
 
   clock(_seconds: number | null): void {

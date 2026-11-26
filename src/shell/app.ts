@@ -170,7 +170,7 @@ export class Shell {
     this.shown = section;
     this.view.name(section.solidLabel);
     this.solidKey.label = section.solidLabel;
-    this.time.refresh();
+    this.time.showSection();
   }
 
   /** Another address. A section not shown yet loads first; the page stays as it is until then. */
