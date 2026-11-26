@@ -419,7 +419,9 @@ export function dynamicTopSpeed(cd: CarDrive, g: CarGear, v0: number, seconds: n
   const crank = memberIndex(s.core, CRANK);
   let before = 0;
   while (veh.time < seconds) {
-    s.memberTorque[crank] = stubTorque(cd.map, s.memberSpeed(crank), 1);
+    // Full load as the runs and steadyTopSpeed take it (with a turbo's steady boost); past the limit the fuel is cut.
+    const omega = s.memberSpeed(crank);
+    s.memberTorque[crank] = omega * RPM > cd.map.limitRpm ? stubTorque(cd.map, omega, 1) : fullLoadTorque(cd.map, omega);
     veh.step(dt);
     if (before === 0 && veh.time >= seconds - 1) before = ch.v;
   }

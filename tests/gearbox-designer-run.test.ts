@@ -46,6 +46,20 @@ describe('«Проїхати»: the whole core against the panel', () => {
     expect(cd.gears[0]!.ratio).toBeCloseTo(evaluateGearbox(civic).gears[0]!.overall, 2);
   });
 
+  it('pulls with a turbo\'s steady boost: full load reaches each engine\'s published peak torque', async () => {
+    const { fullLoadTorque } = await import('../src/drivetrain/engine-stub.ts');
+    const { engineSource } = await import('../src/gearbox-designer/engine-source.ts');
+    const { engineFacts } = await import('../src/data/engines.ts');
+    // The catalogue's sourced figures: two turbocharged engines and one without.
+    for (const id of ['i4/civic-type-r-k20c1', 'b6/porsche-992-carrera-3-0', 'i4/bmw-m3-e30-s14']) {
+      const nm = engineFacts(id)!.torqueNm!;
+      const map = engineSource(id)!.map;
+      let peak = 0;
+      for (let rpm = 1000; rpm < map.limitRpm; rpm += 50) peak = Math.max(peak, fullLoadTorque(map, (rpm * Math.PI) / 30));
+      expect(Math.abs(peak / nm - 1)).toBeLessThan(0.03);
+    }
+  });
+
   it('drives a helical differential as the plate one of the same torque split', () => {
     expect(runDifferential({ ...own, diff: 'helical', tbr: 3 })).toEqual({ kind: 'plate', lockDrive: 0.5, lockCoast: 0.5, preloadNm: 0 });
   });
