@@ -9,8 +9,8 @@ import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
 import { designFromSpec } from '../src/designer/presets.ts';
 import { Router, type RouterWindow } from '../src/shell/router.ts';
 import { CONTEXT_KEYS, formatRoute, HOME, parseRoute, PATTERNS, QUERY_KEYS, RESERVED, type Route, type SectionId } from '../src/shell/routes.ts';
-import { designerRoute, DesignerPage } from '../src/ui/designer/designer-page.ts';
-import { catalogueEngineId, enginesPage } from '../src/ui/engines/routes.ts';
+import { designerAddress, designerRoute, DesignerPage } from '../src/ui/designer/designer-page.ts';
+import { catalogueEngineId, enginesPage, featureQuery, routeLayers } from '../src/ui/engines/routes.ts';
 import { SumpPage } from '../src/ui/sump/sump-page.ts';
 
 const ROOT = join(import.meta.dirname, '..');
@@ -192,6 +192,20 @@ describe('routes', () => {
     }
   });
 
+  it('reads the dyno and the layers from an address', () => {
+    expect(parseRoute('#/engines/i4?m=dyno').query.m).toBe('dyno');
+    expect(enginesPage(parseRoute('#/engines/i4?m=dyno'))).toBe('catalogue');
+    expect(routeLayers(parseRoute('#/engines/i4'))).toBeNull();
+    expect(routeLayers(parseRoute('#/engines/i4?l=air,oil,nonsense'))).toEqual(['oil', 'air']);
+    expect(routeLayers(parseRoute('#/engines/i4?l=oil%2Cfuel'))).toEqual(['oil', 'fuel']);
+    expect(routeLayers(parseRoute('#/engines/i4?l='))).toEqual([]);
+    for (const [key, value] of Object.entries(featureQuery(true, ['air', 'fuel', 'coolant', 'oil']))) {
+      const known = QUERY_KEYS.find((k) => k.key === key)!;
+      expect(known.sections, key).toContain('engines');
+      if (known.values?.engines) expect(known.values.engines, key).toContain(value);
+    }
+  });
+
   it('has one table of query keys without two meanings for one key', () => {
     const keys = QUERY_KEYS.map((k) => k.key);
     expect(new Set(keys).size).toBe(keys.length);
@@ -232,6 +246,32 @@ describe('router', () => {
     router.push({ section: 'engines', page: 'catalogue', path: ['i4'] });
     expect(win.location.hash).toBe('#/engines/i4?car=civic-type-r-fk8');
     expect(win.writes).toHaveLength(1);
+  });
+
+  it('keeps the context, the dyno and the layers through several edits in the designer', () => {
+    const start = encodeDesign(DEFAULT_DESIGN);
+    const win = fakeWindow(`#/designer/${start}?m=dyno&l=oil,coolant&car=civic-type-r-fk8&ret=car`);
+    const router = new Router(() => win);
+    for (const cylinders of [6, 8, 3]) {
+      const design: Design = { ...DEFAULT_DESIGN, cylinders };
+      router.replace(designerAddress(design, router.current));
+      expect(win.location.hash).toBe(`#/designer/${encodeDesign(design)}?m=dyno&l=oil,coolant&car=civic-type-r-fk8&ret=car`);
+    }
+    // Without them the designer writes its code and the context alone, as it always did.
+    const plain = fakeWindow(`#/designer/${start}?car=civic-type-r-fk8`);
+    new Router(() => plain).replace(designerAddress(DEFAULT_DESIGN, parseRoute(plain.location.hash)));
+    expect(plain.location.hash).toBe(`#/designer/${start}?car=civic-type-r-fk8`);
+  });
+
+  it('writes the dyno and the layers into the address in place, with the context kept', () => {
+    const win = fakeWindow('#/engines/i4?car=civic-type-r-fk8');
+    const router = new Router(() => win);
+    router.replace({ query: { ...router.current.query, ...featureQuery(true, ['coolant', 'oil']) } });
+    expect(win.location.hash).toBe('#/engines/i4?car=civic-type-r-fk8&m=dyno&l=oil,coolant');
+    expect(parseRoute(win.location.hash).query).toMatchObject({ m: 'dyno', l: 'oil,coolant', car: 'civic-type-r-fk8' });
+    router.replace({ query: { ...router.current.query, ...featureQuery(false, []) } });
+    expect(win.location.hash).toBe('#/engines/i4?car=civic-type-r-fk8');
+    expect(win.writes).toHaveLength(2);
   });
 
   it('drops the context only when asked, and never shares it', () => {

@@ -21,6 +21,8 @@ export interface SystemsHost {
   wantAssembled(): void;
   /** Injection and spark marks for the cycle diagram while the fuel layer shows; null clears them. */
   markers?(markers: CycleMarkers | null): void;
+  /** After a layer was switched on or off, so the address can say which are on. */
+  switched?(): void;
 }
 
 /** Layers in the order of their keys, 4 to 7. */
@@ -184,6 +186,11 @@ export class SystemsView {
     return this.on.has(id);
   }
 
+  /** The layers switched on, in the order of their keys. */
+  get shown(): LayerId[] {
+    return LAYERS.map((l) => l.id).filter((id) => this.on.has(id));
+  }
+
   get state(): SystemsState {
     return this.sim.state;
   }
@@ -263,6 +270,7 @@ export class SystemsView {
     }
     this.syncButtons();
     this.lastText = 0;
+    this.host.switched?.();
   }
 
   private syncButtons(): void {

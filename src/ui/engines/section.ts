@@ -99,10 +99,11 @@ export class EnginesSection implements Section {
     this.catalogue.load(this.engine, false);
   }
 
-  enter(_route: Route, from: Route | null): void {
+  enter(route: Route, from: Route | null): void {
     if (this.away) this.resume();
     if (from === null || this.page() !== 'catalogue' || this.onDesigner || this.sump.on) this.applyRoute();
     else this.catalogue.enter();
+    this.features.fromRoute(route);
   }
 
   /** The page the address opens now. Read afresh, because leaving a page may rewrite the address in place. */

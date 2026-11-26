@@ -19,6 +19,7 @@ import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
 import { router, type RouteTarget } from '../../shell/router.ts';
 import type { Route } from '../../shell/routes.ts';
+import { keptFeatures } from '../engines/routes.ts';
 import { probesFor } from './probes.ts';
 import { DesignerControls, type DesignPatch } from './controls.ts';
 import { DesignerResults } from './results.ts';
@@ -30,6 +31,9 @@ const TRIM_DELAY_MS = 700;
 
 /** The designer's address for a design: #/designer/<code>, with no keys of its own; the router keeps the context. */
 export const designerRoute = (design: Design): RouteTarget => ({ section: 'engines', page: 'designer', path: [encodeDesign(design)], query: {} });
+
+/** The address the designer writes after a change: its design, with the dyno and the layers the page shows kept. */
+export const designerAddress = (design: Design, current: Route): RouteTarget => ({ ...designerRoute(design), query: keptFeatures(current) });
 
 export interface DesignerHost {
   /** Rebuild the 3D model and everything drawn from the engine's geometry. */
@@ -375,7 +379,7 @@ export class DesignerPage {
     window.clearTimeout(this.urlTimer);
     this.urlTimer = window.setTimeout(() => {
       if (!this.active) return;
-      const target = designerRoute(this.design);
+      const target = designerAddress(this.design, router.current);
       const code = target.path[0]!;
       router.replace(target);
       try {
