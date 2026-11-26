@@ -7,8 +7,10 @@ export const SUSPENSION_MULTILINK_EN: Record<string, string> = {
   'NHTSA зважила й виміряла 190 1987 року: 1302 кг, 54,4 % ваги спереду, центр мас на висоті 0,559 м.':
     'NHTSA weighed and measured a 1987 190: 1302 kg, 54.4 % of the weight in front, the center of gravity 0.559 m up.',
   'Спереду стійка Макферсон із подвійним шарніром унизу, ззаду п’ять тяг, важелі алюмінієві.': 'A MacPherson strut with a double-joint lower arm in front, five links at the rear, aluminum arms.',
-  'Ззаду «модульна спортивна» багаторичажна вісь вагою 49 кг. Слабші версії мають легшу вісь на 38 кг, тож одна модель авто їздить на двох різних задніх підвісках.':
-    'At the rear, the “modular performance” multi-link axle, 49 kg. Weaker versions get a lighter 38 kg axle, so one model rides on two different rear suspensions.',
+  'Ззаду «модульна спортивна» багаторичажна вісь вагою 49 кг: поздовжній важіль і три поперечні тяги — нижня, на яку спирається пружина, верхня й тяга сходження. Тяг тут чотири, а сторінка показує типову п’ятиважільну геометрію.':
+    'At the rear, the “modular performance” multi-link axle, 49 kg: a trailing link and three transverse links (the lower one the spring sits on, the upper one and the toe link). That is four links; the page shows the typical five-link geometry.',
+  'Версії слабші за 90 кВт мають іншу задню вісь вагою 38 кг: поперечний профіль, що працює на скручування, тобто скручувану балку. Тож одна модель авто їздить на двох різних задніх підвісках.':
+    'Versions under 90 kW get another rear axle, 38 kg: a transverse profile that works in torsion, that is a twist beam. So one model rides on two different rear suspensions.',
   'Про багаторичажну підвіску': 'About the multi-link suspension',
   'Кожен поперечний важіль тут розділено на дві окремі тяги, кожна зі своїм шарніром на кулаці, а п’ята тяга задає сходження. Тяги пари сходяться не на кулаці, а в уявній точці поза ним, тож вісь, навколо якої хитається кулак, можна поставити там, куди справжня кульова опора не дістала б: усередину гальмівного диска або під саму пляму контакту.': 'Each control arm is split here into two separate links, each with its own joint on the knuckle, and a fifth link sets the toe. The links of a pair meet not on the knuckle but at a virtual point beyond it, so the axis the knuckle swings about can be placed where a real ball joint could not reach: inside the brake rotor, or right under the contact patch.',
   'П’ять тяг, один рух': 'Five links, one motion',

@@ -9,8 +9,10 @@
 // - Toyota GR Supra (A90): wheelbase 2470 mm and 1410–1520 kg (Wikipedia; the heavier is the 3.0 the page shows). The
 //   strut with a double-joint lower arm in front and the five links at the rear are Toyota's press pack as the plan
 //   cites it; not seen again here. Tracks, tyres and the weight split are not checked.
-// - Volkswagen Golf 7: the «modular performance suspension» at the rear, 49 kg, on the stronger versions, and the 38 kg
-//   «modular lightweight» axle on those under 90 kW (Volkswagen's 2012 launch text; another page of it puts the line
+// - Volkswagen Golf 7: the «modular performance suspension» at the rear, 49 kg, on the stronger versions (a trailing
+//   link, the spring link, the upper transverse link and the tie rod: four links, as the launch text names them), and
+//   the 38 kg «modular lightweight» axle, a transverse profile with torsion inserts (a twist beam), on those under 90 kW
+//   (Volkswagen's 2012 launch text; another page of it puts the line
 //   at 110 kW, which the 2.0 TDI's 110 kW meets either way); wheelbase 2637 mm (Wikipedia). The mass is a value inside
 //   Wikipedia's 1205–1500 kg range, the weight split the Mk6 GTI's from Car and Driver; tracks and tyres not checked.
 
@@ -72,7 +74,8 @@ const GOLF_7: PageCar = {
     layouts: ['macpherson', 'multilink'],
   }),
   facts: [
-    t('Ззаду «модульна спортивна» багаторичажна вісь вагою 49 кг. Слабші версії мають легшу вісь на 38 кг, тож одна модель авто їздить на двох різних задніх підвісках.'),
+    t('Ззаду «модульна спортивна» багаторичажна вісь вагою 49 кг: поздовжній важіль і три поперечні тяги — нижня, на яку спирається пружина, верхня й тяга сходження. Тяг тут чотири, а сторінка показує типову п’ятиважільну геометрію.'),
+    t('Версії слабші за 90 кВт мають іншу задню вісь вагою 38 кг: поперечний профіль, що працює на скручування, тобто скручувану балку. Тож одна модель авто їздить на двох різних задніх підвісках.'),
   ],
   sources: [
     'https://www.volkswagen-newsroom.com/en/the-new-golf-das-auto-international-driving-presentation-2797/the-new-golf-running-gear-suspensions-2847',
