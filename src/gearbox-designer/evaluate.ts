@@ -338,6 +338,8 @@ function standingStart(m: Model): { zeroTo100S: number | null; zeroTo400mS: numb
 
   while (t < 60) {
     const now = state(t, vel, aPrev);
+    const was = phase;
+    const gWas = g;
     // Phase changes, checked at the start of each step as runs.ts does.
     if (phase === 'launch' && now.omegaIn >= m.omegaLaunch * (1 - 1e-9)) phase = 'drive';
     if (phase === 'drive' && now.omegaIn >= m.omegaShift * (1 - 1e-9)) {
@@ -355,7 +357,7 @@ function standingStart(m: Model): { zeroTo100S: number | null; zeroTo400mS: numb
       phase = 'drive';
       backT = t;
     }
-    const k1 = state(t, vel, aPrev);
+    const k1 = phase === was && g === gWas ? now : state(t, vel, aPrev);
     // The step: short in the ramps, else sized so that the speed changes by about 0.3 m/s; landing on the next event.
     let dt: number;
     if (phase === 'lift') dt = Math.min(0.015, liftT + RUN.torqueRampS - t);

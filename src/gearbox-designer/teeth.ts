@@ -17,7 +17,7 @@
 // Picks are cached: the sensitivity checks run the model twice per control, and most controls leave the teeth alone.
 
 import { centreDistance, helixForCentre, shiftSumForCentre, undercut } from '../drivetrain/gear-geometry.ts';
-import { gcd, pairCandidates, type PairPick } from '../drivetrain/gear-pick.ts';
+import { gcd, type PairPick } from '../drivetrain/gear-pick.ts';
 import { HELIX_SPREAD, MAX_HELIX, MAX_TEETH, MIN_TEETH, type FinalSetting, type PairSetting, type ReverseSetting } from './design.ts';
 
 const DEG = Math.PI / 180;
@@ -91,10 +91,12 @@ export interface CylRequest {
 /** A candidate pair with the shift sum that closes the centre distance and its two shifts. */
 type Candidate = PairPick & { shiftSum: number; shift: [number, number] };
 
+/** Ratios closer than this count as the same (gear-pick.ts). */
+const EXACT = 1e-12;
+
 /** Nearest first; the grid step around the target, as gear-pick.ts measures it. */
 function nearest(found: Candidate[]): { pick: Candidate; step: number } | null {
   if (!found.length) return null;
-  const EXACT = 1e-12;
   const exact = found.some((p) => Math.abs(p.error) <= EXACT);
   const below = Math.max(...found.filter((p) => p.error < -EXACT).map((p) => p.ratio));
   const above = Math.min(...found.filter((p) => p.error > EXACT).map((p) => p.ratio));
@@ -122,15 +124,48 @@ function withShifts(p: PairPick, shiftSum: number, req: CylRequest): Candidate |
   return shifted ? { ...p, helix, shiftSum: sum, shift: shifted } : null;
 }
 
-/** Candidates of one request that can be cut without undercut: coprime when there are any, else all. */
-function candidates(req: CylRequest, shiftSum: number): Candidate[] {
-  const base = {
-    ratio: req.ratio, centreMm: req.centreMm, module: req.module, helixRange: helixRange(req.helix), pressureAngle: req.pressureAngle,
-    shiftSum, minTeeth: MIN_TEETH, maxTeeth: MAX_TEETH,
+/**
+ * Candidates of one request that can be cut without undercut, coprime when there are any, else all; of each tooth
+ * sum the centre distance allows (as gear-pick.ts pairCandidates allows them) only the nearest on each side of the
+ * target and an exact one. Within a sum the ratio falls as the driving gear grows, so the nearest pair overall and the
+ * neighbours that set the grid step are always among these: the same pick as from the whole list, from a few dozen
+ * pairs instead of hundreds (tests/gearbox-designer 7 times it). A spur pair asks for the one sum its shift sum closes.
+ */
+function candidates(req: CylRequest, shiftSum: number, onlySum?: number): Candidate[] {
+  const alpha = req.pressureAngle;
+  const [lo, hi] = helixRange(req.helix);
+  const spur = lo === 0 && hi === 0;
+  const scan = (coprimeOnly: boolean): Candidate[] => {
+    const found: Candidate[] = [];
+    for (let sum = onlySum ?? 2 * MIN_TEETH; sum <= (onlySum ?? 2 * MAX_TEETH); sum++) {
+      const helix = spur ? 0 : helixForCentre(req.centreMm, req.module, 1, sum - 1, alpha, shiftSum);
+      const fits = spur
+        ? Math.abs(centreDistance(req.module, 1, sum - 1, 0, alpha, shiftSum) - req.centreMm) < 1e-6
+        : Number.isFinite(helix) && helix >= lo - 1e-9 && helix <= hi + 1e-9;
+      if (!fits) continue;
+      const first = Math.max(MIN_TEETH, sum - MAX_TEETH);
+      const last = Math.min(MAX_TEETH, sum - MIN_TEETH);
+      const ideal = Math.floor(sum / (1 + req.ratio));
+      /** The first pair that can be cut walking from z1 by dz; exact ones on the way are kept too. */
+      const walk = (from: number, dz: 1 | -1): void => {
+        for (let z1 = from; z1 >= first && z1 <= last; z1 += dz) {
+          const z2 = sum - z1;
+          const coprime = gcd(z1, z2) === 1;
+          if (coprimeOnly && !coprime) continue;
+          const ratio = z2 / z1;
+          const c = withShifts({ teeth: [z1, z2], ratio, error: ratio - req.ratio, helix, coprime, step: Infinity }, shiftSum, req);
+          if (!c) continue;
+          found.push(c);
+          if (Math.abs(c.error) > EXACT) return;
+        }
+      };
+      walk(Math.min(last, ideal), -1);
+      walk(Math.max(first, ideal + 1), 1);
+    }
+    return found;
   };
-  const fit = (list: PairPick[]): Candidate[] => list.flatMap((p) => withShifts(p, shiftSum, req) ?? []);
-  const found = fit(pairCandidates(base));
-  return found.length ? found : fit(pairCandidates({ ...base, coprime: false }));
+  const found = scan(true);
+  return found.length ? found : scan(false);
 }
 
 /** Spur tooth sums the centre distance allows with a shift sum within ±1, and that sum. */
@@ -162,7 +197,7 @@ export function pickCylPair(req: CylRequest): PickedPair | null {
   return remember(pairCache, key, () => {
     const spur = (): Candidate[] =>
       spurSums(req.centreMm, req.module, req.pressureAngle).flatMap(({ sum, shiftSum }) =>
-        candidates({ ...req, helix: 0 }, shiftSum).filter((p) => p.teeth[0] + p.teeth[1] === sum),
+        candidates({ ...req, helix: 0 }, shiftSum, sum),
       );
     // A nominal helix of a few degrees may leave no whole tooth sum inside its narrow range: then the pair goes spur.
     let found = req.helix === 0 ? spur() : candidates(req, 0);
