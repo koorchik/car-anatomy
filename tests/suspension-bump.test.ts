@@ -109,6 +109,32 @@ describe('bump run', () => {
     }
   });
 
+  it('calls a corner settled only when it stays settled, as a longer run shows', () => {
+    // Settled: the travel within 1.5 mm of rest and the body within 2 mm of where it ends (docs/suspension-model.md).
+    const trueSettle = (rc: ReturnType<typeof resolved>, scene: BumpScene): number => {
+      const run = runBump(rc, scene);
+      const sim = new QuarterSim(rc, new RoadBuffer(new EventRoad(run.trace.events), rc.tyre.freeRadiusM, rc.tyre.patchM), scene.speedKmh / 3.6);
+      sim.reset(0);
+      const end = scene.obstacle.startsWith('kerb') ? (scene.obstacle === 'kerb' ? 0.1 : 0.12) : 0;
+      let last = 0;
+      for (let i = 0; i < 10_000; i++) {
+        sim.step(0.001);
+        const off = Math.abs(sim.out.travel - rc.staticTravelM) > 0.0015 || Math.abs(sim.out.bodyZ - rc.bodyStaticM - end) > 0.002;
+        if (off && i * 0.001 > run.trace.leaveS) last = i * 0.001;
+      }
+      return last - run.trace.leaveS;
+    };
+    for (const [setup, scene] of [[{}, BUMP_DEFAULT], [{}, BUMP_PUNCH], [{}, { ...BUMP_DEFAULT, obstacle: 'kerb' }], [{ damper: 'worn' }, BUMP_DEFAULT]] as const) {
+      const rc = resolved(setup);
+      const reported = runBump(rc, scene).stats.settleS;
+      const truth = trueSettle(rc, scene);
+      if (reported === null) expect(truth).toBeGreaterThan(3);
+      else expect(Math.abs(reported - truth)).toBeLessThan(0.003);
+    }
+    // The punch's body still swings through rest at 3 s: not settled.
+    expect(runBump(resolved(), BUMP_PUNCH).stats.settleS).toBeNull();
+  });
+
   it('takes any scene from a link', () => {
     expect(clampScene({ obstacle: 'cliff' as never, speedKmh: 900, wheel: undefined })).toEqual({ ...BUMP_DEFAULT, speedKmh: 120 });
     expect(clampScene({ speedKmh: Number.NaN })).toEqual(BUMP_DEFAULT);

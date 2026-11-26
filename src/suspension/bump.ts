@@ -87,7 +87,8 @@ const LEAD_S = 0.4;
 /** Longest the run goes on after the obstacle, and the least, s. */
 const MAX_AFTER_S = 3;
 const MIN_AFTER_S = 0.8;
-/** Kept after the corner has settled, s. */
+/** Kept after the corner has settled, s. A run is also written this much past MAX_AFTER_S, so a corner that only
+ *  passes through the settled band at the cut (a slow body swing crossing rest) is not taken for settled. */
 const TAIL_S = 0.5;
 /** Settled: the travel within 1.5 mm of rest and the body within 2 mm of where it ends. */
 const SETTLE_TRAVEL_M = 0.0015;
@@ -164,7 +165,7 @@ export function runBump(corner: ResolvedCorner, raw: BumpScene): BumpRun {
   const reachS = atM / v;
   const leaveS = (atM + o.lengthM) / v;
   const h = QUARTER_STEP_S;
-  const cap = Math.ceil((leaveS + MAX_AFTER_S) / h) + 1;
+  const cap = Math.ceil((leaveS + MAX_AFTER_S + TAIL_S) / h) + 1;
   const arrays = {
     x: new Float32Array(cap),
     roadZ: new Float32Array(cap),
@@ -207,7 +208,8 @@ export function runBump(corner: ResolvedCorner, raw: BumpScene): BumpRun {
   for (let i = leaveI; i < cap; i++) {
     if (Math.abs(arrays.travel[i]! - restTravel) > SETTLE_TRAVEL_M || Math.abs(arrays.bodyZ[i]! - bodyEnd) > SETTLE_BODY_M) lastUnsettled = i;
   }
-  const settled = lastUnsettled < cap - 1;
+  // Settled within MAX_AFTER_S, and seen to stay so for at least TAIL_S after it.
+  const settled = lastUnsettled < leaveI + Math.round(MAX_AFTER_S / h);
   const endI = settled ? Math.min(cap, Math.max(lastUnsettled + Math.round(TAIL_S / h), leaveI + Math.round(MIN_AFTER_S / h))) : cap;
   const n = endI;
   const cut = (a: Float32Array): Float32Array => a.subarray(0, n);
