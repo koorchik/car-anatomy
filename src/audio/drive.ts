@@ -55,6 +55,8 @@ export class Drive {
   private shownAngle = 0;
   private volume = 0.8;
   private muted = false;
+  /** Silenced by the page (pause): the audio thread stays suspended even when the tab comes back. */
+  private paused = false;
   private listen: ListenPosition = 'exhaust';
   private lockedRpm: number | null = null;
   private pedal = 0;
@@ -76,7 +78,7 @@ export class Drive {
     document.addEventListener('visibilitychange', () => {
       if (!this.ctx) return;
       if (document.hidden) void this.ctx.suspend();
-      else void this.ctx.resume();
+      else if (!this.paused) void this.ctx.resume();
     });
   }
 
@@ -86,6 +88,17 @@ export class Drive {
 
   get sampleRate(): number {
     return this.ctx?.sampleRate ?? 48000;
+  }
+
+  /**
+   * Suspends the audio thread, so nothing is heard at once, the tail of a stopping engine included; false lets it run
+   * again. The engine's state is the caller's: stop it first, and the local copy takes over from the last report.
+   */
+  pause(on: boolean): void {
+    this.paused = on;
+    if (!this.ctx) return;
+    if (on) void this.ctx.suspend();
+    else if (!document.hidden) void this.ctx.resume();
   }
 
   /** Has to be called from a user gesture the first time, because browsers require it. */
@@ -209,6 +222,16 @@ export class Drive {
     this.wanted = false;
     this.local.stop();
     this.post({ type: 'stop' });
+  }
+
+  /**
+   * The engine stands still at once, with no run-down: for a section that silences the engine (ShellAudio.suspend).
+   * A stop would only freeze the run-down with the audio thread, and the visitor would hear the rest of it on coming back.
+   */
+  halt(): void {
+    this.wanted = false;
+    this.local.adopt('off', 0);
+    this.post({ type: 'halt' });
   }
 
   /** Holds the crank at a fixed speed for slow motion. Null releases it. */

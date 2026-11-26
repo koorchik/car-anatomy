@@ -68,6 +68,20 @@ export class Router {
     return formatRoute({ section: target.section, page: target.page, path: target.path, query: withContext(this.current.query, target.query ?? {}) });
   }
 
+  /**
+   * A link of a page (`#/…` in its markup) as the router would write it: the visitor's context added where the link
+   * does not say. The same text when there is no context to add, so that a link without it opens as it is written,
+   * and for a link to the car's own pages: the context is the way back there, and those pages do not carry it.
+   */
+  link(hash: string): string {
+    const query = this.current.query;
+    if (!CONTEXT_KEYS.some((key) => query[key] !== undefined)) return hash;
+    const target = parseRoute(hash);
+    if (target.section === 'car') return hash;
+    const href = this.href(target);
+    return formatRoute(target) === href ? hash : href;
+  }
+
   /** A whole address to share. The visitor's context belongs to their visit, not to the page, and stays out. */
   shareUrl(target: RouteTarget): string {
     const query: Record<string, string> = {};

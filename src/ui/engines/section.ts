@@ -13,7 +13,7 @@ import { registerParts } from '../../scene/parts-registry.ts';
 import { PistonEngineModel } from '../../scene/piston-engine.ts';
 import { RotaryEngineModel } from '../../scene/rotary-engine.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
-import type { KeyBinding, PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
+import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
 import { readableDegreesPerSecond } from '../../shell/time.ts';
 import { shownAdvance, type SystemsFrame } from '../../systems/sim.ts';
 import { tableHtml } from '../table.ts';
@@ -23,6 +23,7 @@ import { EngineDash } from './dash.ts';
 import type { DesignerHost } from './designer-host.ts';
 import { $ } from './dom.ts';
 import { EngineFeatures } from './features.ts';
+import { ENGINE_KEY_CONTEXTS, engineKeys } from './keys.ts';
 import { actionsHtml, afterDashHtml, badgeHtml, dashHtml, panelHtml, resultsHtml, SLOW_RPM_DEFAULT, statusHtml, tableHeadHtml, titleHtml, toolsHtml } from './markup.ts';
 import { enginesPage, type EnginesPage } from './routes.ts';
 import { SumpMode } from './sump-host.ts';
@@ -30,6 +31,9 @@ import './engines.css';
 
 /** No cylinder resting, shared so that the frame does not make a new list each time. */
 const NONE_RESTING: number[] = [];
+
+/** The classes on <body> with which the engine pages and features style the shared skeleton. */
+const BODY_CLASSES = ['sump-mode', 'designer-mode', 'dyno-mode', 'forces-on'];
 
 export class EnginesSection implements Section {
   readonly id = 'engines' as const;
@@ -57,7 +61,11 @@ export class EnginesSection implements Section {
   /** The freeze the camera has gone home for (see TimeControl.frozen). */
   private homedFor: FreezeOptions | null = null;
   /** Between leave() and the next enter(): another section is shown. */
-  private away = false;
+  away = false;
+  /** The body classes of BODY_CLASSES that were on when the section left, put back when it returns. */
+  private leftBodyClasses: string[] = [];
+  /** The panel's heading and the document's title as this section left them. */
+  private leftTitles = { panel: '', document: '' };
   /** Reused every frame: the systems step allocates nothing. */
   private readonly systemsFrame: SystemsFrame = { theta: 0, advance: 0, rpm: 0, load: 0, throttle: 0, boost: 0, running: false, cranking: false, fuelCut: true, live: false, dt: 0, timeScale: 1 };
   /** Valve events and firing cylinders for the systems layers, written in place each frame. */
@@ -98,13 +106,11 @@ export class EnginesSection implements Section {
     this.catalogue.load(this.engine, false);
   }
 
-  enter(_route: Route, from: Route | null): void {
+  enter(route: Route, from: Route | null): void {
     if (this.away) this.resume();
-    if (from === null || this.page() !== 'catalogue' || this.onDesigner || this.sump.on) {
-      this.applyRoute();
-      return;
-    }
-    this.catalogue.enter();
+    if (from === null || this.page() !== 'catalogue' || this.onDesigner || this.sump.on) this.applyRoute();
+    else this.catalogue.enter();
+    this.features.fromRoute(route);
   }
 
   /** The page the address opens now. Read afresh, because leaving a page may rewrite the address in place. */
@@ -123,12 +129,33 @@ export class EnginesSection implements Section {
     this.drive.lock(null);
     this.drive.stop();
     this.ctx.keys.use([]);
+    // The engine and what hangs on it (the layers, the oil page's scene) wait off the stage for coming back.
+    if (this.model) this.ctx.stage.release(this.model);
+    this.leftTitles = { panel: this.ctx.slots.panelTitle.textContent ?? '', document: document.title };
+    // Its pages style the shared skeleton through these (sump-mode hides the dash and the view tools): none stays on
+    // under another section. The shell hides the section's own markup (section-dom.ts).
+    const body = document.body.classList;
+    this.leftBodyClasses = BODY_CLASSES.filter((c) => body.contains(c));
+    for (const c of this.leftBodyClasses) body.remove(c);
   }
 
   /** Back from another section, which may have changed the shared view and time while this one was away. */
   private resume(): void {
     this.away = false;
-    const { view, time } = this.ctx;
+    const { view, time, slots } = this.ctx;
+    for (const c of this.leftBodyClasses) document.body.classList.add(c);
+    this.leftBodyClasses = [];
+    slots.panelTitle.textContent = this.leftTitles.panel;
+    document.title = this.leftTitles.document;
+    // The other section may have had the Drive play its own engine (the gearbox page runs its car's).
+    this.drive.setEngine(this.engine);
+    // The model waited off the stage (leave), with the layers still on it.
+    if (this.model) {
+      this.placeModel(this.model, false);
+      if (this.sump.on) this.sump.lookAtOil();
+    }
+    // The shell laid the page out while this section's content was still hidden: the charts measured nothing.
+    this.ctx.panels.relayout();
     this.useKeys();
     this.applyView(view.mode);
     $('slow-tool').hidden = time.mode !== 'slow';
@@ -138,7 +165,7 @@ export class EnginesSection implements Section {
 
   /** The keys of the page shown: the oil page's own over the engines'. */
   useKeys(): void {
-    this.ctx.keys.use(this.sump.on ? ['engines/sump', 'engines'] : ['engines']);
+    this.ctx.keys.use(this.sump.on ? ENGINE_KEY_CONTEXTS.sump : ENGINE_KEY_CONTEXTS.catalogue);
   }
 
   private applyView(mode: ViewMode): void {
@@ -177,19 +204,11 @@ export class EnginesSection implements Section {
   showEngine(next: Engine, keepCamera: boolean): void {
     this.engine = next;
     const spec = next.spec;
-    const { stage, view, slots } = this.ctx;
+    const { view, slots } = this.ctx;
     const features = this.features;
     const { balance, systems, dyno, valves } = features;
     const newModel: EngineModel = next.isRotary ? new RotaryEngineModel(next) : new PistonEngineModel(next);
-    // A rotary explains itself from the front, a piston engine from a three-quarter view.
-    // The same scale for a whole page, or for a design as its sliders move, so that size can be seen.
-    const onSump = this.sump.on;
-    stage.setModel(newModel, {
-      home: next.isRotary ? [0.34, 0.22, 1] : onSump ? [0.95, 0.1, 0.7] : undefined,
-      keepCamera,
-      keepScale: true,
-      frameScale: this.onDesigner || onSump ? 1 : this.catalogue.pageFrameScale(next),
-    });
+    this.placeModel(newModel, keepCamera);
     this.model = newModel;
     newModel.setView(view.mode);
     newModel.setExplode(this.explode);
@@ -206,6 +225,20 @@ export class EnginesSection implements Section {
     $('badge').textContent = spec.badge;
     $('badge').style.setProperty('--badge-fit', String(spec.badge.length > 2 ? 0.46 : 0.62));
     slots.partCard.hidden = true;
+  }
+
+  /** Puts the engine's model on the stage, framed as its page frames it. */
+  private placeModel(model: EngineModel, keepCamera: boolean): void {
+    const next = this.engine;
+    // A rotary explains itself from the front, a piston engine from a three-quarter view.
+    // The same scale for a whole page, or for a design as its sliders move, so that size can be seen.
+    const onSump = this.sump.on;
+    this.ctx.stage.setModel(model, {
+      home: next.isRotary ? [0.34, 0.22, 1] : onSump ? [0.95, 0.1, 0.7] : undefined,
+      keepCamera,
+      keepScale: true,
+      frameScale: this.onDesigner || onSump ? 1 : this.catalogue.pageFrameScale(next),
+    });
   }
 
   setPanel(open: boolean): void {
@@ -287,8 +320,6 @@ export class EnginesSection implements Section {
       this.onDesigner = on;
       document.body.classList.toggle('designer-mode', on);
       stage.fitScale = on ? 0.82 : 0.68;
-      $('nav-engines').classList.toggle('current', !on);
-      $('nav-designer').classList.toggle('current', on);
       $('article').hidden = on;
       $('designer-host').hidden = !on;
       $('results-panel').hidden = !on;
@@ -355,76 +386,25 @@ export class EnginesSection implements Section {
   private bindKeys(): void {
     const { keys, slots } = this.ctx;
     const pedal = this.dash.pedal;
-    const gas: Pick<KeyBinding, 'label' | 'down' | 'up'> = {
-      label: t('Газ'),
-      down: (event) => {
-        event.preventDefault();
-        if (event.repeat) return;
-        pedal.holdKey(true);
+    const { engines, sump } = engineKeys({
+      gas: (on) => {
+        pedal.holdKey(on);
+        if (!on) return;
         (document.activeElement as HTMLElement | null)?.blur?.();
         void this.pressThrottle();
       },
-      up: (event) => {
-        event.preventDefault();
-        pedal.holdKey(false);
+      ignition: () => void this.toggleIgnition(),
+      step: (direction) => {
+        if (!this.onDesigner) this.catalogue.step(direction);
       },
-    };
-    const layer = (code: string, id: 'oil' | 'coolant' | 'fuel' | 'air', label: string): KeyBinding => ({
-      codes: [code],
-      label,
-      down: () => {
-        this.features.systems.toggle(id);
-      },
+      table: () => slots.table.open(true),
+      mute: () => this.dash.toggleMute(),
+      layer: (id) => this.features.systems.toggle(id),
+      closeHelp: () => this.features.dyno?.closeHelp(),
+      lap: (event) => this.sump.page?.key(event) ?? false,
     });
-    keys.bind('engines', [
-      // Esc closes the dyno's help and then goes on to the shell, which closes the table: Esc closes whatever is open.
-      {
-        codes: ['Escape'],
-        label: null,
-        reach: 'always',
-        down: () => {
-          this.features.dyno?.closeHelp();
-          return false;
-        },
-      },
-      // Space works on a slider too: it is the gas wherever the visitor is.
-      { codes: ['Space'], reach: 'controls', ...gas },
-      { codes: ['ArrowUp'], ...gas },
-      { codes: ['KeyS'], label: t('Запустити двигун'), down: () => void this.toggleIgnition() },
-      {
-        codes: ['ArrowLeft'],
-        label: t('Попередній двигун'),
-        down: () => {
-          if (!this.onDesigner) this.catalogue.step(-1);
-        },
-      },
-      {
-        codes: ['ArrowRight'],
-        label: t('Наступний двигун'),
-        down: () => {
-          if (!this.onDesigner) this.catalogue.step(1);
-        },
-      },
-      { codes: ['KeyT'], label: t('Усі двигуни'), down: () => slots.table.open(true) },
-      { codes: ['KeyM'], label: t('Вимкнути звук'), down: () => this.dash.toggleMute() },
-      layer('Digit4', 'oil', t('Олива')),
-      layer('Digit5', 'coolant', t('Охолодження')),
-      layer('Digit6', 'fuel', t('Паливо')),
-      layer('Digit7', 'air', t('Повітря')),
-    ]);
-    // The oil page plays its lap with Space and moves through it with the arrows; its engine is the lap's to drive.
-    const lap = (event: KeyboardEvent): boolean => {
-      const page = this.sump.page;
-      if (!page || !page.key(event)) return false;
-      event.preventDefault();
-      return true;
-    };
-    const digits = Array.from({ length: 10 }, (_, i) => `Digit${i}`);
-    keys.bind('engines/sump', [
-      { codes: ['Space'], label: t('Поїхали або пауза'), down: lap },
-      { codes: ['ArrowLeft', 'ArrowRight'], label: t('На 5 с назад або вперед'), down: lap },
-      { codes: [...digits, 'KeyS'], label: null, down: lap },
-    ]);
+    keys.bind('engines', engines);
+    keys.bind('engines/sump', sump);
     this.useKeys();
   }
 

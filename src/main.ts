@@ -17,6 +17,7 @@ import { parseRoute } from './shell/routes.ts';
 import type { DesignerPage } from './ui/designer/designer-page.ts';
 import type { DynoPanel } from './ui/dyno/dyno-panel.ts';
 import type { EnginesSection } from './ui/engines/section.ts';
+import type { GearboxSection } from './ui/gearboxes/section.ts';
 import type { SumpPage } from './ui/sump/sump-page.ts';
 import type { SystemsView } from './ui/systems-view.ts';
 
@@ -49,25 +50,38 @@ declare global {
       systems: SystemsView;
       readonly dyno: DynoPanel | null;
       readonly sump: SumpPage | null;
+      /** The gearbox section while it is shown. */
+      readonly gearbox: GearboxSection | null;
       freeze: (options: FreezeOptions | null) => void;
       loadAll: () => Promise<void>;
     };
   }
 }
+// The first section shown is the one these reach into; the engines' own features are there only when it is theirs.
 const engines = first as EnginesSection;
-window.__engine = {
-  drive: engines.drive,
+// A section without an engine first (#/suspensions) has none to hand over: window.__engine is there from the engine and
+// gearbox pages, which both run the one Drive.
+if (first.id === 'engines' || first.id === 'gearboxes') window.__engine = {
+  get drive() {
+    return (first as EnginesSection | GearboxSection).drive;
+  },
   stage: shell.stage,
   get designer() {
     return engines.designer?.page ?? null;
   },
-  systems: engines.features.systems,
+  get systems() {
+    return engines.features.systems;
+  },
   get dyno() {
-    return engines.features.dyno;
+    return engines.features?.dyno ?? null;
   },
   get sump() {
-    return engines.sump.page;
+    return engines.sump?.page ?? null;
+  },
+  get gearbox() {
+    const shown = shell.section;
+    return shown?.id === 'gearboxes' ? (shown as GearboxSection) : null;
   },
   freeze: (options) => shell.freeze(options),
-  loadAll: () => engines.loadAll(),
+  loadAll: () => (first.id === 'engines' ? engines.loadAll() : Promise.resolve()),
 };

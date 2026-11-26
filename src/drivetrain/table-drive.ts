@@ -96,6 +96,22 @@ export class TableDrive {
     this.refresh();
   }
 
+  /**
+   * Takes over where another drive of the same box left off, when the box is changed on a page's panel: the input and
+   * output angles and the output's speed, and every sleeve with the same id where it stood, so the shafts do not jump
+   * back to zero and a shift under way goes on. The state asked for stays this drive's own.
+   */
+  continueFrom(prev: TableDrive): void {
+    this.inputAngle = prev.inputAngle;
+    this.outputAngle = prev.outputAngle;
+    this.outputSpeed = prev.outputSpeed;
+    for (const id of this.sleeveIds) {
+      const at = prev.position[id];
+      if (at !== undefined) this.position[id] = at;
+    }
+    this.refresh();
+  }
+
   /** The state the driver asked for. */
   get selected(): string {
     return this.wanted.name;

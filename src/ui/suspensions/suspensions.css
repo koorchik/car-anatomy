@@ -1,0 +1,60 @@
+/* The suspension pages, under body.section-suspensions (suspensions plan, what the section needs of the shell). The
+ * section's chunk loads it after the shell's styles. */
+
+body.section-suspensions {
+  --dash-h: 0px;
+}
+
+/* No dash, no engine hints and, while the rig holds the wheel still, no choice of time. */
+body.section-suspensions .dash,
+body.section-suspensions #hint,
+body.section-suspensions .view-tools .tool:has(#speed) {
+  display: none;
+}
+
+.susp-travel-tool input[type='range'] {
+  width: 220px;
+}
+
+.susp-readout {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+  margin: 0 0 12px;
+}
+
+.susp-readout dt {
+  color: var(--bone-dim);
+}
+
+.susp-readout dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.susp-note {
+  font-size: 13.5px;
+  color: var(--bone-dim);
+}
+
+.susp-travel-tool output {
+  font-variant-numeric: tabular-nums;
+}
+
+.susp-checks {
+  display: flex;
+  gap: 4px 14px;
+}
+
+@media (max-width: 860px) {
+  /* Two sliders side by side would read as one with two thumbs: on a phone each keeps its name. */
+  .susp-travel-tool .tool-label,
+  .susp-explode-tool .tool-label {
+    display: inline;
+  }
+
+  .susp-travel-tool input[type='range'] {
+    width: min(200px, calc(100vw - 170px));
+  }
+}

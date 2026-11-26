@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { TimeCapabilities, TimeMode } from '../src/shell/section.ts';
-import { ShellTime } from '../src/shell/time.ts';
+import { clockLabel, factorLabel, ShellTime } from '../src/shell/time.ts';
 
 /** A segmented control with a button per mode, as the skeleton has it, without a DOM. */
 function setup(offer: TimeCapabilities) {
@@ -57,5 +57,57 @@ describe('ShellTime', () => {
     state.offer = { modes: ['slow', 'readable', 'real'], unavailable: { slow: 'dyno' } };
     time.refresh();
     expect([time.mode, heard]).toEqual(['readable', []]);
+  });
+
+  it('gives the next section back the mode the visitor chose, which a page with fewer modes only set aside', () => {
+    const { time, state } = setup({ modes: ['slow', 'readable', 'real'] });
+    time.set('slow');
+    // The suspensions' rig: real time only.
+    state.offer = { modes: ['real'] };
+    time.showSection();
+    expect(time.mode).toBe('real');
+    // Back on the engine pages.
+    state.offer = { modes: ['slow', 'readable', 'real'] };
+    time.showSection();
+    expect(time.mode).toBe('slow');
+  });
+
+  it('keeps a fallback within a page: only a change of section goes back to the chosen mode', () => {
+    const { time, state } = setup({ modes: ['slow', 'readable', 'real'] });
+    time.set('slow');
+    state.offer = { modes: ['slow', 'readable', 'real'], unavailable: { slow: 'dyno' } };
+    time.refresh();
+    state.offer = { modes: ['slow', 'readable', 'real'] };
+    time.refresh();
+    expect(time.mode).toBe('readable');
+  });
+
+  it('gives the reason a mode cannot be chosen in its hint, and takes it away once it can', () => {
+    const { time, state, buttons } = setup({ modes: ['slow', 'readable', 'real'], unavailable: { slow: 'Стенд не працює на 40 об/хв' } });
+    time.refresh();
+    expect(buttons.map((b) => (b as unknown as { title: string }).title)).toEqual(['Стенд не працює на 40 об/хв', '', '', '']);
+    state.offer = { modes: ['slow', 'readable', 'real'] };
+    time.refresh();
+    expect((buttons[0] as unknown as { title: string }).title).toBe('');
+  });
+
+  it('keeps the factor of the slow-down the page offers, and refuses one it does not', () => {
+    const { time } = setup({ modes: ['real', 'slowdown'], slowdown: [0.25, 0.1] });
+    expect(time.set('slowdown', 0.1)).toBe(true);
+    expect(time.factor).toBe(0.1);
+    // Choosing the mode again keeps the factor; an unknown factor gives way to the one chosen.
+    time.set('slowdown');
+    expect(time.factor).toBe(0.1);
+    time.set('slowdown', 0.5);
+    expect(time.factor).toBe(0.1);
+    time.set('real');
+    expect(time.factor).toBe(1);
+    time.set('slowdown');
+    expect(time.factor).toBe(0.25);
+  });
+
+  it('prints the factor and the clock of the slow-down', () => {
+    expect([0.25, 0.5, 0.1, 0.05].map(factorLabel)).toEqual(['×¼', '×½', '×0,1', '×0,05']);
+    expect(clockLabel(0.1, 0.3124)).toBe('×0,1 · 0,312 с');
   });
 });

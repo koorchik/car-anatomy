@@ -105,7 +105,7 @@ export const GEARBOX_DESIGNER_EN: Record<string, string> = {
   'Зубці': 'Teeth',
   'Синхронізатори': 'Synchronizers',
   'Диференціал': 'Differential',
-  'Авто': 'Car',
+  'Автомобіль': 'Car',
   'З проміжним валом': 'With a countershaft',
   'Двовальна': 'Two-shaft',
   'Латунь': 'Brass',

@@ -111,4 +111,17 @@ describe('ShellKeys', () => {
     press('KeyA');
     expect(log).toEqual([]);
   });
+
+  it('opens the help with ? wherever the layout puts it, and leaves Shift+7 of an English layout to the 7', () => {
+    const { keys, log, press, binding } = setup();
+    keys.bind(SHELL_KEYS, [binding('help', ['Slash'])]);
+    keys.bind('engines', [binding('air', ['Digit7'])]);
+    keys.use(['engines']);
+    // English layout: Shift+/ types '?'. Ukrainian layout: Shift+7 types '?', and must not toggle the air layer.
+    press('Slash', null, { key: '?', shiftKey: true });
+    press('Digit7', null, { key: '?', shiftKey: true });
+    // English layout: Shift+7 types '&' and stays the 7.
+    press('Digit7', null, { key: '&', shiftKey: true });
+    expect(log).toEqual(['help', 'help', 'air']);
+  });
 });

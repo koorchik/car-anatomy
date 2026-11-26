@@ -1,7 +1,35 @@
-// English for the suspension section: part cards for now. t.ts takes it in with the other dictionaries until the
-// shell's registerDictionary lets the section's lazy chunk register it instead (suspensions plan, «Переклад»).
+// English for the suspension section: its pages and the cards of its parts. The section's chunk registers it before it
+// loads (src/ui/suspensions/load.ts), and the model viewer for its corners and axles.
 
 export const SUSPENSION_EN: Record<string, string> = {
+  // The page (src/ui/suspensions/).
+  'Підвіска': 'Suspension',
+  'Стійка Макферсон': 'MacPherson strut',
+  'Передня підвіска компактного передньопривідного авто': 'Front suspension of a compact front-wheel-drive car',
+  'Хід колеса': 'Wheel travel',
+  'Розібрати': 'Take apart',
+  'Сили': 'Forces',
+  'Лазер розвалу': 'Camber laser',
+  'У стійці Макферсон амортизатор жорстко затиснутий у поворотному кулаці й сам працює верхньою ланкою, а низ кулака тримає один поперечний важіль. Рухай повзунок «Хід колеса»: колесо пройде від повного відбою до стиснутого відбійника, а цифри нижче покажуть, як при цьому змінюються розвал, сходження й пружина.':
+    'In a MacPherson strut the shock absorber is clamped rigidly in the steering knuckle and works as the upper link itself, while a single lower control arm holds the bottom of the knuckle. Move the “Wheel travel” slider: the wheel goes from full droop to a pressed bump stop, and the numbers below show how the camber, the toe and the spring change on the way.',
+  '«Рентген» робить шину, диск і корпус амортизатора скляними, «Механізм» лишає самі ланки й шарніри. Клацни будь-яку деталь, щоб дізнатися, що вона робить.':
+    '“X-ray” turns the tire, the wheel and the strut body to glass, and “Mechanism” leaves only the links and joints. Click any part to find out what it does.',
+  'На цьому ході': 'At this travel',
+  'Розвал': 'Camber',
+  'Сходження': 'Toe',
+  'Довжина пружини': 'Spring length',
+  'Зусилля пружини': 'Spring force',
+  'Хід рахується від проєктної висоти кузова, плюс — колесо вгору. Розвал від’ємний, коли верх колеса нахилений до кузова; сходження додатне, коли перед колеса повернутий до середини авто.':
+    'Travel is measured from the design ride height, plus is the wheel moving up. Camber is negative when the top of the wheel leans toward the body; toe is positive when the front of the wheel points toward the middle of the car.',
+  'Звідки цифри': 'Where the numbers come from',
+  'Точки кріплення стійки, важеля й рульової тяги виміряні на справжньому компактному передньопривідному авто: JTEKT Engineering Journal 1019E (2023), таблиця 1. Модель авто стаття не називає. Висота центра колеса, межі ходу, пружина, відбійник і піввісь типові: їх у статті немає.':
+    'The mounting points of the strut, the arm and the tie rod were measured on a real compact front-wheel-drive car: JTEKT Engineering Journal 1019E (2023), Table 1. The paper does not name the car. The wheel center height, the travel limits, the spring, the bump stop and the halfshaft are typical: the paper does not give them.',
+  'Підвіски. Анатомія авто': 'Suspensions. Car Anatomy',
+  'Про цей кут': 'About this corner',
+  'Довжина цього відрізка в натурі': 'The real length of this bar',
+  'Тривимірна модель підвіски. Перетягуй, щоб обертати, коліщатком наближай.': '3D model of the suspension. Drag to rotate, scroll to zoom.',
+  '{value} мм': '{value} mm',
+  '{value} кН': '{value} kN',
   'Поворотний кулак': 'Steering knuckle',
   'Литий кулак, на якому обертається маточина колеса. До нього сходяться всі ланки: стійка, кульова опора важеля й рульова тяга, тож саме він визначає, як колесо ходить і повертається.':
     'A cast knuckle the wheel hub turns in. Every link meets here: the strut, the control arm’s ball joint and the tie rod, so the knuckle decides how the wheel moves and steers.',

@@ -255,6 +255,16 @@ export class Stage {
     model.group.updateMatrixWorld(true);
   }
 
+  /**
+   * Takes a model off the stage without disposing it, when its section gives the stage to another one and keeps the
+   * model for coming back. A model not on the stage is left alone.
+   */
+  release(model: SceneModel<unknown>): void {
+    if (this.model !== model) return;
+    this.scene.remove(model.group);
+    this.model = null;
+  }
+
   /** The model's bounds with the extras beside it, as framing sees them. */
   private framedBox(): THREE.Box3 | null {
     if (!this.model) return null;
@@ -360,6 +370,11 @@ export class Stage {
   /** True while the camera is on its way to a view. */
   get moving(): boolean {
     return this.move !== null;
+  }
+
+  /** Whether the slow orbit is allowed (setOrbit), so that a section can give back what it found. */
+  get orbit(): boolean {
+    return this.orbitAllowed;
   }
 
   setOrbit(enabled: boolean): void {

@@ -39,11 +39,23 @@ export interface GearboxRecord {
   unverified: string[];
 }
 
+/** A page's article about its layout, in the source language (English per page, src/i18n/en/gearbox-<page>.ts). */
+export interface GearboxArticle {
+  lead: string;
+  how: string;
+  sound: string;
+  pros: string[];
+  cons: string[];
+  cars: string[];
+}
+
 /** A gearbox page: its base gearbox and the variants of the same type. */
 export interface GearboxPage {
   id: string;
   base: GearboxRecord;
   variants: GearboxRecord[];
+  /** Comes with the stage that shows the page. */
+  article?: GearboxArticle;
 }
 
 /** The core's spec of a record. Expanding is cheap; buildGearbox() caches per spec object. */
