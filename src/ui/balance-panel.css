@@ -369,6 +369,32 @@
   text-align: left;
 }
 
+/* At 360 px both diagrams and their words have 320 px: the word of the couple ran off the screen. */
+@media (max-width: 380px) {
+  .compact .forces-figs {
+    gap: 10px;
+  }
+
+  .compact .forces-fig {
+    gap: 5px;
+  }
+
+  .compact .forces-fig svg {
+    width: 88px;
+    height: 88px;
+  }
+
+  .compact .forces-fig.couple svg {
+    width: 56px;
+    height: 56px;
+  }
+
+  .compact .forces-fig figcaption {
+    max-width: 78px;
+    font-size: 11px;
+  }
+}
+
 /* The polygon large: a box in the middle of the page, a sheet from the bottom on a phone. */
 .forces-sheet {
   width: min(460px, calc(100vw - 32px));
