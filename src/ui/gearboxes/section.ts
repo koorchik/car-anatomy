@@ -646,9 +646,9 @@ export class GearboxSection implements Section {
     if (kindChanged) this.sinceRebuild = REBUILD_S;
   }
 
-  /** The design's engine on the crank and on the dial. */
+  /** The design's engine on the crank and on the dial: a catalogue engine or one built in the engine designer. */
   private designEngine(d: GearboxDesign): void {
-    const spec = engineById(d.engine);
+    const spec = this.designerModule?.engineSource(d.engine)?.spec;
     if (!spec) return;
     const engine = buildEngine(spec);
     this.data = { ...this.data, engine };

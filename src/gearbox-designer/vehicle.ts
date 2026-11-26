@@ -5,8 +5,6 @@
 
 import { CARS } from '../data/cars.ts';
 import { driveCarById } from '../data/drive-cars.ts';
-import { engineById } from '../data/engines.ts';
-import { catalogueTorqueMap } from '../designer/torque-map.ts';
 import { buildEngine } from '../engine/kinematics.ts';
 import { DISC_DAMPER, DMF_DAMPER, DRY_ORGANIC, DRY_STRIBECK, MANUAL_SPIN_LOSS, meanRadius, stiffDisc, WET_PACK } from '../drivetrain/elements.ts';
 import { CASE_INERTIA, FINAL_DRIVE_EFFICIENCY, PINION_INERTIA, PROPSHAFT_FITTINGS, SIDE_INERTIA, tubeInertia } from '../drivetrain/final-drive.ts';
@@ -18,6 +16,7 @@ import { roadLoadCoeffs, type RoadLoadCoeffs } from '../vehicle/road-load.ts';
 import { parseTyreSize, rollingRadiusM } from '../vehicle/tyre-size.ts';
 import { tyreAt, type Tyre } from '../vehicle/tyre.ts';
 import type { GearboxDesign } from './design.ts';
+import { engineSource } from './engine-source.ts';
 
 /**
  * One wheel with its tyre, hub and disc when the base car's record gives none, kg·m² [estimate: the 16-inch wheel of
@@ -97,9 +96,9 @@ export function designVehicle(d: GearboxDesign): DesignVehicle {
   let v = vehicles.get(key);
   if (v) return v;
   const base = CARS[d.car];
-  const spec = engineById(d.engine);
-  if (!base || !spec) throw new Error(`designer: no car ${d.car} or engine ${d.engine}`);
-  const map = catalogueTorqueMap(spec);
+  const source = engineSource(d.engine);
+  if (!base || !source) throw new Error(`designer: no car ${d.car} or engine ${d.engine}`);
+  const { spec, map } = source;
   const own = roadLoadCoeffs(base);
   const m = d.massKg;
   const c = 0.5 * AIR_DENSITY * d.cdA;

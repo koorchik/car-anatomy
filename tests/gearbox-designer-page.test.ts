@@ -59,3 +59,24 @@ describe('a design\'s link', () => {
     for (const d of [copy, edited, transaxle]) expect(decodeGearboxDesign(encodeGearboxDesign(d))).toEqual(d);
   });
 });
+
+describe('an engine from the engine designer in the car', () => {
+  it('drives the design with its own torque map, survives the link, and a broken one falls back to the catalogue', async () => {
+    const { designFromSpec, editDesign } = await import('../src/designer/presets.ts');
+    const { engineById } = await import('../src/data/engines.ts');
+    const { designEngineId, engineSource } = await import('../src/gearbox-designer/engine-source.ts');
+    const { resolveGearboxDesign } = await import('../src/gearbox-designer/constraints.ts');
+    const s14 = designFromSpec(engineById('i4/bmw-m3-e30-s14')!);
+    const bigger = editDesign(s14, { bore: s14.bore + 6 });
+    const id = designEngineId(bigger);
+    const source = engineSource(id)!;
+    expect(source.own).toBe(true);
+    const base = designFromRecord(e30);
+    const own = editGearboxDesign(base, { engine: id });
+    expect(own.engine).toBe(id);
+    expect(decodeGearboxDesign(encodeGearboxDesign(own))).toEqual(own);
+    // A bigger bore: more torque at the input, more bending on the teeth.
+    expect(evaluateGearbox(own).peakTorqueNm).toBeGreaterThan(evaluateGearbox(base).peakTorqueNm);
+    expect(resolveGearboxDesign({ ...own, engine: 'design:not-a-design' }).engine).toBe(resolveGearboxDesign({ ...own, engine: 'nothing' }).engine);
+  });
+});

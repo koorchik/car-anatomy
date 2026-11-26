@@ -4,11 +4,11 @@
 
 import { CARS } from '../data/cars.ts';
 import { DRIVE_CARS } from '../data/drive-cars.ts';
-import { engineById, pageChoices } from '../data/engines.ts';
 import { t } from '../i18n/t.ts';
 import type { TyreId } from '../vehicle/vehicle.ts';
 import type { NumericKey } from './constraints.ts';
 import type { GearboxDesign } from './design.ts';
+import { engineSource } from './engine-source.ts';
 
 export type ControlGroup = 'type' | 'ratios' | 'teeth' | 'synchro' | 'clutch' | 'diff' | 'car';
 
@@ -79,11 +79,11 @@ const fixed = (list: Array<[string, string]>) => (): Array<[string, string]> => 
 const carOptions = (): Array<[string, string]> => Object.keys(DRIVE_CARS).flatMap((id) => (CARS[id] ? [[id, CARS[id]!.name] as [string, string]] : []));
 const engineOptions = (d: GearboxDesign): Array<[string, string]> => {
   const ids = [...new Set([d.engine, ...Object.keys(DRIVE_CARS).flatMap((id) => (CARS[id] ? [CARS[id]!.engine] : []))])];
+  // The engine's own name (BMW M3 E30 (S14)), not its layout's page title, which two fours share; an engine built in
+  // the engine designer by its design's name.
   return ids.flatMap((id) => {
-    const e = engineById(id);
-    // The engine's own name (BMW M3 E30 (S14)), not its layout's page title, which two fours share.
-    const name = pageChoices(id).find((c) => c.id === id)?.name ?? e?.title;
-    return e && name ? [[id, name] as [string, string]] : [];
+    const e = engineSource(id);
+    return e ? [[id, e.own ? t('{name} (свій)', { name: e.name }) : e.name] as [string, string]] : [];
   });
 };
 

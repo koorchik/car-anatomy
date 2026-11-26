@@ -5,7 +5,6 @@
 
 import { CARS } from '../data/cars.ts';
 import { DRIVE_CARS } from '../data/drive-cars.ts';
-import { engineById } from '../data/engines.ts';
 import { gearboxById } from '../data/gearboxes.ts';
 import { helixForCentre } from '../drivetrain/gear-geometry.ts';
 import { buildEngine } from '../engine/kinematics.ts';
@@ -17,6 +16,7 @@ import {
   MIN_HAND_TEETH, MIN_STEP, SYNCHRO_MATERIALS, mainTarget, targetRatios, type ConeCount, type FinalSetting, type GearboxDesign, type PairSetting,
   type ReverseSetting,
 } from './design.ts';
+import { engineSource } from './engine-source.ts';
 import { bevelMaxFace, designBuild, faceFor, handRatios } from './to-spec.ts';
 import { compoundClears, maxModuleFor, minModuleFor, pickCylPair } from './teeth.ts';
 
@@ -63,11 +63,11 @@ const MAIN_PAIR: Range = { min: 1, max: 2.5 };
 const HIGHEST_TOP = 1.3;
 
 const flywheels = new Map<string, number>();
-/** Flywheel radius of a catalogue engine as the 3D draws it, mm (packaging.ts). */
+/** Flywheel radius of the design's engine as the 3D draws it, mm (packaging.ts). */
 export function engineFlywheelMm(engineId: string): number {
   let r = flywheels.get(engineId);
   if (r === undefined) {
-    const spec = engineById(engineId);
+    const spec = engineSource(engineId)?.spec;
     r = spec ? flywheelRadiusMm(buildEngine(spec)) : 150;
     flywheels.set(engineId, r);
   }
@@ -233,7 +233,7 @@ export function resolveGearboxDesign(input: GearboxDesign): GearboxDesign {
 
   // The car first: the clutch's limit needs its engine.
   d.car = typeof raw.car === 'string' && Object.hasOwn(DRIVE_CARS, raw.car) && CARS[raw.car] ? raw.car : D.car;
-  d.engine = typeof raw.engine === 'string' && engineById(raw.engine) ? raw.engine : D.engine;
+  d.engine = typeof raw.engine === 'string' && engineSource(raw.engine) ? raw.engine : D.engine;
   for (const key of ['massKg', 'frontShare', 'cdA', 'crr'] as const) d[key] = clamp(num(key), FIXED[key]!);
   d.tyreSize = typeof raw.tyreSize === 'string' && validTyreSize(raw.tyreSize) ? raw.tyreSize.trim() : drivenSize(d.car, d.drive);
   d.tyre = oneOf(raw.tyre, Object.keys(TYRES) as TyreId[], D.tyre);

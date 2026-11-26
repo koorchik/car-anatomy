@@ -309,4 +309,7 @@ export const GEARBOX_DESIGNER_EN: Record<string, string> = {
   '{hz} Гц (спалахи на холостому {idle} Гц)': '{hz} Hz (firing at idle {idle} Hz)',
   '{db} дБ від прямозубої пари': '{db} dB against a straight-cut pair',
   'Довжина пакета шестерень': 'Length of the gear stack',
+  // engine-source.ts and controls.ts: an engine from the engine designer.
+  'Двигун з конструктора': 'Engine from the designer',
+  '{name} (свій)': '{name} (own)',
 };

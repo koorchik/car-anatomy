@@ -9,7 +9,6 @@
 // panel "Set up" of a gearbox page loads it to carry its box over (designFromTable, from-table.ts).
 
 import { CARS } from '../../data/cars.ts';
-import { pageChoices } from '../../data/engines.ts';
 import { decodeGearboxDesign, encodeGearboxDesign } from '../../gearbox-designer/codec.ts';
 import { resolveGearboxDesign } from '../../gearbox-designer/constraints.ts';
 import { DEFAULT_GEARBOX_DESIGN, type GearboxDesign } from '../../gearbox-designer/design.ts';
@@ -17,6 +16,7 @@ import { diagnoseGearbox, type GearboxDiagnostic } from '../../gearbox-designer/
 import { designRun, type DesignRun } from '../../gearbox-designer/drive-run.ts';
 import { editGearboxDesign } from '../../gearbox-designer/edit.ts';
 import { evaluateGearbox, type GearboxPerformance } from '../../gearbox-designer/evaluate.ts';
+import { DESIGN_ENGINE, engineSource } from '../../gearbox-designer/engine-source.ts';
 import { designFromTable, designTableRecord, recordById } from '../../gearbox-designer/from-table.ts';
 import { catalogueGearboxPresets, designFromRecord, oddGearboxPresets, type GearboxPreset } from '../../gearbox-designer/presets.ts';
 import { assessGearbox, type GearboxReliability } from '../../gearbox-designer/reliability.ts';
@@ -34,7 +34,7 @@ const REBUILD_INTERVAL_MS = 130;
 const SOUND_DELAY_MS = 240;
 const URL_DELAY_MS = 300;
 
-export { designFromTable, designTableRecord };
+export { designFromTable, designTableRecord, engineSource };
 
 /** The designer's address for a design: #/gearboxes/designer/<code>; the router keeps the visitor's context. */
 export const gearboxDesignerRoute = (d: GearboxDesign): RouteTarget => ({ section: 'gearboxes', page: 'designer', path: [encodeGearboxDesign(d)], query: {} });
@@ -113,7 +113,7 @@ export class GearboxDesignerPage {
   get summary(): string {
     const d = this.design;
     const car = CARS[d.car]?.name ?? d.car;
-    const engine = pageChoices(d.engine).find((c) => c.id === d.engine)?.name ?? d.engine;
+    const engine = engineSource(d.engine)?.name ?? d.engine;
     return t('{gears} передач, {type} · {car} · двигун {engine}', { gears: d.gears, type: typeWord(d), car, engine });
   }
 
@@ -201,14 +201,27 @@ export class GearboxDesignerPage {
     }, 2200);
   }
 
-  /** What the address or local storage holds: #/gearboxes/designer/from/<page>[/<variant>] or #/gearboxes/designer/<code>. */
+  /**
+   * What the address or local storage holds: #/gearboxes/designer/from/<page>[/<variant>] (a catalogue copy),
+   * #/gearboxes/designer/engine/<engine designer's code> (the last design with that engine in its car) or
+   * #/gearboxes/designer/<code>.
+   */
   static designFromRoute(route: Route): GearboxDesign | null {
     const [first, ...rest] = route.path;
     if (first === 'from') {
       const record = recordById(rest.join('/'));
       return record?.car ? designFromRecord(record) : null;
     }
+    if (first === 'engine') {
+      const engine = `${DESIGN_ENGINE}${rest[0] ?? ''}`;
+      if (!engineSource(engine)) return null;
+      return editGearboxDesign(GearboxDesignerPage.stored() ?? resolveGearboxDesign(DEFAULT_GEARBOX_DESIGN), { engine });
+    }
     if (first) return decodeGearboxDesign(first);
+    return GearboxDesignerPage.stored();
+  }
+
+  private static stored(): GearboxDesign | null {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       return saved ? decodeGearboxDesign(saved) : null;
