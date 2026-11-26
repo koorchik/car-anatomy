@@ -10,6 +10,7 @@ import { CAR as porsche911CarreraT992 } from './cars/porsche-911-carrera-t-992.t
 import { CAR as porsche911Gt3_991_2 } from './cars/porsche-911-gt3-991-2.ts';
 import { CAR as porscheCaymanS981 } from './cars/porsche-cayman-s-981.ts';
 import { CAR as subaruWrxStiVa } from './cars/subaru-wrx-sti-va.ts';
+import { CAR as toyotaPriusXw30 } from './cars/toyota-prius-xw30.ts';
 
 export const CAR_LIST: readonly CarRecord[] = [
   bmwM3E30,
@@ -20,6 +21,7 @@ export const CAR_LIST: readonly CarRecord[] = [
   porsche911Gt3_991_2,
   porscheCaymanS981,
   subaruWrxStiVa,
+  toyotaPriusXw30,
 ];
 
 // Ids arrive from addresses (#/car/<id>, ?car=), so the map has no prototype: 'constructor' or '__proto__' must find
