@@ -42,7 +42,7 @@ export const SUSPENSION_DESIGNER_EN: Record<string, string> = {
   'Авто нестійке на швидкості': 'Unstable at speed',
   'Задня вісь ковзає раніше за передню: надмірна поворотність {us}°/g. Понад {v} км/год авто саме йде в занос від найменшого збурення.':
     'The rear axle slides before the front: {us}°/g of oversteer. Above {v} km/h the slightest disturbance sends the car into a spin.',
-  'Перенеси більше перенесення ваги наперед: жорсткіший передній стабілізатор або м’якший задній.':
+  'Збільш частку перенесення ваги спереду: жорсткіший передній стабілізатор або м’якший задній.':
     'Move more of the load transfer to the front: a stiffer front anti-roll bar or a softer rear one.',
   'Кермо смикає на нерівностях': 'The steering tugs over bumps',
   'Кожне переднє колесо повертається на {deg}° на 100 мм ходу: на нерівній дорозі авто саме змінює напрямок.':

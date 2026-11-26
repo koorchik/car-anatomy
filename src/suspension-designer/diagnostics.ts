@@ -12,7 +12,7 @@ import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import { G } from '../suspension/forces.ts';
 import type { ChassisPerformance } from '../suspension/evaluate-chassis.ts';
-import type { ChassisDesign } from './design.ts';
+import { isSolid, type ChassisDesign } from './design.ts';
 
 export type Severity = 'fatal' | 'warning' | 'note';
 
@@ -80,7 +80,7 @@ export function diagnoseChassis(d: ChassisDesign, perf: ChassisPerformance): Cha
       'fatal',
       t('Авто нестійке на швидкості'),
       t('Задня вісь ковзає раніше за передню: надмірна поворотність {us}°/g. Понад {v} км/год авто саме йде в занос від найменшого збурення.', { us: fmt(-perf.understeerPerG * DEG, 1), v: fmt(perf.criticalSpeedMs * 3.6) }),
-      t('Перенеси більше перенесення ваги наперед: жорсткіший передній стабілізатор або м’якший задній.'),
+      t('Збільш частку перенесення ваги спереду: жорсткіший передній стабілізатор або м’якший задній.'),
     );
   }
   if (Math.abs(front.bumpSteer) > L.bumpSteer) {
@@ -154,7 +154,11 @@ export function diagnoseChassis(d: ChassisDesign, perf: ChassisPerformance): Cha
       t('Більший від’ємний розвал, більший набір розвалу на стиску або менший крен.'),
     );
   }
-  const jacking = perf.axles.findIndex((a) => a.rollCentreM > L.rollCentreHigh);
+  // Jacking and a sinking body are about independent wheels, whose links tilt the side force: a beam or a solid axle
+  // takes it through a level rod or bush, its roll centre only sets how the load transfers, and its camber does not
+  // follow the body.
+  const independent = [d.layoutF, d.layoutR].map((l) => !isSolid(l) && l !== 'twist-beam');
+  const jacking = perf.axles.findIndex((a, k) => independent[k] && a.rollCentreM > L.rollCentreHigh);
   if (jacking >= 0) {
     add(
       'jacking',
@@ -164,7 +168,7 @@ export function diagnoseChassis(d: ChassisDesign, perf: ChassisPerformance): Cha
       t('Опусти внутрішні опори важелів.'),
     );
   }
-  const sinking = perf.axles.findIndex((a) => a.rollCentreM < L.rollCentreLow);
+  const sinking = perf.axles.findIndex((a, k) => independent[k] && a.rollCentreM < L.rollCentreLow);
   if (sinking >= 0) {
     add(
       'roll-centre-below',
@@ -270,10 +274,11 @@ export function chassisCharacter(perf: ChassisPerformance): ChassisCharacter {
   const roll = clamp01((ROLL_RANGE[1] - perf.rollPerG) / (ROLL_RANGE[1] - ROLL_RANGE[0]));
   const damping = clamp01((zeta - ZETA_RANGE[0]) / (ZETA_RANGE[1] - ZETA_RANGE[0]));
   const control = Math.min(roll, damping);
+  // A body that is barely held cannot be composed: with a gentle ride it is soft, with a rough one it wallows.
   let verdict: ChassisCharacter['verdict'];
   if (zeta < DIAGNOSIS_LIMITS.zetaLow) verdict = 'floaty';
+  else if (control < 0.5) verdict = comfort >= 0.4 ? 'soft' : 'floaty';
   else if (control >= 0.6 && comfort < 0.4) verdict = 'stiff';
-  else if (comfort >= 0.6 && control < 0.5) verdict = 'soft';
   else verdict = 'composed';
   const labels: Record<ChassisCharacter['verdict'], string> = {
     soft: t('м’яка й плавна'),

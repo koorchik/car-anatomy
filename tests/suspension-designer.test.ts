@@ -444,6 +444,15 @@ describe('diagnoses', () => {
     for (const expected of Object.values(odd).flat()) expect(plain).not.toContain(expected);
   });
 
+  it('jacking is a diagnosis of independent wheels: a high live axle does not jack, a swing axle does', () => {
+    const leaf = chassisPreset('leaf-offroader')!.design();
+    const perf = evaluateChassis(chassisToSpec(leaf));
+    expect(leaf.layoutR).toBe('live-axle');
+    expect(perf.axles[1].rollCentreM).toBeGreaterThan(0.25);
+    expect(ids(leaf)).not.toContain('jacking');
+    expect(ids(chassisPreset('corvair-swing-axle')!.design())).toContain('jacking');
+  });
+
   it('each has a title and a text, worst first', () => {
     const rank = { fatal: 0, warning: 1, note: 2 };
     for (const p of CHASSIS_PRESETS) {
@@ -463,6 +472,12 @@ describe('diagnoses', () => {
       expect(c.label.length).toBeGreaterThan(0);
     }
     expect(chassisCharacter(evaluateChassis(chassisToSpec(chassisPreset('too-soft')!.design()))).verdict).toBe('floaty');
+    // A body that rolls 6°/g is not composed, whatever its damping: the leaf-sprung off-roader and the Corvair.
+    for (const id of ['leaf-offroader', 'corvair-swing-axle']) {
+      const perf = evaluateChassis(chassisToSpec(chassisPreset(id)!.design()));
+      expect(perf.rollPerG / DEG, id).toBeGreaterThan(5);
+      expect(chassisCharacter(perf).verdict, id).not.toBe('composed');
+    }
     const track = chassisCharacter(evaluateChassis(chassisToSpec(chassisPreset('track')!.design())));
     const sedan = chassisCharacter(evaluateChassis(chassisToSpec(chassisPreset('comfort-sedan')!.design())));
     expect(track.control).toBeGreaterThan(sedan.control);
