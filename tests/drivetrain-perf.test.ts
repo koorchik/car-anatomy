@@ -12,6 +12,13 @@ import { buildGearbox, stateByName } from '../src/drivetrain/topology.ts';
 import { buildCarDrive } from '../src/data/car-drive.ts';
 import { carVehicle } from '../src/drivetrain/car-model.ts';
 
+// The cost is this thread's CPU time, not the wall clock: the machine that runs the tests is often shared, and a step
+// the scheduler set aside for others is not the step's cost. On a quiet machine the two agree.
+const cpuMicros = (): number => {
+  const u = typeof process.threadCpuUsage === 'function' ? process.threadCpuUsage() : process.cpuUsage();
+  return u.user + u.system;
+};
+
 describe('15. budget', () => {
   it('BMW M3 E30 without a car, clutch slipping on the falling Stribeck slope: under 10 µs per step', () => {
     const box = buildGearbox(gearboxSpec(gearboxById('manual-rwd')!));
@@ -32,13 +39,13 @@ describe('15. budget', () => {
     for (let i = 0; i < 3000; i++) s.step(h);
     let slipping = 0;
     let maxSlip = 0;
-    const t0 = performance.now();
+    const t0 = cpuMicros();
     for (let i = 0; i < 30000; i++) {
       s.step(h);
       if (s.state[clutch] === SLIP) slipping++;
       maxSlip = Math.max(maxSlip, Math.abs(s.slip[clutch]!));
     }
-    const us = ((performance.now() - t0) / 30000) * 1000;
+    const us = (cpuMicros() - t0) / 30000;
     // The state is the one the budget is about: slipping much of the time, on the falling part of μ(Δω).
     expect(slipping).toBeGreaterThan(0.3 * 30000);
     expect(maxSlip).toBeLessThan(4 * DRY_STRIBECK);
@@ -65,12 +72,12 @@ describe('15. budget with the car (stage K2b)', () => {
     const h = 1 / 3000;
     for (let i = 0; i < 3000; i++) veh.step(h);
     let slipping = 0;
-    const t0 = performance.now();
+    const t0 = cpuMicros();
     for (let i = 0; i < 30000; i++) {
       veh.step(h);
       if (s.state[clutch] === SLIP) slipping++;
     }
-    const us = ((performance.now() - t0) / 30000) * 1000;
+    const us = (cpuMicros() - t0) / 30000;
     expect(slipping).toBeGreaterThan(0.3 * 30000);
     expect(Math.abs(s.slip[clutch]!)).toBeLessThan(4 * DRY_STRIBECK);
     expect(us).toBeLessThan(10);
@@ -111,13 +118,13 @@ describe('15. budget of the automatic (stage K12a)', () => {
     for (let i = 0; i < 3000; i++) s.step(h);
     let slipping = 0;
     let converting = 0;
-    const t0 = performance.now();
+    const t0 = cpuMicros();
     for (let i = 0; i < 30000; i++) {
       s.step(h);
       if (s.state[c] === SLIP && s.state[lockup] === SLIP) slipping++;
       if (s.converter.sr < 0.9) converting++;
     }
-    const us = ((performance.now() - t0) / 30000) * 1000;
+    const us = (cpuMicros() - t0) / 30000;
     expect(slipping).toBeGreaterThan(0.9 * 30000);
     expect(converting).toBeGreaterThan(0.9 * 30000);
     expect(us).toBeLessThan(20);
