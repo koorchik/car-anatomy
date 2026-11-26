@@ -56,13 +56,13 @@ const REFERENCES: ReadonlyArray<{ id: 'macpherson' | 'double-wishbone'; design: 
 ];
 
 /**
- * Whether the axle's 3D has a place for the bar's link (axle-model.ts, barLayout): a strut, or a link the spring sits on
- * or that does not steer. A wishbone has neither yet, so a double-wishbone axle turns with its bar in the numbers only.
+ * Whether the axle's 3D has a place for the bar's link (axle-model.ts, barLayout): a strut, a link the spring sits on
+ * or that does not steer, or a wishbone. An axle with none of them turns with its bar in the numbers only.
  */
 function barSeat(corner: ReturnType<typeof resolveCorner>): boolean {
   const spec = corner.axle.spec;
   const link = spec.linkage;
-  if (link.strut) return true;
+  if (link.strut || link.wishbones.length > 0) return true;
   const onId = spec.spring.on ?? link.rods.find((r) => !r.steer)?.id;
   return link.rods.some((r) => r.id === onId);
 }

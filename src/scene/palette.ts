@@ -122,6 +122,9 @@ export const LOAD_SHARE = {
   unsprung: '#c98bff',
 } as const;
 
+/** The stripe along an anti-roll bar that shows its twist (suspensions plan, the roll scene, step 1). */
+export const BAR_STRIPE = '#f2c14e';
+
 /** The roll scene's construction: the lines from the patches through the instant centres, and the roll centre, as the
  *  travel scene's front view colours them (suspensions.css, .susp-fv-ic and .susp-fv-rc). */
 export const ROLL_CENTRE = { instant: '#b5e48c', roll: '#ffd25a', jack: '#ffffff' } as const;
