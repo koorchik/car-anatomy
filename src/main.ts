@@ -35,7 +35,9 @@ window.addEventListener('vite:preloadError', () => {
 });
 
 const route = parseRoute(location.hash);
-const [{ Shell }, first] = await Promise.all([import('./shell/app.ts'), sectionEntry(route).load(route)]);
+const shellCode = import('./shell/app.ts');
+// The dev server adds a module's styles as it runs: there the section waits for the shell's, so that its own win (CLAUDE.md).
+const [{ Shell }, first] = await Promise.all([shellCode, import.meta.env.DEV ? shellCode.then(() => sectionEntry(route).load(route)) : sectionEntry(route).load(route)]);
 const shell = new Shell(document.getElementById('app')!, SECTIONS);
 shell.start(first);
 
