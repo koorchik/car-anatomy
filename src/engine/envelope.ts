@@ -40,10 +40,11 @@ export const TIMING_COVER_BORES = 0.4;
 
 /**
  * A rotary as rotary-engine.ts draws it, in rotor radii R, eccentricities e and millimetres: housings 1.32·R to each
- * side and 1.28·(R + e) up and down, end plates 10 mm past the outer rotors' faces, the eccentric shaft 30 mm past them
- * at both ends (the pulley on its front end), the flywheel of radius 1.1·R and 0.26·R thick behind the rear end.
+ * side and 1.28·(R + e) up and down with a 3 mm painted band on top, tension bolts 13 mm past the outer rotors' faces,
+ * the eccentric shaft 55 mm past them at both ends (its front end carries the pulley and is the crank's front end),
+ * and the flywheel of radius 1.1·R and 0.26·R thick centred 45 mm behind the rear rotor's face.
  */
-export const ROTARY = { halfWidthR: 1.32, tallRE: 1.28, plateMm: 10, shaftEndMm: 30, flywheelR: 1.1, flywheelThickR: 0.26 } as const;
+export const ROTARY = { halfWidthR: 1.32, tallRE: 1.28, bandMm: 3, boltsMm: 13, shaftEndMm: 55, flywheelR: 1.1, flywheelThickR: 0.26, flywheelMm: 45 } as const;
 
 /** systems/sump.ts works in scene units (1 = 100 mm) and kinematics.ts in millimetres. */
 const SCENE_MM = 100;
@@ -105,15 +106,16 @@ function rotaryEnvelope(engine: Engine, systems: SystemsSpec): Box3 {
   const { R, e } = layout;
   const out = new Bounds();
   const half = ROTARY.halfWidthR * R;
-  const tall = ROTARY.tallRE * (R + e);
+  const tall = ROTARY.tallRE * (R + e) + ROTARY.bandMm;
   const front = crankFrontZMm(engine);
-  const back = engine.zMin - ROTARY.shaftEndMm;
-  out.take(-half, -tall, engine.zMin - ROTARY.plateMm);
-  out.take(half, tall, engine.zMax + ROTARY.plateMm);
+  out.take(-half, -tall, engine.zMin - ROTARY.boltsMm);
+  out.take(half, tall, engine.zMax + ROTARY.boltsMm);
   out.take(0, 0, front);
+  out.take(0, 0, engine.zMin - ROTARY.shaftEndMm);
   const fly = ROTARY.flywheelR * R;
-  out.take(-fly, -fly, back - ROTARY.flywheelThickR * R);
-  out.take(fly, fly, back);
+  const flyZ = engine.zMin - ROTARY.flywheelMm;
+  out.take(-fly, -fly, flyZ - (ROTARY.flywheelThickR * R) / 2);
+  out.take(fly, fly, flyZ + (ROTARY.flywheelThickR * R) / 2);
   const pan = panShape(engine, systems);
   out.take(-pan.halfW * SCENE_MM, pan.bottom * SCENE_MM, pan.zMin * SCENE_MM);
   out.take(pan.halfW * SCENE_MM, pan.bottom * SCENE_MM, pan.zMax * SCENE_MM);

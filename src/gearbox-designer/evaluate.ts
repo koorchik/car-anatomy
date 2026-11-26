@@ -37,7 +37,7 @@ import { gearboxStrength, type GearStrength } from './strength.ts';
 import { shiftTime, synchroFigures, type SynchroFigures } from './synchro.ts';
 import { designBuild, type DesignTeeth } from './to-spec.ts';
 import type { PickedPair } from './teeth.ts';
-import { clutchKineticNm, designVehicle, type DesignVehicle } from './vehicle.ts';
+import { clutchKineticNm, designVehicle, type DesignEngine, type DesignVehicle } from './vehicle.ts';
 
 const RPM = 30 / Math.PI;
 const KMH = 3.6;
@@ -255,9 +255,9 @@ function drivenAxleN(v: DesignVehicle, ax: number, grade = 0): number {
   return v.drive === 'rwd' ? rear : m * G * Math.cos(grade) - rear;
 }
 
-function buildModel(d: GearboxDesign): Model {
+function buildModel(d: GearboxDesign, own?: DesignEngine): Model {
   const { box, teeth } = designBuild(d);
-  const v = designVehicle(d);
+  const v = designVehicle(d, own);
   const map = v.map;
   const states = box.states.filter((s) => s.kind === 'gear' && s.ratio! > 0);
   const inertia = box.inertia;
@@ -510,9 +510,9 @@ function traction(m: Model, vTop: number): TractionCurves {
   return { kmh, gears, roadLoadN: kmh.map((k) => roadLoadN(m.v.roadLoad, k / KMH, 0)) };
 }
 
-/** Everything the designer shows of a resolved design. */
-export function evaluateGearbox(d: GearboxDesign): GearboxPerformance {
-  const m = buildModel(d);
+/** Everything the designer shows of a resolved design; `engine` drives it with an engine of the engine designer (vehicle.ts). */
+export function evaluateGearbox(d: GearboxDesign, engine?: DesignEngine): GearboxPerformance {
+  const m = buildModel(d, engine);
   const { v, box, teeth } = m;
   const map = v.map;
   const peakNm = peakTorque(map).nm;
