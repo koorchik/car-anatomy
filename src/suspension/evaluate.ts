@@ -41,6 +41,10 @@ export interface QuarterLinear {
   /** The damper along its axis and its motion ratio at rest, for the statistical linearisation. */
   damper: DamperCoeffs;
   mrDamper: number;
+  /** A controlled damper (damper-control.ts): skyhook damping on the body's absolute speed, N·s/m at the wheel, and
+   *  the bandwidth of the actuator that makes it, Hz (absent: ideal). */
+  skyNsm?: number;
+  skyHz?: number;
 }
 
 /** Linearises a resolved corner about rest, with the same tables and stops the quarter car runs on. */
@@ -98,6 +102,7 @@ export const newQuarterGains = (): QuarterGains => ({ bodyAcc: 0, tyreForce: 0, 
 
 /** Frequency response of the linear quarter car at `hz` into `out` (magnitudes). `c` overrides the damping. */
 export function quarterGains(lin: QuarterLinear, hz: number, out: QuarterGains, c = lin.c): QuarterGains {
+  if (lin.skyNsm) return controlledGains(lin, hz, c, out);
   const w = TAU * hz;
   const w2 = w * w;
   const { ms, mu, k, kt, ct } = lin;
@@ -128,6 +133,13 @@ export function quarterGains(lin: QuarterLinear, hz: number, out: QuarterGains, 
 /** The squares of quarterGains' body acceleration, tyre force and travel at `hz` into out[0..2], without a square root:
  *  the sums over a road's band square them anyway, and Math.hypot would take most of their time. */
 function quarterGainsSquared(lin: QuarterLinear, hz: number, c: number, out: Float64Array): void {
+  if (lin.skyNsm) {
+    const g = controlledGains(lin, hz, c, SCRATCH_GAINS);
+    out[0] = g.bodyAcc * g.bodyAcc;
+    out[1] = g.tyreForce * g.tyreForce;
+    out[2] = g.travel * g.travel;
+    return;
+  }
   const w = TAU * hz;
   const w2 = w * w;
   const { ms, mu, k, kt, ct } = lin;
@@ -148,6 +160,48 @@ function quarterGainsSquared(lin: QuarterLinear, hz: number, c: number, out: Flo
   out[2] = (ms * ms * w4 * t2) / d2;
 }
 
+const SCRATCH_GAINS = newQuarterGains();
+
+/**
+ * Gains with a skyhook force −c_sky·H(s)·s·Z_s on the body, H = 1/(1 + s/ω_b) the actuator's lag (1 without one):
+ *   B = m_s·s² + P + c_sky·H·s,  A = m_u·s² + P + T,  Δ = A·B − P²
+ *   Z_s = P·T·Y/Δ,  Z_u = T·B·Y/Δ,  travel = (B − P)·T·Y/Δ,  tyre force = T·(Δ − T·B)·Y/Δ
+ * which are the passive formulas when c_sky = 0.
+ */
+function controlledGains(lin: QuarterLinear, hz: number, c: number, out: QuarterGains): QuarterGains {
+  const w = TAU * hz;
+  const w2 = w * w;
+  const { ms, mu, k, kt, ct } = lin;
+  const cs = lin.skyNsm ?? 0;
+  // c_sky·H·s at s = iω: H = 1/(1 + iω/ω_b).
+  const wb = lin.skyHz ? TAU * lin.skyHz : Infinity;
+  const r = w / wb;
+  const hRe = 1 / (1 + r * r);
+  const hIm = -r / (1 + r * r);
+  const skyRe = -cs * w * hIm;
+  const skyIm = cs * w * hRe;
+  const pr = k;
+  const pi = c * w;
+  const tr = kt;
+  const ti = ct * w;
+  const br = k - ms * w2 + skyRe;
+  const bi = pi + skyIm;
+  const ar = k + kt - mu * w2;
+  const ai = (c + ct) * w;
+  const dr = ar * br - ai * bi - (pr * pr - pi * pi);
+  const di = ar * bi + ai * br - 2 * pr * pi;
+  const dAbs = Math.hypot(dr, di);
+  const tAbs = Math.hypot(tr, ti);
+  // Δ − T·B
+  const er = dr - (tr * br - ti * bi);
+  const ei = di - (tr * bi + ti * br);
+  out.bodyAcc = (w2 * Math.hypot(pr, pi) * tAbs) / dAbs;
+  out.travel = (Math.hypot(br - pr, bi - pi) * tAbs) / dAbs;
+  out.tyreForce = (tAbs * Math.hypot(er, ei)) / dAbs;
+  out.wheel = (tAbs * Math.hypot(br, bi)) / dAbs;
+  return out;
+}
+
 /** A mode of the quarter car: the undamped frequency of its pair of roots and its damping ratio. */
 export interface QuarterMode {
   hz: number;
@@ -157,7 +211,15 @@ export interface QuarterMode {
 /** Body and wheel-hop modes from the four roots of Δ(s) = 0. With heavy damping a pair may be real (ζ > 1). */
 export function quarterModes(lin: QuarterLinear, c = lin.c): { body: QuarterMode; hop: QuarterMode } {
   const { ms, mu, k, kt, ct } = lin;
-  const poly = [mu * ms, mu * c + (c + ct) * ms, mu * k + ct * c + (k + kt) * ms, ct * k + kt * c, k * kt];
+  // A skyhook adds c_sky to the body's own damping (its actuator's lag is left out of the modes).
+  const cs = lin.skyNsm ?? 0;
+  const poly = [
+    mu * ms,
+    mu * (c + cs) + (c + ct) * ms,
+    mu * k + (c + ct) * (c + cs) - c * c + (k + kt) * ms,
+    (c + ct) * k + (k + kt) * (c + cs) - 2 * c * k,
+    k * kt,
+  ];
   const roots = polyRoots(poly);
   // Pair each complex root with its conjugate; the real ones pair among themselves.
   const complex = roots.filter((r) => Math.abs(r[1]) > 1e-9 * Math.hypot(r[0], r[1])).filter((r) => r[1] > 0);
