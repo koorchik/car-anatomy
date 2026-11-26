@@ -2,7 +2,7 @@
 // gives, the share over a window, the mean of a millisecond clock being the true mean, and when the step goes coarse.
 
 import { describe, expect, it } from 'vitest';
-import { COARSE_WINDOWS, ProcessMeter, scopeClock, WINDOW_S } from '../src/audio/process-meter.ts';
+import { COARSE_WINDOWS, FINE_WINDOWS, ProcessMeter, scopeClock, WINDOW_S } from '../src/audio/process-meter.ts';
 
 const FS = 48000;
 const BLOCK = 128;
@@ -66,5 +66,23 @@ describe('process() meter', () => {
     for (let w = 1; w < COARSE_WINDOWS; w++) for (let i = 0; i < window; i++) run(heavy);
     expect(meter.wantsCoarse).toBe(true);
     expect(meter.peak).toBeCloseTo(0.6, 2);
+  });
+
+  it('does not count the first window, when the module is still compiling, and lets the fine step come back', () => {
+    const { meter, run } = fake('performance');
+    const window = Math.ceil((WINDOW_S * FS) / BLOCK);
+    const block = (BLOCK / FS) * 1000;
+    // A slow start alone never coarsens the step: the first window is the compile, the second the only one over.
+    for (let w = 0; w < COARSE_WINDOWS; w++) for (let i = 0; i < window; i++) run(0.9 * block);
+    expect(meter.wantsCoarse).toBe(false);
+    for (let i = 0; i < window; i++) run(0.9 * block);
+    expect(meter.wantsCoarse).toBe(true);
+    // The worklet takes the coarse step and settles the meter; time to spare again for FINE_WINDOWS windows: back.
+    meter.settle();
+    expect(meter.wantsCoarse).toBe(false);
+    for (let w = 0; w < FINE_WINDOWS - 1; w++) for (let i = 0; i < window; i++) run(0.1 * block);
+    expect(meter.wantsFine).toBe(false);
+    for (let i = 0; i < window; i++) run(0.1 * block);
+    expect(meter.wantsFine).toBe(true);
   });
 });

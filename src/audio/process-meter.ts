@@ -1,6 +1,8 @@
 // How much of the audio thread's time process() takes (whole-car plan, the real-time budget; gearbox plan, stage 3a).
 // The worklet times each call and reports the share of the block's time it used, over windows of WINDOW_S. A share
-// above COARSE_SHARE for COARSE_WINDOWS windows in a row asks for the coarser step: 32 samples instead of 16.
+// above COARSE_SHARE for COARSE_WINDOWS windows in a row asks for the coarser step: 32 samples instead of 16. The first
+// window does not count (the module is still being compiled then), and a coarse step whose share has stayed under
+// FINE_SHARE for FINE_WINDOWS windows goes back to 16, so a passing spike does not coarsen the rest of the visit.
 //
 // Which clock: AudioWorkletGlobalScope need not have `performance`. Checked 2026-11-26 on Linux: Chrome 158 and
 // Firefox 157 have neither `performance` nor any other sub-millisecond clock there, and Date.now() steps by 1 ms;
@@ -20,6 +22,12 @@ export const WINDOW_S = 1;
 /** Above this share of the block's time the step goes coarse, once it has held for COARSE_WINDOWS windows. */
 export const COARSE_SHARE = 0.5;
 export const COARSE_WINDOWS = 2;
+/**
+ * Below this share at the coarse step, for FINE_WINDOWS windows, the fine step comes back. Well under half of
+ * COARSE_SHARE: the fine step at most doubles the share, so the two never chase each other [estimate].
+ */
+export const FINE_SHARE = 0.2;
+export const FINE_WINDOWS = 5;
 
 export interface MeterClock {
   method: LoadMethod;
@@ -42,8 +50,10 @@ export class ProcessMeter {
   private started = 0;
   private busyMs = 0;
   private frames = 0;
-  /** Windows in a row above COARSE_SHARE. */
+  /** Windows in a row above COARSE_SHARE and below FINE_SHARE, and windows ended so far. */
   private over = 0;
+  private under = 0;
+  private windows = 0;
   /** Share of the block's time process() took over the last whole window, 0 until the first one ends. */
   share = 0;
   /** The highest share of a window so far. */
@@ -69,13 +79,26 @@ export class ProcessMeter {
     const share = this.busyMs / ((this.frames / this.sampleRate) * 1000);
     this.share = share;
     this.peak = Math.max(this.peak, share);
-    this.over = share > COARSE_SHARE ? this.over + 1 : 0;
     this.busyMs = 0;
     this.frames = 0;
+    if (++this.windows === 1) return;
+    this.over = share > COARSE_SHARE ? this.over + 1 : 0;
+    this.under = share < FINE_SHARE ? this.under + 1 : 0;
   }
 
-  /** The share has stayed above COARSE_SHARE for COARSE_WINDOWS windows in a row. */
+  /** The share has stayed above COARSE_SHARE for COARSE_WINDOWS windows in a row, the first window aside. */
   get wantsCoarse(): boolean {
     return this.over >= COARSE_WINDOWS;
+  }
+
+  /** The share has stayed below FINE_SHARE for FINE_WINDOWS windows in a row. */
+  get wantsFine(): boolean {
+    return this.under >= FINE_WINDOWS;
+  }
+
+  /** The step changed: the windows counted so far were at the other one. */
+  settle(): void {
+    this.over = 0;
+    this.under = 0;
   }
 }

@@ -59,7 +59,7 @@ export interface WorkletReport {
   /** Share of the blocks' time process() took over the last window (process-meter.ts), and how it was timed. */
   processShare: number;
   loadMethod: LoadMethod;
-  /** Samples per simulation step now: 16, or 32 once the thread ran short of time. */
+  /** Samples per simulation step now: 16, or 32 while the thread runs short of time. */
   stepSamples: number;
 }
 
@@ -156,8 +156,17 @@ class EngineProcessor extends AudioWorkletProcessor {
     const left = out[0]!;
     const right = out[1] ?? left;
     const synth = this.synth;
-    // Short of time for two windows running: a step twice as long, if the load on the crank is stable at it.
-    if (meter.wantsCoarse && synth.stepSamples === 16 && (synth.sim.crank?.load.maxStepS?.() ?? Infinity) >= 32 / sampleRate) synth.stepSamples = 32;
+    // Short of time for two windows running: a step twice as long, if the load on the crank is stable at it; with time
+    // to spare again, back to the fine one.
+    if (synth.stepSamples === 16) {
+      if (meter.wantsCoarse && (synth.sim.crank?.load.maxStepS?.() ?? Infinity) >= 32 / sampleRate) {
+        synth.stepSamples = 32;
+        meter.settle();
+      }
+    } else if (meter.wantsFine) {
+      synth.stepSamples = 16;
+      meter.settle();
+    }
     synth.process(left, right);
     this.sinceReport += left.length;
     if (this.sinceReport >= REPORT_EVERY) {

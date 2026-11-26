@@ -30,7 +30,7 @@ export interface DriveSnapshot {
   vehicle?: LoadFrame;
   /**
    * The audio thread's time (process-meter.ts), while it runs: the share of the blocks' time process() took over the
-   * last second, how that was timed, and the samples per simulation step (16, or 32 once it ran short).
+   * last second, how that was timed, and the samples per simulation step (16, or 32 while it runs short).
    */
   processShare?: number;
   loadMethod?: LoadMethod;
