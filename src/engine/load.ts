@@ -67,8 +67,11 @@ export interface CrankLoad<R extends AnyLoadReadings = AnyLoadReadings> {
   /** Flat state for the hand-over between the audio thread and the main-thread copy, both ways (loadRestore). */
   snapshot?(): LoadSnapshot;
   restore?(s: LoadSnapshot): void;
-  /** What a page shows of the load now (a car's speed, gear and angles), plain data sent in every report. */
-  frame?(): LoadFrame;
+  /**
+   * What a page shows of the load now (a car's speed, gear and angles), plain data sent in every report. A new object,
+   * or `into` filled in place when it is a frame of this load (the main-thread copy reuses one).
+   */
+  frame?(into?: LoadFrame): LoadFrame;
 }
 
 /** The car on its drivetrain (stage K2c) adds its kinds to these unions. */

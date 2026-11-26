@@ -115,6 +115,16 @@ describe('the car mode', () => {
     fourth.meshLoads!.forEach((m, j) => expect(p.meshPower[j]!).toBeCloseTo(m.power, 9));
   });
 
+  it('fills a frame in place for the main-thread copy, the same figures as a new one', () => {
+    const { load, story } = drive();
+    const kept = load.frame();
+    runStory(story, 1 / 3000, 6, () => undefined);
+    const fresh = load.frame();
+    expect(load.frame(kept)).toBe(kept);
+    expect(kept).toEqual(fresh);
+    expect(fresh.speed).toBeGreaterThan(1);
+  });
+
   it('shows the slip of a driven wheel: none rolling, positive spinning, negative locked', () => {
     const { load } = drive();
     const r = 0.3;

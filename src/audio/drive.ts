@@ -42,9 +42,21 @@ export interface DriveSnapshot {
   audioLag?: number;
 }
 
+/**
+ * Beyond a turn plus this long of the coordinate's own motion, s, the shown angles jump to the reported ones instead of
+ * easing: another car on the crank, or frames far apart. Ordinary jitter of the reports stays well inside it.
+ */
+const SNAP_S = 0.1;
+
 /** A frame continued toward the reported one: angles move on by their speeds and ease toward where they should be. */
 function continueAngles(shown: Float64Array, at: Float64Array, speed: Float64Array, age: number, dt: number): void {
   const ahead = Math.min(age, 0.1);
+  for (let k = 0; k < shown.length; k++) {
+    if (Math.abs(at[k]! + speed[k]! * ahead - shown[k]!) <= 2 * Math.PI + Math.abs(speed[k]!) * SNAP_S) continue;
+    // All of them at once, so the members (P·φ) stay in mesh.
+    for (let j = 0; j < shown.length; j++) shown[j] = at[j]! + speed[j]! * ahead;
+    return;
+  }
   for (let k = 0; k < shown.length; k++) {
     const predicted = at[k]! + speed[k]! * ahead;
     shown[k] = shown[k]! + speed[k]! * dt;
@@ -106,8 +118,9 @@ export class Drive {
   private seq = 0;
   /** A hand-over has been sent and its first report has not come yet: the local copy goes on meanwhile. */
   private awaiting = false;
-  /** The load's frame as shown (DriveSnapshot.vehicle). */
+  /** The load's frame as shown (DriveSnapshot.vehicle), and the local copy's, filled in place every frame. */
   private shownFrame: LoadFrame | null = null;
+  private localFrame: LoadFrame | null = null;
   /** The audio clock against the wall clock (DriveSnapshot.audioLag): where the window began, ms and s. */
   private lagFrom = { wall: 0, audio: 0 };
   private audioLag: number | undefined = undefined;
@@ -306,6 +319,9 @@ export class Drive {
   setLoad(spec: LoadSpec | null): void {
     this.loadSpec = spec;
     this.keptCommand = null;
+    // A new load starts at rest: its angles are not eased toward from the old one's (the box would spin back).
+    this.shownFrame = null;
+    this.localFrame = null;
     this.coupleLocal(true);
     this.post({ type: 'load', spec });
   }
@@ -361,7 +377,9 @@ export class Drive {
       for (let i = 0; i < steps; i++) this.local.step(dt / steps);
       this.shownAngle = this.local.angle;
       if (this.local.crank) this.queueReading(this.local.crank.readings());
-      this.continueFrame(this.local.crank?.load.frame?.(), 0, dt);
+      const frame = this.local.crank?.load.frame?.(this.localFrame ?? undefined);
+      this.localFrame = frame ?? null;
+      this.continueFrame(frame, 0, dt);
       return this.snapshot();
     }
     this.awaiting = false;

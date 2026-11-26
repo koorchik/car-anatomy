@@ -30,27 +30,48 @@ export interface VehicleFrame {
   phiDot: Float64Array;
 }
 
-/** The frame of a car now. A new object each call: it goes to another thread. */
-export function vehicleFrame(load: VehicleLoad): VehicleFrame {
+/**
+ * The frame of a car now: a new object, for a report that goes to another thread, or written into `into` when it is a
+ * frame of the same drivetrain (the main-thread copy, every frame, allocates nothing).
+ */
+export function vehicleFrame(load: VehicleLoad, into?: VehicleFrame): VehicleFrame {
   const { vehicle, chassis, control } = load;
   const s = vehicle.solver;
   const bus = vehicle.bus;
   const gears = control.spec.gears;
-  return {
-    kind: 'vehicle',
-    speed: chassis.v,
-    distance: chassis.x,
-    gear: control.gearIn(s),
-    selected: control.target < 0 ? 'N' : gears[control.target]!.name,
-    lever: control.sleeve < 0 ? 'N' : gears[control.sleeve]!.name,
-    shift: control.phase,
-    clutch: control.clamp,
-    clutchSlip: s.slip[control.spec.clutch]!,
-    brake: control.brake,
-    wheelAngle: Float64Array.from(bus.angle.subarray(0, WHEELS)),
-    wheelOmega: Float64Array.from(bus.omega.subarray(0, WHEELS)),
-    wheelRadius: Float64Array.from(bus.rEff.subarray(0, WHEELS)),
-    phi: Float64Array.from(s.phi),
-    phiDot: Float64Array.from(s.phiDot),
-  };
+  const f: VehicleFrame =
+    into && into.phi.length === s.phi.length
+      ? into
+      : {
+          kind: 'vehicle',
+          speed: 0,
+          distance: 0,
+          gear: 'N',
+          selected: 'N',
+          lever: 'N',
+          shift: 'engaged',
+          clutch: 0,
+          clutchSlip: 0,
+          brake: 0,
+          wheelAngle: new Float64Array(WHEELS),
+          wheelOmega: new Float64Array(WHEELS),
+          wheelRadius: new Float64Array(WHEELS),
+          phi: new Float64Array(s.phi.length),
+          phiDot: new Float64Array(s.phi.length),
+        };
+  f.speed = chassis.v;
+  f.distance = chassis.x;
+  f.gear = control.gearIn(s);
+  f.selected = control.target < 0 ? 'N' : gears[control.target]!.name;
+  f.lever = control.sleeve < 0 ? 'N' : gears[control.sleeve]!.name;
+  f.shift = control.phase;
+  f.clutch = control.clamp;
+  f.clutchSlip = s.slip[control.spec.clutch]!;
+  f.brake = control.brake;
+  f.wheelAngle.set(bus.angle.subarray(0, WHEELS));
+  f.wheelOmega.set(bus.omega.subarray(0, WHEELS));
+  f.wheelRadius.set(bus.rEff.subarray(0, WHEELS));
+  f.phi.set(s.phi);
+  f.phiDot.set(s.phiDot);
+  return f;
 }

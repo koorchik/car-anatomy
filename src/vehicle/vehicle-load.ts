@@ -192,9 +192,9 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
     return reading;
   }
 
-  /** The dash's figures and the angles of the drivetrain and the wheels (vehicle-frame.ts). */
-  frame(): VehicleFrame {
-    return vehicleFrame(this);
+  /** The dash's figures and the angles of the drivetrain and the wheels (vehicle-frame.ts), new or into `into`. */
+  frame(into?: VehicleFrame): VehicleFrame {
+    return vehicleFrame(this, into);
   }
 
   private size(): number {
