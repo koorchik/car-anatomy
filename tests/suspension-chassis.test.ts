@@ -11,11 +11,15 @@ import {
   axleRollStiffness, liftOff, millikenTransfer, rollModel, settle, settleAt, understeerGradient, type SteadyState,
 } from '../src/suspension/statics.ts';
 import { antiGeometry } from '../src/suspension/anti.ts';
+import { WheelForces, newTyreShare } from '../src/suspension/wheel-forces.ts';
+import { carLongitudinal } from '../src/suspension/car-longitudinal.ts';
+import { CAR_LIST } from '../src/data/cars.ts';
+import { driveCarById } from '../src/data/drive-cars.ts';
 import { doubleWishbone, wishboneDefaults } from '../src/suspension/templates/double-wishbone.ts';
 import { solidAxle, SOLID_TYPICAL } from '../src/suspension/templates/solid-axle.ts';
-import { aeroDragN, roadLoadN } from '../src/vehicle/road-load.ts';
+import { aeroDragN, roadLoadCoeffs, roadLoadN } from '../src/vehicle/road-load.ts';
 import {
-  chassisOf, restWheelCentreZM, typicalChassis, typicalFront, typicalRear, type TypicalCar,
+  chassisOf, restWheelCentreZM, TYPICAL_FINAL_DRIVE, typicalChassis, typicalFront, typicalRear, type TypicalCar,
 } from '../src/suspension/templates/typical-chassis.ts';
 import { coilForce, swayBarTorsionRate, G } from '../src/suspension/forces.ts';
 import { QuarterSim } from '../src/suspension/quarter.ts';
@@ -878,6 +882,86 @@ describe('braking and accelerating: the wheel’s limit', () => {
     expect(o.impossible).toBe(true);
     expect(o.shortfallYN).toBeGreaterThan(0);
     near(sum(o.fy), c.massKg * 0.8 * G, 1e-12);
+  });
+});
+
+describe('braking and accelerating: the direction of travel', () => {
+  /** The static loads, on dry road everywhere. */
+  const staticLoads = (c: Chassis): Float64Array => Float64Array.from(c.corners, (k) => k.staticN);
+  const dry = (): Float64Array => new Float64Array([1, 1, 1, 1]);
+
+  it('rolling backwards, the drive speeds the car up backwards and the brakes slow it down; drag and rolling turn round', () => {
+    const c = chassis(SEDAN);
+    const f = new WheelForces(c);
+    const o = newTyreShare();
+    const lon = c.spec.longitudinal;
+    // Speeding up backwards at 0.2 g: reverse gear, the rear wheels only.
+    f.share(staticLoads(c), -0.2 * G, 0, -5, dry(), true, o);
+    expect(o.dragN).toBeGreaterThan(0);
+    expect(sum(o.rollingN)).toBeGreaterThan(0);
+    near(sum(o.rollingN) + o.dragN, roadLoadN(lon.roadLoad, -5, 0), 1e-12);
+    expect(Math.abs(sum(o.brakeN))).toBe(0);
+    expect(Math.abs(o.driveN[0]) + Math.abs(o.driveN[1])).toBe(0);
+    expect(o.driveN[2]).toBeLessThan(0);
+    near(sum(o.fx), c.massKg * -0.2 * G - o.dragN, 1e-12);
+    // Slowing down backwards at 0.5 g: all four brakes by the balance, now pushing forwards.
+    f.share(staticLoads(c), 0.5 * G, 0, -5, dry(), true, o);
+    expect(Math.abs(sum(o.driveN))).toBe(0);
+    for (const b of o.brakeN) expect(b).toBeGreaterThan(0);
+    near((o.brakeN[0] + o.brakeN[1]) / sum(o.brakeN), lon.brakeFront, 1e-12);
+    near(sum(o.fx), c.massKg * 0.5 * G - o.dragN, 1e-12);
+    expect(o.propNm).toBe(0);
+  });
+
+  it('a car with no driven axle brakes but cannot drive: what it is asked is the shortfall', () => {
+    const z = (share: number): number => restWheelCentreZM('street', (1500 * share) / 2);
+    const c = buildChassis(chassisOf({
+      id: 'trailer-like', massKg: 1500, frontShare: 0.55, cgHeightM: 0.55, wheelbaseM: 2.7,
+      front: typicalFront('double-wishbone', 1.52, z(0.55), false), rear: typicalRear('double-wishbone', 1.54, z(0.45), false),
+      frontBar: null, rearBar: null, unsprungKg: [45, 45], rideHz: [1.3, 1.4], zeta: 0.25, tyre: 'street', geometry: 'typical',
+    }));
+    const f = new WheelForces(c);
+    const o = newTyreShare();
+    for (const limit of [true, false]) {
+      f.share(staticLoads(c), 0.2 * G, 0, 10, dry(), limit, o);
+      expect(o.impossible).toBe(true);
+      expect(Math.abs(sum(o.driveN))).toBe(0);
+      near(o.shortfallXN, c.massKg * 0.2 * G - o.dragN - sum(o.rollingN), 1e-12);
+      f.share(staticLoads(c), -0.5 * G, 0, 10, dry(), limit, o);
+      expect(o.impossible).toBe(false);
+      near(sum(o.fx), c.massKg * -0.5 * G - o.dragN, 1e-12);
+    }
+  });
+
+  it('without the limit a wheel in the air still makes nothing: its share goes to the other wheel of its axle', () => {
+    const c = chassis(SEDAN);
+    const f = new WheelForces(c);
+    const o = newTyreShare();
+    const fz = staticLoads(c);
+    fz[0] += fz[1];
+    fz[1] = 0;
+    f.share(fz, -0.6 * G, 0, 0, dry(), false, o);
+    expect(o.impossible).toBe(false);
+    expect(o.fx[1]).toBe(0);
+    near(o.fx[0], c.spec.longitudinal.brakeFront * c.massKg * -0.6 * G, 1e-12);
+    near(sum(o.fx), c.massKg * -0.6 * G, 1e-12);
+    expect(Array.from(o.atLimit)).toEqual([0, 0, 0, 0]);
+  });
+});
+
+describe('a real car’s brakes, drive and road load', () => {
+  it.each(CAR_LIST.map((car) => [car.id, car] as const))('%s: the drag on the body is aeroDragN(roadLoadCoeffs(car), v)', (_id, car) => {
+    const drive = driveCarById(car.id);
+    const lon = carLongitudinal(car, drive);
+    expect(lon.roadLoad).toEqual(roadLoadCoeffs(car));
+    expect(lon.finalDrive).toBe(drive ? drive.finalDrive.ratio : TYPICAL_FINAL_DRIVE);
+    const c = chassis({ ...SEDAN, id: `sedan-${car.id}`, longitudinal: lon });
+    const sim = new ChassisSim(c);
+    sim.v = 40;
+    sim.ax = -0.3 * G;
+    const o = sim.observe();
+    near(-o.dragN, aeroDragN(roadLoadCoeffs(car), 40), 1e-12);
+    near(-sum(o.rollingN) - o.dragN, roadLoadN(roadLoadCoeffs(car), 40, 0), 1e-12);
   });
 });
 
