@@ -49,7 +49,8 @@ export interface SceneModel<F> {
   setRenderBand?(base: number): void;
   /**
    * Cards of this model's parts in its own words, over the registry's (parts-registry.ts): a corner tells its knuckle
-   * by how that corner is steered. Every key is one its section has registered.
+   * by how that corner is steered, an axle names its parts by side (susp.front.spring). The stage reads these first;
+   * a key found in neither has no card.
    */
   readonly parts?: PartDictionary;
 }
