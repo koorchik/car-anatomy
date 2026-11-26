@@ -106,6 +106,8 @@ export class GearboxSection implements Section {
   /** Skeleton texts and states this section changes while it is shown, to give back on leave. */
   private readonly lent = new Map<HTMLElement, { text?: string; hidden?: boolean; current?: boolean }>();
   private fitScaleBefore = 0.68;
+  /** The --tools-h the page had before this section measured its own row, to give back on leave. */
+  private toolsHBefore = '';
   /** Last texts of the readouts, so the DOM is touched only when they change. */
   private shown = { input: '', output: '', gear: '', note: '' };
   private readonly unlit = { angles: [] as ArrayLike<number>, sleeves: {} as Readonly<Record<string, number>>, meshPower: [] as number[] };
@@ -137,6 +139,9 @@ export class GearboxSection implements Section {
     this.pedal = new Pedal(this.el('gbx-pedal-col'), { setThrottle: (value) => this.drive.setPedal(value), press: () => void this.pressThrottle() });
     this.ignition = new Ignition(this.el('gbx-control'), () => void this.toggleIgnition());
     this.listen();
+    // The row of view tools wraps on a phone and in the longer language; the first-visit callout and the scale bar stand
+    // above it through --tools-h, which on the engine pages their systems view measures.
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.measureTools()).observe(slots.tools.parent);
     this.showPage();
     this.present();
   }
@@ -176,6 +181,9 @@ export class GearboxSection implements Section {
       if (was.current !== undefined) el.classList.toggle('current', was.current);
     }
     this.lent.clear();
+    const root = document.documentElement.style;
+    if (this.toolsHBefore) root.setProperty('--tools-h', this.toolsHBefore);
+    else root.removeProperty('--tools-h');
     this.owned.setAway(true);
   }
 
@@ -284,6 +292,8 @@ export class GearboxSection implements Section {
     slots.panelTitle.textContent = t('Про коробку');
     document.title = t('{title}. Анатомія авто', { title: t('Механічна коробка з проміжним валом') });
     this.fitScaleBefore = stage.fitScale;
+    this.toolsHBefore = document.documentElement.style.getPropertyValue('--tools-h');
+    this.measureTools();
     this.buildModel(false);
     this.model?.setView(view.mode);
     this.el('gbx-slow-tool').hidden = time.mode !== 'slow';
@@ -293,6 +303,16 @@ export class GearboxSection implements Section {
     panels.setOpen('left', !small && window.innerWidth >= BOTH_PANELS);
     panels.relayout();
     this.ctx.keys.use(['gearboxes']);
+  }
+
+  /** The height the row of view tools takes above the dash, for what stands over it (--tools-h). */
+  private measureTools(): void {
+    if (this.away) return;
+    const row = this.ctx.slots.tools.parent;
+    if (!row.offsetHeight) return;
+    const style = getComputedStyle(row);
+    const above = parseFloat(style.bottom) - parseFloat(style.getPropertyValue('--dash-h'));
+    document.documentElement.style.setProperty('--tools-h', `${Math.round(row.offsetHeight + (Number.isFinite(above) ? above : 12))}px`);
   }
 
   /** Overall reverse of a description, the magnitude. */
