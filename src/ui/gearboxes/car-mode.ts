@@ -408,9 +408,15 @@ export class CarMode {
     this.fillClutch(pedal);
   }
 
+  /** The clutch pedal drawn this far down, %; written only when it moves (the auto clutch's comes every frame). */
+  private clutchFilled = -1;
+
   private fillClutch(value: number): void {
-    this.el('gbx-clutch-fill').style.height = `${Math.round(value * 100)}%`;
-    this.el('gbx-clutch').setAttribute('aria-valuenow', String(Math.round(value * 100)));
+    const pct = Math.round(value * 100);
+    if (pct === this.clutchFilled) return;
+    this.clutchFilled = pct;
+    this.el('gbx-clutch-fill').style.height = `${pct}%`;
+    this.el('gbx-clutch').setAttribute('aria-valuenow', String(pct));
   }
 
   /** A stall, a note, or the gear a driver would want now, in the line under the dash's figures. */
