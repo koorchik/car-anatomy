@@ -22,6 +22,7 @@ import type { Gearbox } from '../../drivetrain/topology.ts';
 import { merge, MM, zCylinder } from '../geometry.ts';
 import { castAluminiumMaterial } from '../materials.ts';
 import { tag, type SceneModel, type ViewMode } from '../model-types.ts';
+import { CONVERTER_BACK_MM, ConverterView, PUMP_COLOR, STATOR_COLOR, TURBINE_COLOR, VORTEX_COLOR, type ConverterFrame } from './converter-mesh.ts';
 import { bodyTints, elementColor } from './element-colors.ts';
 import { acquireGearGeometry, drawnGear, type MeshQuality } from './gear-mesh.ts';
 import { acquireRingGeometry } from './ring-mesh.ts';
@@ -35,11 +36,18 @@ export interface PlanetaryFrame {
   meshPower: ArrayLike<number>;
   /** Closed elements by id. */
   closed: ReadonlySet<string>;
+  /** The torque converter's wheels (stage K12a); absent, it turns with the input as one. */
+  converter?: ConverterFrame;
 }
 
 export interface PlanetaryModelOptions {
   quality?: MeshQuality;
+  /** Draw the torque converter in front of the case (stage K12a). */
+  converter?: boolean;
 }
+
+/** Gap between the case's front face and the pump's hub, mm [layout estimate]. */
+const CONVERTER_GAP = 14;
 
 // Layout estimates (not data), mm.
 const SHAFT_IN = 11;
@@ -116,6 +124,8 @@ export class PlanetaryModel extends GearboxSceneBase implements SceneModel<Plane
   private readonly zAxis = new THREE.Vector3(0, 0, 1);
   private maxRim = 0;
   private back = 0;
+  private converterView: ConverterView | null = null;
+  private readonly still: ConverterFrame = { pump: 0, turbine: 0, stator: 0, flow: 0, strength: 0 };
 
   constructor(box: Gearbox, options: PlanetaryModelOptions = {}) {
     super();
@@ -138,6 +148,7 @@ export class PlanetaryModel extends GearboxSceneBase implements SceneModel<Plane
       this.buildShafts();
       this.buildPacks();
       this.buildCase();
+      if (options.converter) this.buildConverter();
     } catch (error) {
       this.dispose();
       throw error;
@@ -409,6 +420,37 @@ export class PlanetaryModel extends GearboxSceneBase implements SceneModel<Plane
     this.explode(mesh, new THREE.Vector3(0, 1, 0), 2.6 * outer);
   }
 
+  /** The converter in front of the case, on the input's axis; its cover is a shell like the case. */
+  private buildConverter(): void {
+    const segments = this.quality === 'low' ? 40 : 72;
+    const material = (color: string) => this.own(new THREE.MeshStandardMaterial({ color, metalness: 0.75, roughness: 0.38, side: THREE.DoubleSide }));
+    const solid = this.own(castAluminiumMaterial());
+    solid.side = THREE.DoubleSide;
+    const glass = this.glass('#d6c9b3', 0.03, 0.3);
+    const vortex = this.own(new THREE.MeshStandardMaterial({ color: VORTEX_COLOR, emissive: VORTEX_COLOR, emissiveIntensity: 0.6, transparent: true, opacity: 0.9, depthTest: false }));
+    const turbine = material(TURBINE_COLOR);
+    const view = new ConverterView(
+      { pump: material(PUMP_COLOR), turbine, stator: material(STATOR_COLOR), steel: material('#c3c7cb'), cover: solid, vortex },
+      segments,
+    );
+    const middle = CONVERTER_GAP + CONVERTER_BACK_MM;
+    view.group.position.z = middle * MM;
+    // The input shaft reaches into the turbine's hub.
+    view.turbine.add(tag(new THREE.Mesh(zCylinder(SHAFT_IN * MM, (middle - 40) * MM, 20, 0, 0, (-(middle - 40) / 2) * MM), turbine), 'gbx-turbine'));
+    this.mounted.add(view.group);
+    this.shells.push({ mesh: view.cover, solid, glass });
+    // The wheels' shells are glass in their own colour in the X-ray, so the blades and the vortex inside show.
+    for (const [mesh, color] of [[view.pumpShell, PUMP_COLOR], [view.turbineShell, TURBINE_COLOR]] as const) {
+      this.shells.push({ mesh, solid: mesh.material as THREE.Material, glass: this.glass(color, 0.12, 0.45) });
+      mesh.renderOrder = 7;
+      mesh.userData.ownOrder = 7;
+    }
+    view.cover.renderOrder = 6;
+    view.cover.userData.ownOrder = 6;
+    this.explode(view.group, new THREE.Vector3(0, 0, 1), 140);
+    this.converterView = view;
+  }
+
   // ---- Frame ----
 
   private placePlanets(set: SetView, planetAngle: number, carrierAngle: number): void {
@@ -424,6 +466,16 @@ export class PlanetaryModel extends GearboxSceneBase implements SceneModel<Plane
 
   update(frame: PlanetaryFrame): void {
     for (const m of this.members) m.spin.rotation.z = -wrap(frame.angles[m.index] ?? 0);
+    if (this.converterView) {
+      let c = frame.converter;
+      if (!c) {
+        const input = wrap(frame.angles[this.box.members.indexOf(this.box.spec.input)] ?? 0);
+        this.still.pump = input;
+        this.still.turbine = input;
+        c = this.still;
+      }
+      this.converterView.update(c);
+    }
     for (const set of this.sets) this.placePlanets(set, frame.angles[set.planetIndex] ?? 0, frame.angles[set.carrierIndex] ?? 0);
     for (const [id, material] of this.gearMaterials) {
       let glow = 0;
@@ -453,6 +505,11 @@ export class PlanetaryModel extends GearboxSceneBase implements SceneModel<Plane
   }
 
   // ---- For tests and the page ----
+
+  /** The converter's view, when the model draws one. */
+  get converter(): ConverterView | null {
+    return this.converterView;
+  }
 
   /** The packs' openness, 0 closed to 1 open, by element. */
   packOpenness(): Record<string, number> {

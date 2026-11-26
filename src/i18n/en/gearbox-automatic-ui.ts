@@ -2,14 +2,15 @@
 // cards of its model. Words it shares with the manual pages come from gearbox-ui.ts; the record and the article
 // about the layout from gearbox-automatic.ts.
 
+import { GEARBOX_CONVERTER_EN } from './gearbox-converter.ts';
+
 export const GEARBOX_AUTOMATIC_UI_EN: Record<string, string> = {
+  ...GEARBOX_CONVERTER_EN,
   'Ряди: зубці сонячної / коронної': 'Gearsets: sun / ring teeth',
   'Сателітів у рядах': 'Planets per gearset',
   'Опубліковані числа: {ratios}, задній {reverse}. Зубці рядів дають їх до останнього знака.':
     'Published ratios: {ratios}, reverse {reverse}. The gearset teeth give them to the last digit.',
   'Показати: матриця 8HP': 'Show: the 8HP shift matrix',
-  'На столі коробка крутиться без авто й поки без гідротрансформатора: двигун крутить вхідний вал напряму, вихід крутиться вільно, а муфти й гальма замикаються одразу. Замикайте елементи кнопками A–E, і модель та номограма покажуть, що вони лишають.':
-    'On the table the transmission turns without the car and, for now, without the torque converter: the engine turns the input shaft directly, the output turns freely, and the clutches and brakes close at once. Close the elements with the A–E buttons, and the model and the lever diagram show what they leave.',
   'Три з п’яти': 'Three of five',
   'Чотири ряди, з’єднані між собою, мають чотири ступені свободи. Кожен замкнений елемент забирає один, тож три лишають рівно один рух: це передача. Перша — {closed}, число {ratio}. На номограмі швидкість кожного ряду лежить на прямій, а вихід стоїть на висоті 1/{ratio}.':
     'Four gearsets joined to each other have four degrees of freedom. Each closed element takes one away, so three leave exactly one motion: a gear. First is {closed}, ratio {ratio}. On the lever diagram the speeds of each set lie on a straight line, and the output stands at a height of 1/{ratio}.',
@@ -88,8 +89,8 @@ export const GEARBOX_AUTOMATIC_UI_EN: Record<string, string> = {
   'Муфта': 'Clutch',
   'Пакет дисків між двома частинами, що крутяться. Стиснутий пакет змушує їх крутитися разом. У 8HP муфт три: C з’єднує вхід із коронною ряду 3, D — водила рядів 3 і 4, E — коронні рядів 2 і 3.':
     'A pack of plates between two turning parts. Squeezed, the pack makes them turn together. The 8HP has three clutches: C joins the input to the ring of set 3, D the carriers of sets 3 and 4, E the rings of sets 2 and 3.',
-  'Крутиться від турбіни гідротрансформатора й веде водило ряду 2, а через муфту C — ще й коронну ряду 3. На цій сторінці гідротрансформатора поки немає: вал крутить двигун напряму.':
-    'Driven by the torque converter\'s turbine, it turns the carrier of set 2 and, through clutch C, the ring of set 3 too. This page has no torque converter yet: the engine turns the shaft directly.',
+  'Крутиться від турбіни гідротрансформатора й веде водило ряду 2, а через муфту C — ще й коронну ряду 3. На столі двигун крутить вал так, ніби муфта блокування замкнена, а сам гідротрансформатор працює в лабораторії.':
+    'Driven by the torque converter\'s turbine, it turns the carrier of set 2 and, through clutch C, the ring of set 3 too. On the table the engine turns the shaft as if the lockup clutch were closed; the converter itself works in the lab.',
   'Водило ряду 4 і вал до кардана. Його швидкість, поділена на швидкість входу, — це одиниця, поділена на число передачі.':
     'The carrier of set 4 and the shaft to the driveshaft. Its speed divided by the input\'s is one over the gear ratio.',
   'Картер коробки': 'Transmission case',

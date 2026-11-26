@@ -15,6 +15,7 @@ export const titleHtml = (): string => `<div class="gbx-title" id="gba-title-blo
     <div class="gbx-title-row">
       <button class="btn" id="gba-levers-toggle" type="button" aria-controls="results-panel">${t('Номограма')}</button>
       <button class="btn" id="gba-demo-open" type="button">${t('Демонстрація')}<span class="gbx-long">: ${t('матриця 8HP')}</span></button>
+      <button class="btn" id="gba-lab-open" type="button">${t('Лабораторія')}<span class="gbx-long">: ${t('гідротрансформатор')}</span></button>
     </div>
   </div>`;
 
@@ -38,6 +39,28 @@ export const statusHtml = (): string => `<section class="gbx-demo" id="gba-demo"
     <footer>
       <button class="btn" id="gba-demo-prev" type="button">${t('Назад')}</button>
       <button class="btn" id="gba-demo-next" type="button">${t('Далі')}</button>
+    </footer>
+  </section>`;
+
+/** The torque converter's lab (demonstration 9): steps, readouts, a chart; converter-lab-ui.ts fills it. */
+export const labHtml = (): string => `<section class="gbx-demo gba-lab" id="gba-lab" role="region" aria-live="polite" aria-label="${t('Лабораторія')}" hidden>
+    <header><span id="gba-lab-count"></span><button class="btn" id="gba-lab-close" type="button">${t('Закрити')}</button></header>
+    <h3 id="gba-lab-title"></h3>
+    <p id="gba-lab-text"></p>
+    <div class="gba-lab-chart" id="gba-lab-chart"></div>
+    <dl class="gba-lab-figures">
+      <div><dt>${t('Двигун і насос')}</dt><dd id="gba-lab-engine"></dd></div>
+      <div><dt>${t('Турбінне колесо')}</dt><dd id="gba-lab-turbine"></dd></div>
+      <div><dt>${t('Відношення')}</dt><dd id="gba-lab-ratio"></dd></div>
+      <div><dt>${t('Реактор')}</dt><dd id="gba-lab-stator"></dd></div>
+      <div><dt>${t('Ковзання')}</dt><dd id="gba-lab-slip"></dd></div>
+      <div><dt>${t('Автомобіль')}</dt><dd><span id="gba-lab-speed"></span> · <span id="gba-lab-controls"></span></dd></div>
+    </dl>
+    <p class="gba-lab-legend"><i class="pump"></i>${t('насос')} <i class="turbine"></i>${t('турбіна')} <i class="stator"></i>${t('реактор')} <i class="flow"></i>${t('потік оливи')}</p>
+    <footer>
+      <button class="btn" id="gba-lab-prev" type="button">${t('Назад')}</button>
+      <button class="btn" id="gba-lab-again" type="button">${t('Ще раз')}</button>
+      <button class="btn" id="gba-lab-next" type="button">${t('Далі')}</button>
     </footer>
   </section>`;
 

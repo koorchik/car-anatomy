@@ -26,24 +26,28 @@ const ZF_8HP51_SUPRA: GearboxRecord = {
   id: 'automatic',
   name: GEARBOX_PAGE_NAMES['automatic']!,
   car: null,
-  layout: { kind: 'planetary', desc: zf8hpDesc('automatic', [[48, 96, 4], [54, 96, 5], [60, 96, 4], [24, 102, 3]]) },
+  // The converter (stage K12a): the 6T40's measured shape (research §9) sized so that the B58 stalls near 2200 rpm.
+  // No primary source gives the 8HP's stall speed; 2200 rpm is the gearbox plan's estimate, and a spec page of
+  // unclear origin gives the same for the BMW 330i.
+  layout: { kind: 'planetary', desc: { ...zf8hpDesc('automatic', [[48, 96, 4], [54, 96, 5], [60, 96, 4], [24, 102, 3]]), converter: { kStall: 100 } } },
   published: { ratios: [5.25, 3.36, 2.172, 1.72, 1.316, 1.0, 0.822, 0.64], reverse: 3.712, ratedTorqueNm: 500, centreMm: null },
   verifyNote:
     'Передаточні числа, задній хід і головну передачу дає технічна специфікація Toyota GR Supra 2024 року. Зубці рядів 48/96, 54/96, 60/96 і 24/102, з’єднання рядів і матрицю перемикань ми взяли з англійської Вікіпедії, ' +
     'а вона для рядів 1 і 2 посилається на інструкцію з ремонту ZF. Ці зубці відтворюють усі числа Toyota до останнього знака. Розрахунковий момент 500 Н·м теж із Вікіпедії. ' +
     'Скільки сателітів у кожному ряду, у джерелах немає. Їх можна рівно розставити лише тоді, коли сума зубців сонячної й коронної ділиться на їхню кількість: 144 — на 3, 4 або 6, 150 — на 3, 5 або 6, 156 — на 3, 4 або 6, 126 — на 3 або 6. ' +
-    'Ми взяли найбільше число до п’яти, за якого між сателітами лишається місце для стійок водила: 4, 5, 4 і 3. Модуль 1,75 мм, ширини вінців, прямі зубці, місця рядів і пакетів уздовж осі — наша оцінка.',
+    'Ми взяли найбільше число до п’яти, за якого між сателітами лишається місце для стійок водила: 4, 5, 4 і 3. Модуль 1,75 мм, ширини вінців, прямі зубці, місця рядів і пакетів уздовж осі — наша оцінка. ' +
+    'Оберти на зупинці для 8HP у первинних джерелах ми не знайшли. Гідротрансформатор має форму виміряної кривої GM 6T40 (EPA), а його розмір K = 100 об/хв/√(Н·м) ми підібрали так, щоб двигун B58 ставав близько 2200 об/хв. Діаметр 273 мм і муфта блокування теж оцінка.',
   sources: [
     'https://media.toyota.co.uk/wp-content/uploads/sites/5/pdf/240429-GR-Supra-Tech-Specs.pdf',
     'https://en.wikipedia.org/w/index.php?title=ZF_8HP_transmission&action=raw',
     'https://www.zf.com/public/org/zf_pkw_getriebebroschuere2017_de_web_72250.pdf',
   ],
-  unverified: ['published.ratedTorqueNm', 'teeth', 'planets', 'module', 'faceWidth', 'packs'],
+  unverified: ['published.ratedTorqueNm', 'teeth', 'planets', 'module', 'faceWidth', 'packs', 'converter.kStall'],
 };
 
 // The article (stage K11). Research §10: the lever analogy (Benford and Leising, SAE 810102), the 8HP's matrix, the
 // two open elements and the one-element shifts (ZF, via Wikipedia), the brochure's 87 kg and 7.81 span. The torque
-// converter and the automatic shifting come with stages K12a and K12b.
+// converter's lab came with stage K12a (its paragraph is in the page's article.ts); the shifting comes with K12b.
 const ARTICLE: GearboxArticle = {
   lead:
     'Гідромеханічний автомат не має шестерень, які треба вводити в зачеплення: усі його шестерні зачеплені завжди. Передачу вибирають муфти й гальма, які з’єднують між собою частини планетарних рядів або тримають їх на картері. ' +
@@ -55,7 +59,7 @@ const ARTICLE: GearboxArticle = {
     'Між сусідніми передачами міняється лише один елемент, тому перемикання — це одна муфта відпускає, друга замикає, і момент не зникає.',
   sound:
     'Планетарні ряди звучать тихо: момент ділиться між кількома сателітами, а зачеплень у кожному ряду багато. На шостій передачі весь механізм крутиться як одне ціле, і жодне зачеплення не котиться. ' +
-    'На цій сторінці поки чути лише двигун, а гідротрансформатор і автоматичні перемикання з’являться пізніше.',
+    'На цій сторінці поки чути лише двигун: гідротрансформатор працює в лабораторії без звуку, а автоматичні перемикання з’являться пізніше.',
   pros: [
     'Шестерні завжди в зачепленні, а передачу міняє одна муфта: перемикання без розриву тяги',
     'Вісім передач із діапазоном 8,2 від чотирьох рядів, бо кожен ряд працює в кількох передачах',

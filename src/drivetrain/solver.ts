@@ -22,12 +22,17 @@
 // The KKT system is factorised on every pass: C changes with every slipping element, and the sizes are tiny (a
 // dozen coordinates, a handful of rows).
 //
+// A torque converter (converter.ts) takes −T_p from its pump and gives T_t to its turbine; its slopes go into C as
+// their symmetric part, made positive semidefinite, so Cholesky still applies. The part left out is the skew one that
+// TR ≠ 1 brings; near SR 1, where the converter is stiffest, TR is 1 and the slopes are symmetric.
+//
 // The halfshaft springs end on the wheels, which the chassis side integrates (src/vehicle/wheel.ts): before a step
 // the caller writes the wheel angles and speeds into anchorAngle and anchorSpeed, and after it reads springApplied,
 // the exact torque each spring used in the step, implicit damping included. The wheel gets that torque and the side
 // gear its opposite, so the momentum crossing the port is the same on both sides.
 
 import { DOG, type DrivetrainCore, FRICTION, ONEWAY, SYNCHRO } from './core.ts';
+import { converterTorques, newConverterPoint, type ConverterPoint } from './converter.ts';
 import { BELL_HOUSING_C, DISC_COOLING_S, LOCK_SLIP, SPIN_LOSS_FADE, SYNC_WINDOW, stribeckMu, stribeckSlope } from './elements.ts';
 
 /** Element states, as reported. */
@@ -90,6 +95,10 @@ export class DrivetrainSolver {
   readonly springApplied: Float64Array;
   /** Energy the spin loss and the torque-proportional losses have taken, J, cumulative. */
   lossEnergy = 0;
+  /** The converter at the start of the last step (core.converter), torques and speed ratio. */
+  readonly converter: ConverterPoint = newConverterPoint();
+  /** Energy the converter has turned into heat, J, cumulative. */
+  converterEnergy = 0;
   /** Events of the last steps; the reader empties it. */
   events: DrivetrainEvent[] = [];
   /** Simulated time, s. */
@@ -312,6 +321,10 @@ export class DrivetrainSolver {
       if (c === SLIP && Math.abs(dw) > 1e-9) this.slipDir[e] = Math.sign(dw);
     }
 
+    // The converter at the step's speeds: its torques and slopes for the passes below and the losses' source.
+    const cv = core.converter;
+    if (cv.pump >= 0) converterTorques(this.dotRow(core.P, cv.pump, this.phiDot), this.dotRow(core.P, cv.turbine, this.phiDot), cv.kStall, this.converter);
+
     // Torque-proportional losses: the share of the gear the locks select, on the torque the source springs carry now.
     for (let l = 0; l < core.losses.length; l++) {
       const L = core.losses[l]!;
@@ -325,7 +338,10 @@ export class DrivetrainSolver {
         }
       }
       let src = 0;
-      if (share !== 0) for (let k = 0; k < L.springs.length; k++) src += L.gains[k]! * this.springTorque(L.springs[k]!);
+      if (share !== 0) {
+        for (let k = 0; k < L.springs.length; k++) src += L.gains[k]! * this.springTorque(L.springs[k]!);
+        if (L.converter !== 0 && cv.pump >= 0) src += L.converter * (this.converter.turbine - this.converter.pump);
+      }
       this.lossMag[l] = share * Math.abs(src);
     }
 
@@ -376,6 +392,10 @@ export class DrivetrainSolver {
       this.phi[k]! += h * this.phiDot[k]!;
     }
     this.time += h;
+    if (cv.pump >= 0) {
+      const c = this.converter;
+      this.converterEnergy += h * (c.pump * this.dotRow(core.P, cv.pump, this.phiDot) - c.turbine * this.dotRow(core.P, cv.turbine, this.phiDot));
+    }
     if (core.drag.member >= 0) this.lossEnergy -= h * this.dragApplied * this.dotRow(core.P, core.drag.member, this.phiDot);
     for (let l = 0; l < core.losses.length; l++) this.lossEnergy -= h * this.lossApplied[l]! * this.dotRow(core.P, core.losses[l]!.member, this.phiDot);
 
@@ -454,6 +474,9 @@ export class DrivetrainSolver {
       this.dragApplied = t;
       this.addRank1(P, d.member, t, h * (d.b + (fade ? d.a / SPIN_LOSS_FADE : 0)));
     }
+    // The converter: −T_p on the pump, T_t on the turbine, the symmetric part of their slopes implicit.
+    const cv = core.converter;
+    if (cv.pump >= 0) this.addConverter(h, cv.pump, cv.turbine);
     // Torque-proportional losses against the rotation of their member, fading out at rest like the spin loss.
     for (let l = 0; l < core.losses.length; l++) {
       const mag = this.lossMag[l]!;
@@ -505,6 +528,31 @@ export class DrivetrainSolver {
       m++;
     }
     this.rows = m;
+  }
+
+  /** The converter's torques (taken at the start of the step) into f and h·C of its slopes into A (see the head of the file). */
+  private addConverter(h: number, p: number, t: number): void {
+    const { A, f } = this;
+    const { n, P } = this.core;
+    const c = this.converter;
+    // C = −∂τ/∂ω with τ_p = −T_p and τ_t = T_t; its symmetric part, clipped to a positive semidefinite one.
+    const cpp = Math.max(0, c.dPumpP);
+    const ctt = Math.max(0, -c.dTurbineT);
+    let cpt = (c.dPumpT - c.dTurbineP) / 2;
+    const bound = Math.sqrt(cpp * ctt);
+    if (cpt > bound) cpt = bound;
+    else if (cpt < -bound) cpt = -bound;
+    const po = p * n;
+    const to = t * n;
+    for (let r = 0; r < n; r++) {
+      const pr = P[po + r]!;
+      const tr = P[to + r]!;
+      if (pr === 0 && tr === 0) continue;
+      f[r]! += -c.pump * pr + c.turbine * tr;
+      const a = h * (cpp * pr + cpt * tr);
+      const b = h * (cpt * pr + ctt * tr);
+      for (let k = 0; k < n; k++) A[r * n + k]! += a * P[po + k]! + b * P[to + k]!;
+    }
   }
 
   /** f += t·rowᵀ, A += c·rowᵀ·row for one row of `m`. */
