@@ -234,7 +234,7 @@ export class CarSection implements Section {
     this.tint(system);
   }
 
-  enter(route: Route, _from: Route | null): void {
+  enter(route: Route, from: Route | null): void {
     const carId = overviewCarId(route.path);
     if (route.path[0] !== carId || route.page !== 'overview') {
       // An address without a car, or with one the overview does not show yet, shows the first car under its own address.
@@ -246,7 +246,7 @@ export class CarSection implements Section {
     const asked = route.query.focus;
     const model = this.model!;
     if (isCarSystem(asked) && model.has(asked)) {
-      const system = returnFocus(this.car!, asked, this.came(carId), shown);
+      const system = returnFocus(this.car!, asked, this.came(carId), shown, from);
       // A focus asked by the address the page opens with is there at once; a change while the car is shown is a move.
       this.setFocus(system, first || placed ? 0 : undefined);
     } else if (this.focused || route.query.focus !== undefined) {

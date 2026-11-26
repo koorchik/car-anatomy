@@ -149,10 +149,13 @@ export function focusForRoute(route: RouteLike, car: CarRecord | undefined): Car
 /**
  * The system to bring back into focus: the one the visitor drilled in from (`came`), when the address names the
  * system of the page it led to, or a system whose page is that same page (a layer turned off on the engine's page
- * turns 'cooling' into 'engine'); otherwise the address's own.
+ * turns 'cooling' into 'engine'); otherwise the address's own. `from` is the page the visitor comes back from: the
+ * remembered system counts only from a page of this car (`car=`), since 'On the car' on a page reached some other way,
+ * or a link from elsewhere, names its own system and the remembered one is stale there.
  */
-export function returnFocus(car: CarRecord, asked: CarSystem, came: CarSystem | null, shown: PageShown): CarSystem {
+export function returnFocus(car: CarRecord, asked: CarSystem, came: CarSystem | null, shown: PageShown, from: RouteLike | null): CarSystem {
   if (!came || came === asked) return asked;
+  if (!from || from.section === 'car' || from.query.car !== car.id) return asked;
   const target = drillTarget(car, came, shown);
   if (!target) return asked;
   const own = drillTarget(car, asked, shown);

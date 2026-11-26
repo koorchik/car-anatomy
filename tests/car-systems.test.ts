@@ -22,7 +22,7 @@ const back = (hash: string, carId: string, came: string): string | null => {
   expect(route.path[0]).toBe(carId);
   const asked = route.query.focus;
   expect(isCarSystem(asked)).toBe(true);
-  return returnFocus(carById(carId)!, asked as never, came as never, shown);
+  return returnFocus(carById(carId)!, asked as never, came as never, shown, parseRoute(hash));
 };
 
 describe('the overview drills into the sections', () => {
@@ -65,6 +65,21 @@ describe('the overview drills into the sections', () => {
     expect(focusForRoute(parseRoute('#/sump/i4?car=civic-type-r-fk8'), civic)).toBe('oil');
     expect(focusForRoute(parseRoute(`#/suspensions/${civic.suspension!.rear}?car=civic-type-r-fk8`), civic)).toBe('rear-suspension');
     expect(back('#/designer?car=civic-type-r-fk8', civic.id, 'gearbox')).toBe('engine');
+  });
+});
+
+describe('the remembered system', () => {
+  it('counts only on the way back from a page of this car', () => {
+    const civic = carById('civic-type-r-fk8')!;
+    const engine = `#/engines/${civic.engine}`;
+    // Went in from the cooling, came back, then reached the engine's page through the menu: «На авто» names the engine.
+    const on = onCar(parseRoute(engine))!;
+    expect(returnFocus(civic, parseRoute(on.href).query.focus as never, 'cooling', shown, parseRoute(engine))).toBe('engine');
+    // A link from elsewhere, a chip on the overview itself and a first load name the address's own system.
+    expect(returnFocus(civic, 'engine', 'cooling', shown, parseRoute('#/car/civic-type-r-fk8?focus=cooling'))).toBe('engine');
+    expect(returnFocus(civic, 'engine', 'cooling', shown, null)).toBe('engine');
+    // Back from the engine's page with the cooling layer turned off there.
+    expect(returnFocus(civic, 'engine', 'cooling', shown, parseRoute(`${engine}?car=${civic.id}`))).toBe('cooling');
   });
 });
 
