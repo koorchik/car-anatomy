@@ -292,9 +292,14 @@ async function launchChrome(path: string, profile: string): Promise<{ child: Chi
 // ---------------------------------------------------------------------------------------------------------------
 // One shot
 
-/** The DOM as text: the root's attributes, the title and the body, one tag per line, after the address. */
+/**
+ * The DOM as text: the root's attributes, the title and the body, one tag per line, after the address. The root's
+ * inline style holds the layout's custom properties, in the order they were first set; that order changes nothing on
+ * screen but follows when each feature's code loaded, so they are sorted.
+ */
 const SERIALIZE = `(() => {
-  const attrs = (el) => Array.from(el.attributes, (a) => ' ' + a.name + '="' + a.value + '"').join('');
+  const value = (el, a) => (el === document.documentElement && a.name === 'style' ? a.value.split(';').map((d) => d.trim()).filter(Boolean).sort().join('; ') + ';' : a.value);
+  const attrs = (el) => Array.from(el.attributes, (a) => ' ' + a.name + '="' + value(el, a) + '"').join('');
   return '<!-- ' + location.hash + ' -->\\n<html' + attrs(document.documentElement) + '>\\n<title>' + document.title + '</title>\\n'
     + document.body.outerHTML.replace(/></g, '>\\n<') + '\\n';
 })()`;
@@ -347,6 +352,9 @@ async function shoot(cdp: Cdp, url: string, page: ShotPage, [width, height]: [nu
     while (!loaded && Date.now() - start < 60_000) await sleep(100);
     if (!loaded) throw new Error(`${page.id}: the page did not load`);
     await waitFor('window.__engine && window.__engine.freeze', 'window.__engine.freeze');
+    // Since the engine features load on first use, the page brings them all first, as it made them all at the start
+    // before: the hidden parts of each are then in the DOM to compare. Code from before that has no loadAll.
+    await evaluate(`window.__engine.loadAll ? window.__engine.loadAll() : null`);
     await evaluate(`document.fonts.ready.then(() => (${FRAMES})(2))`);
     // Whether the part hint shows depends on what the visitor has done before; the shots are of the page itself.
     await evaluate(`{ const callout = document.getElementById('parts-callout'); if (callout) callout.hidden = true; }`);

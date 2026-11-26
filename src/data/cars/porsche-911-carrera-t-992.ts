@@ -17,7 +17,7 @@ export const CAR: CarRecord = {
   years: '2022-2024',
   engine: 'b6/porsche-992-carrera-3-0',
   gearbox: 'manual-transaxle/porsche-911-carrera-t-992',
-  suspension: null,
+  suspension: { front: 'macpherson', rear: 'multilink' },
   mount: { axis: 'longitudinal', front: 'rearward', position: 'rear' },
   massKg: 1476,
   massBasis: 'kerb',

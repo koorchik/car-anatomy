@@ -23,6 +23,9 @@ export const SECTOR_NAMES: Record<TestSectorId, string> = {
   'right-hander': t('Правий'),
 };
 
+/** A sector's name for a page; an id of another circuit shows as it is. */
+export const sectorName = (id: string): string => SECTOR_NAMES[id as TestSectorId] ?? id;
+
 export const TRACK_NAMES: Record<string, string> = {
   test: t('Тестове коло'),
 };

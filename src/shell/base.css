@@ -1,0 +1,64 @@
+/* What the page needs before any code has run: the colours, the type and the dark page behind it. The loader
+ * (src/main.ts) carries it, so the page is dark from the first paint. */
+
+:root {
+  --petrol-deep: #0e2a33;
+  --petrol: #143642;
+  --petrol-up: #1c4957;
+  --petrol-lit: #2f6573;
+  --bone: #ece6d6;
+  --bone-dim: #b4c0bb;
+  --ignition: #ff7a1a;
+  --ignition-ink: #2b1200;
+  --intake: #62c6ec;
+  --rule: rgba(236, 230, 214, 0.14);
+  --dash-h: 212px;
+  --panel-w: 400px;
+  --top-h: 52px;
+  --body: 'Fira Sans', system-ui, sans-serif;
+  --display: 'Fira Sans Extra Condensed', 'Fira Sans', system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--petrol-deep);
+  color: var(--bone);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--intake);
+  outline-offset: 2px;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}

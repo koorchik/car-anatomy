@@ -5,7 +5,7 @@
 // The page only plays the result back, so the 3D, the table and the tests all see the same numbers.
 // No DOM; LubeRunner works in slices so a page can spread it over idle time.
 
-import { starvationLoad, wearRateAt } from '../designer/reliability.ts';
+import { starvationLoad, wearRateAt } from '../designer/wear.ts';
 import { newOilState, oilStep, type OilInput } from '../systems/oil.ts';
 import { newLapSample, sampleLap, type LapTrace } from '../vehicle/lap.ts';
 import { surfaceSlope } from '../vehicle/mount.ts';

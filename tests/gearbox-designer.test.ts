@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { DRIVE_CARS } from '../src/data/drive-cars.ts';
 import { ALL_GEARBOXES, gearboxById } from '../src/data/gearboxes.ts';
-import { buildCarDrive } from '../src/drivetrain/car-model.ts';
+import { buildCarDrive } from '../src/data/car-drive.ts';
 import { gearboxSpec } from '../src/drivetrain/catalogue.ts';
 import { centreDistance, helixForCentre, shiftSumForCentre, undercut } from '../src/drivetrain/gear-geometry.ts';
 import { gcd } from '../src/drivetrain/gear-pick.ts';

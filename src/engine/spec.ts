@@ -1,7 +1,6 @@
 // Declarative description of an engine. Everything the 3D model, the sound and
 // the charts need is derived from these fields (see kinematics.ts).
 
-import { t } from '../i18n/t.ts';
 import type { SystemsSpec } from './systems-spec.ts';
 import type { VariableValves } from './valve-control.ts';
 
@@ -149,25 +148,3 @@ export interface EngineSpec {
   /** Oil, coolant, fuel, ignition and air hardware, for the systems layers. Built by hand in tests without it. */
   systems?: SystemsSpec;
 }
-
-export const FAMILY_NAMES: Record<Family, string> = {
-  inline: t('Рядні'),
-  vee: t('V-подібні'),
-  flat: t('Опозитні та плоскі'),
-  narrow: t('VR і W'),
-  rotary: t('Роторні'),
-};
-
-export const ASPIRATION_NAMES: Record<Aspiration, string> = {
-  na: t('атмосферний'),
-  turbo: t('турбо'),
-  'twin-turbo': t('дві турбіни'),
-  'quad-turbo': t('чотири турбіни'),
-  supercharged: t('механічний нагнітач'),
-};
-
-export const VALVETRAIN_NAMES: Record<Valvetrain, string> = {
-  dohc: t('два розподільчі вали в головці'),
-  sohc: t('один розподільчий вал у головці'),
-  ohv: t('нижній розподільчий вал і штанги'),
-};

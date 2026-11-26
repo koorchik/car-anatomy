@@ -3,7 +3,8 @@
 
 import { ENGINES, pageChoices } from '../data/engines.ts';
 import { DEG, buildEngine } from '../engine/kinematics.ts';
-import { FAMILY_NAMES, type EngineSpec, type Family } from '../engine/spec.ts';
+import { FAMILY_NAMES } from '../data/engine-names.ts';
+import type { EngineSpec, Family } from '../engine/spec.ts';
 import { t } from '../i18n/t.ts';
 
 const escapeHtml = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
