@@ -103,3 +103,16 @@ describe('the travel scene', () => {
     expect(jointRange(buildAxle(wishbone.axle), 0)).toBeNull();
   });
 });
+
+describe('the engine articles', () => {
+  it('name the suspension page of each car with that engine, and link to the car on it', async () => {
+    const { articleHtml } = await import('../src/ui/article.ts');
+    const { buildEngine } = await import('../src/engine/kinematics.ts');
+    const html = (id: string): string => articleHtml(buildEngine(engineById(id)!));
+    expect(html('b4/gr86-fa24')).toContain('href="#/suspensions/double-wishbone/subaru-brz-zd8"');
+    expect(html('i4/civic-type-r-k20c1')).toContain('href="#/suspensions/macpherson/civic-type-r-fk8"');
+    expect(html('i6/toyota-supra-b58')).toContain('href="#/suspensions/multilink/toyota-gr-supra-a90"');
+    expect(html('i4')).not.toContain('#/suspensions/');
+    for (const link of SUSPENSION_CAR_LINKS.filter((l) => l.engine)) expect(html(link.engine!)).toContain(`#/suspensions/${link.page}/${link.car}`);
+  });
+});

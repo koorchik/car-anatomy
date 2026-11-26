@@ -1,6 +1,8 @@
-// The suspensions section (`#/suspensions…`): the full MacPherson corner of the macpherson page in two scenes. The bump scene
-// (stage P1d) rolls the corner over an obstacle and plays the run back with its strip chart and numbers; the travel scene
-// (stage P1b) holds the wheel on a rig at the travel a slider picks. The Setup panel (build order, A3) edits
+// The suspensions section (`#/suspensions/<page>/<car>`): the corner of a suspension page (macpherson, double-wishbone,
+// multilink; stage P4) or of one of its real cars, in two scenes. The bump scene (stage P1d) rolls the corner over an
+// obstacle and plays the run back with its strip chart and numbers; the travel scene (stages P1b and P4) holds the wheel
+// on a rig at the travel a slider picks, with the corner's curves, its front view, the lowering, the tie-rod pad and the
+// five links taken away (travel-scene.ts). The Setup panel (build order, A3) edits
 // the corner's setup in both, and every change shows at once on the arrows, the lasers, the tyre and the numbers. There
 // is no engine here, so the sound is suspended while the section is shown (the plan of the whole car, its amendments to
 // the suspensions plan, item 9).
@@ -11,7 +13,7 @@
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
 import { registerParts } from '../../scene/parts-registry.ts';
-import { CornerModel, cornerFrame } from '../../scene/suspension/corner-model.ts';
+import { CornerModel, cornerFrame, cornerGeometryKey } from '../../scene/suspension/corner-model.ts';
 import { SUSPENSION_REGISTERED } from '../../scene/suspension/parts.ts';
 import { rigFrame, rigTravelRange } from '../../scene/suspension/rig-frame.ts';
 import type { Stage } from '../../scene/stage.ts';
@@ -25,10 +27,15 @@ import {
 import { EventRoad } from '../../suspension/road.ts';
 import { factorySetup, type CornerSetup, type ResolvedCorner } from '../../suspension/setup.ts';
 import type { CornerSpec } from '../../suspension/spec.ts';
-import { jtektCorner } from '../../suspension/templates/macpherson.ts';
+import { withInnerToeShift } from '../../suspension/travel-curves.ts';
+import { pageCorner } from '../../suspension-designer/page-cars.ts';
+import { allTableHeadHtml, allTableHtml } from './all-table.ts';
+import { pageArticleHtml } from './article.ts';
 import { bumpCaption, bumpRows } from './bump-text.ts';
 import { SUSPENSION_KEY_CONTEXTS, suspensionKeys } from './keys.ts';
 import { dashHtml, obstacleSize, panelHtml, titleHtml, toolsHtml } from './markup.ts';
+import { carsHtml, choiceOf, stepPage, titleOf, type PageChoice } from './pages.ts';
+import { LOWER_M, TravelScene, travelDashHtml } from './travel-scene.ts';
 import { DEFAULT_SCENE, sceneOf, stepScene, type SceneId } from './scenes.ts';
 import { SetupPanel } from './setup-panel.ts';
 import { StripChart } from './strip-chart.ts';
@@ -48,6 +55,8 @@ const OPENING_FACTOR = 0.1;
 const HOLD_S = 0.6;
 /** Height of the bump scene's dash, px; suspensions.css gives --dash-h the same. */
 const DASH_PX = { wide: 156, small: 188 };
+/** Height of the travel scene's dash, px; suspensions.css gives --dash-h the same. */
+const TRAVEL_DASH_PX = { wide: 188, small: 210 };
 /** Real seconds between two writes of the clock. */
 const CLOCK_EVERY_S = 0.1;
 /** Frames the frame-time figure averages over (window.__suspension.section.frameStats). */
@@ -74,6 +83,19 @@ export class SuspensionSection implements Section {
   readonly solidLabel = t('Підвіска');
   private ctx!: SectionContext;
   private corner!: CornerSpec;
+  /** The page and car shown, and the corner they give before the tie-rod pad moves it. */
+  private choice!: PageChoice;
+  private pageCorner!: CornerSpec;
+  /** The travel scene's state: the inner tie-rod joint's height shift (m), the rack (m), the links taken away. */
+  private tieDzM = 0;
+  private rack = 0;
+  private removed: string[] = [];
+  private travelScene!: TravelScene;
+  /** The geometry of the model on the stage, and the choice it was made for. */
+  private modelKey = '';
+  private modelPage: PageChoice | null = null;
+  private readonly wobble = new Float64Array(6);
+  private clock = 0;
   private resolved!: ResolvedCorner;
   private model!: CornerModel;
   private setupPanel!: SetupPanel;
@@ -109,18 +131,32 @@ export class SuspensionSection implements Section {
     this.ctx = ctx;
     // The corner's and the axle's cards in one dictionary: both name the rack.
     registerParts(SUSPENSION_REGISTERED);
-    this.corner = jtektCorner();
+    this.choice = choiceOf([]);
+    this.pageCorner = pageCorner(this.choice.page, null);
+    this.corner = this.pageCorner;
     const factory = factorySetup(this.corner);
     this.resolved = resolveBumpCorner(this.corner, factory, this.bump.wheel);
     this.model = new CornerModel(this.resolved);
+    this.modelKey = cornerGeometryKey(this.resolved);
+    this.modelPage = this.choice;
     const range = rigTravelRange(this.resolved);
     const { slots } = ctx;
     slots.title.add(titleHtml());
     slots.tools.add(toolsHtml(Math.round(range.min * 1000), Math.round(range.max * 1000)));
     slots.panel.add(panelHtml());
-    slots.afterDash.add(dashHtml());
+    slots.afterDash.add(dashHtml() + travelDashHtml());
+    slots.table.head.add(allTableHeadHtml());
     this.strip = new StripChart(this.$<HTMLCanvasElement>('susp-strip'));
     this.setupPanel = new SetupPanel(this.$('susp-panel'), factory, () => (this.dirty = true));
+    this.travelScene = new TravelScene((id) => this.$(id), {
+      lower: (on) => this.setupPanel.edit({ rideHeightM: on ? -LOWER_M : 0 }),
+      tie: (dz) => {
+        this.tieDzM = dz;
+        this.dirty = true;
+      },
+      rack: (m) => (this.rack = m),
+      links: (removed) => this.setLinks(removed),
+    });
     this.listen();
     ctx.keys.bind(
       SUSPENSION_KEY_CONTEXTS[0],
@@ -131,11 +167,50 @@ export class SuspensionSection implements Section {
           return true;
         },
         scene: (direction) => this.setScene(stepScene(this.scene, direction)),
+        page: (direction) => this.ctx.router.push({ section: 'suspensions', page: 'catalogue', path: [stepPage(this.choice.page.id, direction).id], query: this.scene === DEFAULT_SCENE ? {} : { s: this.scene } }),
       }),
     );
     this.apply();
     this.readout();
     window.__suspension = { stage: ctx.stage, section: this };
+  }
+
+  /** Shows a page or one of its cars: its corner at the factory setup, its name, its cars and its article. */
+  private setChoice(choice: PageChoice): void {
+    const same = this.choice && choice.page === this.choice.page && choice.car === this.choice.car;
+    this.choice = choice;
+    const { title, sub } = titleOf(choice);
+    this.$('susp-title').textContent = title;
+    this.$('susp-sub').textContent = sub;
+    const cars = this.$('susp-cars');
+    cars.innerHTML = carsHtml(choice);
+    // On a phone the list scrolls sideways: the car shown is brought into it.
+    const current = cars.querySelector<HTMLElement>('.current');
+    if (current && cars.scrollWidth > cars.clientWidth) cars.scrollLeft = Math.max(0, current.offsetLeft - cars.offsetLeft - 8);
+    this.$('susp-article').innerHTML = pageArticleHtml(choice);
+    if (this.ctx.slots.table.isOpen) this.ctx.slots.table.body.innerHTML = allTableHtml(choice);
+    if (same) return;
+    this.pageCorner = pageCorner(choice.page, choice.car);
+    const spec = this.pageCorner.axle;
+    this.setupPanel.setFactory(factorySetup(this.pageCorner));
+    this.setupPanel.setAdjusters({ camber: !!spec.linkage.strut, toe: spec.linkage.rods.some((r) => r.steer) });
+    this.tieDzM = 0;
+    this.rack = 0;
+    this.$<HTMLInputElement>('susp-rack').value = '0';
+    this.removed = [];
+    this.travelScene.resetLinks();
+    this.travel = 0;
+    this.apply();
+  }
+
+  /** Takes links away from the travel scene's corner, or puts them back with an empty list. */
+  private setLinks(removed: readonly string[]): void {
+    this.removed = [...removed];
+    this.model.setLinksRemoved(this.removed);
+    // The force arrows stand for a linkage that holds: with links gone they would show forces nothing carries.
+    this.model.setOverlays({ forces: !this.removed.length && this.$<HTMLInputElement>('susp-forces').checked });
+    if (!this.removed.length) this.model.setWobble(null);
+    this.travelScene.setCorner(this.choice, this.resolved, null, this.tieDzM, this.removed);
   }
 
   /** Moves the wheel to `mm` of travel, as the slider does. */
@@ -190,6 +265,15 @@ export class SuspensionSection implements Section {
     });
     this.$('susp-go').addEventListener('click', () => this.restart());
     this.$('susp-pause').addEventListener('click', () => this.setPaused(!this.paused));
+    const go = (direction: -1 | 1): void =>
+      this.ctx.router.push({ section: 'suspensions', page: 'catalogue', path: [stepPage(this.choice.page.id, direction).id], query: this.scene === DEFAULT_SCENE ? {} : { s: this.scene } });
+    this.$('susp-prev').addEventListener('click', () => go(-1));
+    this.$('susp-next').addEventListener('click', () => go(1));
+    this.$('susp-all').addEventListener('click', () => {
+      const table = this.ctx.slots.table;
+      table.body.innerHTML = allTableHtml(this.choice);
+      table.open(true);
+    });
     // The view is the shell's and outlives this section: another section's choice is not drawn here until it is back.
     view.onChange((mode) => {
       if (this.shown) this.model.setView(mode);
@@ -224,22 +308,51 @@ export class SuspensionSection implements Section {
   private apply(): void {
     this.dirty = false;
     let resolved: ResolvedCorner;
+    let untouched: ResolvedCorner | null = null;
+    const corner = this.tieDzM === 0 ? this.pageCorner : { ...this.pageCorner, axle: withInnerToeShift(this.pageCorner.axle, this.tieDzM) };
     try {
-      resolved = resolveBumpCorner(this.corner, this.setupPanel.current, this.bump.wheel);
+      resolved = resolveBumpCorner(corner, this.setupPanel.current, this.bump.wheel);
+      // The toe curve as it was before the pad moved the joint, for the chart.
+      if (this.tieDzM !== 0) untouched = resolveBumpCorner(this.pageCorner, this.setupPanel.current, this.bump.wheel);
     } catch {
       // A setup the linkage cannot reach (the core says so) leaves the corner as it was.
       this.setupPanel.show(this.resolved);
       return;
     }
+    this.corner = corner;
     this.resolved = resolved;
-    this.model.setCorner(resolved);
+    if (cornerGeometryKey(resolved) === this.modelKey) this.model.setCorner(resolved);
+    else this.newModel(resolved);
     const run = runBump(resolved, this.bump);
     this.run = run;
     if (this.scene === 'bump') this.model.setRoad(new EventRoad(run.trace.events));
     this.strip.setRun(run);
     this.setupPanel.show(resolved);
     this.writeBump();
+    this.travelScene.setCorner(this.choice, resolved, untouched?.axle ?? null, this.tieDzM, this.removed);
     if (this.scene === 'travel') this.setTravel(Math.round(this.travel * 1000));
+  }
+
+  /** A corner of another geometry: a new model in place of the old one, with the view, overlays and links of the page. */
+  private newModel(resolved: ResolvedCorner): void {
+    const old = this.model;
+    this.model = new CornerModel(resolved);
+    this.modelKey = cornerGeometryKey(resolved);
+    const range = rigTravelRange(resolved);
+    const slider = this.$<HTMLInputElement>('susp-travel');
+    slider.min = String(Math.round(range.min * 1000));
+    slider.max = String(Math.round(range.max * 1000));
+    if (this.shown) {
+      // The same page with its tie rod moved keeps the camera; another page is framed afresh.
+      const samePage = this.modelPage === this.choice;
+      this.ctx.stage.setModel(this.model, { home: HOME, keepCamera: samePage, keepScale: samePage });
+      this.modelPage = this.choice;
+      this.model.setView(this.ctx.view.mode);
+    } else old.dispose();
+    this.model.setExplode(Number(this.$<HTMLInputElement>('susp-explode').value));
+    this.model.setOverlays({ forces: !this.removed.length && this.$<HTMLInputElement>('susp-forces').checked, laser: this.$<HTMLInputElement>('susp-laser').checked });
+    this.model.setLinksRemoved(this.removed);
+    if (this.scene === 'bump') this.model.setRoad(new EventRoad(this.run?.trace.events ?? []));
   }
 
   /** The scene's controls, the line in the dash, the numbers and the caption for the current run. */
@@ -264,6 +377,7 @@ export class SuspensionSection implements Section {
 
   enter(route: Route, _from: Route | null): void {
     const scene = sceneOf(route.query);
+    this.setChoice(choiceOf(route.path));
     if (this.shown) {
       this.setScene(scene, false);
       return;
@@ -315,6 +429,7 @@ export class SuspensionSection implements Section {
     body.classList.toggle('susp-scene-travel', scene === 'travel');
     setSegment(this.$('susp-scene'), scene);
     this.$('susp-dash').hidden = scene !== 'bump';
+    this.$('susp-travel-dash').hidden = scene !== 'travel';
     if (record) this.ctx.router.replace({ query: { s: scene === DEFAULT_SCENE ? null : scene } });
     if (!changed) return;
     if (scene === 'bump') {
@@ -366,7 +481,11 @@ export class SuspensionSection implements Section {
     if (this.scene === 'bump') this.bumpFrame(frozen ? null : dt);
     else {
       rigFrame(this.resolved, this.travel, this.frameData);
+      this.frameData.rack = this.rack;
+      this.clock += frozen ? 0 : dt;
+      this.model.setWobble(this.travelScene.wobble(this.travel, this.clock, this.wobble));
       this.model.update(this.frameData);
+      this.travelScene.frame(this.travel, this.rack);
     }
     if (!frozen) {
       this.homedFor = null;
@@ -414,12 +533,13 @@ export class SuspensionSection implements Section {
   }
 
   layout(viewport: Viewport): PanelSizes {
-    const dash = this.scene === 'bump' ? (viewport.small ? DASH_PX.small : DASH_PX.wide) : 0;
+    const dash = viewport.small ? (this.scene === 'bump' ? DASH_PX : TRAVEL_DASH_PX).small : (this.scene === 'bump' ? DASH_PX : TRAVEL_DASH_PX).wide;
     return { right: 380, left: 0, dash, rightLabel: t('Налаштувати') };
   }
 
   laidOut(): void {
     this.strip.resize();
+    this.travelScene.resize();
   }
 
   time(): TimeCapabilities {

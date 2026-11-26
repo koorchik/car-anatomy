@@ -28,4 +28,7 @@ export const SUSPENSION_MACPHERSON_EN: Record<string, string> = {
   'Плече обкатки на осі колеса через це менше, ніж у звичайної стійки, і кермо менше смикає, коли 320 к.с. ідуть на передні колеса.':
     'The kingpin offset at the hub is smaller than a plain strut’s for it, and the steering tugs less when 320 hp go to the front wheels.',
   'Ззаду багаторичажна підвіска, на обох осях стабілізатори.': 'A multi-link suspension at the rear, sway bars on both axles.',
+  'Розворот розвалу': 'Camber reversal',
+  'Сцена «Хід колеса» показує головну слабкість стійки. Розвал набирається лише до певного ходу, тут близько +60 мм, а далі нижній важіль і стійка розходяться, і розвал повертає назад: це видно і на кривій, і на лазері розвалу. «Занизити на 40 мм» з’їдає більшу частину цього запасу, а центр крену опускається майже до дороги. Тому заниженій стійці часто ставлять подовжені кульові опори або проставки під важіль.':
+    'The “Wheel travel” scene shows the strut’s main weakness. Camber builds only up to a certain travel, about +60 mm here, and past it the lower arm and the strut swing apart and the camber turns back: you see it on the curve and on the camber laser. “Lower by 40 mm” eats most of that margin, and the roll center drops almost to the road. That is why a lowered strut often gets extended ball joints or spacers under the arm.',
 };

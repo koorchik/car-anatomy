@@ -2,9 +2,12 @@
 // maker's, the same in every language), the axle the page shows and the catalogue engine the car has on this site. An
 // engine article names its car's suspension from here (src/ui/article.ts), without loading the suspension data, its
 // designs and its text; the pages' own records (src/data/suspensions/<page>.ts) take these lines, so the two cannot
-// differ. One line per car, in the order of the page's list.
+// differ. One line per car, in the order of the page's list. Nothing here but plain data: the shell's registry loads it.
 
-import type { SuspensionPageId } from '../suspension-designer/page-cars.ts';
+/** The suspension pages, in the order of the catalogue. The shell's registry takes them from here: a link from another
+ *  section may lead to these and no others. */
+export const SUSPENSION_PAGE_IDS = ['macpherson', 'double-wishbone', 'multilink'] as const;
+export type SuspensionPageId = (typeof SUSPENSION_PAGE_IDS)[number];
 
 export interface SuspensionCarLink {
   page: SuspensionPageId;

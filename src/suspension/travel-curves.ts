@@ -197,3 +197,34 @@ export function freeMotions(axle: Axle, travel: number, removed: readonly string
   const without = linkRows(axle.spec).filter((l) => removed.includes(l.id)).flatMap((l) => l.rows);
   return axle.solver.freeMotions(pose, 0, without);
 }
+
+/** The wheel angle the steering slider of the travel scene reaches either way, degrees: a typical lock, not a car's. */
+export const SCENE_LOCK_DEG = 30;
+
+/**
+ * Rack travel, m, at which the left wheel at design height turns SCENE_LOCK_DEG either way (the smaller of the two), or
+ * as far as the corner assembles, at most 80 mm. Zero on a corner that does not steer.
+ */
+export function sceneRackRange(axle: Axle): number {
+  if (!axle.spec.linkage.rods.some((r) => r.steer)) return 0;
+  const s: CornerSample = newCornerSample();
+  const pose = new Float64Array(POSE_SIZE);
+  const limit = (SCENE_LOCK_DEG * Math.PI) / 180;
+  let range = 0.08;
+  for (const sign of [1, -1]) {
+    axle.tablePose(0, pose);
+    for (let rack = 0.002; rack <= 0.08 + 1e-9; rack += 0.002) {
+      const res = axle.solver.solve(pose, 0, sign * rack, 30);
+      if (!res.ok) {
+        range = Math.min(range, rack - 0.002);
+        break;
+      }
+      axle.measure(pose, 0, sign * rack, s);
+      if (Math.abs(s.toe) >= limit) {
+        range = Math.min(range, rack);
+        break;
+      }
+    }
+  }
+  return range;
+}

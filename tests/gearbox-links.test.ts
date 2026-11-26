@@ -18,7 +18,7 @@ describe('the gearbox section', () => {
     expect(pageShown('gearboxes', 'manual-rwd')).toBe(true);
     // Data without its page yet is not a page a link may go to.
     expect(pageShown('gearboxes', 'manual-transaxle')).toBe(false);
-    expect(pageShown('suspensions', 'macpherson')).toBe(false);
+    expect(pageShown('suspensions', 'twist-beam')).toBe(false);
     expect(pageShown('engines', 'i4')).toBe(true);
     for (const page of entry.openPages ?? []) {
       const data = GEARBOX_PAGES.find((p) => p.id === page);

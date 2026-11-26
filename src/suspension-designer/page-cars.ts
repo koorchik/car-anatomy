@@ -15,12 +15,8 @@ import { CARS } from '../data/cars.ts';
 import { BAR_TYPICAL_MM, catalogueChassis } from './catalogue.ts';
 import { cornerSprungKg, resolveChassis } from './constraints.ts';
 import { DEFAULT_CAR, typicalAxle } from './defaults.ts';
-import type { SuspensionCarLink } from '../data/suspension-links.ts';
+import type { SuspensionCarLink, SuspensionPageId } from '../data/suspension-links.ts';
 import { designOf, isDriven, type AxleEnd, type AxleParams, type ChassisDesign, type DesignLayout, type Drive } from './design.ts';
-
-/** The pages of the suspension section that have cars, in the order of the catalogue. */
-export const SUSPENSION_PAGE_IDS = ['macpherson', 'double-wishbone', 'multilink'] as const;
-export type SuspensionPageId = (typeof SUSPENSION_PAGE_IDS)[number];
 
 /** A real car as the suspension pages know it: what its maker or a measurement gives, and what is typical. */
 export interface CarFigures {

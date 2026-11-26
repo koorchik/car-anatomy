@@ -7,6 +7,7 @@
 import { DEFAULT_ENGINE } from '../ui/engines/routes.ts';
 import { loadEngines } from '../ui/engines/load.ts';
 import { GEARBOX_PAGES_SHOWN, loadGearboxes } from '../ui/gearboxes/load.ts';
+import { SUSPENSION_PAGE_IDS } from '../data/suspension-links.ts';
 import { loadSuspensions } from '../ui/suspensions/load.ts';
 import type { Route, SectionId } from './routes.ts';
 import type { Section } from './section.ts';
@@ -55,8 +56,7 @@ export const SECTIONS: readonly SectionEntry[] = [
     openPages: GEARBOX_PAGES_SHOWN,
     pages: [{ key: 'catalogue', href: `#/gearboxes/${GEARBOX_PAGES_SHOWN[0]!}` }],
   },
-  // In the menu since P1d; no link from another section leads to its pages yet.
-  { id: 'suspensions', load: loadSuspensions, openPages: [], pages: [{ key: 'catalogue', href: '#/suspensions' }] },
+  { id: 'suspensions', load: loadSuspensions, openPages: SUSPENSION_PAGE_IDS, pages: [{ key: 'catalogue', href: '#/suspensions' }] },
 ];
 
 /** The entry of the section a route belongs to. */

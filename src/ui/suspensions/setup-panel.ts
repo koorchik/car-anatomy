@@ -47,7 +47,7 @@ export const setupPanelHtml = (): string => `<section class="susp-setup" aria-la
 
 export class SetupPanel {
   private readonly root: HTMLElement;
-  private readonly factory: CornerSetup;
+  private factory: CornerSetup;
   private readonly onChange: (setup: CornerSetup) => void;
   private setup: CornerSetup;
 
@@ -71,6 +71,21 @@ export class SetupPanel {
       this.setup = { ...this.factory };
       this.onChange(this.setup);
     });
+  }
+
+  /** Another corner: its factory setup, which the panel starts from and its factory button goes back to. */
+  setFactory(factory: CornerSetup): void {
+    this.factory = factory;
+    this.setup = { ...factory };
+  }
+
+  /**
+   * Which alignment adjusters the corner has: camber needs a strut's top mount, toe a steered tie rod (setup.ts). A
+   * slider for hardware the corner lacks is hidden, as the setup would ignore it.
+   */
+  setAdjusters(on: { camber: boolean; toe: boolean }): void {
+    this.$('susp-camber').closest<HTMLElement>('.susp-ctl')!.hidden = !on.camber;
+    this.$('susp-toe').closest<HTMLElement>('.susp-ctl')!.hidden = !on.toe;
   }
 
   get current(): CornerSetup {

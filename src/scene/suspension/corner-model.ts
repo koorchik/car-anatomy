@@ -20,6 +20,7 @@ import { markDamaged, tag, type SceneModel, type ViewMode } from '../model-types
 import { DAMAGE, HIGHLIGHT } from '../palette.ts';
 import { merge } from '../geometry.ts';
 import { G } from '../../suspension/forces.ts';
+import { rotateQuatBy } from '../../suspension/vec.ts';
 import { KnuckleStatics } from '../../suspension/knuckle-statics.ts';
 import type { Axle } from '../../suspension/kinematics.ts';
 import type { QuarterOut } from '../../suspension/quarter.ts';
@@ -256,6 +257,9 @@ export class CornerModel implements SceneModel<CornerFrame> {
   private readonly schematicPoints: SchematicPoints;
   private readonly fa = [0, 0, 0];
   private readonly axisPoint = new Float64Array(3);
+  /** A pose velocity the knuckle is moved by off its solved pose (setWobble), and the moved pose. */
+  private wobble: Float64Array | null = null;
+  private readonly wobbled = new Float64Array(POSE_SIZE);
   private readonly axisDir = new Float64Array(3);
   /** Per link (arms first, then rods): an applied force from the coilover that sits on it, scene axes, N. */
   private readonly seatForce: THREE.Vector3[];
@@ -613,12 +617,14 @@ export class CornerModel implements SceneModel<CornerFrame> {
     const joints: SchematicPoints['joints'] = [];
     const bars: SchematicPoints['bars'] = [];
     for (const arm of this.linkSet.arms) {
-      joints.push({ at: arm.front, part: 'susp.bush' }, { at: arm.rear, part: 'susp.bush' }, { at: arm.ball, part: 'susp.ball-joint' });
-      bars.push({ a: arm.front, b: arm.ball, part: arm.spec.part }, { a: arm.rear, b: arm.ball, part: arm.spec.part });
+      const link = arm.spec.id;
+      joints.push({ at: arm.front, part: 'susp.bush', link }, { at: arm.rear, part: 'susp.bush', link }, { at: arm.ball, part: 'susp.ball-joint', link });
+      bars.push({ a: arm.front, b: arm.ball, part: arm.spec.part, link }, { a: arm.rear, b: arm.ball, part: arm.spec.part, link });
     }
     for (const rod of this.linkSet.rods) {
-      joints.push({ at: rod.bodyEnd, part: rod.tie ? 'susp.rack' : 'susp.bush' }, { at: rod.knuckleEnd, part: rod.spec.part });
-      bars.push({ a: rod.bodyEnd, b: rod.knuckleEnd, part: rod.spec.part });
+      const link = rod.spec.id;
+      joints.push({ at: rod.bodyEnd, part: rod.tie ? 'susp.rack' : 'susp.bush', link }, { at: rod.knuckleEnd, part: rod.spec.part, link });
+      bars.push({ a: rod.bodyEnd, b: rod.knuckleEnd, part: rod.spec.part, link });
     }
     joints.push({ at: this.top, part: 'susp.top-mount' });
     if (!strut) joints.push({ at: this.lower, part: 'susp.damper' });
@@ -667,6 +673,29 @@ export class CornerModel implements SceneModel<CornerFrame> {
     if (on.forces !== undefined) this.forcesOn = on.forces;
     if (on.laser !== undefined) this.laserOn = on.laser;
     this.update(this.frame);
+  }
+
+  /**
+   * Takes links away from the drawing (a rod's id, a wishbone's id), or puts them all back with an empty list: the
+   * five links, one motion of the travel scene. Only the drawing changes; the solver keeps every link.
+   */
+  setLinksRemoved(ids: readonly string[]): void {
+    const gone = new Set(ids);
+    for (const arm of this.linkSet.arms) arm.object.visible = !gone.has(arm.spec.id);
+    for (const rod of this.linkSet.rods) rod.object.visible = !gone.has(rod.spec.id);
+    for (const entry of [...this.schematicPoints.joints, ...this.schematicPoints.bars]) entry.hidden = entry.link !== undefined && gone.has(entry.link);
+    this.update(this.frame);
+  }
+
+  /**
+   * Moves the knuckle off its solved pose by a small pose velocity (δt in m, δθ in rad, about the wheel centre), or
+   * back with null: how the travel scene shows the motions the links taken away leave free.
+   */
+  setWobble(delta: ArrayLike<number> | null): void {
+    if (delta) {
+      this.wobble ??= new Float64Array(6);
+      for (let k = 0; k < 6; k++) this.wobble[k] = delta[k] ?? 0;
+    } else this.wobble = null;
   }
 
   setView(view: ViewMode): void {
@@ -820,8 +849,16 @@ export class CornerModel implements SceneModel<CornerFrame> {
     const res = axle.solvePose(f.travel, f.rack, warm, this.pose);
     if (!res.ok) axle.solvePose(f.travel, f.rack, null, this.pose);
     this.body.position.set(0, f.bodyZ * 10, 0);
-    // ISO quaternion (x, y, z) → scene (y, z, x), as points are.
-    const P = this.pose;
+    // ISO quaternion (x, y, z) → scene (y, z, x), as points are. A wobble moves the knuckle off the solved pose along
+    // the motions the links left free (setWobble); the solver keeps warm-starting from the pose it solved.
+    let P = this.pose;
+    const wob = this.wobble;
+    if (wob) {
+      P = this.wobbled;
+      P.set(this.pose);
+      for (let k = 0; k < 3; k++) P[k] = P[k]! + wob[k]!;
+      rotateQuatBy(P, 3, wob[3]!, wob[4]!, wob[5]!);
+    }
     this.q1.set(P[4]!, P[5]!, P[3]!, P[6]!);
     this.knuckle.quaternion.copy(this.q1);
     this.v1.copy(this.c0).applyQuaternion(this.q1);
