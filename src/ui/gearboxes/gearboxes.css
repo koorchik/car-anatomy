@@ -45,6 +45,13 @@
   margin-top: 4px;
 }
 
+/* The title block stands in the shell's .engine-name, which lets clicks through to the stage: its buttons and the
+ * engine's link take them, as .engine-nav does on the engine pages. */
+.gbx-title-row,
+.gbx-title a {
+  pointer-events: auto;
+}
+
 /* With the article hidden on a desktop, its button stands at the top right: the language switch moves aside. */
 @media (min-width: 861px) {
   body.panel-closed:has(#gbx-title-block:not([style*='display'])) .lang-switch {
