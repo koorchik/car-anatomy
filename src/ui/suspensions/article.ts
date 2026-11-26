@@ -1,12 +1,15 @@
 // The article under the scene's controls: on a car's page the block about the car comes first and the article about
 // the layout goes under a heading about the layout in general (pages.ts), as on the engine pages. Here is the macpherson page's
 // own article: what the strut is, how to read the scenes, what the setup changes, where the strut came from and where
-// the numbers come from. Each page's article has its own dictionary (src/i18n/en/suspension-<page>.ts); the double
-// wishbone's and the multilink's are in articles/.
+// the numbers come from. Each page's article has its own dictionary (src/i18n/en/suspension-<page>.ts); the other
+// pages' articles are in articles/.
 
 import { t } from '../../i18n/t.ts';
 import { doubleWishboneArticleHtml } from './articles/double-wishbone.ts';
 import { multilinkArticleHtml } from './articles/multilink.ts';
+import { semiTrailingArticleHtml } from './articles/semi-trailing.ts';
+import { swingAxleArticleHtml } from './articles/swing-axle.ts';
+import { trailingArmArticleHtml } from './articles/trailing-arm.ts';
 import { carBlockHtml, type PageChoice } from './pages.ts';
 
 const source = (href: string, text: string): string => `<a href="${href}" target="_blank" rel="noopener">${text}</a>`;
@@ -32,6 +35,13 @@ export const macphersonArticleHtml = (): string => `<section class="susp-article
 
 /** The article of a page or a car's page. */
 export function pageArticleHtml(c: PageChoice): string {
-  const own = c.page.id === 'double-wishbone' ? doubleWishboneArticleHtml() : c.page.id === 'multilink' ? multilinkArticleHtml() : macphersonArticleHtml();
+  const articles: Partial<Record<string, () => string>> = {
+    'double-wishbone': doubleWishboneArticleHtml,
+    multilink: multilinkArticleHtml,
+    'trailing-arm': trailingArmArticleHtml,
+    'semi-trailing': semiTrailingArticleHtml,
+    'swing-axle': swingAxleArticleHtml,
+  };
+  const own = (articles[c.page.id] ?? macphersonArticleHtml)();
   return c.car ? carBlockHtml(c.car) + own : own;
 }

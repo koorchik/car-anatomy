@@ -1,0 +1,173 @@
+{
+ "page": {
+  "layout": "semi-trailing",
+  "track": 1.54,
+  "travel": {
+   "bumpM": 0.12,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "pivot-arm",
+    "front": [0.35, 0.2, 0.3076],
+    "rear": [0.4406, 0.5381, 0.3076],
+    "ball": [0, 0.67, 0.3076]
+   },
+   {
+    "id": "pivot-hold",
+    "front": [0.35, 0.2, 0.3076],
+    "rear": [0.4406, 0.5381, 0.3076],
+    "ball": [0, 0.67, 0.4076]
+   }
+  ],
+  "rods": [
+   {
+    "id": "pivot-brace",
+    "body": [0.35, 0.2, 0.3076],
+    "knuckle": [0.0259, 0.7666, 0.3076],
+    "steer": false
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.77, 0.3076],
+  "spring": {
+   "rate": 59970,
+   "body": [0.1173, 0.5886, 0.6076]
+  },
+  "halfshaft": {
+   "diffOutput": [0, 0.2, 0.3076],
+   "outerJoint": [0, 0.65, 0.3076]
+  },
+  "sprungKg": 296,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": 0.3172,
+  "curves": {
+   "camber": [2.444, 1.222, 0, -1.222, -2.444],
+   "toe": [0.196, 0.049, 0, 0.049, 0.196],
+   "halfTrack": [-14.834, -6.986, 0, 6.132, 11.4],
+   "rcHeight": [156.463, 141.431, 126.254, 110.656, 94.339]
+  },
+  "camberReversal": null,
+  "joints": {
+   "plungeMm": [-10.5, 0],
+   "innerDeg": 14.2,
+   "outerDeg": 10.5
+  }
+ },
+ "bmw-325i-e30": {
+  "layout": "semi-trailing",
+  "track": 1.394,
+  "travel": {
+   "bumpM": 0.12,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "pivot-arm",
+    "front": [0.35, 0.2, 0.2954],
+    "rear": [0.4406, 0.5381, 0.2954],
+    "ball": [0, 0.597, 0.2954]
+   },
+   {
+    "id": "pivot-hold",
+    "front": [0.35, 0.2, 0.2954],
+    "rear": [0.4406, 0.5381, 0.2954],
+    "ball": [0, 0.597, 0.3954]
+   }
+  ],
+  "rods": [
+   {
+    "id": "pivot-brace",
+    "body": [0.35, 0.2, 0.2954],
+    "knuckle": [0.0259, 0.6936, 0.2954],
+    "steer": false
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.697, 0.2954],
+  "spring": {
+   "rate": 50902,
+   "body": [0.1127, 0.5168, 0.5954]
+  },
+  "halfshaft": {
+   "diffOutput": [0, 0.2, 0.2954],
+   "outerJoint": [0, 0.577, 0.2954]
+  },
+  "sprungKg": 252.34,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": 0.3045,
+  "curves": {
+   "camber": [2.543, 1.271, 0, -1.271, -2.543],
+   "toe": [0.212, 0.053, 0, 0.053, 0.212],
+   "halfTrack": [-14.894, -6.997, 0, 6.109, 11.318],
+   "rcHeight": [142.459, 128.402, 114.187, 99.533, 84.14]
+  },
+  "camberReversal": null,
+  "joints": {
+   "plungeMm": [-12.9, 0],
+   "innerDeg": 16.8,
+   "outerDeg": 13
+  }
+ },
+ "porsche-944": {
+  "layout": "semi-trailing",
+  "track": 1.451,
+  "travel": {
+   "bumpM": 0.12,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "pivot-arm",
+    "front": [0.35, 0.2, 0.3099],
+    "rear": [0.4406, 0.5381, 0.3099],
+    "ball": [0, 0.6255, 0.3099]
+   },
+   {
+    "id": "pivot-hold",
+    "front": [0.35, 0.2, 0.3099],
+    "rear": [0.4406, 0.5381, 0.3099],
+    "ball": [0, 0.6255, 0.4099]
+   }
+  ],
+  "rods": [
+   {
+    "id": "pivot-brace",
+    "body": [0.35, 0.2, 0.3099],
+    "knuckle": [0.0259, 0.7221, 0.3099],
+    "steer": false
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.7255, 0.3099],
+  "spring": {
+   "rate": 54420,
+   "body": [0.1145, 0.5448, 0.6099]
+  },
+  "halfshaft": {
+   "diffOutput": [0, 0.2, 0.3099],
+   "outerJoint": [0, 0.6055, 0.3099]
+  },
+  "sprungKg": 269.36,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": 0.3195,
+  "curves": {
+   "camber": [2.503, 1.251, 0, -1.251, -2.503],
+   "toe": [0.206, 0.051, 0, 0.051, 0.206],
+   "halfTrack": [-15.295, -7.205, 0, 6.33, 11.776],
+   "rcHeight": [151.628, 137.272, 122.75, 107.782, 92.069]
+  },
+  "camberReversal": null,
+  "joints": {
+   "plungeMm": [-11.9, 0],
+   "innerDeg": 15.7,
+   "outerDeg": 11.9
+  }
+ }
+}

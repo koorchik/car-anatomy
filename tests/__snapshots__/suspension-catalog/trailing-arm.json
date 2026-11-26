@@ -1,0 +1,102 @@
+{
+ "page": {
+  "layout": "trailing-arm",
+  "track": 1.54,
+  "travel": {
+   "bumpM": 0.12,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "pivot-arm",
+    "front": [0.4, 0.25, 0.3076],
+    "rear": [0.4, 0.6, 0.3076],
+    "ball": [0, 0.67, 0.3076]
+   },
+   {
+    "id": "pivot-hold",
+    "front": [0.4, 0.25, 0.3076],
+    "rear": [0.4, 0.6, 0.3076],
+    "ball": [0, 0.67, 0.4076]
+   }
+  ],
+  "rods": [
+   {
+    "id": "pivot-brace",
+    "body": [0.4, 0.25, 0.3076],
+    "knuckle": [0, 0.77, 0.3076],
+    "steer": false
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.77, 0.3076],
+  "spring": {
+   "rate": 38119,
+   "body": [0.1, 0.62, 0.6076]
+  },
+  "halfshaft": null,
+  "sprungKg": 240,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": 0.3172,
+  "curves": {
+   "camber": [0, 0, 0, 0, 0],
+   "toe": [0, 0, 0, 0, 0],
+   "halfTrack": [0, 0, 0, 0, 0],
+   "rcHeight": [0, 0, 0, 0, 0]
+  },
+  "camberReversal": 0.011999999999999997,
+  "joints": null
+ },
+ "citroen-2cv": {
+  "layout": "trailing-arm",
+  "track": 1.26,
+  "travel": {
+   "bumpM": 0.12,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "pivot-arm",
+    "front": [0.4, 0.25, 0.2895],
+    "rear": [0.4, 0.6, 0.2895],
+    "ball": [0, 0.53, 0.2895]
+   },
+   {
+    "id": "pivot-hold",
+    "front": [0.4, 0.25, 0.2895],
+    "rear": [0.4, 0.6, 0.2895],
+    "ball": [0, 0.53, 0.3895]
+   }
+  ],
+  "rods": [
+   {
+    "id": "pivot-brace",
+    "body": [0.4, 0.25, 0.2895],
+    "knuckle": [0, 0.63, 0.2895],
+    "steer": false
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.63, 0.2895],
+  "spring": {
+   "rate": 13472,
+   "body": [0.1, 0.48, 0.5895]
+  },
+  "halfshaft": null,
+  "sprungKg": 88.9,
+  "unsprungKg": 38.1,
+  "tyre": "street",
+  "tyreRadiusM": 0.2985,
+  "curves": {
+   "camber": [0, 0, 0, 0, 0],
+   "toe": [0, 0, 0, 0, 0],
+   "halfTrack": [0, 0, 0, 0, 0],
+   "rcHeight": [0, 0, 0, 0, 0]
+  },
+  "camberReversal": 0,
+  "joints": null
+ }
+}

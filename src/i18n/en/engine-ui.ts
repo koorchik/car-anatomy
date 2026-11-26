@@ -479,6 +479,9 @@ export const ENGINE_UI_EN: Record<string, string> = {
   'Стійка Макферсон': 'MacPherson strut',
   'Подвійні поперечні важелі': 'Double wishbone',
   'Багаторичажна підвіска': 'Multi-link suspension',
+  'Поздовжні важелі': 'Trailing arms',
+  'Косі важелі': 'Semi-trailing arms',
+  'Хитний міст': 'Swing axle',
   'спереду': 'at the front',
   'ззаду': 'at the rear',
 };

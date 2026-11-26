@@ -6,7 +6,7 @@
 
 /** The suspension pages, in the order of the catalogue. The shell's registry takes them from here: a link from another
  *  section may lead to these and no others. */
-export const SUSPENSION_PAGE_IDS = ['macpherson', 'double-wishbone', 'multilink'] as const;
+export const SUSPENSION_PAGE_IDS = ['macpherson', 'double-wishbone', 'multilink', 'trailing-arm', 'semi-trailing', 'swing-axle'] as const;
 export type SuspensionPageId = (typeof SUSPENSION_PAGE_IDS)[number];
 
 export interface SuspensionCarLink {
@@ -30,6 +30,12 @@ export const SUSPENSION_CAR_LINKS: readonly SuspensionCarLink[] = [
   { page: 'multilink', car: 'mercedes-190-w201', name: 'Mercedes-Benz 190 (W201)', years: '1982–1993', end: 'R', engine: null },
   { page: 'multilink', car: 'toyota-gr-supra-a90', name: 'Toyota GR Supra (A90)', years: '2019–', end: 'R', engine: 'i6/toyota-supra-b58' },
   { page: 'multilink', car: 'vw-golf-7', name: 'Volkswagen Golf 7 2.0 TDI', years: '2012–2020', end: 'R', engine: 'i4d/vw-20-tdi-ea288' },
+  { page: 'trailing-arm', car: 'citroen-2cv', name: 'Citroën 2CV', years: '1948–1990', end: 'R', engine: 'b2' },
+  { page: 'semi-trailing', car: 'bmw-325i-e30', name: 'BMW 325i (E30)', years: '1985–1993', end: 'R', engine: null },
+  { page: 'semi-trailing', car: 'porsche-944', name: 'Porsche 944', years: '1982–1991', end: 'R', engine: null },
+  { page: 'swing-axle', car: 'chevrolet-corvair', name: 'Chevrolet Corvair', years: '1960–1963', end: 'R', engine: null },
+  { page: 'swing-axle', car: 'vw-beetle', name: 'Volkswagen Beetle', years: '1945–1967', end: 'R', engine: null },
+  { page: 'swing-axle', car: 'tatra-11', name: 'Tatra 11', years: '1923–1927', end: 'R', engine: 'b2/tatra-11' },
 ];
 
 /** The link line of a car on a page, or undefined. */

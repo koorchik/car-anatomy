@@ -31,7 +31,9 @@ import { factorySetup, type CornerSetup, type ResolvedCorner } from '../../suspe
 import { POSE_SIZE } from '../../suspension/solve.ts';
 import type { CornerSpec } from '../../suspension/spec.ts';
 import { withInnerToeShift } from '../../suspension/travel-curves.ts';
+import type { ChassisDesign } from '../../suspension-designer/design.ts';
 import { pageCorner } from '../../suspension-designer/page-cars.ts';
+import { designSweep, morphCorner, rollCentreBySweep } from '../../suspension-designer/pivot-morph.ts';
 import { allTableHeadHtml, allTableHtml } from './all-table.ts';
 import { pageArticleHtml } from './article.ts';
 import { bumpCaption, bumpRows } from './bump-text.ts';
@@ -96,6 +98,8 @@ export class SuspensionSection implements Section {
   private rack = 0;
   private removed: string[] = [];
   private travelScene!: TravelScene;
+  /** A pivot page's design and the angle its axis slider holds (pivot-morph.ts); null on any other corner. */
+  private sweep: { design: ChassisDesign; deg: number } | null = null;
   /** The geometry of the model on the stage, and the choice it was made for. */
   private modelKey = '';
   private modelPage: PageChoice | null = null;
@@ -172,6 +176,7 @@ export class SuspensionSection implements Section {
         this.readout();
       },
       links: (removed) => this.setLinks(removed),
+      sweep: (deg) => this.setSweep(deg),
     });
     this.road = new RoadScene(slots.root, this.pageCorner, () => (this.dirty = true));
     this.shaker = new ShakerScene(slots.root, this.pageCorner, this.road.scene.unsprungKg, () => (this.dirty = true));
@@ -214,6 +219,10 @@ export class SuspensionSection implements Section {
     if (this.ctx.slots.table.isOpen) this.ctx.slots.table.body.innerHTML = allTableHtml(choice);
     if (same) return;
     this.pageCorner = pageCorner(choice.page, choice.car);
+    const design = choice.car?.design ?? choice.page.base.design?.() ?? null;
+    const own = design ? designSweep(design, choice.car?.link.end ?? choice.page.base.end) : null;
+    this.sweep = design && own !== null ? { design, deg: own } : null;
+    this.writeSweep();
     const spec = this.pageCorner.axle;
     this.setupPanel.setFactory(factorySetup(this.pageCorner));
     this.setupPanel.setAdjusters({ camber: !!spec.linkage.strut, toe: spec.linkage.rods.some((r) => r.steer) });
@@ -228,6 +237,32 @@ export class SuspensionSection implements Section {
     this.travelScene.resetLinks();
     this.travel = 0;
     this.apply();
+  }
+
+  /** The end of the axle the page shows. */
+  private get end(): 'F' | 'R' {
+    return this.choice.car?.link.end ?? this.choice.page.base.end;
+  }
+
+  /** Turns a pivot page's axis to `deg` (the travel scene's slider): the corner of that angle, at its factory setup. */
+  private setSweep(deg: number): void {
+    if (!this.sweep || deg === this.sweep.deg) return;
+    this.sweep.deg = deg;
+    this.pageCorner = morphCorner(this.sweep.design, this.end, deg);
+    this.setupPanel.setFactory(factorySetup(this.pageCorner));
+    this.road.setCorner(this.pageCorner);
+    this.shaker.setCorner(this.pageCorner);
+    this.writeSweep();
+    this.dirty = true;
+  }
+
+  private writeSweep(): void {
+    if (!this.sweep) {
+      this.travelScene.setSweep(null);
+      return;
+    }
+    const [row] = rollCentreBySweep(this.sweep.design, this.end, [this.sweep.deg]);
+    this.travelScene.setSweep(this.sweep.deg, row!.rcMm, row!.pivotMm);
   }
 
   /** Takes links away from the travel scene's corner, or puts them back with an empty list. */

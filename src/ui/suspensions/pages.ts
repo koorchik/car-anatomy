@@ -30,7 +30,14 @@ export function stepPage(id: string, direction: -1 | 1): SuspensionPage {
 }
 
 export const pageName = (id: SuspensionPageId): string =>
-  ({ macpherson: t('Стійка Макферсон'), 'double-wishbone': t('Подвійні поперечні важелі'), multilink: t('Багаторичажна підвіска') })[id];
+  ({
+    macpherson: t('Стійка Макферсон'),
+    'double-wishbone': t('Подвійні поперечні важелі'),
+    multilink: t('Багаторичажна підвіска'),
+    'trailing-arm': t('Поздовжні важелі'),
+    'semi-trailing': t('Косі важелі'),
+    'swing-axle': t('Хитний міст'),
+  })[id];
 
 /** The line under a page's own name: where its corner sits and what kind of geometry it is. */
 const baseSubtitle = (id: SuspensionPageId): string =>
@@ -38,6 +45,9 @@ const baseSubtitle = (id: SuspensionPageId): string =>
     macpherson: t('Передня підвіска компактного передньопривідного авто'),
     'double-wishbone': t('Передня підвіска задньопривідного авто · типова геометрія'),
     multilink: t('Задня підвіска задньопривідного авто · п’ять тяг · типова геометрія'),
+    'trailing-arm': t('Задня підвіска передньопривідного авто · вісь хитання поперек авто · типова геометрія'),
+    'semi-trailing': t('Задня підвіска задньопривідного авто · вісь хитання під кутом · типова геометрія'),
+    'swing-axle': t('Задня підвіска авто з двигуном ззаду · вісь хитання вздовж авто · типова геометрія'),
   })[id];
 
 export const endLabel = (end: 'F' | 'R'): string => (end === 'F' ? t('Передня підвіска') : t('Задня підвіска'));
@@ -72,6 +82,9 @@ const unverifiedName = (key: string): string =>
     'suspension layout': t('опис підвіски'),
     kingpinOffsetMmF: t('плече осі повороту кулака'),
     kpiDegF: t('нахил осі повороту кулака'),
+    layoutF: t('тип передньої підвіски'),
+    barMmF: t('передній стабілізатор'),
+    barMmR: t('задній стабілізатор'),
   })[key] ?? key;
 
 const source = (href: string): string => {

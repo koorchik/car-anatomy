@@ -26,6 +26,9 @@ export const DICTIONARIES = {
   'suspension-macpherson': { module: 'src/i18n/en/suspension-macpherson.ts', load: () => import('./en/suspension-macpherson.ts').then((m) => m.SUSPENSION_MACPHERSON_EN) },
   'suspension-double-wishbone': { module: 'src/i18n/en/suspension-double-wishbone.ts', load: () => import('./en/suspension-double-wishbone.ts').then((m) => m.SUSPENSION_DOUBLE_WISHBONE_EN) },
   'suspension-multilink': { module: 'src/i18n/en/suspension-multilink.ts', load: () => import('./en/suspension-multilink.ts').then((m) => m.SUSPENSION_MULTILINK_EN) },
+  'suspension-trailing-arm': { module: 'src/i18n/en/suspension-trailing-arm.ts', load: () => import('./en/suspension-trailing-arm.ts').then((m) => m.SUSPENSION_TRAILING_ARM_EN) },
+  'suspension-semi-trailing': { module: 'src/i18n/en/suspension-semi-trailing.ts', load: () => import('./en/suspension-semi-trailing.ts').then((m) => m.SUSPENSION_SEMI_TRAILING_EN) },
+  'suspension-swing-axle': { module: 'src/i18n/en/suspension-swing-axle.ts', load: () => import('./en/suspension-swing-axle.ts').then((m) => m.SUSPENSION_SWING_AXLE_EN) },
   /** The gearbox pages: the table, its dash, the settings panel, the article's frame and the demonstrations. */
   gearboxes: { module: 'src/i18n/en/gearbox-ui.ts', load: () => import('./en/gearbox-ui.ts').then((m) => m.GEARBOX_UI_EN) },
   /** The planetary automatic's page: its dash, lever diagram, matrix, demonstration and part cards. */

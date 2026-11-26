@@ -73,7 +73,8 @@ const gearboxRows = (s: EngineSpec): string => {
 
 /** A suspension page's name as the engine article links it; the same words as the suspension pages' own. */
 const suspensionName = (page: string): string =>
-  page === 'macpherson' ? t('Стійка Макферсон') : page === 'double-wishbone' ? t('Подвійні поперечні важелі') : page === 'multilink' ? t('Багаторичажна підвіска') : page;
+  page === 'macpherson' ? t('Стійка Макферсон') : page === 'double-wishbone' ? t('Подвійні поперечні важелі') : page === 'multilink' ? t('Багаторичажна підвіска')
+    : page === 'trailing-arm' ? t('Поздовжні важелі') : page === 'semi-trailing' ? t('Косі важелі') : page === 'swing-axle' ? t('Хитний міст') : page;
 
 /** The suspension row: each car with this engine on a suspension page that can be opened (suspensions plan, real cars). */
 const suspensionRows = (s: EngineSpec): string =>

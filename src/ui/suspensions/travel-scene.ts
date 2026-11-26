@@ -14,6 +14,8 @@ import {
   bumpSteerPer25, camberGainLeft, camberReversal, curveAt, freeMotions, jointRange, linkRows, sceneRackRange, travelCurves,
   type JointRange, type TravelCurves,
 } from '../../suspension/travel-curves.ts';
+import { pivotLayout } from '../../suspension/templates/pivot.ts';
+import { jackingLift } from '../../scene/suspension/jacking-arrows.ts';
 import { frontViewSvg } from './front-view.ts';
 import { pageName, type PageChoice } from './pages.ts';
 import { TravelChart, type ChartSeries } from './travel-chart.ts';
@@ -23,7 +25,14 @@ export const LOWER_M = 0.04;
 /** The tie-rod height pad's reach either way, mm (suspensions plan, step 6). */
 export const TIE_PAD_MM = 15;
 /** Each page's colour on the chart and in its legend. */
-export const PAGE_COLORS: Record<SuspensionPageId, string> = { macpherson: '#ffb36b', 'double-wishbone': '#7fd3ff', multilink: '#b5e48c' };
+export const PAGE_COLORS: Record<SuspensionPageId, string> = {
+  macpherson: '#ffb36b',
+  'double-wishbone': '#7fd3ff',
+  multilink: '#b5e48c',
+  'trailing-arm': '#f4a3c8',
+  'semi-trailing': '#c9a8ff',
+  'swing-axle': '#ffe066',
+};
 const TOE_BEFORE = '#ece6d6';
 /** Size of the wobble along each free motion: the wheel centre's move plus this many metres per radian of turn. */
 const WOBBLE_M = 0.012;
@@ -41,6 +50,11 @@ const signed = (v: number, digits: number): string => {
 /** The panel's part of the scene, under the readout of the travel. */
 export const travelControlsHtml = (): string => `<section class="susp-travel-controls">
       <dl class="susp-numbers susp-travel-numbers-phone" id="susp-travel-numbers-phone"></dl>
+      <label class="susp-ctl" id="susp-sweep-row" hidden>
+        <span class="susp-ctl-head"><span>${t('Кут осі хитання')}</span><output id="susp-sweep-value" for="susp-sweep"></output></span>
+        <input type="range" id="susp-sweep" min="0" max="90" step="1" value="0" />
+      </label>
+      <p class="susp-caption" id="susp-sweep-caption" hidden></p>
       <button type="button" class="btn" id="susp-lower" aria-pressed="false">${t('Занизити на 40 мм')}</button>
       <p class="susp-caption" id="susp-lower-caption"></p>
       <label class="susp-ctl" id="susp-tie-row">
@@ -89,6 +103,8 @@ export interface TravelSceneActions {
   tie(dzM: number): void;
   rack(m: number): void;
   links(removed: readonly string[]): void;
+  /** The pivot pages' axis angle in plan, degrees (pivot-morph.ts). */
+  sweep(deg: number): void;
 }
 
 interface Geometry {
@@ -136,6 +152,26 @@ export class TravelScene {
       if (next) actions.links([...this.removed, next.id]);
     });
     $('susp-links-back').addEventListener('click', () => actions.links([]));
+    $<HTMLInputElement>('susp-sweep').addEventListener('input', (e) => actions.sweep(Number((e.target as HTMLInputElement).value)));
+  }
+
+  /**
+   * The pivot axis slider: its angle, or null to hide it on a corner without a single pivot. The caption names the
+   * layout the angle makes and the roll centre it gives, against the height of the axis.
+   */
+  setSweep(sweepDeg: number | null, rcMm = 0, pivotMm = 0): void {
+    const $ = this.$;
+    $('susp-sweep-row').hidden = sweepDeg === null;
+    $('susp-sweep-caption').hidden = sweepDeg === null;
+    if (sweepDeg === null) return;
+    const slider = $<HTMLInputElement>('susp-sweep');
+    if (document.activeElement !== slider) slider.value = String(Math.round(sweepDeg));
+    $('susp-sweep-value').textContent = `${fmt(sweepDeg, 0)}°`;
+    $('susp-sweep-caption').textContent = t('{layout}. Центр крену в спокої {rc} мм, вісь хитання на висоті {pivot} мм. 0° — вісь поперек авто, 90° — уздовж.', {
+      layout: pageName(pivotLayout(sweepDeg)),
+      rc: fmt(Math.round(rcMm) || 0, 0),
+      pivot: fmt(pivotMm, 0),
+    });
   }
 
   /** The rack travel the steering slider spans either way, m; 0 on an unsteered corner. */
@@ -263,7 +299,10 @@ export class TravelScene {
       false,
     ]);
     const j = this.joints;
-    if (j) {
+    // A swing axle's shaft is its arm: one joint by the differential, which neither plunges nor has an outer partner.
+    if (j && this.own.axle.spec.halfshaft?.outer === 'none') {
+      rows.push([t('Шарнір піввісі: кут'), t('{value}° із {limit}°', { value: fmt(j.innerDeg, 0), limit: fmt(j.limits.innerDeg, 0) }), j.innerDeg > j.limits.innerDeg]);
+    } else if (j) {
       rows.push([
         t('Внутрішній ШРУС: хід'),
         t('{min}…{max} мм із {lo}…{hi}', { min: signed(j.plunge[0] * 1000, 0), max: signed(j.plunge[1] * 1000, 0), lo: signed(j.limits.plunge[0] * 1000, 0), hi: signed(j.limits.plunge[1] * 1000, 0) }),
@@ -275,6 +314,10 @@ export class TravelScene {
         t('{value}° із {limit}°', { value: fmt(j.outerDeg, 0), limit: fmt(j.limits.outerDeg, 0) }),
         j.outerDeg > j.limits.outerDeg,
       ]);
+    }
+    // A single pivot arm: the body lift a sideways force of 1 kN on the tyre gives through the force line (jacking).
+    if (this.own.axle.spec.linkage.rigidArm) {
+      rows.push([t('Підйом кузова від 1 кН бічної сили'), t('{value} Н', { value: fmt(jackingLift(1000, s.rcHeight, s.contactY), 0) }), false]);
     }
     if (this.choice.page.id === 'multilink') rows.push([t('Ступенів свободи кулака'), String(this.motions.length || 1), this.removed.length > 0]);
     const html = rows.map(([label, value, alarm]) => `<div class="susp-number${alarm ? ' alarm' : ''}"><dt>${label}</dt><dd>${value}</dd></div>`).join('');
