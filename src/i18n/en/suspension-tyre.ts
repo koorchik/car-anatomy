@@ -87,8 +87,8 @@ export const SUSPENSION_TYRE_EN: Record<string, string> = {
   'Вертикальна жорсткість': 'Vertical stiffness',
   'Прогин шини': 'Tire deflection',
   'Довжина плями': 'Patch length',
-  'Оцінка: жорсткість росте лінійно з тиском, k = k₀·(1 + 0,8·Δp/p₀), а довжина плями ℓ ≈ 2·√(2·r·F/k). Як тиск змінює бічну й поздовжню силу, модель не знає. Тиск спільний зі сценою «Перешкода» й панеллю «Налаштувати».':
-    'An estimate: the stiffness grows linearly with pressure, k = k₀·(1 + 0.8·Δp/p₀), and the patch length is ℓ ≈ 2·√(2·r·F/k). How pressure changes the lateral and longitudinal forces the model does not know. The pressure is shared with the Obstacle scene and the Setup panel.',
+  'Оцінка: жорсткість росте лінійно з тиском, k = k₀·(1 + 0,8·Δp/p₀), а довжина плями ℓ ≈ 2·√(2·r·F/k): це хорда кола, яке не сплющується, тож справжня пляма коротша. Як тиск змінює бічну й поздовжню силу, модель не знає. Тиск спільний зі сценою «Перешкода» й панеллю «Налаштувати».':
+    'An estimate: the stiffness grows linearly with pressure, k = k₀·(1 + 0.8·Δp/p₀), and the patch length is ℓ ≈ 2·√(2·r·F/k): the chord of a circle that does not flatten, so the real patch is shorter. How pressure changes the lateral and longitudinal forces the model does not know. The pressure is shared with the Obstacle scene and the Setup panel.',
   // The article (src/ui/suspensions/tyre-article.ts).
   '[П]': '[R]',
   '[В]': '[S]',
