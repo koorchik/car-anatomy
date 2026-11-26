@@ -5,7 +5,8 @@
 // The transfer m·a_x·h/L moves load between the axles whatever the links do; the links only decide how much of it goes
 // through the springs, and so how far the body pitches. Axle k carries F_x,k = share_k·m·a_x along the road, through
 // the heave slope T of the point that holds its torque (chassis-sim.ts: tanθ_KP of the knuckle for outboard brakes and
-// a differential on the axle, tanθ_WC of the wheel centre for inboard brakes and a differential on the body), and its
+// a differential on the axle, tanθ_WC of the wheel centre for inboard brakes and a differential on the body; inboard
+// brakes on a live axle's differential turn with the axle, so they react like outboard ones), and its
 // unsprung mass's own inertia through the wheel centre's slope T_WC. The links push the body up with
 // −F_x,k·T + m_u,k·a_x·T_WC, so the share of the transfer they carry is
 //   front:  100·(L/h)·(share_f·T_f − (m_u,f/m)·T_WC,f)
@@ -19,6 +20,7 @@
 
 import type { Chassis } from './chassis.ts';
 import { newWheelSample } from './chassis-axle.ts';
+import { brakesOnKnuckle } from './wheel-forces.ts';
 
 /** Per cent, front and rear. */
 export type AxlePair = [number, number];
@@ -52,7 +54,8 @@ export function antiGeometry(chassis: Chassis): AntiGeometry {
   const front = driven[0] && driven[1] ? lon.driveFront : driven[0] ? 1 : 0;
   const driveShare = [driven[0] ? front : 0, driven[1] ? 1 - front : 0];
   const brakeShare = [lon.brakeFront, 1 - lon.brakeFront];
-  const brakeSlope = [0, 1].map((k) => (lon.brakeInboard[k] ? wc[k] : kp[k]));
+  const onKnuckle = brakesOnKnuckle(c);
+  const brakeSlope = [0, 1].map((k) => (onKnuckle[k] ? kp[k] : wc[k]));
   const driveSlope = [c.spec.front.axle, c.spec.rear.axle].map((a, k) => (a.diff === 'axle' ? kp[k] : wc[k]));
   const scale = (100 * c.wheelbaseM) / c.cgHeightM;
   const unsprung = (k: number): number => (2 * c.corners[2 * k].unsprungKg * wc[k]) / c.massKg;

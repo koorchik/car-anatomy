@@ -26,7 +26,8 @@
 //
 // The forces along the road do the same with the fore-aft slopes, each through the part that holds its torque
 // (stage P9-core): outboard brakes and a differential on the axle through the knuckle's (or the axle's) own point at
-// the contact patch, tanθ_KP, the line to the side-view instant centre; inboard brakes, a differential on the body and
+// the contact patch, tanθ_KP, the line to the side-view instant centre (so do inboard brakes on a live axle's
+// differential, which turns with the axle); inboard brakes on the body, a differential on the body and
 // the rolling resistance through the wheel centre, tanθ_WC, their torque going to the body by the half-shafts or into
 // the free wheel; the unsprung mass's inertia at its wheel centre:
 //   S_i += −Σ_j (F_brake,j·tanθ_b,j + F_drive,j·tanθ_d,j + F_roll,j·tanθ_WC,j)_i + Σ_j m_u,j·a_x·∂W_x,j/∂q_i
@@ -58,7 +59,7 @@
 import type { Chassis } from './chassis.ts';
 import { newWheelSample, type WheelSample } from './chassis-axle.ts';
 import { bumpStopForce, coilForce, damperForce, G, tyreNormalForce } from './forces.ts';
-import { newTyreShare, WheelForces, type TyreShare } from './wheel-forces.ts';
+import { brakesOnKnuckle, newTyreShare, WheelForces, type TyreShare } from './wheel-forces.ts';
 
 /** Fixed physics step, s. */
 export const CHASSIS_STEP_S = 0.001;
@@ -172,8 +173,7 @@ export class ChassisSim {
   constructor(chassis: Chassis) {
     this.chassis = chassis;
     this.forces = new WheelForces(chassis);
-    const inboard = chassis.spec.longitudinal.brakeInboard;
-    this.brakeOnKnuckle = [!inboard[0], !inboard[1]];
+    this.brakeOnKnuckle = brakesOnKnuckle(chassis);
     this.driveOnAxle = [chassis.spec.front.axle.diff === 'axle', chassis.spec.rear.axle.diff === 'axle'];
     const c = chassis.corners;
     this.trackW = [c[0].y - c[1].y, c[2].y - c[3].y];

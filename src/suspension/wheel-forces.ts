@@ -45,6 +45,18 @@ import { aeroDragN, roadLoadN } from '../vehicle/road-load.ts';
 /** Height the drag acts at when nobody measured it, m: an estimate (suspensions plan, the car on four wheels). */
 export const AERO_HEIGHT_ESTIMATE_M = 0.5;
 
+/**
+ * Per axle [front, rear]: whether the brakes' torque goes into the knuckle (or the axle), so their force reacts through
+ * its own point at the contact patch, tanθ_KP. Outboard brakes do; inboard ones do on a live axle too, whose
+ * differential they sit on turns with the axle. Inboard brakes on the body (a differential on the body, a de Dion) send
+ * their torque to the body by the half-shafts, and their force reacts at the wheel centre, tanθ_WC.
+ */
+export function brakesOnKnuckle(chassis: Chassis): readonly [boolean, boolean] {
+  const spec = chassis.spec;
+  const inboard = spec.longitudinal.brakeInboard;
+  return [!inboard[0] || spec.front.axle.diff === 'axle', !inboard[1] || spec.rear.axle.diff === 'axle'];
+}
+
 /** The forces in the four patches and what they could not be. Per corner FL, FR, RL, RR. */
 export interface TyreShare {
   /** Along the road (the sum of the next three) and across, N. */

@@ -277,8 +277,9 @@ export interface ChassisAxleSpec {
 export interface ChassisLongitudinal {
   /** Share of the brake force on the front axle (the brake balance). */
   brakeFront: number;
-  /** Whether each axle's brakes sit inboard, on the body or the differential (a de Dion, racing cars), and not in the
-   *  wheel: their torque then reaches the body through the half-shafts instead of the knuckle. [front, rear] */
+  /** Whether each axle's brakes sit inboard, on the differential (a de Dion, racing cars), and not in the wheel: their
+   *  torque then reaches the body through the half-shafts instead of the knuckle, unless the differential sits on a live
+   *  axle and turns with it (brakesOnKnuckle in wheel-forces.ts). [front, rear] */
   brakeInboard: readonly [boolean, boolean];
   /** Share of the drive force on the front axle when both axles are driven; ignored otherwise. */
   driveFront: number;

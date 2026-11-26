@@ -752,6 +752,28 @@ describe('braking and accelerating: the load transfer and the pitch', () => {
     expect(sb.pitch).toBeGreaterThan(sa.pitch + 0.3 * DEG);
   });
 
+  it('inboard brakes on a live axle’s differential turn with the axle: the same anti-lift as in the wheels', () => {
+    // The differential rides on the axle, so the brake torque goes into the axle housing either way; only on the body
+    // would it skip the links. On a triangulated four-link the axle pitches in bump, so its own point at the patch and
+    // its wheel centre move differently along the car (a de Dion tube with the same links would lose the anti-lift).
+    const z = (share: number): number => restWheelCentreZM('street', (1500 * share) / 2);
+    const build = (brakeInboard: [boolean, boolean]): Chassis => buildChassis(chassisOf({
+      id: 'live-axle-triangulated', massKg: 1500, frontShare: 0.55, cgHeightM: 0.55, wheelbaseM: 2.7,
+      front: typicalFront('double-wishbone', 1.52, z(0.55), false),
+      rear: solidAxle({ ...SOLID_TYPICAL.triangulated, trackM: 1.54, wheelCentreZM: z(0.45), driven: true }),
+      frontBar: null, rearBar: null, unsprungKg: [45, 60], rideHz: [1.3, 1.4], zeta: 0.25, tyre: 'street', geometry: 'typical',
+      longitudinal: { brakeInboard },
+    }));
+    const [outboard, inboard] = [build([false, false]), build([false, true])];
+    const [a, b] = [antiGeometry(outboard), antiGeometry(inboard)];
+    expect(a.slopeKP[1]).toBeLessThan(a.slopeWC[1] - 0.05);
+    near(b.braking[1], a.braking[1], 1e-12);
+    const ax = -0.8 * G;
+    const [sa, sb] = [settleAt(outboard, { ax }), settleAt(inboard, { ax })];
+    near(sb.pitch, sa.pitch, 1e-9);
+    for (let i = 0; i < 4; i++) near(sb.fz[i], sa.fz[i], 1e-9);
+  });
+
   it('drag acts on the body at its own height: it pitches the body, but the links carry only what the tyres push', () => {
     // A drag centre well above the CG (0.9 m, a van's), so its own moment shows. The road load is drag alone.
     const base = wishboneSedan(antiAngles([100, 100], { brakeFront: 0.6 }), { brakeFront: 0.6 });
