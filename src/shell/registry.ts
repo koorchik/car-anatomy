@@ -55,8 +55,7 @@ export const SECTIONS: readonly SectionEntry[] = [
     openPages: GEARBOX_PAGES_SHOWN,
     pages: [{ key: 'catalogue', href: `#/gearboxes/${GEARBOX_PAGES_SHOWN[0]!}` }],
   },
-  // At a hidden address until its first visible page (P1d): no link leads there yet.
-  { id: 'suspensions', load: loadSuspensions, openPages: [] },
+  { id: 'suspensions', load: loadSuspensions, pages: [{ key: 'catalogue', href: '#/suspensions' }] },
 ];
 
 /** The entry of the section a route belongs to. */

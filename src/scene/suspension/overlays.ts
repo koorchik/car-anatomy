@@ -1,5 +1,5 @@
-// What the corner draws over itself: the forces on the wheel and the camber laser. Both live in the body's frame and
-// are drawn on top of everything, invisible to framing and picking (src/scene/arrows.ts).
+// What the corner draws over itself: the forces on the wheel and the camber and toe lasers. They live in the body's
+// frame and are drawn on top of everything, invisible to framing and picking (src/scene/arrows.ts).
 //
 // Forces are the ones acting on the wheel with its knuckle and strut tube, so they read as one free-body diagram:
 // the tyre pushing up at the contact patch, the spring, damper and bump stop pushing down along the strut, the links
@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { numberLocale } from '../../i18n/locale.ts';
 import { Arrows, arrowHeadGeometry, arrowShaftGeometry, ON_TOP, outOfFrame, overlayMaterial } from '../arrows.ts';
 import { MEASURE, OVERLAY_WHITE, SUSPENSION_FORCE } from '../palette.ts';
+import { ToeLabel, writeToeLines } from './toe-laser.ts';
 
 /** Scene units per newton: 1 kN = 40 mm (suspensions plan, 3D overlays). */
 export const FORCE_SCALE = 0.4 / 1000;
@@ -108,16 +109,21 @@ export class CamberLaser {
   private readonly texture: THREE.CanvasTexture;
   private shown = Number.NaN;
   private readonly p = new THREE.Vector3();
+  /** The toe laser's angle; its two lines are the last four vertices of these segments (toe-laser.ts). */
+  readonly toeLabel = new ToeLabel();
+  private readonly toeAt: number;
 
   constructor() {
-    // Segments: the plumb first, so the laser draws over it; then the laser, the axle line and the arc.
-    const count = 2 * (3 + ARC_SEGMENTS);
+    // Segments: the plumb first, so the laser draws over it; then the laser, the axle line and the arc; then the toe
+    // laser's straight-ahead line and its laser. Zero-length until setToe() writes them.
+    this.toeAt = 2 * (3 + ARC_SEGMENTS);
+    const count = this.toeAt + 4;
     this.positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
     const laser = new THREE.Color(LASER);
     const plumb = new THREE.Color(PLUMB);
     for (let i = 0; i < count; i++) {
-      const c = i < 2 ? plumb : laser;
+      const c = i < 2 || i === this.toeAt || i === this.toeAt + 1 ? plumb : laser;
       colors.set([c.r, c.g, c.b], i * 3);
     }
     const geo = outOfFrame(new THREE.BufferGeometry());
@@ -140,7 +146,14 @@ export class CamberLaser {
     this.label.raycast = () => {};
     this.label.frustumCulled = false;
     this.label.renderOrder = ON_TOP;
-    this.group.add(this.lines, this.label);
+    this.group.add(this.lines, this.label, this.toeLabel.sprite);
+  }
+
+  /** The toe laser on the road beside the tyre: `contact` in the body frame, `axis` the spin axis (both scene). */
+  setToe(contact: THREE.Vector3, axis: THREE.Vector3): void {
+    writeToeLines(this.positions, this.toeAt, contact, axis);
+    this.lines.geometry.attributes.position!.needsUpdate = true;
+    this.toeLabel.update(contact, axis);
   }
 
   private write(i: number, v: THREE.Vector3): void {
@@ -206,5 +219,6 @@ export class CamberLaser {
     (this.lines.material as THREE.Material).dispose();
     this.texture.dispose();
     this.label.material.dispose();
+    this.toeLabel.dispose();
   }
 }

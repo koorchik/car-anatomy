@@ -6,6 +6,6 @@ import type { Route } from '../../shell/routes.ts';
 import type { Section } from '../../shell/section.ts';
 
 export async function loadSuspensions(_route: Route): Promise<Section> {
-  const { SuspensionSection } = await withDictionaries(['suspension'], () => import('./section.ts'));
+  const { SuspensionSection } = await withDictionaries(['suspension', 'suspension-macpherson'], () => import('./section.ts'));
   return new SuspensionSection();
 }
