@@ -46,6 +46,8 @@ export type VehicleCommand =
   /** The driver's clutch pedal, 0 released … 1 floored; it acts only with the auto clutch off. */
   | { kind: 'vehicle'; action: 'clutch'; pedal: number }
   | { kind: 'vehicle'; action: 'autoClutch'; on: boolean }
+  /** Rev matching: the control blips the throttle for a gear that needs the engine faster (stage K3b). */
+  | { kind: 'vehicle'; action: 'revMatch'; on: boolean }
   | { kind: 'vehicle'; action: 'brake'; value: number }
   /** Grade along the road, rad, uphill positive, and each wheel's surface as a share of dry friction. */
   | { kind: 'vehicle'; action: 'road'; gradeRad: number; surfaceMu: [number, number, number, number] };
@@ -66,6 +68,8 @@ export interface VehicleReadings {
   clutch: number;
   clutchSlip: number;
   clutchC: number;
+  /** Heat the clutch has taken since the car was put on the crank, J, at the end. */
+  clutchJ: number;
   /** Mean torque the car took from the crank, N·m, and the mean drive torque on the driven hubs together, N·m. */
   crankNm: number;
   wheelNm: number;
@@ -77,6 +81,9 @@ export interface VehicleSnapshot {
   values: Float64Array;
 }
 
+/** The snapshot's own values ahead of the vehicle's and the control's: the crank's angle and speed, and the clock. */
+const HEAD = 3;
+
 export class VehicleLoad implements CrankLoad<VehicleReadings> {
   readonly spec: VehicleLoadSpec;
   readonly vehicle: VehicleStep;
@@ -85,8 +92,13 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
   /** The crank as the drivetrain sees it: angle, rad, unwrapped, and speed, rad/s. */
   crankAngle = 0;
   crankSpeed = 0;
+  /** Seconds the car has been on the crank, by the simulation's own clock: the dash times 0–100 km/h by it. */
+  time = 0;
   private readonly damper: number;
   private readonly torque: LoadTorque = { torqueNm: 0, dTorque: 0 };
+  private readonly request: EngineRequest = {};
+  /** The driver's pedal on the last step: a blip never closes the throttle the driver holds open. */
+  private pedal = 0;
   private sum = { samples: 0, seconds: 0, crankNm: 0, wheelNm: 0 };
 
   constructor(spec: VehicleLoadSpec) {
@@ -118,6 +130,8 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
     const s = veh.solver;
     this.crankAngle += dt * input.omega;
     this.crankSpeed = input.omega;
+    this.time += dt;
+    this.pedal = input.pedal;
     s.anchorAngle[CRANK_SLOT] = this.crankAngle;
     s.anchorSpeed[CRANK_SLOT] = input.omega;
     this.control.step(s, veh.bus, input, dt);
@@ -135,8 +149,12 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
     return t;
   }
 
+  /** The rev matching's blip, when it asks for more than the driver's pedal (control/manual.ts). */
   engineRequest(): EngineRequest | null {
-    return null;
+    const blip = this.control.blip;
+    if (!(blip > this.pedal)) return null;
+    this.request.throttle = blip;
+    return this.request;
   }
 
   command(cmd: LoadCommand): void {
@@ -153,6 +171,10 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
         break;
       case 'autoClutch':
         c.autoClutch = cmd.on;
+        break;
+      case 'revMatch':
+        c.revMatch = cmd.on;
+        if (!cmd.on) c.blip = 0;
         break;
       case 'brake':
         c.brake = Math.min(1, Math.max(0, cmd.value));
@@ -185,6 +207,7 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
       clutch: c.clamp,
       clutchSlip: s.slip[clutch]!,
       clutchC: s.temperature[clutch]!,
+      clutchJ: s.energy[clutch]!,
       crankNm: sum.crankNm / n,
       wheelNm: sum.wheelNm / n,
     };
@@ -198,15 +221,16 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
   }
 
   private size(): number {
-    return 2 + this.vehicle.snapshotSize() + this.control.snapshotSize();
+    return HEAD + this.vehicle.snapshotSize() + this.control.snapshotSize();
   }
 
   snapshot(): VehicleSnapshot {
     const values = new Float64Array(this.size());
     values[0] = this.crankAngle;
     values[1] = this.crankSpeed;
-    this.vehicle.snapshot(values, 2);
-    this.control.snapshot(values, 2 + this.vehicle.snapshotSize());
+    values[2] = this.time;
+    this.vehicle.snapshot(values, HEAD);
+    this.control.snapshot(values, HEAD + this.vehicle.snapshotSize());
     return { kind: 'vehicle', values };
   }
 
@@ -216,7 +240,8 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
     const v = snap.values;
     this.crankAngle = v[0]!;
     this.crankSpeed = v[1]!;
-    this.vehicle.restore(v, 2);
-    this.control.restore(v, 2 + this.vehicle.snapshotSize());
+    this.time = v[2]!;
+    this.vehicle.restore(v, HEAD);
+    this.control.restore(v, HEAD + this.vehicle.snapshotSize());
   }
 }

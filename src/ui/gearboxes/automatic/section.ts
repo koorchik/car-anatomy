@@ -156,6 +156,8 @@ export class AutomaticSection implements Section {
       },
       gear: (name) => this.select(name),
       brake: () => {},
+      // An automatic has no clutch pedal; its keys come only with the car mode.
+      clutch: () => {},
     });
     ctx.keys.bind(KEY_CONTEXT, keys.gearboxes);
     // The row of view tools wraps on a phone and in the longer language; the first-visit callout and the scale bar stand

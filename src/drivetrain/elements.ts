@@ -61,6 +61,16 @@ const smoothstep = (a: number, b: number, x: number): number => {
 export const pedalClamp = (pedal: number): number => 1 - smoothstep(0.35, 0.75, pedal);
 
 /**
+ * The pedal position that gives this share of the clamp, pedalClamp's inverse: 0 (the pedal up) for a full clamp, 0.75
+ * for an open clutch. smoothstep's inverse is ½ − sin(asin(1 − 2s)/3).
+ */
+export const clampPedal = (clamp: number): number => {
+  const s = 1 - Math.min(1, Math.max(0, clamp));
+  if (s <= 0) return 0;
+  return 0.35 + 0.4 * (0.5 - Math.sin(Math.asin(1 - 2 * s) / 3));
+};
+
+/**
  * A dry single-plate clutch for a car whose own clutch is not in the data yet: a 228 mm organic disc with a 152 mm
  * inner diameter, two faces, the clamp sized for CLUTCH_RESERVE times the engine's peak torque [estimate].
  */

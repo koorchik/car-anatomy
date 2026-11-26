@@ -27,6 +27,11 @@ export const titleHtml = (): string => `<div class="gbx-title" id="gbx-title-blo
       <button class="btn" id="gbx-setup-toggle" type="button" aria-controls="results-panel">${t('Налаштувати')}</button>
       <a class="btn" id="gbx-designer-link" href="#/gearboxes/designer">${t('Своя коробка')}</a>
       <button class="btn" id="gbx-demo-open" type="button">${t('Демонстрація')}<span class="gbx-long">: ${t('чому шестерні крутяться завжди')}</span></button>
+      <span class="gbx-car-demos" id="gbx-car-demos" hidden>
+        <span class="gbx-car-demos-label">${t('Демонстрації')}:</span>
+        <button class="btn" id="gbx-demo-pull" type="button" data-car-demo="pull-away">${t('Рушаємо')}</button>
+        <button class="btn" id="gbx-demo-shift" type="button" data-car-demo="shifting">${t('Перемикання і оберти')}</button>
+      </span>
       <span class="gbx-steps" id="gbx-steps"></span>
     </div>
     <div class="gbx-nav" id="gbx-nav"></div>
@@ -40,6 +45,10 @@ export const toolsHtml = (): string => `<label class="tool tool-slow" id="gbx-sl
       <span class="tool-label">${t('Розібрати')}</span>
       <input type="range" id="gbx-explode" min="0" max="1" step="0.01" value="0" />
     </label>
+    <label class="check" id="gbx-engine-tool" hidden>
+      <input type="checkbox" id="gbx-with-engine" />
+      ${t('З двигуном')}
+    </label>
     <label class="check" id="gbx-glow-tool">
       <input type="checkbox" id="gbx-glow" checked />
       ${t('Шлях потужності')}
@@ -50,7 +59,9 @@ export const statusHtml = (): string => `${wheelRoadHtml()}
     <header><span id="gbx-demo-count"></span><button class="btn" id="gbx-demo-close" type="button">${t('Закрити')}</button></header>
     <h3 id="gbx-demo-title"></h3>
     <p id="gbx-demo-text"></p>
+    <p class="gbx-demo-result" id="gbx-demo-result" hidden></p>
     <footer>
+      <button class="btn" id="gbx-demo-again" type="button" hidden>${t('Ще раз')}</button>
       <button class="btn" id="gbx-demo-prev" type="button">${t('Назад')}</button>
       <button class="btn" id="gbx-demo-next" type="button">${t('Далі')}</button>
     </footer>
@@ -60,7 +71,10 @@ export const statusHtml = (): string => `${wheelRoadHtml()}
 export const panelHtml = (): string => `<div class="panel-scroll gbx-article" id="gbx-article" tabindex="0"></div>
   <div class="panel-scroll gbd-panel" id="gbd-params" tabindex="0" hidden></div>`;
 
+// The left panel: the settings on the table, the drive panel in the car (drive-panel.ts fills it when the car mode loads),
+// and the designer's results beside them.
 export const resultsHtml = (): string => `<div class="panel-scroll gbx-setup" id="gbx-setup" tabindex="0"></div>
+  <div class="panel-scroll gbx-drive" id="gbx-drive" tabindex="0" hidden></div>
   <div class="panel-scroll gbd-panel" id="gbd-results" tabindex="0" hidden></div>`;
 
 export const dashHtml = (): string => `<section class="control-col gbx-control" id="gbx-control">
@@ -76,6 +90,10 @@ export const dashHtml = (): string => `<section class="control-col gbx-control" 
       <p class="gbx-gear-now" aria-live="polite"><span>${t('Передача')}</span> <b id="gbx-gear-now">N</b></p>
     </section>
     <section class="pedal-col gbx-pedal" id="gbx-pedal-col">${pedalHtml()}
+      <div class="pedal gbx-clutch" id="gbx-clutch" role="slider" tabindex="0" aria-label="${t('Педаль зчеплення')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+        <div class="pedal-fill" id="gbx-clutch-fill"></div>
+        <div class="pedal-text">${t('Зчеплення')}<small id="gbx-clutch-key">C</small></div>
+      </div>
       <div class="pedal gbx-brake" id="gbx-brake" role="slider" tabindex="0" aria-label="${t('Педаль гальма')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
         <div class="pedal-fill" id="gbx-brake-fill"></div>
         <div class="pedal-text">${t('Гальма')}<small>B</small></div>
@@ -84,6 +102,7 @@ export const dashHtml = (): string => `<section class="control-col gbx-control" 
     <section class="gbx-gears-col">
       <h4>${t('Передача')} <span id="gbx-gear-text"></span></h4>
       <div class="gbx-gears" role="group" aria-label="${t('Передача')}" id="gbx-gears"></div>
+      <div class="gbx-gate" id="gbx-gate" hidden></div>
       <dl class="gbx-shafts" id="gbx-table-figures">
         <div><dt>${t('Первинний вал')}</dt><dd id="gbx-input-rpm"></dd></div>
         <div><dt>${t('Вторинний вал')}</dt><dd id="gbx-output-rpm"></dd></div>
@@ -92,6 +111,8 @@ export const dashHtml = (): string => `<section class="control-col gbx-control" 
       <dl class="gbx-shafts" id="gbx-car-figures" hidden>
         <div><dt>${t('Швидкість')}</dt><dd id="gbx-car-speed"></dd></div>
         <div><dt>${t('Зчеплення')}</dt><dd id="gbx-car-clutch"></dd></div>
+        <div><dt>${t('Диск')}</dt><dd id="gbx-car-disc"></dd></div>
       </dl>
+      <p class="gbx-hint" id="gbx-hint" aria-live="polite" hidden></p>
       <p class="gbx-gear-note" id="gbx-gear-note"></p>
     </section>`;

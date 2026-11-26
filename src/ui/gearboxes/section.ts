@@ -43,6 +43,9 @@ import { Ignition } from '../widgets/ignition.ts';
 import { Pedal } from '../widgets/pedal.ts';
 import { Tacho } from '../widgets/tacho.ts';
 import { gearboxArticleHtml } from './article.ts';
+import type { EngineWithGearbox } from '../../scene/gearbox/engine-with-gearbox.ts';
+import type { FrameState } from '../../scene/model-types.ts';
+import { CAR_DEMO_IDS, pullAwayDemo, shiftingDemo, type CarDemo, type CarDemoId } from './car-demos.ts';
 import type { CarMode } from './car-mode.ts';
 import { alwaysTurningSteps, type DemoStep } from './demo.ts';
 import { GEARBOX_KEY_CONTEXTS, gearboxKeys } from './keys.ts';
@@ -67,6 +70,11 @@ const FIT = 0.8;
 const FIT_PHONE = 0.88;
 /** The gear a demonstration step points at. */
 const MARK = '#ffd27a';
+/** The engine's shake in the view with the engine, as the engine pages have it by default. */
+const ENGINE_SHAKE = 0.45;
+
+/** The view with the engine, fetched the first time a visitor turns it on: the engine model is the engine pages'. */
+const loadEngineView = (): Promise<typeof import('./engine-view.ts')> => withDictionaries(['engines'], () => import('./engine-view.ts'));
 
 /**
  * The designer (#/gearboxes/designer, stage K10): its page, model and presets, fetched the first time it is opened or a
@@ -105,6 +113,11 @@ export class GearboxSection implements Section {
   private desc!: TableDesc;
   private table!: TableDrive;
   private model: TableModel | null = null;
+  /** The view with the engine: asked for, the module once loaded, and the composed model on the stage while it shows. */
+  private withEngine = false;
+  private engineView: typeof import('./engine-view.ts') | null = null;
+  private composite: EngineWithGearbox | null = null;
+  private readonly engineFrame: FrameState = { theta: 0, rpm: 0, load: 0, fuelCut: true, running: false, boost: 0, dt: 0, shake: ENGINE_SHAKE };
   /** The settings panel of the page shown. */
   setup!: SetupPanel<TableDesc>;
   private tacho!: Tacho;
@@ -128,6 +141,9 @@ export class GearboxSection implements Section {
   private markerMaterial: THREE.MeshBasicMaterial | null = null;
   private markedGear: string | null = null;
   private demo: { steps: DemoStep[]; at: number } | null = null;
+  /** A demonstration in the car (2 and 3): which, the step shown, and one asked for before the car was on the crank. */
+  private carDemo: { id: CarDemoId; at: number; count: number; result: string } | null = null;
+  private pendingCarDemo: CarDemoId | null = null;
   /** On the table or in the car, as the address has it (m=drive). */
   mode: GearboxMode = 'table';
   /** The car mode once loaded; `car.on` while the car is on the crank. */
@@ -151,6 +167,10 @@ export class GearboxSection implements Section {
   private shown = { input: '', output: '', diff: '', gear: '', note: '' };
   /** What the readouts were last built from: the texts are built only when it changes, not every frame. */
   private readoutsFor = { rpm: NaN, engaged: '', selected: '', box: null as Gearbox | null };
+  /** The members' angles on the last frame, for their speeds: the teeth blur by them in real time. */
+  private lastAngles: Float64Array | null = null;
+  private blurSpeeds: Float64Array | null = null;
+  private blurred = false;
   private readonly unlit = { angles: [] as ArrayLike<number>, sleeves: {} as Readonly<Record<string, number>>, meshPower: [] as number[] };
   /** The designer's code and page once loaded; `onDesigner` while its address is shown. */
   private designerModule: DesignerModule | null = null;
@@ -184,11 +204,21 @@ export class GearboxSection implements Section {
     this.tacho = new Tacho();
     this.el('gbx-tacho').append(this.tacho.element);
     this.tacho.configure(this.data.engine.spec.redlineRpm);
-    this.pedal = new Pedal(this.el('gbx-pedal-col'), { setThrottle: (value) => this.drive.setPedal(value), press: () => void this.pressThrottle() });
+    this.pedal = new Pedal(this.el('gbx-pedal-col'), {
+      setThrottle: (value) => this.drive.setPedal(value),
+      press: () => {
+        this.car?.handBack();
+        void this.pressThrottle();
+      },
+    });
     this.ignition = new Ignition(this.el('gbx-control'), () => void this.toggleIgnition());
     this.listen();
     const keys = gearboxKeys({
-      gas: (on) => this.pedal.holdKey(on),
+      gas: (on) => {
+        // A finished demonstration's step lets go of the brake and the clutch it held when the visitor drives on.
+        if (on) this.car?.handBack();
+        this.pedal.holdKey(on);
+      },
       ignition: () => void this.toggleIgnition(),
       mute: () => {
         this.muted = !this.muted;
@@ -196,6 +226,7 @@ export class GearboxSection implements Section {
       },
       gear: (name) => this.selectGear(name),
       brake: (on) => this.car?.holdBrakeKey(on),
+      clutch: (on) => this.car?.holdClutchKey(on),
     });
     ctx.keys.bind('gearboxes', keys.gearboxes);
     ctx.keys.bind('gearboxes/drive', keys.drive);
@@ -232,11 +263,21 @@ export class GearboxSection implements Section {
       this.showPage();
       this.present();
     }
-    const mode: GearboxMode = route.query.m === 'drive' ? 'drive' : 'table';
+    const carDemo = (CAR_DEMO_IDS as readonly string[]).includes(route.query.demo ?? '') ? (route.query.demo as CarDemoId) : null;
+    // A demonstration in the car takes the page into the car.
+    const mode: GearboxMode = route.query.m === 'drive' || carDemo ? 'drive' : 'table';
     if (mode !== this.mode || (mode === 'drive' && !this.car?.on)) void this.setMode(mode);
     if (from === null || route.query.demo !== from.query.demo) {
       if (route.query.demo === DEMO_ID && this.mode === 'table') this.startDemo();
-      else if (this.demo) this.closeDemo();
+      else if (carDemo) {
+        if (this.car?.on && this.mode === 'drive') this.startCarDemo(carDemo, 0);
+        else this.pendingCarDemo = carDemo;
+      } else {
+        this.closeDemo();
+        this.closeCarDemo();
+        // One asked for on a page without the car (the transaxle) is dropped with the address, not run later.
+        this.pendingCarDemo = null;
+      }
     }
   }
 
@@ -246,6 +287,8 @@ export class GearboxSection implements Section {
     this.stopPlayback();
     this.designer?.leave();
     this.closeDemo();
+    this.closeCarDemo();
+    this.pendingCarDemo = null;
     this.modeTicket++;
     this.car?.leave();
     this.mode = 'table';
@@ -260,11 +303,13 @@ export class GearboxSection implements Section {
     this.ctx.stage.fitScale = this.fitScaleBefore;
     this.holding = false;
     // Off the stage before the next section's model comes; the box is rebuilt on return (present).
-    if (this.model) {
-      this.ctx.stage.release(this.model);
-      this.model.dispose();
+    const staged = this.composite ?? this.model;
+    if (staged) {
+      this.ctx.stage.release(staged);
+      staged.dispose();
     }
     this.model = null;
+    this.composite = null;
     for (const [el, was] of this.lent) {
       if (was.text !== undefined) el.textContent = was.text;
       if (was.hidden !== undefined) el.hidden = was.hidden;
@@ -282,12 +327,12 @@ export class GearboxSection implements Section {
     if (!this.onDesigner) this.present();
   }
 
-  layout({ width, small }: Viewport): PanelSizes {
+  layout({ width }: Viewport): PanelSizes {
     const narrow = width < 1500;
     return {
       right: narrow ? 360 : 400,
-      // The box is set up on the table: in the car a phone has no settings sheet, as a desktop has its button disabled.
-      left: small && this.mode === 'drive' ? 0 : narrow ? 300 : 340,
+      // In the car the left panel holds the drive panel instead of the settings.
+      left: narrow ? 300 : 340,
       dash: this.ctx.slots.dash.parent.offsetHeight,
       rightLabel: this.onDesigner ? t('Параметри') : t('Про коробку'),
     };
@@ -357,7 +402,8 @@ export class GearboxSection implements Section {
           engine: `<a href="#/engines/${car.engine}">${t('двигун {name}, {hp} к.с.', { name: engineName, hp: num(facts?.powerHp ?? 0) })}</a>`,
         })
       : record.name;
-    // The car mode drives the page's car: a box without one stays on the table.
+    // The car mode drives the page's car: a box without one stays on the table, and so does a transaxle, whose final
+    // drive is in its own case and not yet on the car's drivetrain.
     this.el('gbx-modes').querySelector<HTMLElement>('[data-mode="drive"]')!.hidden = !this.carModeOffered();
     // A new panel in a fresh element: the last page's panel leaves with its listeners.
     const host = this.el('gbx-setup');
@@ -398,8 +444,10 @@ export class GearboxSection implements Section {
   private present(): void {
     const { slots, view, time, panels, stage } = this.ctx;
     const designer = this.onDesigner;
-    this.lend('#results-open', designer ? t('Результати') : t('Налаштувати'));
-    this.lend('.results-head h2', designer ? t('Результати') : t('Налаштувати'));
+    // The left panel: the designer's results, the drive panel in the car, the settings on the table.
+    const panelName = designer ? t('Результати') : this.mode === 'drive' ? t('Дорога й графіки') : t('Налаштувати');
+    this.lend('#results-open', panelName);
+    this.lend('.results-head h2', panelName);
     this.lend('#panel-toggle-closed', designer ? t('Параметри') : t('Про коробку'));
     this.lendHidden('#results-panel', false);
     this.lendHidden('#hint', true);
@@ -463,10 +511,16 @@ export class GearboxSection implements Section {
 
   private buildModel(keepCamera: boolean): void {
     const model = this.data.layout.model(this.box, window.innerWidth <= PHONE ? 'low' : 'high');
-    this.ctx.stage.setModel(model, { home: HOME, keepCamera, keepScale: keepCamera, fitScale: window.innerWidth <= PHONE ? FIT_PHONE : FIT });
+    // With the engine in front only in the car: the table turns the box alone.
+    const engineShown = this.withEngine && this.mode === 'drive' && this.engineView !== null;
+    const composite = engineShown ? this.engineView!.withEngine(this.data.engine, model) : null;
+    // The camera frames the engine too when it comes or goes.
+    const keep = keepCamera && engineShown === (this.composite !== null);
+    this.ctx.stage.setModel(composite ?? model, { home: HOME, keepCamera: keep, keepScale: keep, fitScale: window.innerWidth <= PHONE ? FIT_PHONE : FIT });
     this.model = model;
-    model.setView(this.ctx.view.mode);
-    model.setExplode(this.explode);
+    this.composite = composite;
+    (composite ?? model).setView(this.ctx.view.mode);
+    (composite ?? model).setExplode(this.explode);
     this.rebuildDue = false;
     this.sinceRebuild = 0;
     this.ctx.slots.partCard.hidden = true;
@@ -515,14 +569,20 @@ export class GearboxSection implements Section {
       const module = await loadCarMode();
       const { record } = this.data;
       if (ticket !== this.modeTicket || this.away || !record.car || !this.carModeOffered()) return;
-      this.car ??= new module.CarMode(this.root, () => this.drive);
+      this.car ??= new module.CarMode(this.root, () => this.drive, this.ctx.runs, () => `#/engines/${CARS[record.car!]!.engine}?m=dyno`);
       if (this.mode !== 'drive') this.timeBefore = time.mode;
       this.mode = 'drive';
       this.car.enter(module.pageCarRecords(record.car, record, this.desc as LayshaftDesc, this.setup.finalDrive));
       this.demoMode = false;
-      panels.setOpen('left', false);
+      if (this.pendingCarDemo) {
+        this.startCarDemo(this.pendingCarDemo, 0);
+        this.pendingCarDemo = null;
+      }
+      // The drive panel takes the settings' place: open beside the article where both fit.
+      panels.setOpen('left', window.innerWidth >= BOTH_PANELS);
       panels.relayout();
     } else {
+      this.closeCarDemo();
       this.mode = 'table';
       this.car?.leave();
       if (this.pausedForMute) this.drive.pause(false);
@@ -530,6 +590,7 @@ export class GearboxSection implements Section {
       // The buttons show the table's own gear again.
       this.pressedGear = '';
       this.pressGear(this.table.selected);
+      panels.setOpen('left', window.innerWidth > PHONE && window.innerWidth >= BOTH_PANELS);
       panels.relayout();
     }
     time.refresh();
@@ -540,9 +601,16 @@ export class GearboxSection implements Section {
     keys.use(mode === 'drive' ? GEARBOX_KEY_CONTEXTS.drive : GEARBOX_KEY_CONTEXTS.table);
     for (const button of this.el('gbx-modes').querySelectorAll<HTMLButtonElement>('button')) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
     this.el('gbx-mode-text').textContent = mode === 'drive' ? t('двигун через зчеплення й коробку везе авто, зчеплення працює саме') : t('двигун крутить первинний вал, вихід вільний');
-    this.el<HTMLButtonElement>('gbx-setup-toggle').disabled = mode === 'drive';
-    this.el<HTMLButtonElement>('gbx-setup-toggle').title = mode === 'drive' ? t('Коробку налаштовують на столі, а авто їде з нею') : '';
+    // In the car the left panel is the drive panel: the box is set up on the table, and the car drives with it.
+    const panelName = mode === 'drive' ? t('Дорога й графіки') : t('Налаштувати');
+    this.el('gbx-setup-toggle').textContent = panelName;
+    this.lend('#results-open', panelName);
+    this.lend('.results-head h2', panelName);
     this.el<HTMLButtonElement>('gbx-demo-open').hidden = mode === 'drive' || !this.data.layout.demo;
+    this.el('gbx-car-demos').hidden = mode !== 'drive';
+    this.el('gbx-engine-tool').hidden = mode !== 'drive';
+    // The engine stands in front of the box only in the car.
+    if ((this.composite !== null) !== (this.withEngine && mode === 'drive' && this.engineView !== null)) this.buildModel(false);
     this.syncSound();
   }
 
@@ -712,7 +780,7 @@ export class GearboxSection implements Section {
   private listen(): void {
     const { view, time } = this.ctx;
     view.onChange((mode) => {
-      if (!this.away) this.model?.setView(mode);
+      if (!this.away) (this.composite ?? this.model)?.setView(mode);
     });
     time.onChange((mode) => {
       if (this.away) return;
@@ -730,7 +798,11 @@ export class GearboxSection implements Section {
     });
     this.el<HTMLInputElement>('gbx-explode').addEventListener('input', (event) => {
       this.explode = Number((event.target as HTMLInputElement).value);
-      this.model?.setExplode(this.explode);
+      (this.composite ?? this.model)?.setExplode(this.explode);
+    });
+    this.el<HTMLInputElement>('gbx-with-engine').addEventListener('change', (event) => {
+      this.withEngine = (event.target as HTMLInputElement).checked;
+      void this.showEngine();
     });
     this.el<HTMLInputElement>('gbx-glow').addEventListener('change', (event) => {
       this.glow = (event.target as HTMLInputElement).checked;
@@ -758,9 +830,27 @@ export class GearboxSection implements Section {
       }
       this.routeDemo(true);
     });
+    for (const id of ['gbx-demo-pull', 'gbx-demo-shift']) {
+      this.el(id).addEventListener('click', (event) => {
+        const demo = (event.currentTarget as HTMLElement).dataset.carDemo as CarDemoId;
+        this.ctx.router.replace({ query: { m: 'drive', demo } });
+        if (this.car?.on) this.startCarDemo(demo, 0);
+      });
+    }
     this.el('gbx-demo-close').addEventListener('click', () => this.routeDemo(false));
-    this.el('gbx-demo-prev').addEventListener('click', () => this.stepDemo(-1));
-    this.el('gbx-demo-next').addEventListener('click', () => this.stepDemo(1));
+    this.el('gbx-demo-prev').addEventListener('click', () => (this.carDemo ? this.stepCarDemo(-1) : this.stepDemo(-1)));
+    this.el('gbx-demo-next').addEventListener('click', () => (this.carDemo ? this.stepCarDemo(1) : this.stepDemo(1)));
+    this.el('gbx-demo-again').addEventListener('click', () => this.carDemo && this.startCarDemo(this.carDemo.id, this.carDemo.at));
+  }
+
+  /** Builds the model again with the engine in front, or without it, fetching the engine's code the first time. */
+  private async showEngine(): Promise<void> {
+    if (this.withEngine && !this.engineView) {
+      this.engineView = await loadEngineView();
+      if (this.away) return;
+    }
+    if (this.withEngine === (this.composite !== null)) return;
+    this.buildModel(false);
   }
 
   private toggleSetup(): void {
@@ -790,8 +880,15 @@ export class GearboxSection implements Section {
     const drive = this.drive;
     const state = drive.snapshot().state;
     if (state === 'running' || state === 'cranking') {
+      this.car?.stopping();
       drive.stop();
       this.ignition.show(false);
+      return;
+    }
+    // In gear with the driver's own clutch up the starter would push the car: as in a real one, it is not allowed.
+    const blocked = this.car?.on ? this.car.startBlocked() : null;
+    if (blocked) {
+      this.car!.say(blocked);
       return;
     }
     this.demoMode = false;
@@ -813,7 +910,68 @@ export class GearboxSection implements Section {
   private routeDemo(on: boolean): void {
     this.ctx.router.replace({ query: { demo: on ? DEMO_ID : null } });
     if (on) this.startDemo();
-    else this.closeDemo();
+    else {
+      this.closeDemo();
+      this.closeCarDemo();
+    }
+  }
+
+  // ---- Demonstrations 2 and 3, in the car ----
+
+  private makeCarDemo(id: CarDemoId): CarDemo {
+    return id === 'pull-away' ? pullAwayDemo() : shiftingDemo(this.car!.carDrive!);
+  }
+
+  /** Runs a step of a demonstration in the car from its start: a fresh script, so a step can be seen again. */
+  private startCarDemo(id: CarDemoId, at: number): void {
+    const car = this.car;
+    if (!car?.on) return;
+    this.closeDemo();
+    const demo = this.makeCarDemo(id);
+    at = Math.max(0, Math.min(demo.steps.length - 1, at));
+    const step = car.startDemo(demo, at, {
+      gas: (value) => this.drive.setPedal(value),
+      start: () => {
+        const state = this.drive.snapshot().state;
+        if (state === 'off' || state === 'stopping') void this.toggleIgnition();
+      },
+    });
+    this.carDemo = { id, at, count: demo.steps.length, result: '' };
+    this.el('gbx-demo').hidden = false;
+    this.el('gbx-demo-count').textContent = t('{demo} · {n} з {count}', { demo: demo.title, n: at + 1, count: demo.steps.length });
+    this.el('gbx-demo-title').textContent = step.title;
+    this.el('gbx-demo-text').textContent = step.text;
+    this.el('gbx-demo-result').hidden = true;
+    this.el('gbx-demo-again').hidden = false;
+    this.el<HTMLButtonElement>('gbx-demo-prev').disabled = at === 0;
+    this.el<HTMLButtonElement>('gbx-demo-next').disabled = at === demo.steps.length - 1;
+  }
+
+  private stepCarDemo(delta: number): void {
+    if (this.carDemo) this.startCarDemo(this.carDemo.id, this.carDemo.at + delta);
+  }
+
+  private closeCarDemo(): void {
+    if (!this.carDemo) return;
+    this.carDemo = null;
+    this.car?.stopDemo();
+    this.drive.setPedal(0);
+    this.el('gbx-demo').hidden = true;
+    this.el('gbx-demo-again').hidden = true;
+    this.el('gbx-demo-result').hidden = true;
+  }
+
+  /** The step's numbers as they come, shown once it has done its part. */
+  private showCarDemoResult(): void {
+    const demo = this.carDemo;
+    const car = this.car;
+    if (!demo || !car) return;
+    const text = car.demoDone ? car.demoResult() : '';
+    if (text === demo.result) return;
+    demo.result = text;
+    const el = this.el('gbx-demo-result');
+    el.textContent = text;
+    el.hidden = !text;
   }
 
   private startDemo(): void {
@@ -821,8 +979,11 @@ export class GearboxSection implements Section {
       this.closeDemo();
       return;
     }
+    this.closeCarDemo();
     this.demo = { steps: alwaysTurningSteps(this.box, this.data.engine.spec.idleRpm), at: 0 };
     this.el('gbx-demo').hidden = false;
+    this.el('gbx-demo-again').hidden = true;
+    this.el('gbx-demo-result').hidden = true;
     this.showDemoStep();
   }
 
@@ -893,12 +1054,14 @@ export class GearboxSection implements Section {
         : time.mode === 'readable'
           ? readableDegreesPerSecond(rpm, spec.idleRpm, spec.redlineRpm) / 6
           : rpm;
-    const carPose = this.car?.on ? this.car.frame(frozen ? 0 : dt, snap) : null;
+    const carPose = this.car?.on ? this.car.frame(frozen ? 0 : dt, snap, this.ctx.panels.isOpen('left')) : null;
     if (!this.car?.on) this.table.step(frozen ? 0 : dt, shownRpm);
     else if (snap?.vehicle) this.pressGear(snap.vehicle.selected);
     if (this.model) {
       if (this.rebuildDue && (this.sinceRebuild += dt) >= REBUILD_S) this.buildModel(true);
       const pose = carPose ?? this.table.frame();
+      this.blur(pose.angles, time.mode === 'real' && !frozen ? dt : 0);
+      if (this.composite && snap) this.updateEngine(snap, running, dt, frozen !== null);
       if (this.glow) this.model.update(pose);
       else {
         this.unlit.angles = pose.angles;
@@ -919,7 +1082,50 @@ export class GearboxSection implements Section {
     const figuresRpm = time.mode === 'slow' && (running || this.demoMode) ? this.slowRpm : rpm;
     this.tacho.update(this.demoMode ? spec.idleRpm : engineRpm, running && snap!.fuelCut && engineRpm > spec.redlineRpm - 200);
     if (!this.car?.on) this.readouts(figuresRpm);
+    else this.showCarDemoResult();
     if (running !== this.ignition.on && !this.demoMode && !this.starting) this.ignition.show(running);
+  }
+
+  /** The engine in front of the box turns by the crank angle, as on its own page in real time. */
+  private updateEngine(snap: NonNullable<SectionContext['audio']['snapshot']>, running: boolean, dt: number, held: boolean): void {
+    const f = this.engineFrame;
+    f.theta = snap.angle;
+    f.rpm = snap.rpm;
+    f.load = snap.load;
+    f.fuelCut = snap.fuelCut;
+    f.running = running;
+    f.boost = snap.boost;
+    f.dt = dt;
+    f.held = held;
+    f.valves = snap.valves;
+    this.composite!.engine.update(f);
+  }
+
+  /** Each member's speed from its angle a frame ago, for the teeth's blur; none outside real time. */
+  private blur(angles: ArrayLike<number>, dt: number): void {
+    const model = this.model;
+    if (!model?.setBlur) return;
+    const n = angles.length;
+    if (!(dt > 0)) {
+      this.lastAngles = null;
+      if (this.blurred) model.setBlur(null);
+      this.blurred = false;
+      return;
+    }
+    if (this.lastAngles?.length !== n) {
+      this.lastAngles = Float64Array.from(angles);
+      this.blurSpeeds = new Float64Array(n);
+      return;
+    }
+    const speeds = this.blurSpeeds!;
+    for (let i = 0; i < n; i++) {
+      // Smoothed over a few frames, so one long frame does not flash the gears.
+      const omega = (angles[i]! - this.lastAngles[i]!) / dt;
+      speeds[i]! += (omega - speeds[i]!) * Math.min(1, dt * 12);
+      this.lastAngles[i] = angles[i]!;
+    }
+    model.setBlur(speeds);
+    this.blurred = true;
   }
 
   /** Shaft speeds and the gear's ratio under the dash's gear buttons. */

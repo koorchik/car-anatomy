@@ -1,0 +1,428 @@
+// The full dash of the car mode (stage K3b): the clutch's heat the dash shows is the core's, the rev matching takes the
+// jolt out of a downshift, a clutch dropped without gas stalls the engine, the E30 pulls away up a 15 % grade and rolls
+// back without gas, demonstration 3 tells and shows the classic drop on the E30's ratios, the gate is the dogleg of the
+// Getrag 265, and the traction chart and the hints read the same force the core applies. The drives step the solver in
+// Node for tens of simulated seconds, so they get the time the sound tests get on a busy machine.
+
+import { describe, expect, it } from 'vitest';
+import { synthConfig } from '../src/audio/synth.ts';
+import { buildCarDrive } from '../src/data/car-drive.ts';
+import { carById } from '../src/data/cars.ts';
+import { engineById } from '../src/data/engines.ts';
+import { GEARBOX_PAGES } from '../src/data/gearboxes.ts';
+import { vehicleLoadSpec } from '../src/drivetrain/car-load.ts';
+import { DriveStory, runStory } from '../src/drivetrain/drive-story.ts';
+import { clampPedal, pedalClamp } from '../src/drivetrain/elements.ts';
+import { forceFromInput } from '../src/drivetrain/runs.ts';
+import { buildEngine } from '../src/engine/kinematics.ts';
+import { LoadedCrank } from '../src/engine/loaded-crank.ts';
+import { EngineSim } from '../src/engine/sim.ts';
+import { bitePedal, pullAwayDemo, shiftDrop, shiftingDemo, SHIFT_DEMO_RPM, type CarDemo, type DemoControls, type DemoView } from '../src/ui/gearboxes/car-demos.ts';
+import { DriveMeter, DriveStrip, STRIP_RATE, STRIP_SECONDS } from '../src/ui/gearboxes/drive-meter.ts';
+import { DEFAULT_DRIVE_SETTINGS, gradeRad } from '../src/ui/gearboxes/drive-panel.ts';
+import { constrain, gateLayout } from '../src/ui/gearboxes/gate.ts';
+import { DYNO_RUNS_KEY, mapTorque, runTorque, sameEngine, shiftHint, traction } from '../src/ui/gearboxes/traction.ts';
+import { DYNO_RUNS } from '../src/ui/dyno/dyno-panel.ts';
+import { wheelSlip } from '../src/ui/gearboxes/wheel-road.ts';
+import type { Run } from '../src/ui/dyno/runs.ts';
+import { VehicleLoad } from '../src/vehicle/vehicle-load.ts';
+
+const CAR = 'bmw-m3-e30';
+const DT = 1 / 3000;
+
+function rig() {
+  const cd = buildCarDrive(CAR);
+  const load = new VehicleLoad(vehicleLoadSpec(cd));
+  const sim = new EngineSim(synthConfig(buildEngine(engineById(carById(CAR)!.engine)!)).sim);
+  sim.attach(new LoadedCrank(cd.map, load));
+  const command = (c: Record<string, unknown>) => load.command({ kind: 'vehicle', ...c } as Parameters<VehicleLoad['command']>[0]);
+  const run = (seconds: number, each?: () => void) => {
+    for (let t = 0; t < seconds; t += DT) {
+      sim.step(DT);
+      each?.();
+    }
+  };
+  return { cd, load, sim, command, run, clutch: load.control.spec.clutch };
+}
+
+/** Runs one step of a demonstration on a fresh car the way the page does, a frame every 1/30 s; its result. */
+function runDemoStep(make: (cd: ReturnType<typeof buildCarDrive>) => CarDemo, at: number, maxS = 40): { done: boolean; result: string; r: ReturnType<typeof rig> } {
+  const r = rig();
+  const settings = { ...DEFAULT_DRIVE_SETTINGS };
+  const meter = new DriveMeter();
+  const controls: DemoControls = {
+    gas: (v) => (r.sim.pedal = v),
+    clutch: (v) => r.command({ action: 'clutch', pedal: v }),
+    gear: (gear) => r.command({ action: 'gear', gear }),
+    brake: (value) => r.command({ action: 'brake', value }),
+    settings: (patch) => {
+      Object.assign(settings, patch);
+      r.command({ action: 'autoClutch', on: settings.autoClutch });
+      r.command({ action: 'revMatch', on: settings.revMatch });
+      r.command({ action: 'road', gradeRad: gradeRad(settings.gradePct), surfaceMu: [1, 1, 1, 1] });
+    },
+    start: () => r.sim.start(),
+  };
+  const step = make(r.cd).steps[at]!;
+  const view: DemoView = { rpm: 0, speed: 0, gear: 'N', shift: 'engaged', accel: 0, running: false, launchJ: 0, clutchJ: 0, clutchC: 0, slip: 0 };
+  const frame = 1 / 30;
+  let done = false;
+  for (let t = 0; t < maxS && !done; t += frame) {
+    r.run(frame);
+    const f = r.load.frame();
+    meter.step(f, frame);
+    Object.assign(view, {
+      rpm: r.sim.rpm, speed: f.speed, gear: f.gear, shift: f.shift, accel: f.accel, running: r.sim.state === 'running',
+      launchJ: meter.figures.launchJ, clutchJ: f.clutchJ, clutchC: f.clutchC, slip: wheelSlip(f, r.cd.driven[0]).slip,
+    });
+    done = step.frame(view, controls, frame);
+  }
+  return { done, result: step.result(), r };
+}
+
+describe('the full dash in the car', () => {
+  it('counts the clutch\'s heat as the core does: in the frame, in the readings and for the last pull-away', () => {
+    const { cd, load, sim, clutch } = rig();
+    const story = new DriveStory(cd, load, sim);
+    Object.assign(story.o, { idleS: 1, topS: 1, endIdleS: 0.5, downshift: true });
+    const meter = new DriveMeter();
+    let base = 0;
+    let checked = 0;
+    let n = 0;
+    runStory(story, DT, 90, () => {
+      if (n++ % 100) return;
+      const f = load.frame();
+      const core = load.vehicle.solver.energy[clutch]!;
+      expect(f.clutchJ).toBe(core);
+      // The meter's pull-away heat is the core's counter since the car last stood with the clutch at rest.
+      if (Math.abs(f.speed) < 0.15 && (f.clutch <= 0 || Math.abs(f.clutchSlip) < 0.5)) base = core;
+      const fig = meter.step(structuredClone(f), 100 * DT);
+      expect(fig.launchJ).toBeCloseTo(core - base, 6);
+      checked++;
+    });
+    expect(story.done).toBe(true);
+    expect(checked).toBeGreaterThan(100);
+    const total = load.vehicle.solver.energy[clutch]!;
+    expect(total).toBeGreaterThan(1000);
+    expect(load.readings().clutchJ).toBe(total);
+    // The pull-away was timed: 0–100 km/h within a sane range for the E30 [the model's figure, not a published one].
+    expect(meter.figures.to100).not.toBeNull();
+    expect(meter.figures.to100!).toBeGreaterThan(5);
+    expect(meter.figures.to100!).toBeLessThan(12);
+  }, 60_000);
+
+  it('takes the jolt out of a downshift with the rev matching: the engine meets the gear before the clutch closes', () => {
+    const down = (revMatch: boolean) => {
+      const r = rig();
+      r.sim.start();
+      r.run(1.5);
+      r.command({ action: 'revMatch', on: revMatch });
+      r.command({ action: 'gear', gear: '1' });
+      r.run(0.6);
+      r.sim.pedal = 0.6;
+      r.run(2.5);
+      r.sim.pedal = 0;
+      r.command({ action: 'gear', gear: '2' });
+      r.run(0.6);
+      r.sim.pedal = 0.6;
+      r.run(2);
+      r.sim.pedal = 0;
+      r.command({ action: 'gear', gear: '3' });
+      r.run(0.6);
+      r.sim.pedal = 0.5;
+      r.run(2);
+      r.sim.pedal = 0;
+      const j0 = r.load.vehicle.solver.energy[r.clutch]!;
+      r.command({ action: 'gear', gear: '2' });
+      let minA = 0;
+      let blipped = false;
+      r.run(1.2, () => {
+        minA = Math.min(minA, r.load.chassis.ax);
+        blipped ||= r.load.control.blip > 0;
+      });
+      expect(r.load.control.gearIn(r.load.vehicle.solver)).toBe('2');
+      return { heat: r.load.vehicle.solver.energy[r.clutch]! - j0, minA, blipped };
+    };
+    const plain = down(false);
+    const matched = down(true);
+    expect(plain.blipped).toBe(false);
+    expect(matched.blipped).toBe(true);
+    // Without the blip the clutch drags the engine up to the shaft: hundreds of joules and a dip of over 2 m/s².
+    expect(plain.heat).toBeGreaterThan(300);
+    expect(matched.heat).toBeLessThan(0.1 * plain.heat);
+    expect(plain.minA).toBeLessThan(-2);
+    expect(matched.minA).toBeGreaterThan(plain.minA + 1);
+  }, 60_000);
+
+  it('blips only for a gear change: a clutch held down in the same gear lets the engine fall to idle', () => {
+    const r = rig();
+    r.sim.start();
+    r.run(1.5);
+    r.command({ action: 'revMatch', on: true });
+    for (const gear of ['1', '2', '3']) {
+      r.command({ action: 'gear', gear });
+      r.run(0.6);
+      r.sim.pedal = 0.6;
+      r.run(2.5);
+      r.sim.pedal = 0;
+    }
+    r.command({ action: 'autoClutch', on: false });
+    r.command({ action: 'clutch', pedal: 0 });
+    r.run(0.2);
+    expect(r.load.control.gearIn(r.load.vehicle.solver)).toBe('3');
+    const idle = r.load.control.spec.idleRpm;
+    // Coasting in third with the pedal down: nothing asked for another gear, so the engine idles.
+    r.command({ action: 'clutch', pedal: 1 });
+    let blipped = false;
+    r.run(2, () => (blipped ||= r.load.control.blip > 0));
+    expect(blipped).toBe(false);
+    expect(r.sim.rpm).toBeLessThan(1.3 * idle);
+    // Now the lever into second with the pedal still down: the engine is brought up to second's input speed.
+    r.command({ action: 'gear', gear: '2' });
+    r.run(1.5, () => (blipped ||= r.load.control.blip > 0));
+    expect(blipped).toBe(true);
+    const shaft = (r.load.vehicle.solver.memberSpeed(r.load.control.spec.input) * 30) / Math.PI;
+    expect(Math.abs(r.sim.rpm - shaft) / shaft).toBeLessThan(0.1);
+    // A shift made without the clutch is over once its gear holds: pressing the pedal afterwards is not a shift.
+    r.command({ action: 'clutch', pedal: 0 });
+    r.run(1);
+    r.command({ action: 'gear', gear: '3' });
+    r.run(2);
+    expect(r.load.control.gearIn(r.load.vehicle.solver)).toBe('3');
+    r.command({ action: 'clutch', pedal: 1 });
+    blipped = false;
+    r.run(2, () => (blipped ||= r.load.control.blip > 0));
+    expect(blipped).toBe(false);
+    expect(r.sim.rpm).toBeLessThan(1.3 * idle);
+  }, 60_000);
+
+  it('takes the pedal over from the auto clutch where its clamp is: the pedal for a clamp gives that clamp back', () => {
+    for (let c = 0; c <= 1.0001; c += 0.05) expect(pedalClamp(clampPedal(c))).toBeCloseTo(Math.min(1, c), 9);
+    expect(clampPedal(1)).toBe(0);
+    expect(clampPedal(0)).toBeCloseTo(0.75, 12);
+  });
+
+  it('stalls when the driver drops the clutch in first without gas, and the auto clutch never does', () => {
+    for (const auto of [false, true]) {
+      const r = rig();
+      r.sim.start();
+      r.run(1.5);
+      r.command({ action: 'autoClutch', on: auto });
+      r.command({ action: 'clutch', pedal: 1 });
+      r.run(0.3);
+      r.command({ action: 'gear', gear: '1' });
+      r.run(0.6);
+      expect(r.sim.state).toBe('running');
+      r.command({ action: 'clutch', pedal: 0 });
+      r.run(2);
+      expect(r.sim.state, auto ? 'auto clutch' : 'driver').toBe(auto ? 'running' : 'off');
+    }
+  }, 60_000);
+
+  it('demonstration 2: drops the clutch to a stall, rolls back down a 15 % grade without gas and pulls up it with gas', () => {
+    const stall = runDemoStep(() => pullAwayDemo(), 1);
+    expect(stall.done).toBe(true);
+    expect(stall.r.sim.state).toBe('off');
+    expect(stall.result).toMatch(/заглух/);
+    const back = runDemoStep(() => pullAwayDemo(), 3);
+    expect(back.done).toBe(true);
+    expect(back.result).toMatch(/назад/);
+    const up = runDemoStep(() => pullAwayDemo(), 4);
+    expect(up.done).toBe(true);
+    expect(up.r.sim.state).toBe('running');
+    expect(up.r.load.chassis.x).toBeGreaterThan(5);
+    expect(up.result).toMatch(/вгору/);
+    // The same foot through the bite at the same revs as on the level: up the hill the disc also holds the car's
+    // weight along the slope, so it slips longer and takes more heat, as the step says.
+    const kj = (result: string) => Number(result.replace(/[\s\u202f\u00a0]/g, '').match(/(\d+,\d+)кДж/)![1]!.replace(',', '.'));
+    const level = runDemoStep(() => pullAwayDemo(), 0);
+    expect(kj(up.result)).toBeGreaterThan(1.2 * kj(level.result));
+  }, 120_000);
+
+  it('demonstration 3 on the E30: 1→2 at 6750 rpm drops the engine to 6750·2.404/3.717 ≈ 4366, as the model drives it', () => {
+    const cd = buildCarDrive(CAR);
+    const [first, second] = cd.gears;
+    expect(first!.ratio).toBeCloseTo(3.717, 2);
+    expect(second!.ratio).toBeCloseTo(2.404, 2);
+    expect(SHIFT_DEMO_RPM).toBe(6750);
+    expect(shiftDrop(6750, 3.717, 2.404)).toBeCloseTo(4366, 0);
+    // The text works the sum out on the ratios it prints, so the visitor can check it: 6 750 · 2,404/3,717 ≈ 4 366.
+    const text = shiftingDemo(cd).steps[0]!.text.replace(/\s/g, '');
+    expect(text).toContain('6750·2,404/3,717≈4366');
+    const { done, result, r } = runDemoStep((c) => shiftingDemo(c), 0);
+    expect(done).toBe(true);
+    expect(r.sim.state).toBe('running');
+    // Driven: at the lock the engine turns at the drop from the speed at the lever, within what the car gained meanwhile.
+    // «перед перемиканням B об/хв, і B · r2/r1 = E; … — A об/хв»: the whole numbers are B, B, E and A.
+    const [before, , expected, after] = (result.replace(/[\s\u202f\u00a0]/g, '').match(/\d+(?:,\d+)?/g) ?? []).filter((x) => !x.includes(',')).map(Number);
+    expect(before!).toBeGreaterThanOrEqual(6750);
+    expect(before!).toBeLessThan(7100);
+    expect(expected!).toBeCloseTo(shiftDrop(before!, 3.717, 2.404), -1);
+    expect(Math.abs(after! - expected!) / expected!).toBeLessThan(0.05);
+  }, 120_000);
+
+  it('demonstration 3 downshifts 3→2 with a dip in the acceleration and heat in the disc, and the rev matching takes most of both away', () => {
+    const figures = (at: number) => {
+      const { done, result } = runDemoStep((c) => shiftingDemo(c), at);
+      expect(done).toBe(true);
+      // «Провал прискорення A м/с², у диск K кДж…»: a dip is told as a depth, never with a minus.
+      const [a, kj] = (result.replace(/[\s\u202f\u00a0]/g, '').match(/-?\d+,\d+/g) ?? []).map((x) => Number(x.replace(',', '.')));
+      return { a: a!, kj: kj! };
+    };
+    const plain = figures(1);
+    const matched = figures(2);
+    expect(plain.a).toBeGreaterThan(1);
+    expect(matched.a).toBeGreaterThanOrEqual(0);
+    expect(matched.a).toBeLessThan(plain.a - 0.5);
+    expect(plain.kj).toBeGreaterThan(0.3);
+    expect(matched.kj).toBeLessThan(0.1 * plain.kj);
+  }, 120_000);
+
+  it('lays out the Getrag 265 as a dogleg, first back on the left, and lets the lever cross only in neutral', () => {
+    const e30 = GEARBOX_PAGES.find((p) => p.id === 'manual-rwd')!.base;
+    if (e30.layout.kind !== 'layshaft') throw new Error('layshaft expected');
+    const gate = gateLayout(e30.layout.desc.sleeves);
+    expect(gate.planes).toBe(3);
+    const at = (name: string) => gate.slots.find((s) => s.name === name);
+    expect(at('R')).toEqual({ name: 'R', plane: 0, up: true });
+    expect(at('1')).toEqual({ name: '1', plane: 0, up: false });
+    expect(at('2')).toEqual({ name: '2', plane: 1, up: true });
+    expect(at('3')).toEqual({ name: '3', plane: 1, up: false });
+    expect(at('4')).toEqual({ name: '4', plane: 2, up: true });
+    expect(at('5')).toEqual({ name: '5', plane: 2, up: false });
+    // In first, a drag toward third stays in the plane of first; in neutral it moves across.
+    expect(constrain({ u: 0, v: 1 }, { u: 1, v: 1 }, 3)).toEqual({ u: 0, v: 1 });
+    expect(constrain({ u: 0, v: 0 }, { u: 0.5, v: 0.6 }, 3)).toEqual({ u: 0.5, v: 0 });
+    expect(constrain({ u: 0.5, v: 0 }, { u: 1.05, v: 0.7 }, 3)).toEqual({ u: 1, v: 0.7 });
+    // A plane with a speed on one side only has no slot on the other: the lever stops at neutral there.
+    const six = gateLayout([
+      { id: 'a', front: 1, back: 2 },
+      { id: 'b', front: 3, back: 4 },
+      { id: 'c', front: 5, back: 6 },
+      { id: 'd', front: 'R', back: null },
+    ]);
+    expect(six.slots.find((s) => s.name === 'R')).toEqual({ name: 'R', plane: 3, up: false });
+    expect(constrain({ u: 3, v: 0 }, { u: 3, v: -1 }, six.planes, six.slots)).toEqual({ u: 3, v: 0 });
+    expect(constrain({ u: 3, v: 0 }, { u: 3, v: 0.9 }, six.planes, six.slots)).toEqual({ u: 3, v: 0.9 });
+    expect(constrain({ u: 0, v: 0.5 }, { u: 0, v: -0.8 }, six.planes, six.slots)).toEqual({ u: 0, v: -0.8 });
+  });
+
+  it('draws the traction from the core\'s own force, and from the last dyno run only when it was made on this engine', () => {
+    // The car reads the runs where the dyno keeps them: the key is spelled twice to keep the dyno out of the car's chunk.
+    expect(DYNO_RUNS_KEY).toBe(DYNO_RUNS);
+    const cd = buildCarDrive(CAR);
+    const tr = traction(cd, 0, null);
+    expect(tr.source).toBe('map');
+    expect(tr.gears.map((g) => g.gear)).toEqual(['1', '2', '3', '4', '5']);
+    // A point of second: the force the core applies at that input torque and speed.
+    const g2 = cd.gears[1]!;
+    const curve = tr.gears[1]!;
+    const i = 20;
+    const omegaIn = (curve.kmh[i]! / 3.6 / cd.radius[cd.driven[0]]!) * g2.ratio * cd.axle.ratio;
+    expect(curve.force[i]!).toBeCloseTo(forceFromInput(cd, g2, mapTorque(cd.map)((omegaIn * 30) / Math.PI)!, omegaIn), 6);
+    // The road on a 15 % grade needs more than on the level at every speed.
+    const hill = traction(cd, gradeRad(15), null);
+    hill.road.force.forEach((f, k) => expect(f).toBeGreaterThan(tr.road.force[k]!));
+    // A full-throttle run of this engine replaces the map; one of another engine does not.
+    const points = Array.from({ length: 30 }, (_, k) => {
+      const rpm = 1500 + k * 200;
+      return { rpm, nm: 200, inertiaNm: 10, manifoldBar: 1, settled: true };
+    });
+    // As the dyno records a sweep: always at a floored pedal (dyno-panel.ts, startSweep).
+    const run = { kind: 'sweep', engine: 'S14', map: cd.map, absorber: 'eddy', rate: 300, throttle: 1, points, stopped: null, stoppedAt: null } as unknown as Run;
+    expect(sameEngine(cd.map, structuredClone(cd.map))).toBe(true);
+    expect(runTorque(run, cd.map)!(3000)).toBeCloseTo(210, 9);
+    expect(traction(cd, 0, run).source).toBe('dyno');
+    const other = buildCarDrive('bmw-m3-e30').map;
+    const foreign = { ...run, map: { ...other, wotNm: other.wotNm.map((v) => v * 1.1) } } as Run;
+    expect(runTorque(foreign, cd.map)).toBeNull();
+    expect(traction(cd, 0, { ...run, kind: 'steps', throttle: 0.5 } as Run).source).toBe('map');
+    expect(traction(cd, 0, { ...run, kind: 'steps', throttle: 1 } as Run).source).toBe('dyno');
+    // Points recorded by hand were held at whatever the pedal was: not a full-load curve.
+    expect(traction(cd, 0, { ...run, kind: 'points', throttle: null } as Run).source).toBe('map');
+  });
+
+  it('hints an upshift at the limiter and a downshift when the engine labours', () => {
+    const cd = buildCarDrive(CAR);
+    const v1 = ((cd.map.limitRpm - 100) / 30) * Math.PI / (cd.gears[0]!.ratio * cd.axle.ratio) * cd.radius[cd.driven[0]]!;
+    expect(shiftHint(cd, '1', cd.map.limitRpm - 100, v1, 1)).toEqual({ direction: 'up', to: '2' });
+    expect(shiftHint(cd, '3', cd.map.idleRpm * 1.2, 8, 0.3)).toEqual({ direction: 'down', to: '2' });
+    expect(shiftHint(cd, '5', 3000, 30, 0.3)).toBeNull();
+  });
+
+  it('counts a pull-away from the last stop, even when the car stood in gear with the pedal down and the engine idling', () => {
+    const r = rig();
+    const meter = new DriveMeter();
+    r.sim.start();
+    r.run(1.5);
+    r.command({ action: 'autoClutch', on: false });
+    const drive = (s: number, each: () => void) => {
+      for (let t = 0; t < s; t += 1 / 30) {
+        each();
+        r.run(1 / 30);
+        meter.step(r.load.frame(), 1 / 30);
+      }
+    };
+    // A pull-away as demonstration 2 drives it, the revs held near 2500 by the gas, then a stop with the clutch down,
+    // standing in first as at a light.
+    r.command({ action: 'clutch', pedal: 1 });
+    r.command({ action: 'gear', gear: '1' });
+    drive(0.6, () => {});
+    const gas = () => (r.sim.pedal = Math.min(0.8, Math.max(0, (2500 - r.sim.rpm) / 1500)));
+    let time = 0;
+    drive(4, () => {
+      gas();
+      r.command({ action: 'clutch', pedal: bitePedal(time, 2.5) });
+      time += 1 / 30;
+    });
+    expect(r.sim.state).toBe('running');
+    expect(meter.figures.launchJ).toBeGreaterThan(1000);
+    drive(3, () => {
+      r.sim.pedal = 0;
+      r.command({ action: 'clutch', pedal: 1 });
+      r.command({ action: 'brake', value: 1 });
+    });
+    const f = r.load.frame();
+    expect(Math.abs(f.speed)).toBeLessThan(0.01);
+    expect(Math.abs(f.clutchSlip)).toBeGreaterThan(50);
+    expect(r.sim.state).toBe('running');
+    // The heat of the last pull-away is behind: the next one starts from nothing.
+    expect(meter.figures.launchJ).toBe(0);
+  }, 60_000);
+
+  it('times 0–100 km/h by the simulation\'s clock, not by how often the page draws', () => {
+    const { load } = rig();
+    const meter = new DriveMeter();
+    const f = load.frame();
+    // A car gaining 5 m/s² reported every 10 ms of its own time on a page that draws slowly (0.25 s a frame, as on a
+    // software renderer): 100 km/h comes after 27.78 / 5 = 5.56 s of the car's time.
+    for (let k = 0; k <= 800; k++) {
+      const time = k * 0.01;
+      meter.step({ ...f, time, speed: 5 * time, distance: 2.5 * time * time, clutchSlip: 0 }, 0.25);
+    }
+    expect(meter.figures.to100!).toBeCloseTo(100 / 3.6 / 5, 1);
+    expect(meter.figures.to400).toBeNull();
+  });
+
+  it('keeps ten seconds of the drive for the strip', () => {
+    const { load } = rig();
+    const strip = new DriveStrip();
+    const f = load.frame();
+    for (let k = 0; k < 20 * 60; k++) strip.step({ ...f, time: k / 60, speed: k }, 1000, 1 / 60);
+    expect(strip.count).toBe(STRIP_SECONDS * STRIP_RATE);
+    // The newest is last, the oldest ten seconds back.
+    expect(strip.at('kmh', strip.count - 1)).toBeCloseTo((20 * 60 - 1) * 3.6, 0);
+    expect(strip.at('kmh', strip.count - 1) - strip.at('kmh', 0)).toBeCloseTo((STRIP_SECONDS * 60 - 2) * 3.6, -1);
+    // A slow device's frames, 4 a second of the car's time and each capped at 0.1 s by the page: still STRIP_RATE
+    // samples a second of the car's time, so the strip spans ten seconds, and the samples between two frames lie on
+    // the line between them.
+    const slow = new DriveStrip();
+    for (let k = 0; k <= 12 * 4; k++) slow.step({ ...f, time: k / 4, speed: k / 4 / 3.6 }, 1000, 0.1);
+    expect(slow.count).toBe(STRIP_SECONDS * STRIP_RATE);
+    // The newest sample is the last one due by the newest frame (12 s), at most a sample's period before it.
+    const newest = slow.at('kmh', slow.count - 1);
+    expect(newest).toBeLessThanOrEqual(12 + 1e-4);
+    expect(newest).toBeGreaterThan(12 - 1 / STRIP_RATE - 1e-4);
+    expect(newest - slow.at('kmh', 0)).toBeCloseTo(STRIP_SECONDS - 1 / STRIP_RATE, 4);
+  });
+});

@@ -74,6 +74,12 @@ const WALL = 10;
 const FRONT_SPACE = 12;
 const DEFAULTS = { flywheelRadiusMm: 150, bellhousingDepthMm: 120, extensionMm: 190 };
 
+/** Tooth blur (setBlur): the frame rate it is judged at, teeth a frame from sharp to fully smeared, and the band's opacity then. */
+const BLUR_FPS = 60;
+const BLUR_FROM = 0.35;
+const BLUR_TO = 1.5;
+const BLUR_OPACITY = 0.82;
+
 const TAU = Math.PI * 2;
 const wrap = (angle: number): number => angle - Math.floor(angle / TAU) * TAU;
 
@@ -102,6 +108,8 @@ interface GearView {
   /** Tip radius and bore as drawn, mm. */
   tip: number;
   bore: number;
+  /** The smeared band over the teeth in real time (setBlur), made the first time it shows. */
+  blur?: { mesh: THREE.Mesh; material: THREE.MeshStandardMaterial };
 }
 
 interface SleeveView {
@@ -612,6 +620,10 @@ export class GearboxModel implements SceneModel<GearboxFrame> {
       g.glow = glow;
       this.glow.set(g.material, glow);
       this.paint(g.material);
+      if (g.blur) {
+        this.glow.set(g.blur.material, glow);
+        this.paint(g.blur.material);
+      }
     }
   }
 
@@ -702,6 +714,39 @@ export class GearboxModel implements SceneModel<GearboxFrame> {
   /** The group of a member (its axis, moved when pulled apart), holding everything that turns or slides with it. */
   memberFrame(id: string): THREE.Group | undefined {
     return this.members.find((m) => m.id === id)?.frame;
+  }
+
+  /**
+   * The teeth smeared by their speed, as a camera at the frame rate sees them (gearboxes plan, the views: in real time
+   * the teeth blur): a band over each gear's teeth, more opaque the more teeth pass a point in one frame of 60 Hz,
+   * from about a third of a tooth (still sharp) to a tooth and a half (a blur). Member speeds, rad/s, in
+   * `Gearbox.members` order; null clears it.
+   */
+  setBlur(speeds: ArrayLike<number> | null): void {
+    for (const g of this.gears) {
+      const omega = speeds ? Math.abs(speeds[this.member(g.def.member).index] ?? 0) : 0;
+      const perFrame = (omega * g.def.teeth) / (2 * Math.PI * BLUR_FPS);
+      const b = Math.min(1, Math.max(0, (perFrame - BLUR_FROM) / (BLUR_TO - BLUR_FROM)));
+      const amount = b * b * (3 - 2 * b);
+      if (amount < 0.02) {
+        if (g.blur) g.blur.mesh.visible = false;
+        continue;
+      }
+      if (!g.blur) {
+        const material = this.own(new THREE.MeshStandardMaterial({ color: '#aeb3b8', metalness: 0.6, roughness: 0.55, transparent: true, depthWrite: false }));
+        const root = Math.max(g.bore + 1, g.tip - 2.25 * g.def.module);
+        const mesh = new THREE.Mesh(ring(root, g.tip + 0.3, g.def.faceWidth * 1.01, 0, 72), material);
+        mesh.raycast = () => undefined;
+        mesh.userData.gear = g.id;
+        g.mesh.add(mesh);
+        g.blur = { mesh, material };
+        // The band glows with its gear.
+        this.glow.set(material, g.glow);
+        this.paint(material);
+      }
+      g.blur.mesh.visible = true;
+      g.blur.material.opacity = BLUR_OPACITY * amount;
+    }
   }
 
   /** The drawn mesh of a gear by its id. */

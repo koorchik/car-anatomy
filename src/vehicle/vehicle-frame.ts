@@ -9,9 +9,12 @@ import { WHEELS } from './wheel-bus.ts';
 
 export interface VehicleFrame {
   kind: 'vehicle';
-  /** Road speed, m/s, and distance, m. */
+  /** Road speed, m/s, distance, m, and the body's acceleration along the road, m/s². */
   speed: number;
   distance: number;
+  accel: number;
+  /** Seconds the car has been on the crank, by the simulation's clock (VehicleLoad.time). */
+  time: number;
   /** The gear that holds ('N' while none does), the one the lever asks for, and the one whose sleeve is pushed in. */
   gear: string;
   selected: string;
@@ -21,6 +24,12 @@ export interface VehicleFrame {
   clutch: number;
   clutchSlip: number;
   brake: number;
+  /** Clutch plate temperature, °C, and the heat it has taken since the car was put on the crank, J (stage K3b). */
+  clutchC: number;
+  clutchJ: number;
+  /** Drive torque on the driven hubs together, N·m, and the throttle the rev matching asks for, 0 none. */
+  driveNm: number;
+  blip: number;
   /** Every wheel, FL, FR, RL, RR: angle, rad, unwrapped, spin, rad/s, and effective rolling radius, m. */
   wheelAngle: Float64Array;
   wheelOmega: Float64Array;
@@ -46,6 +55,8 @@ export function vehicleFrame(load: VehicleLoad, into?: VehicleFrame): VehicleFra
           kind: 'vehicle',
           speed: 0,
           distance: 0,
+          accel: 0,
+          time: 0,
           gear: 'N',
           selected: 'N',
           lever: 'N',
@@ -53,6 +64,10 @@ export function vehicleFrame(load: VehicleLoad, into?: VehicleFrame): VehicleFra
           clutch: 0,
           clutchSlip: 0,
           brake: 0,
+          clutchC: 0,
+          clutchJ: 0,
+          driveNm: 0,
+          blip: 0,
           wheelAngle: new Float64Array(WHEELS),
           wheelOmega: new Float64Array(WHEELS),
           wheelRadius: new Float64Array(WHEELS),
@@ -61,6 +76,8 @@ export function vehicleFrame(load: VehicleLoad, into?: VehicleFrame): VehicleFra
         };
   f.speed = chassis.v;
   f.distance = chassis.x;
+  f.accel = chassis.ax;
+  f.time = load.time;
   f.gear = control.gearIn(s);
   f.selected = control.target < 0 ? 'N' : gears[control.target]!.name;
   f.lever = control.sleeve < 0 ? 'N' : gears[control.sleeve]!.name;
@@ -68,6 +85,12 @@ export function vehicleFrame(load: VehicleLoad, into?: VehicleFrame): VehicleFra
   f.clutch = control.clamp;
   f.clutchSlip = s.slip[control.spec.clutch]!;
   f.brake = control.brake;
+  f.clutchC = s.temperature[control.spec.clutch]!;
+  f.clutchJ = s.energy[control.spec.clutch]!;
+  let drive = 0;
+  for (let i = 0; i < WHEELS; i++) drive += bus.driveNm[i]!;
+  f.driveNm = drive;
+  f.blip = control.blip;
   f.wheelAngle.set(bus.angle.subarray(0, WHEELS));
   f.wheelOmega.set(bus.omega.subarray(0, WHEELS));
   f.wheelRadius.set(bus.rEff.subarray(0, WHEELS));

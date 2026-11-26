@@ -1,7 +1,7 @@
 // The keys of the gearbox pages, as bindings for the shell's KeyMap (the whole-car plan, keys). Without the DOM, so
 // the test of the keys binds them as the section does. On the table: the gas, the start and the mute, as on the engine
 // pages. In the car the digits are the gears, as on a gate, so the views go by V there; R reverse, N neutral, B the
-// brake. The clutch pedal (C) comes with the full dash (stage K3b).
+// brake, C the clutch pedal held down (stage K3b).
 
 import { t } from '../../i18n/t.ts';
 import type { KeyBinding } from '../../shell/section.ts';
@@ -15,6 +15,8 @@ export interface GearboxKeyActions {
   gear(name: string): void;
   /** The brake held down by its key, and let go. */
   brake(on: boolean): void;
+  /** The clutch pedal held down by its key, and let go. */
+  clutch(on: boolean): void;
 }
 
 /** The contexts of the gearbox pages, the most specific first, as each mode puts them in use. */
@@ -56,6 +58,7 @@ export function gearboxKeys(actions: GearboxKeyActions): { gearboxes: KeyBinding
     { codes: ['KeyR'], label: t('Задній хід'), down: () => actions.gear('R') },
     { codes: ['KeyN'], label: t('Нейтраль'), down: () => actions.gear('N') },
     { codes: ['KeyB'], label: t('Педаль гальма'), ...held((on) => actions.brake(on)) },
+    { codes: ['KeyC'], label: t('Педаль зчеплення'), ...held((on) => actions.clutch(on)) },
   ];
   return { gearboxes, drive };
 }

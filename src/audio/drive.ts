@@ -435,6 +435,8 @@ export class Drive {
     shown.wheelRadius = at.wheelRadius;
     shown.speed = at.speed;
     shown.distance = at.distance;
+    shown.accel = at.accel;
+    shown.time = at.time;
     shown.gear = at.gear;
     shown.selected = at.selected;
     shown.lever = at.lever;
@@ -442,6 +444,10 @@ export class Drive {
     shown.clutch = at.clutch;
     shown.clutchSlip = at.clutchSlip;
     shown.brake = at.brake;
+    shown.clutchC = at.clutchC;
+    shown.clutchJ = at.clutchJ;
+    shown.driveNm = at.driveNm;
+    shown.blip = at.blip;
   }
 
   /** The audio clock against the wall clock over windows of a second or more (DriveSnapshot.audioLag). */
