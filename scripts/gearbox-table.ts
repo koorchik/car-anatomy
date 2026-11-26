@@ -24,6 +24,11 @@ import { DISC_DAMPER, DISC_HUB, DMF_DAMPER, dryClutch, stiffDisc } from '../src/
 import { undercut } from '../src/drivetrain/gear-geometry.ts';
 import { stackLength } from '../src/drivetrain/layouts/layshaft.ts';
 import { finalRatio, speedRatio } from '../src/drivetrain/layouts/transaxle.ts';
+import { splitKinematics } from '../src/drivetrain/layouts/power-split.ts';
+import { HYBRID_CARS } from '../src/data/hybrid-cars.ts';
+import { buildPowerSplitDrive } from '../src/data/car-drive.ts';
+import { mg1Crossing } from '../src/drivetrain/power-split-runs.ts';
+import { drivenTyreRadiusM } from '../src/vehicle/car.ts';
 import { naturalModes } from '../src/drivetrain/modes.ts';
 import type { DamperDef } from '../src/drivetrain/spec.ts';
 import { type Gearbox, buildGearbox } from '../src/drivetrain/topology.ts';
@@ -56,7 +61,10 @@ function print(record: GearboxRecord, car: DriveCar | null): void {
   const teeth = (id: string) => spec.gears.find((g) => g.id === id)!.teeth;
   const mesh = (j: number) => `${box.meshes[j]!.a} ${teeth(box.meshes[j]!.a)}→${teeth(box.meshes[j]!.b)}`;
   const inside = finalRatio(spec);
-  const final = inside !== null ? `, final drive in the case ${inside.toFixed(4)} (published ${record.published.finalDrive ?? '?'})` : '';
+  const final =
+    spec.kind === 'power-split'
+      ? `, ring to differential ${splitKinematics(box).ring.toFixed(4)} (published ${record.published.finalDrive ?? '?'})`
+      : inside !== null ? `, final drive in the case ${inside.toFixed(4)} (published ${record.published.finalDrive ?? '?'})` : '';
   const diff = car ? `, final drive ${car.finalDrive.ratio}, differential ${car.differential.kind}` : '';
   console.log(`\n${record.name} (${record.id})${record.car ? `, car ${record.car}` : ''}: centre ${record.published.centreMm ?? '?'} mm${final}${diff}`);
   console.log('state  kind           ratio      published  overall  loaded meshes');
@@ -79,14 +87,57 @@ function print(record: GearboxRecord, car: DriveCar | null): void {
     const cut = [a, b].filter((g) => undercut(g.teeth, g.shift, Math.abs(g.helix), g.pressureAngle).undercut).map((g) => g.id);
     console.log(
       `${m.a}/${m.b}`.padEnd(24), `${a.teeth}/${b.teeth}`.padStart(7), a.module.toFixed(2).padStart(5), helix(m.geometry.a.beta).padStart(10),
-      `${a.shift}/${b.shift}`.padStart(6), m.geometry.centre.toFixed(3).padStart(11), m.geometry.epsAlpha.toFixed(2).padStart(7), m.geometry.epsBeta.toFixed(2).padStart(6),
+      `${+a.shift.toFixed(3)}/${+b.shift.toFixed(3)}`.padStart(6), m.geometry.centre.toFixed(3).padStart(11), m.geometry.epsAlpha.toFixed(2).padStart(7), m.geometry.epsBeta.toFixed(2).padStart(6),
       ` ${cut.join(', ') || '—'}${m.bevel ? ' (bevel: outer module, axes cross)' : ''}`,
     );
   }
   if (spec.kind === 'layshaft') console.log(`gear stack ${stackLength(spec).toFixed(0)} mm long`);
   if (record.unverified.length) console.log(`unverified: ${record.unverified.join(', ')}`);
+  if (spec.kind === 'power-split') printPowerSplit(record, box);
   if (car) printModes(box, car);
   if (car?.dynamics) printDrive(car);
+}
+
+/**
+ * A power-split box (stage K15a): its kinematics from the derived gearbox, and where MG1 changes direction at a few
+ * engine speeds, three ways: the closed form (z_s + z_r)/z_r of research §12, the derived gearbox's own speeds by
+ * bisection, and the whole car on the road with the control holding the engine there (power-split-car.ts).
+ */
+function printPowerSplit(record: GearboxRecord, box: Gearbox): void {
+  const k = splitKinematics(box);
+  const desc = record.layout.kind === 'power-split' ? record.layout.desc : null;
+  if (!desc) return;
+  const { sun, ring } = desc.split;
+  console.log(`kinematics from the derived box: ω_MG1 = ${k.mg1[0].toFixed(4)}·ω_engine ${k.mg1[1] < 0 ? '−' : '+'} ${Math.abs(k.mg1[1]).toFixed(4)}·ω_out, ω_MG2 = ${k.mg2.toFixed(4)}·ω_out, ω_ring = ${k.ring.toFixed(4)}·ω_out`);
+  console.log(`  that is ${sun}·ω_MG1 + ${ring}·ω_ring = ${sun + ring}·ω_engine; MG2 reduction ${Math.abs(k.mg2 / k.ring).toFixed(4)} (ORNL 2.636)`);
+  const example = (k.mg1[0] * 2000 + k.mg1[1] * (3000 / k.ring));
+  console.log(`  engine 2000 rpm, ring 3000 rpm: MG1 ${example.toFixed(1)} rpm (research §12: −600)`);
+  const hybrid = HYBRID_CARS.find((h) => h.gearbox === record.id);
+  const car = hybrid ? carById(hybrid.car) : undefined;
+  const r = car ? drivenTyreRadiusM(car) : null;
+  const kmh = (omegaOut: number) => (r === null ? '' : `${(omegaOut * r * 3.6).toFixed(2)} km/h`);
+  console.log(`where MG1 stands and then turns backward${car ? ` (${car.name}, tyre radius ${r!.toFixed(4)} m)` : ''}:`);
+  console.log('engine rpm   ring rpm: closed form   derived box   whole car     road speed: closed form   derived box    whole car');
+  const cd = hybrid ? buildPowerSplitDrive(hybrid.car) : null;
+  for (const rpm of [1000, 1500, 2000, 3000, 4000, 5200]) {
+    const we = (rpm * Math.PI) / 30;
+    const closed = ((sun + ring) / ring) * we;
+    let lo = 0;
+    let hi = 5 * we;
+    for (let i = 0; i < 100; i++) {
+      const mid = (lo + hi) / 2;
+      if (k.mg1[0] * we + k.mg1[1] * mid > 0) lo = mid;
+      else hi = mid;
+    }
+    const out = (lo + hi) / 2;
+    const run = cd ? mg1Crossing(cd, rpm) : null;
+    console.log(
+      String(rpm).padStart(10), ((closed * 30) / Math.PI).toFixed(1).padStart(22), ((out * k.ring * 30) / Math.PI).toFixed(1).padStart(13),
+      (run === null ? '—' : run.ringRpm.toFixed(1)).padStart(11),
+      kmh(closed / k.ring).padStart(28), kmh(out).padStart(13), (run === null ? '—' : `${(run.speed * 3.6).toFixed(2)} km/h`).padStart(12),
+    );
+  }
+  console.log('  the whole car\'s road speed is lower by the driving tyres\' slip; — : the car does not get there with the engine held');
 }
 
 /**
