@@ -351,20 +351,19 @@ export class SuspensionSection implements Section {
     this.putOnStage(scene);
     if (record) this.ctx.router.replace({ query: { s: scene === DEFAULT_SCENE ? null : scene } });
     if (!changed) return;
+    // One explode slider serves the corner and the tyre: a new scene starts both assembled, so the slider never shows
+    // what the model on the stage does not.
+    this.$<HTMLInputElement>('susp-explode').value = '0';
+    this.model.setExplode(0);
+    this.tyre.model.setExplode(0);
     if (scene === 'bump') {
-      this.model.setExplode(0);
-      this.$<HTMLInputElement>('susp-explode').value = '0';
       this.model.setRoad(new EventRoad(this.run.trace.events));
       this.restart();
     } else {
       this.model.setRoad(null);
       this.readout();
     }
-    if (scene === 'tyre') {
-      this.$<HTMLInputElement>('susp-explode').value = '0';
-      this.tyre.model.setExplode(0);
-      this.tyre.show();
-    }
+    if (scene === 'tyre') this.tyre.show();
     time.refresh();
     // The first bump scene opens slowed down ten times (step 1); after that the visitor's choice of time stands, and
     // the rig's true time, which the rig alone forced, does not replace it.

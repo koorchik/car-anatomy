@@ -224,6 +224,7 @@ export class TyreModel implements SceneModel<TyreFrame> {
   private readonly patchMesh: THREE.Mesh;
   private readonly patchCanvas: HTMLCanvasElement;
   private readonly patchTexture: THREE.CanvasTexture;
+  private readonly gridTexture: THREE.CanvasTexture;
   private readonly heading: THREE.Line;
   private view: ViewMode = 'solid';
   private explode = 0;
@@ -250,7 +251,7 @@ export class TyreModel implements SceneModel<TyreFrame> {
     g.strokeStyle = '#7a8d94';
     g.lineWidth = 2;
     g.strokeRect(0, 0, 256, 256);
-    const gridTex = new THREE.CanvasTexture(grid);
+    const gridTex = (this.gridTexture = new THREE.CanvasTexture(grid));
     gridTex.wrapS = gridTex.wrapT = THREE.RepeatWrapping;
     gridTex.repeat.set(ROAD_SIZE, ROAD_SIZE);
     gridTex.colorSpace = THREE.SRGBColorSpace;
@@ -477,5 +478,6 @@ export class TyreModel implements SceneModel<TyreFrame> {
     disposeTree(this.group);
     for (const m of this.materials) m.dispose();
     this.patchTexture.dispose();
+    this.gridTexture.dispose();
   }
 }
