@@ -242,6 +242,23 @@ describe('friction circles and axle limits', () => {
   });
 });
 
+describe('wheel loads and axle usage at the limits', () => {
+  it('hand the moment of a lifted inner wheel to the other axle: the whole car still carries m·h·a_y', () => {
+    for (const c of SUMP_CARS) {
+      const gc = gripChassisFor(recordOf(c));
+      const fz = [0, 0, 0, 0];
+      // Static rollover sits at a_y = g·t/(2h); just below it one axle has lifted its inner wheel.
+      const ay = 0.97 * G * Math.min(gc.tracks[0], gc.tracks[1]) / (2 * gc.cgHeightM);
+      wheelLoads(gc, 0, 0, ay, G, fz);
+      expect(Math.min(fz[0]!, fz[2]!), c.car).toBe(0);
+      const moment = ((fz[1]! - fz[0]!) / 2) * gc.tracks[0] + ((fz[3]! - fz[2]!) / 2) * gc.tracks[1];
+      expect(moment / (gc.massKg * gc.cgHeightM * ay), c.car).toBeCloseTo(1, 9);
+      for (const f of fz) expect(f).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+});
+
 describe('time at distance', () => {
   it('gives the time each sample starts at and lands where it says on the track', () => {
     const { point, l2 } = pair(SUMP_CARS[0]!, 'street');

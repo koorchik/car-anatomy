@@ -119,20 +119,30 @@ export function gripChassisOf(chassis: Chassis, tyre: TyreSpec = TYRES[chassis.s
 
 /**
  * Wheel loads FL, FR, RL, RR at speed `v`, accelerations `ax`, `ay` and normal acceleration `n`, m/s² (see the header),
- * N. A wheel the transfer would pull below zero carries nothing and its axle's other wheel all of the axle's load.
+ * N. A wheel the transfer would pull below zero carries nothing and its axle's other wheel all of the axle's load; the
+ * rest of that axle's share of the overturning moment goes to the other axle (the body is stiff in torsion), so the
+ * whole car's moment holds until both inner wheels are off the ground.
  */
 export function wheelLoads(gc: GripChassis, v: number, ax: number, ay: number, n: number, out: number[]): void {
   const m = gc.massKg;
   const off = (m * ax * gc.cgHeightM + aeroDragN(gc.roadLoad, v) * gc.aeroHeightM) / gc.wheelbaseM;
-  const axle0 = m * n * gc.frontShare - off;
-  const axle1 = m * n * (1 - gc.frontShare) + off;
-  for (const k of [0, 1] as const) {
-    const total = Math.max(0, k === 0 ? axle0 : axle1);
-    const half = total / 2;
-    const t = Math.max(-half, Math.min(half, gc.transferPerAy[k] * ay));
-    out[2 * k] = half - t;
-    out[2 * k + 1] = half + t;
-  }
+  const half0 = Math.max(0, m * n * gc.frontShare - off) / 2;
+  const half1 = Math.max(0, m * n * (1 - gc.frontShare) + off) / 2;
+  const t0 = gc.tracks[0];
+  const t1 = gc.tracks[1];
+  let tr0 = gc.transferPerAy[0] * ay;
+  let tr1 = gc.transferPerAy[1] * ay;
+  // Moment one axle cannot carry, N·m, handed to the other one.
+  const spill0 = Math.max(0, Math.abs(tr0) - half0) * t0;
+  const spill1 = Math.max(0, Math.abs(tr1) - half1) * t1;
+  tr0 += (Math.sign(ay) * spill1) / t0;
+  tr1 += (Math.sign(ay) * spill0) / t1;
+  tr0 = Math.max(-half0, Math.min(half0, tr0));
+  tr1 = Math.max(-half1, Math.min(half1, tr1));
+  out[0] = half0 - tr0;
+  out[1] = half0 + tr0;
+  out[2] = half1 - tr1;
+  out[3] = half1 + tr1;
 }
 
 /** Each axle's peak forces at one state, N, and the wheel loads they come from. */
