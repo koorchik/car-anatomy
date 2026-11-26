@@ -10,7 +10,7 @@ import { QuarterSim } from '../src/suspension/quarter.ts';
 import { EventRoad, RoadBuffer } from '../src/suspension/road.ts';
 import { jtektCorner } from '../src/suspension/templates/macpherson.ts';
 import type { Vec3 } from '../src/suspension/spec.ts';
-import type { ViewMode } from '../src/scene/model-types.ts';
+import type { SceneModel } from '../src/scene/model-types.ts';
 
 const context = new Proxy({}, { get: () => () => ({ addColorStop: () => {} }), set: () => true });
 vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => context }) });
@@ -18,22 +18,6 @@ vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getCont
 const { CornerModel, cornerFrame, frameFromQuarter, springWireM } = await import('../src/scene/suspension/corner-model.ts');
 type CornerFrame = ReturnType<typeof cornerFrame>;
 
-/**
- * The shell's SceneModel<F>, word for word from the whole-car plan («Stage для всіх розділів»). O2b puts it in
- * model-types.ts and the corner then declares it; until then this keeps the corner fitting it.
- */
-interface SceneModel<F> {
-  group: THREE.Group;
-  update(frame: F): void;
-  setView(view: ViewMode): void;
-  setExplode(amount: number): void;
-  setFailure(part: string | null): void;
-  dispose(): void;
-  anchors?(): Record<string, THREE.Vector3>;
-  setHighlight?(on: boolean): void;
-  setGhost?(alpha: number): void;
-  setRenderBand?(base: number): void;
-}
 const { SUSPENSION_PARTS } = await import('../src/scene/suspension/parts.ts');
 const { pressPoint, roadHeightAt, ROAD_SAMPLES } = await import('../src/scene/suspension/tyre-press.ts');
 

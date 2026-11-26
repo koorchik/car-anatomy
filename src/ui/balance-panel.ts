@@ -1,15 +1,19 @@
-// Inertia force arrows on the model: the switch under the stage, and a card with the legend, what is left and the
-// forces in newtons. The arrows themselves are in src/scene/balance-arrows.ts, the physics in src/engine/balance-forces.ts.
+// Inertia force arrows on the model, one view of them at a time: the switch under the stage, and a card with the
+// choice of view, its switches, a line of figures and what is left of the whole engine. The arrows themselves are in
+// src/scene/balance-arrows.ts, the views in src/engine/balance-phasors.ts and the physics in src/engine/balance-forces.ts.
 
 import { engineById, pageChoices } from '../data/engines.ts';
 import { DEFAULT_DESIGN } from '../designer/design.ts';
 import { reciprocatingMass } from '../designer/physics.ts';
-import { ALL_LAYERS, BalanceForces, arrowScale, atRpm, massesOf, roughly, type BalanceMasses, type ForceLayers, type OrderResidual } from '../engine/balance-forces.ts';
+import { BalanceForces, arrowScale, atRpm, massesOf, roughly, type BalanceMasses, type OrderResidual } from '../engine/balance-forces.ts';
+import { BalancePhasors, type BalanceView, type ElementKind, type PhasorView } from '../engine/balance-phasors.ts';
 import { buildEngine, type Engine } from '../engine/kinematics.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
-import { BalanceOverlay, FORCE_COLORS } from '../scene/balance-arrows.ts';
+import { BalanceOverlay, FORCE_COLORS, colorOf } from '../scene/balance-arrows.ts';
 import type { EngineModel } from '../scene/model-types.ts';
+import type { ViewControl } from '../shell/section.ts';
+import { forcesToggle } from './forces-toggle.ts';
 import './balance-panel.css';
 
 const num = (v: number): string => roughly(v).toLocaleString(numberLocale, { maximumFractionDigits: v < 10 ? 1 : 0 });
@@ -20,6 +24,18 @@ const LEFT_WORDS: Record<keyof OrderResidual, string> = {
   couple1: t('момент 1-го порядку'),
   couple2: t('момент 2-го порядку'),
 };
+
+/** Words of the legend for each kind of element a view draws. A piston's swatch takes the colour of the view's order. */
+const KIND_WORDS: Record<ElementKind, string> = {
+  piston: t('поршні'),
+  rotating: t('шатуни й шийки'),
+  rotor: t('ротори'),
+  counterweight: t('противаги'),
+  shaft: t('балансирні вали'),
+};
+
+/** The visitor's choice, kept from engine to engine. Counterweights and shafts are on, as the engine is built. */
+const chosen: { view: BalanceView; counterweights: boolean; shafts: boolean } = { view: 'order1', counterweights: true, shafts: true };
 
 const pageScales = new Map<string, number>();
 
@@ -39,6 +55,25 @@ const designerArrowScale = (): number => DEFAULT_DESIGN.bore / ((reciprocatingMa
 
 const swatch = (color: string, shape = ''): string => `<i class="forces-swatch${shape}" style="--swatch:${color}"></i>`;
 
+const viewName = (view: BalanceView, rotary: boolean): string =>
+  view === 'order1' ? t('1-й порядок') : view === 'order2' ? t('2-й порядок') : rotary ? t('Ротори') : t('Обертові маси');
+
+/** What the view shows and what its counterweights do, in a sentence or two. */
+function aboutView(view: PhasorView, rotary: boolean): string {
+  const weights = view.options.counterweights;
+  switch (view.view) {
+    case 'order1':
+      return weights
+        ? t('Сила кожного поршня вздовж осі циліндра, раз на оберт. Противаги гасять ту її половину, що крутиться з валом.')
+        : t('Сила кожного поршня вздовж осі циліндра, раз на оберт.');
+    case 'order2':
+      return t('Сила кожного поршня вздовж осі циліндра, двічі на оберт. Противаги її не гасять, лише балансирні вали на подвійних обертах.');
+    case 'rotating':
+      if (rotary) return weights ? t('Ротори крутяться разом із валом. Противаги на шківі й у маховику гасять і їхню силу, і момент.') : t('Ротори крутяться разом із валом, і їхні сили теж.');
+      return weights ? t('Нижні головки шатунів і шийки крутяться разом із валом. Противаги гасять їх повністю.') : t('Нижні головки шатунів і шийки крутяться разом із валом, і їхні сили теж.');
+  }
+}
+
 /** The designer's choice counts the orders the shafts take out, the picture counts shafts. Says why they differ. */
 function shaftNote(bf: BalanceForces): string {
   const chosen = bf.masses.shafts;
@@ -54,7 +89,7 @@ const sameMasses = (a: BalanceMasses, b: BalanceMasses): boolean =>
   a.reciprocatingKg === b.reciprocatingKg && a.rotatingKg === b.rotatingKg && a.rotorKg === b.rotorKg && a.shafts === b.shafts;
 
 /** Width of the full card and its gap from the edge of the stage, as in balance-panel.css. */
-const CARD_W = 340;
+const CARD_W = 350;
 const CARD_GAP = 18;
 
 export class BalancePanel {
@@ -62,52 +97,67 @@ export class BalancePanel {
   /** Spans the part of the stage between the side panels, so the card never slides under them. */
   private readonly stageBox = document.createElement('div');
   private readonly card = document.createElement('section');
-  private layers: ForceLayers = { ...ALL_LAYERS };
   private engine: Engine | null = null;
   private model: EngineModel | null = null;
   private scale = 1;
   private forces: BalanceForces | null = null;
+  private phasors: BalancePhasors | null = null;
   private overlay: BalanceOverlay | null = null;
+  private readonly view: ViewControl | null;
+  /** The forces put the model in X-ray, and no view has been chosen since: switching them off goes back. */
+  private xrayed = false;
+  private settingView = false;
   /** Height of the full card when it last showed, to tell whether it fits before showing it full again. */
   private fullHeight = 270;
   /** Viewport y the full card has to end above: other overlays on the right of the stage live under it. */
   private room: () => number = () => Infinity;
   private refit: () => void = () => {};
+  /** What shareStage watches, let go when it is called again with another list. */
+  private sharing: { disconnect(): void }[] = [];
   private on = false;
   /** The card is redrawn with each engine and set of layers, and must not fold the note back up. */
   private noteOpen = false;
+  /** Speed of the last frame, and the one the figures were last written for. */
+  private rpm = 0;
   private shownRpm = -1;
   private lastText = 0;
 
-  /** @param tools Row of view options under the stage, where the switch goes. */
-  constructor(tools: HTMLElement, host: HTMLElement) {
-    const label = document.createElement('label');
-    label.className = 'check tool-forces';
-    label.innerHTML = `<input type="checkbox" /> ${t('Сили інерції')}`;
-    this.checkbox = label.querySelector('input')!;
+  /**
+   * @param tools Row of view options under the stage, where the switch goes.
+   * @param checkbox The switch, when the page put it there before this code loaded (forces-toggle.ts).
+   * @param view The page's view of the model: arrows are seen best in X-ray, so they choose it while they show.
+   */
+  constructor(tools: HTMLElement, host: HTMLElement, checkbox: HTMLInputElement = forcesToggle(tools), view: ViewControl | null = null) {
+    this.checkbox = checkbox;
     this.checkbox.addEventListener('change', () => this.show(this.checkbox.checked));
-    // Stacked under the shake switch, which is about the same thing, so the row of tools does not grow.
-    const shake = tools.querySelector('.tool-shake');
-    if (shake) {
-      const column = document.createElement('div');
-      column.className = 'tool-checks';
-      shake.replaceWith(column);
-      column.append(shake, label);
-    } else {
-      tools.append(label);
-    }
+    this.view = view;
+    view?.onChange(() => {
+      if (!this.settingView) this.xrayed = false;
+    });
 
     this.card.className = 'forces-card';
     this.card.hidden = true;
     this.card.setAttribute('aria-label', t('Сили інерції'));
     this.card.addEventListener('click', (event) => {
-      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-layer]');
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-view]');
       if (!button) return;
-      const key = button.dataset.layer as keyof ForceLayers;
-      this.layers = { ...this.layers, [key]: !this.layers[key] };
-      this.overlay?.setLayers(this.layers);
-      this.render();
-      this.card.querySelector<HTMLButtonElement>(`button[data-layer="${key}"]`)?.focus();
+      const choice = button.dataset.view as BalanceView | 'off';
+      if (choice === 'off') {
+        this.show(false);
+        this.checkbox.focus();
+        return;
+      }
+      chosen.view = choice;
+      this.applyView();
+      this.card.querySelector<HTMLButtonElement>(`button[data-view="${choice}"]`)?.focus();
+    });
+    this.card.addEventListener('change', (event) => {
+      const input = (event.target as HTMLElement).closest<HTMLInputElement>('input[data-option]');
+      if (!input) return;
+      const key = input.dataset.option as 'counterweights' | 'shafts';
+      chosen[key] = input.checked;
+      this.applyView();
+      this.card.querySelector<HTMLInputElement>(`input[data-option="${key}"]`)?.focus();
     });
     this.stageBox.className = 'forces-stage';
     this.stageBox.append(this.card);
@@ -138,13 +188,15 @@ export class BalancePanel {
   /**
    * Other overlays on the right of the stage. `room` gives the viewport y the full card has to end above; while it
    * does not, the card takes its compact form at the bottom left. A change to the size, classes or visibility of any
-   * of `watched` asks again.
+   * of `watched` asks again. A later call replaces the earlier one: the valve gear's labels may load after the card.
    */
   shareStage(room: () => number, watched: HTMLElement[]): void {
     this.room = room;
+    for (const old of this.sharing) old.disconnect();
     const again = (): void => this.refit();
     const observer = new MutationObserver(again);
     const sizes = new ResizeObserver(again);
+    this.sharing = [observer, sizes];
     for (const element of watched) {
       observer.observe(element, { attributes: true, attributeFilter: ['class', 'hidden'] });
       sizes.observe(element);
@@ -177,6 +229,7 @@ export class BalancePanel {
       this.overlay?.dispose();
       this.overlay = null;
       this.forces = null;
+      this.phasors = null;
       if (this.on) this.build();
     } else if (engine.spec.redlineRpm !== before.spec.redlineRpm) {
       this.render();
@@ -188,6 +241,7 @@ export class BalancePanel {
     this.overlay?.dispose();
     this.overlay = null;
     this.forces = null;
+    this.phasors = null;
     this.engine = engine;
     this.model = model;
     this.scale = inDesigner ? designerArrowScale() : pageArrowScale(engine.spec.id);
@@ -199,22 +253,64 @@ export class BalancePanel {
   }
 
   show(on: boolean): void {
+    const was = this.on;
     this.on = on;
     this.checkbox.checked = on;
     this.card.hidden = !on;
     document.body.classList.toggle('forces-on', on);
+    if (on && !was) this.toXray();
+    if (!on && was) this.fromXray();
     this.refit();
     if (on && !this.overlay) this.build();
     if (this.overlay) this.overlay.group.visible = on;
   }
 
+  /** The whole model would hide the arrows inside it: they show in X-ray unless the visitor chooses otherwise. */
+  private toXray(): void {
+    const view = this.view;
+    if (!view || view.mode !== 'solid') return;
+    this.setMode('xray');
+    this.xrayed = true;
+  }
+
+  private fromXray(): void {
+    const view = this.view;
+    if (!view || !this.xrayed) return;
+    this.xrayed = false;
+    if (view.mode === 'xray') this.setMode('solid');
+  }
+
+  private setMode(mode: 'solid' | 'xray'): void {
+    this.settingView = true;
+    try {
+      this.view!.set(mode);
+    } finally {
+      this.settingView = false;
+    }
+  }
+
+  /** The view the visitor chose, or the first this engine has: a rotary has only its turning masses. */
+  private currentView(): PhasorView | null {
+    const ph = this.phasors;
+    if (!ph) return null;
+    const view = ph.views.includes(chosen.view) ? chosen.view : ph.views[0]!;
+    return ph.view(view, { counterweights: chosen.counterweights, shafts: chosen.shafts });
+  }
+
+  /** A new view or switch: the arrows and the card follow. */
+  private applyView(): void {
+    this.overlay?.setView(this.on ? this.currentView() : null);
+    if (this.overlay) this.overlay.group.visible = this.on;
+    this.render();
+  }
+
   /** Every frame: the crank angle on screen and the speed the figures are for. */
   frame(theta: number, rpm: number): void {
+    this.rpm = rpm;
     if (!this.on || !this.overlay) return;
     this.overlay.update(theta);
     const now = performance.now();
     if (Math.abs(rpm - this.shownRpm) > Math.max(1, rpm * 0.01) && now - this.lastText > 250) {
-      this.shownRpm = rpm;
       this.lastText = now;
       this.updateNow();
     }
@@ -222,60 +318,64 @@ export class BalancePanel {
 
   /** Only the figures for the current speed change with it. The buttons stay, and keep their focus. */
   private updateNow(): void {
-    const bf = this.forces;
-    if (!bf) return;
-    const rpm = Math.max(0, this.shownRpm);
-    const peak = bf.peaks(this.layers);
-    for (const cell of this.card.querySelectorAll<HTMLElement>('[data-now]')) {
-      cell.textContent = `${num(atRpm(Number(cell.dataset.now), rpm))} ${cell.dataset.unit}`;
-    }
-    this.card.querySelector('.forces-rpm')!.textContent = t('{rpm} об/хв', { rpm: num(rpm) });
-    this.card.querySelector('.forces-brief')!.textContent = t('{rpm} об/хв: сума сил {force} Н, момент {couple} Н·м', {
-      rpm: num(rpm),
-      force: num(atRpm(peak.force, rpm)),
-      couple: num(atRpm(peak.couple, rpm)),
+    const view = this.currentView();
+    const line = this.card.querySelector('.forces-line-text');
+    if (!view || !this.engine || !line) return;
+    // The card may be drawn before the first frame with it on: the speed of the last frame is already known.
+    const rpm = Math.max(0, this.rpm);
+    this.shownRpm = rpm;
+    const limit = this.engine.spec.redlineRpm;
+    const force = view.force.locus.major;
+    const couple = view.couple.locus.major;
+    line.textContent = t('Сума: зараз {force} Н, {couple} Н·м · на межі {forceMax} Н, {coupleMax} Н·м', {
+      force: num(atRpm(force, rpm)),
+      couple: num(atRpm(couple, rpm)),
+      forceMax: num(atRpm(force, limit)),
+      coupleMax: num(atRpm(couple, limit)),
     });
+    line.parentElement!.title = t('Найбільша сума за оберт: зараз на {rpm} об/хв, на межі на {limit} об/хв', { rpm: num(rpm), limit: num(limit) });
   }
 
   private build(): void {
     if (!this.engine || !this.model) return;
     this.forces = new BalanceForces(this.engine, massesOf(this.engine.spec));
-    this.overlay = new BalanceOverlay(this.forces, this.scale, this.layers);
+    this.phasors = new BalancePhasors(this.forces);
+    this.overlay = new BalanceOverlay(this.phasors, this.scale);
     this.model.mounted.add(this.overlay.group);
-    this.render();
+    this.applyView();
   }
 
   private render(): void {
     const bf = this.forces;
-    if (!bf || !this.engine) return;
+    const ph = this.phasors;
+    const view = this.currentView();
+    if (!bf || !ph || !view || !this.engine) return;
     const rotary = bf.engine.isRotary;
     const shafts = bf.shafts.length > 0;
-    // The designer may hand over a new rev limit without new forces.
-    const redline = this.engine.spec.redlineRpm;
-    const peak = bf.peaks(this.layers);
-    const chip = (key: keyof ForceLayers, color: string, label: string): string =>
-      `<button type="button" data-layer="${key}" aria-pressed="${this.layers[key]}">${swatch(color)}${label}</button>`;
-    const chips = rotary
-      ? [chip('order1', FORCE_COLORS.order1, t('Ротори')), chip('balancing', FORCE_COLORS.counterweight, t('Противаги'))]
-      : [
-          chip('order1', FORCE_COLORS.order1, t('1-й порядок')),
-          chip('order2', FORCE_COLORS.order2, t('2-й порядок')),
-          chip('balancing', FORCE_COLORS.counterweight, shafts ? t('Противаги й вали') : t('Противаги')),
-        ];
-    const row = (mark: string, name: string, perOmega2: number, unit: string): string =>
-      `<tr><th scope="row">${mark}${name}</th><td data-now="${perOmega2}" data-unit="${unit}"></td><td>${num(atRpm(perOmega2, redline))} ${unit}</td></tr>`;
-    const rows = rotary
-      ? [row(swatch(FORCE_COLORS.order1), t('Ротор'), bf.primary, t('Н'))]
-      : [row(swatch(FORCE_COLORS.order1), t('Поршень, 1-й порядок'), bf.primary, t('Н')), row(swatch(FORCE_COLORS.order2), t('Поршень, 2-й порядок'), bf.secondary, t('Н'))];
-    rows.push(row(swatch(FORCE_COLORS.net), t('Сума сил'), peak.force, t('Н')), row(swatch(FORCE_COLORS.couple, ' arc'), t('Момент гойдання'), peak.couple, t('Н·м')));
-    const legend = [
-      rotary ? '' : `<span>${swatch(FORCE_COLORS.rotating)}${t('шатун і шийка, що крутяться')}</span>`,
-      shafts ? `<span>${swatch(FORCE_COLORS.shaft)}${t('балансирні вали')}</span>` : '',
+    const views = [...ph.views, 'off' as const].map((v) => {
+      const name = v === 'off' ? t('Вимкнено') : viewName(v, rotary);
+      return `<button type="button" data-view="${v}" aria-pressed="${v === view.view}">${name}</button>`;
+    });
+    const option = (key: 'counterweights' | 'shafts', color: string, name: string): string =>
+      `<label class="forces-option"><input type="checkbox" data-option="${key}"${chosen[key] ? ' checked' : ''} />${swatch(color)}${name}</label>`;
+    const options = [
+      ph.hasCounterweights(view.view) ? option('counterweights', FORCE_COLORS.counterweight, t('Противаги')) : '',
+      ph.hasShafts(view.view) ? option('shafts', FORCE_COLORS.shaft, t('Вали')) : '',
     ].join('');
+    // The legend names what this view draws, in the order it lists its elements.
+    const kinds: string[] = [];
+    const legend: string[] = [];
+    for (const el of view.elements) {
+      if (kinds.includes(el.kind)) continue;
+      kinds.push(el.kind);
+      legend.push(`<span>${swatch(colorOf({ kind: el.kind, order: view.order }))}${KIND_WORDS[el.kind]}</span>`);
+    }
+    legend.push(`<span>${swatch(FORCE_COLORS.net)}${t('сума')}</span>`, `<span>${swatch(FORCE_COLORS.couple, ' arc')}${t('момент гойдання')}</span>`);
     const left = bf.left();
     const after = shafts ? t('Після противаг і балансирних валів') : t('Після противаг');
+    // A rotary's one view already says all there is: its counterweights cancel everything.
     const verdict = rotary
-      ? t('Ротори крутяться разом із валом, тому противаги на кінцях вала гасять і їхні сили, і момент.')
+      ? ''
       : left.length
         ? t('{after} лишається: {list}.', { after, list: left.map((k) => LEFT_WORDS[k]).join(', ') })
         : bf.higherLeft()
@@ -284,15 +384,13 @@ export class BalancePanel {
     const note = shaftNote(bf);
     this.card.innerHTML = `
       <h2 class="forces-title">${t('Сили інерції')}</h2>
-      <div class="forces-layers" role="group" aria-label="${t('Які сили показати')}">${chips.join('')}</div>
-      <table class="forces-table">
-        <thead><tr><th></th><th scope="col">${t('зараз')}<br /><span class="forces-rpm"></span></th><th scope="col">${t('на межі')}<br />${t('{rpm} об/хв', { rpm: num(redline) })}</th></tr></thead>
-        <tbody>${rows.join('')}</tbody>
-      </table>
-      <p class="forces-brief"></p>
-      ${legend ? `<p class="forces-legend">${legend}</p>` : ''}
-      <p class="forces-verdict">${verdict}${note ? ` ${note}` : ''}</p>
-      <details class="forces-note"${this.noteOpen ? ' open' : ''}><summary>${t('Як читати стрілки')}</summary>${t('Довжина стрілок від обертів не залежить: усі сили ростуть із квадратом обертів однаково. Фіолетові стрілки показують 2-й порядок разом із дрібними вищими. Сума сил і момент рахуються лише з показаних стрілок. Дуга моменту така, як сила, що дала б цей момент на плечі між сусідніми циліндрами. Маси деталей оцінено за їхніми розмірами.')}</details>`;
+      <div class="segmented forces-views" role="group" aria-label="${t('Які сили показати')}">${views.join('')}</div>
+      ${options ? `<div class="forces-options">${options}</div>` : ''}
+      <p class="forces-line">${swatch(FORCE_COLORS.net)}<span class="forces-line-text"></span></p>
+      <p class="forces-about">${aboutView(view, rotary)}</p>
+      <p class="forces-legend">${legend.join('')}</p>
+      ${verdict || note ? `<p class="forces-verdict">${[verdict, note].filter(Boolean).join(' ')}</p>` : ''}
+      <details class="forces-note"${this.noteOpen ? ' open' : ''}><summary>${t('Як читати стрілки')}</summary>${t('Тонкі стрілки — сили вибраного виду там, де вони діють, а велика біла стрілка в центрі колінвала — їхня сума. Дуга моменту така, як сила, що дала б цей момент на плечі між сусідніми циліндрами. Довжина стрілок від обертів не залежить: усі сили ростуть із квадратом обертів однаково. Три види разом — уся сила інерції двигуна, крім слабких вищих порядків, яких не показує жоден. Маси деталей оцінено за їхніми розмірами.')}</details>`;
     this.card.querySelector('details')!.addEventListener('toggle', (event) => (this.noteOpen = (event.target as HTMLDetailsElement).open));
     this.updateNow();
   }

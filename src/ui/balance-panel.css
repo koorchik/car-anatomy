@@ -1,4 +1,6 @@
-/* Inertia force arrows: the switch under the stage and the card with the legend and the figures. */
+/* Inertia force arrows: the card with the choice of view, its switches, the legend and the figures. It loads with their
+ * code; the switch under the stage and the article's button are styled in src/ui/engines/engines.css, since they are
+ * there before it. */
 
 /* The stage between the side panels. Only the card in it takes the pointer. */
 .forces-stage {
@@ -17,7 +19,7 @@
   position: absolute;
   right: 18px;
   top: calc(var(--top-h) + 8px);
-  width: 340px;
+  width: 350px;
   padding: 9px 12px 10px;
   border: 1px solid var(--rule);
   border-radius: 3px;
@@ -25,19 +27,6 @@
   font-size: 13px;
   line-height: 1.35;
   pointer-events: auto;
-}
-
-/* The switch shares a column with "exaggerate vibration". */
-.tool-checks {
-  display: flex;
-  flex-direction: column;
-}
-
-/* Two switches stacked fit the height of the other tools. On a phone the switch is alone and keeps its full height. */
-@media (min-width: 861px) {
-  .tool-checks .check {
-    height: 26px;
-  }
 }
 
 /* The card takes the place of the hint while it is open. */
@@ -52,36 +41,58 @@
   line-height: 1.1;
 }
 
-.forces-layers {
+.forces-views {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 7px;
+  width: 100%;
+  margin-bottom: 6px;
 }
 
-.forces-layers button {
+/* The row of views fills the card; the shell's .segmented gives it the look of the view tools. The four Ukrainian
+ * names only just fit the 350px card, hence the small padding. */
+.forces-views button {
+  flex: 1 1 auto;
+  padding: 4px 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.forces-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin-bottom: 4px;
+}
+
+.forces-option {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 7px;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  background: none;
+  gap: 6px;
+  height: 24px;
   font-size: 12.5px;
   cursor: pointer;
 }
 
-.forces-layers button:hover {
-  background: rgba(236, 230, 214, 0.08);
+.forces-option input {
+  accent-color: var(--ignition);
+  width: 14px;
+  height: 14px;
+  margin: 0;
 }
 
-.forces-layers button[aria-pressed='false'] {
+.forces-option .forces-swatch {
+  margin-right: 0;
+}
+
+/* The figures are second to the arrows: one small line. */
+.forces-line {
+  margin: 2px 0 0;
   color: var(--bone-dim);
-  text-decoration: line-through;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
-.forces-layers button[aria-pressed='false'] .forces-swatch {
-  opacity: 0.3;
+.forces-about {
+  margin: 6px 0 0;
 }
 
 .forces-swatch {
@@ -95,43 +106,11 @@
   vertical-align: -1px;
 }
 
-.forces-layers .forces-swatch {
-  margin-right: 0;
-}
-
 .forces-swatch.arc {
   background: none;
   border: 2px solid var(--swatch);
   border-bottom-color: transparent;
   border-radius: 50%;
-}
-
-.forces-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12.5px;
-}
-
-.forces-table th,
-.forces-table td {
-  padding: 2px 0;
-  font-weight: 400;
-  white-space: nowrap;
-}
-
-.forces-table thead th {
-  color: var(--bone-dim);
-  font-size: 11.5px;
-  text-align: right;
-}
-
-.forces-table th[scope='row'] {
-  text-align: left;
-}
-
-.forces-table td {
-  padding-left: 8px;
-  text-align: right;
 }
 
 .forces-legend {
@@ -163,15 +142,6 @@
   margin-bottom: 3px;
 }
 
-.forces-show {
-  margin-top: 8px;
-}
-
-.forces-brief {
-  display: none;
-  margin: 0;
-}
-
 /* The one-time hint about parts would sit under the card. */
 .forces-on .parts-callout {
   display: none;
@@ -179,7 +149,7 @@
 
 /*
  * Where the full card would cover the engine's name (narrow screens, the designer with both panels open), it shrinks
- * to the buttons and one line, just above the view options and clear of the scale bar.
+ * to the choice of view, its switches and the line of figures, just above the view options and clear of the scale bar.
  */
 .forces-card.compact {
   left: 18px;
@@ -192,24 +162,11 @@
 }
 
 .compact .forces-title,
-.compact .forces-table,
+.compact .forces-about,
 .compact .forces-legend,
+.compact .forces-verdict,
 .compact .forces-note {
   display: none;
-}
-
-.compact .forces-brief {
-  display: block;
-  font-size: 12.5px;
-}
-
-.compact .forces-layers {
-  margin-bottom: 4px;
-}
-
-.compact .forces-verdict {
-  margin-top: 4px;
-  font-size: 12.5px;
 }
 
 /* On a stage this wide the card cannot reach the scale bar at the bottom right, so it keeps right above the view options. */

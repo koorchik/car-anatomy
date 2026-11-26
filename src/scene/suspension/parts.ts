@@ -178,6 +178,30 @@ const ON_LINKS_UNSTEERED: Record<string, PartInfo> = {
   },
 };
 
+/** Parts of an axle as a whole (axle-model.ts): the anti-roll bar with its links and the whole steering rack. */
+export const AXLE_PARTS: Record<string, PartInfo> = {
+  'susp.anti-roll-bar': {
+    name: t('Стабілізатор'),
+    text: t('Пружний сталевий пруток поперек авто, кінцями з’єднаний з обома колесами осі. Коли кузов нахиляється в повороті, одне колесо йде вгору, а друге вниз, пруток закручується й опирається крену. Коли обидва колеса йдуть разом, він не працює.'),
+  },
+  'susp.bar-link': {
+    name: t('Стійка стабілізатора'),
+    text: t('Коротка тяга з кульовими шарнірами на кінцях. Передає зусилля з кінця стабілізатора на підвіску колеса й дає їм рухатися одне відносно одного.'),
+  },
+  'susp.rack': {
+    name: t('Рульова рейка'),
+    text: t('Зубчаста рейка в картері, закріпленому на підрамнику. Шестерня на кінці рульового вала рухає її вбік, і рейка тягне за собою обидві рульові тяги. Гофровані пильники захищають внутрішні шарніри тяг.'),
+  },
+};
+
+/**
+ * What the suspensions section registers (parts-registry.ts), as one dictionary: a corner's cards with the axle's own
+ * keys (the anti-roll bar and its links). Both name 'susp.rack', a corner its end and an axle the whole rack, and the
+ * registry refuses one key from two dictionaries; the corner's text wins here, and an axle hands its own through its
+ * model's `parts`, which the stage reads first. tests/parts-registry.test.ts registers this very object.
+ */
+export const SUSPENSION_REGISTERED: Readonly<Record<string, PartInfo>> = { ...AXLE_PARTS, ...SUSPENSION_PARTS };
+
 /** A coilover (or a lone coil) on an arm, on a link or on the knuckle. */
 const SPRING_ON_ARM: PartInfo = {
   name: t('Пружина'),

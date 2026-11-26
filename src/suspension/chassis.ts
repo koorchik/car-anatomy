@@ -9,7 +9,7 @@
 // about it by the parallel-axis theorem. NHTSA measures the whole car, so this is how the body equations get theirs
 // (suspensions plan, the data types).
 
-import type { ChassisAxleSpec, ChassisSpec, SprungBody } from './spec.ts';
+import type { AnyAxleLinkage, AxleSpec, ChassisAxleSpec, ChassisSpec, SprungBody, SwayBarSpec } from './spec.ts';
 import { ChassisAxle, newWheelSample, type WheelSample } from './chassis-axle.ts';
 import { bumpStopForce, coilCompression, swayBarTorsionRate, G, type DamperCoeffs } from './forces.ts';
 import { tyreVertical } from '../vehicle/tyre-data.ts';
@@ -83,18 +83,31 @@ function damperOf(axle: ChassisAxleSpec): DamperCoeffs {
   return { compression: d.compression, rebound: d.rebound, kneeMs: d.kneeMs, highRatio: d.highRatio };
 }
 
+/** How buildChassis makes its axles. `windowM` builds their tables only that far around design (ChassisAxle): enough
+ *  for everything read at rest, not for running the car. `axle` makes (or reuses) each axle instead. */
+export interface BuildChassisOptions {
+  windowM?: number;
+  axle?: (axle: AxleSpec<AnyAxleLinkage>, bar: SwayBarSpec | null) => ChassisAxle;
+}
+
 /** Builds the chassis; throws if an axle cannot assemble or cannot hold its load. */
-export function buildChassis(spec: ChassisSpec): Chassis {
+export function buildChassis(spec: ChassisSpec, options: BuildChassisOptions = {}): Chassis {
   const body = spec.body;
   const m = body.massKg;
   const fs = body.frontShare;
   const L = body.wheelbaseM;
   if (!(m > 0 && fs > 0 && fs < 1 && L > 0)) throw new Error('The chassis needs a mass, a front share inside (0, 1) and a wheelbase');
+  const lon = spec.longitudinal;
+  const share = (x: number): boolean => x >= 0 && x <= 1;
+  if (!(share(lon.brakeFront) && share(lon.driveFront) && lon.finalDrive > 0 && lon.aeroHeightM >= 0)) {
+    throw new Error('The chassis needs brake and drive shares inside [0, 1], a final drive and the height of the drag');
+  }
   const a = L * (1 - fs);
   const b = L * fs;
   const h = body.cgHeightM ?? CG_HEIGHT_ESTIMATE_M;
   const axleSpecs = [spec.front, spec.rear] as const;
-  const axles = [new ChassisAxle(spec.front.axle, spec.front.swayBar), new ChassisAxle(spec.rear.axle, spec.rear.swayBar)] as const;
+  const makeAxle = options.axle ?? ((axle, bar) => new ChassisAxle(axle, bar, { windowM: options.windowM }));
+  const axles = [makeAxle(spec.front.axle, spec.front.swayBar), makeAxle(spec.rear.axle, spec.rear.swayBar)] as const;
   const axleX = [a, -b] as const;
   const tyreData = tyreVertical(spec.tyre);
 

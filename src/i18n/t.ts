@@ -1,15 +1,14 @@
-// Ukrainian text is the source and its own key: t('Запустити двигун'). English lives in src/i18n/en/.
+// Ukrainian text is the source and its own key: t('Запустити двигун'). English lives in src/i18n/en/: UI_EN (the
+// shell and what every page shares) comes with this module, a section's or feature's dictionary with its lazy chunk
+// (dictionaries.ts).
 
-import { DESIGNER_EN } from './en/designer.ts';
-import { DYNO_EN } from './en/dyno.ts';
-import { GEARBOX_PARTS_EN } from './en/gearbox-parts.ts';
-import { LUBRICATION_EN } from './en/lubrication.ts';
-import { SUSPENSION_EN } from './en/suspension.ts';
-import { SYSTEMS_EN } from './en/systems.ts';
+import { ENGLISH, registerDictionary } from './english.ts';
 import { UI_EN } from './en/ui.ts';
 import { locale } from './locale.ts';
 
-const ENGLISH: Record<string, string> = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN, ...GEARBOX_PARTS_EN, ...SUSPENSION_EN };
+export { registerDictionary };
+
+registerDictionary('ui', UI_EN);
 
 /** Translates a source string. `{name}` in the text is filled from `values`. */
 export function t(source: string, values?: Record<string, string | number>): string {

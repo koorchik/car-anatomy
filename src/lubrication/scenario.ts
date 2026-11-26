@@ -1,14 +1,13 @@
 // One engine in one car on the test circuit: the lap, the oil model's setup, and the run. Shared by the page, the
 // comparison table, the designer's track widget, the tests and scripts/sump-table.ts, so all of them agree.
 
-import { SECTOR_NAMES } from '../data/vehicle-names.ts';
 import type { Design } from '../designer/design.ts';
 import { evaluate } from '../designer/physics.ts';
 import type { Engine } from '../engine/kinematics.ts';
 import type { SumpKind, SystemsSpec } from '../engine/systems-spec.ts';
 import type { WellPlace } from '../systems/sump.ts';
 import { simulateLap, type LapTrace } from '../vehicle/lap.ts';
-import { idealGearbox, topSpeed } from '../vehicle/powertrain.ts';
+import { idealGearbox, topSpeed, type Powertrain } from '../vehicle/powertrain.ts';
 import { buildTrack, TEST_CIRCUIT, type Track } from '../vehicle/track.ts';
 import { TYRES, type TyreId, type VehicleSpec } from '../vehicle/vehicle.ts';
 import { LubeRunner, runLubrication, type LubeRun } from './run.ts';
@@ -19,18 +18,14 @@ import { lapTorqueCurve } from './torque.ts';
 export const DRIVELINE = { efficiency: 0.85, gears: 6, spread: 4.3 };
 
 let track: Track | null = null;
-// Sector names ride on the track until stage O2a, when the oil page translates sector ids itself.
-export const testTrack = (): Track => (track ??= buildTrack(TEST_CIRCUIT, 1, SECTOR_NAMES));
+export const testTrack = (): Track => (track ??= buildTrack(TEST_CIRCUIT, 1));
 
 const laps = new Map<string, LapTrace>();
 
-/** The lap of this car with this engine on these tyres. Cached: the oil runs share it. */
-export function lapFor(design: Design, publishedHp: number | null, car: VehicleSpec, tyre: TyreId): LapTrace {
-  const key = JSON.stringify([design, publishedHp, car, tyre]);
-  const hit = laps.get(key);
-  if (hit) return hit;
+/** The stand-in powertrain of this engine in this car: the one the oil page's lap drives, and the lap with weight transfer. */
+export function lapPowertrain(design: Design, publishedHp: number | null, car: VehicleSpec): Powertrain {
   const torque = lapTorqueCurve(evaluate({ ...design, factory: null }).points, publishedHp);
-  const pt = idealGearbox({
+  return idealGearbox({
     torqueAt: torque.at,
     idleRpm: Math.max(600, design.factory?.idleRpm ?? 800),
     redlineRpm: design.rpmLimit,
@@ -40,7 +35,14 @@ export function lapFor(design: Design, publishedHp: number | null, car: VehicleS
     tyreRadiusM: car.tyreRadiusM,
     efficiency: DRIVELINE.efficiency,
   });
-  const lap = simulateLap(testTrack(), car, TYRES[tyre], pt);
+}
+
+/** The lap of this car with this engine on these tyres. Cached: the oil runs share it. */
+export function lapFor(design: Design, publishedHp: number | null, car: VehicleSpec, tyre: TyreId): LapTrace {
+  const key = JSON.stringify([design, publishedHp, car, tyre]);
+  const hit = laps.get(key);
+  if (hit) return hit;
+  const lap = simulateLap(testTrack(), car, TYRES[tyre], lapPowertrain(design, publishedHp, car));
   if (laps.size > 24) laps.clear();
   laps.set(key, lap);
   return lap;

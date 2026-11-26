@@ -41,8 +41,8 @@ export interface WheelSample {
   damperLen: number;
   barZ: number;
   /** Slopes per metre of this wheel's travel, the other held: −dL/dq of the spring and damper, the bar link's rise,
-   *  dC_y/dq and dW_y/dq (car frame), dC_x/dq of the contact point (as the axle module defines it) and of the wheel
-   *  centre, dγ/dq. */
+   *  dC_y/dq and dW_y/dq (car frame), dC_x/dq of the contact point (as the axle module defines it), of the wheel
+   *  centre and of the knuckle's (arm's, axle's) own point at the contact patch, dγ/dq. */
   mrSpring: number;
   mrDamper: number;
   mrBar: number;
@@ -50,6 +50,7 @@ export interface WheelSample {
   tanBetaWC: number;
   tanThetaCP: number;
   tanThetaWC: number;
+  tanThetaKP: number;
   camberGain: number;
   /** The same per metre of the other wheel's travel, this one held; zero on an independent axle. */
   mrSpringCross: number;
@@ -59,6 +60,7 @@ export interface WheelSample {
   tanBetaWCCross: number;
   tanThetaCPCross: number;
   tanThetaWCCross: number;
+  tanThetaKPCross: number;
   camberGainCross: number;
   /** Roll centre above the road under this wheel, m (symmetric travel on a corner, opposite travel on a beam). */
   rcHeight: number;
@@ -72,7 +74,7 @@ const FIELDS = [
   'camber', 'toe', 'contactX', 'contactY', 'contactZ', 'wheelX', 'wheelY', 'wheelZ', 'springLen', 'damperLen', 'barZ',
   'mrSpring', 'mrDamper', 'mrBar', 'tanBeta', 'tanBetaWC', 'tanThetaCP', 'tanThetaWC', 'camberGain', 'mrSpringCross',
   'mrDamperCross', 'mrBarCross', 'tanBetaCross', 'tanBetaWCCross', 'tanThetaCPCross', 'tanThetaWCCross',
-  'camberGainCross', 'rcHeight', 'beamTwist', 'twistRate',
+  'camberGainCross', 'rcHeight', 'beamTwist', 'twistRate', 'tanThetaKP', 'tanThetaKPCross',
 ] as const satisfies readonly (keyof WheelSample)[];
 type Field = (typeof FIELDS)[number];
 const NF = FIELDS.length;
@@ -81,7 +83,7 @@ export const newWheelSample = (): WheelSample => ({
   camber: 0, toe: 0, contactX: 0, contactY: 0, contactZ: 0, wheelX: 0, wheelY: 0, wheelZ: 0, springLen: 0, damperLen: 0,
   barZ: 0, mrSpring: 0, mrDamper: 0, mrBar: 0, tanBeta: 0, tanBetaWC: 0, tanThetaCP: 0, tanThetaWC: 0, camberGain: 0,
   mrSpringCross: 0, mrDamperCross: 0, mrBarCross: 0, tanBetaCross: 0, tanBetaWCCross: 0, tanThetaCPCross: 0,
-  tanThetaWCCross: 0, camberGainCross: 0, rcHeight: 0, beamTwist: 0, twistRate: 0,
+  tanThetaWCCross: 0, camberGainCross: 0, rcHeight: 0, beamTwist: 0, twistRate: 0, tanThetaKP: 0, tanThetaKPCross: 0,
 });
 
 /**
@@ -119,6 +121,8 @@ function unpack(b: Float64Array, o: WheelSample): void {
   o.rcHeight = b[27];
   o.beamTwist = b[28];
   o.twistRate = b[29];
+  o.tanThetaKP = b[30];
+  o.tanThetaKPCross = b[31];
 }
 
 /** The right wheel of two mirrored corners: the left corner's lateral numbers with the other sign. */
@@ -213,14 +217,22 @@ export class ChassisAxle {
   private readonly rowL = new Float64Array(NF);
   private readonly rowR = new Float64Array(NF);
 
-  constructor(spec: AxleSpec<AnyAxleLinkage>, bar: SwayBarSpec | null) {
+  /**
+   * With `windowM` the tables cover only ±windowM of travel around design, on the same grid steps (the nodes of a beam
+   * are the full grid's own, a corner's are as long as the full table's at the usual 2 mm), so everything read at
+   * design matches the full tables while the axle costs a handful of solves: the designer's quick estimates
+   * (evaluate-chassis.ts). Past the window the tables extrapolate linearly, as past the end stops.
+   */
+  constructor(spec: AxleSpec<AnyAxleLinkage>, bar: SwayBarSpec | null, options: { windowM?: number } = {}) {
     this.spec = spec;
     this.bar = bar;
     const link = spec.linkage;
+    const w = options.windowM;
+    const travel = w === undefined ? spec.travel : { droopM: Math.min(w, spec.travel.droopM), bumpM: Math.min(w, spec.travel.bumpM) };
     if (link.kind === 'twist-beam' || link.kind === 'solid') {
       this.kind = 'beam';
       this.corner = null;
-      const { droopM, bumpM } = spec.travel;
+      const { droopM, bumpM } = travel;
       const h = BEAM_GRID_STEP_M;
       const down = Math.ceil(droopM / h - 1e-9);
       const up = Math.ceil(bumpM / h - 1e-9);
@@ -232,7 +244,7 @@ export class ChassisAxle {
       this.right = pack(tables.right, this.n * this.n);
     } else {
       this.kind = 'corner';
-      const corner = new Axle(spec as AxleSpec<CornerLinkage | PivotLinkage>);
+      const corner = new Axle({ ...spec, travel } as AxleSpec<CornerLinkage | PivotLinkage>);
       this.corner = corner;
       const t = corner.table;
       this.travel0 = t.travel0;
@@ -299,7 +311,7 @@ function buildCorner(axle: Axle<CornerLinkage | PivotLinkage>, bar: SwayBarSpec 
   for (const f of FIELDS) out[f] = new Float64Array(n);
   const copied = [
     'camber', 'toe', 'contactX', 'contactY', 'contactZ', 'wheelX', 'wheelY', 'wheelZ', 'springLen', 'damperLen',
-    'mrSpring', 'mrDamper', 'tanBeta', 'tanThetaCP', 'tanThetaWC', 'camberGain', 'rcHeight',
+    'mrSpring', 'mrDamper', 'tanBeta', 'tanThetaCP', 'tanThetaWC', 'tanThetaKP', 'camberGain', 'rcHeight',
   ] as const;
   for (const f of copied) out[f].set(t.fields[f]);
   for (let i = 0; i < n; i++) out.tanBetaWC[i] = slopeAt(out.wheelY, i, n, t.step, 0, 1);
@@ -367,9 +379,14 @@ function buildBeam(
         for (const f of BEAM_FIELDS) into[f][k] = beamSample[f];
         into.beamTwist[k] = beamSample.beamTwist;
         into.twistRate[k] = beamSample.twistRate;
+        into.tanThetaKP[k] = beamSample.tanThetaKP;
+        into.tanThetaKPCross[k] = beamSample.tanThetaKPCross;
       } else {
         solid!.measure(state, side, solidSample);
         for (const f of BEAM_FIELDS) into[f][k] = solidSample[f];
+        // A solid axle's tanθ_CP already follows the axle's own point at the contact patch (solid-kinematics.ts).
+        into.tanThetaKP[k] = solidSample.tanThetaCP;
+        into.tanThetaKPCross[k] = solidSample.tanThetaCPCross;
       }
       into.barZ[k] = linkZ(state, side);
     }

@@ -3,6 +3,7 @@
 
 import type { Engine } from '../engine/kinematics.ts';
 import { isDieselSystem } from '../engine/systems-spec.ts';
+import { LAYER_CODE } from './engines/chunks.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import type { EngineModel, ViewMode } from '../scene/model-types.ts';
@@ -20,6 +21,8 @@ export interface SystemsHost {
   wantAssembled(): void;
   /** Injection and spark marks for the cycle diagram while the fuel layer shows; null clears them. */
   markers?(markers: CycleMarkers | null): void;
+  /** After a layer was switched on or off, so the address can say which are on. */
+  switched?(): void;
 }
 
 /** Layers in the order of their keys, 4 to 7. */
@@ -68,8 +71,6 @@ interface Section {
 export class SystemsView {
   readonly sim = new SystemsSim();
   private layers: SystemsLayers | null = null;
-  /** The layers' code, loaded the first time a layer is wanted: most visits never switch one on. */
-  private static layersCode: Promise<typeof import('../scene/systems/index.ts')> | null = null;
   /** The engine and model on stage, which the layers are built for. */
   private target: { engine: Engine; model: EngineModel } | null = null;
   private readonly on = new Set<LayerId>();
@@ -148,6 +149,8 @@ export class SystemsView {
       observer.observe(row);
       observer.observe(root);
       observer.observe(readout);
+      // Hidden while another section is shown, the switches measure nothing; they place themselves again on coming back.
+      observer.observe(tool);
     }
 
     try {
@@ -183,6 +186,11 @@ export class SystemsView {
     return this.on.has(id);
   }
 
+  /** The layers switched on, in the order of their keys. */
+  get shown(): LayerId[] {
+    return LAYERS.map((l) => l.id).filter((id) => this.on.has(id));
+  }
+
   get state(): SystemsState {
     return this.sim.state;
   }
@@ -206,8 +214,8 @@ export class SystemsView {
   private buildLayers(): void {
     const target = this.target;
     if (!target || this.layers) return;
-    SystemsView.layersCode ??= import('../scene/systems/index.ts');
-    void SystemsView.layersCode.then(({ SystemsLayers }) => {
+    // Loaded the first time a layer is wanted, as most visits never switch one on; an address with `l=` starts it early.
+    void LAYER_CODE.load().then(({ SystemsLayers }) => {
       // Another engine may have come on stage meanwhile; its own attach builds its layers.
       if (this.target !== target || this.layers) return;
       const layers = new SystemsLayers(target.engine, target.model, this.reducedMotion);
@@ -262,6 +270,7 @@ export class SystemsView {
     }
     this.syncButtons();
     this.lastText = 0;
+    this.host.switched?.();
   }
 
   private syncButtons(): void {

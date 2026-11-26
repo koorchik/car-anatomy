@@ -1,7 +1,35 @@
-// English for the suspension section: part cards for now. t.ts takes it in with the other dictionaries until the
-// shell's registerDictionary lets the section's lazy chunk register it instead (suspensions plan, «Переклад»).
+// English for the suspension section: its pages and the cards of its parts. The section's chunk registers it before it
+// loads (src/ui/suspensions/load.ts), and the model viewer for its corners and axles.
 
 export const SUSPENSION_EN: Record<string, string> = {
+  // The page (src/ui/suspensions/).
+  'Підвіска': 'Suspension',
+  'Стійка Макферсон': 'MacPherson strut',
+  'Передня підвіска компактного передньопривідного авто': 'Front suspension of a compact front-wheel-drive car',
+  'Хід колеса': 'Wheel travel',
+  'Розібрати': 'Take apart',
+  'Сили': 'Forces',
+  'Лазер розвалу': 'Camber laser',
+  'У стійці Макферсон амортизатор жорстко затиснутий у поворотному кулаці й сам працює верхньою ланкою, а низ кулака тримає один поперечний важіль. Рухай повзунок «Хід колеса»: колесо пройде від повного відбою до стиснутого відбійника, а цифри нижче покажуть, як при цьому змінюються розвал, сходження й пружина.':
+    'In a MacPherson strut the shock absorber is clamped rigidly in the steering knuckle and works as the upper link itself, while a single lower control arm holds the bottom of the knuckle. Move the “Wheel travel” slider: the wheel goes from full droop to a pressed bump stop, and the numbers below show how the camber, the toe and the spring change on the way.',
+  '«Рентген» робить шину, диск і корпус амортизатора скляними, «Механізм» лишає самі ланки й шарніри. Клацни будь-яку деталь, щоб дізнатися, що вона робить.':
+    '“X-ray” turns the tire, the wheel and the strut body to glass, and “Mechanism” leaves only the links and joints. Click any part to find out what it does.',
+  'На цьому ході': 'At this travel',
+  'Розвал': 'Camber',
+  'Сходження': 'Toe',
+  'Довжина пружини': 'Spring length',
+  'Зусилля пружини': 'Spring force',
+  'Хід рахується від проєктної висоти кузова, плюс — колесо вгору. Розвал від’ємний, коли верх колеса нахилений до кузова; сходження додатне, коли перед колеса повернутий до середини авто.':
+    'Travel is measured from the design ride height, plus is the wheel moving up. Camber is negative when the top of the wheel leans toward the body; toe is positive when the front of the wheel points toward the middle of the car.',
+  'Звідки цифри': 'Where the numbers come from',
+  'Точки кріплення стійки, важеля й рульової тяги виміряні на справжньому компактному передньопривідному авто: JTEKT Engineering Journal 1019E (2023), таблиця 1. Модель авто стаття не називає. Висота центра колеса, межі ходу, пружина, відбійник і піввісь типові: їх у статті немає.':
+    'The mounting points of the strut, the arm and the tie rod were measured on a real compact front-wheel-drive car: JTEKT Engineering Journal 1019E (2023), Table 1. The paper does not name the car. The wheel center height, the travel limits, the spring, the bump stop and the halfshaft are typical: the paper does not give them.',
+  'Підвіски. Анатомія авто': 'Suspensions. Car Anatomy',
+  'Про цей кут': 'About this corner',
+  'Довжина цього відрізка в натурі': 'The real length of this bar',
+  'Тривимірна модель підвіски. Перетягуй, щоб обертати, коліщатком наближай.': '3D model of the suspension. Drag to rotate, scroll to zoom.',
+  '{value} мм': '{value} mm',
+  '{value} кН': '{value} kN',
   'Поворотний кулак': 'Steering knuckle',
   'Литий кулак, на якому обертається маточина колеса. До нього сходяться всі ланки: стійка, кульова опора важеля й рульова тяга, тож саме він визначає, як колесо ходить і повертається.':
     'A cast knuckle the wheel hub turns in. Every link meets here: the strut, the control arm’s ball joint and the tie rod, so the knuckle decides how the wheel moves and steers.',
@@ -141,4 +169,25 @@ export const SUSPENSION_EN: Record<string, string> = {
     'Carries torque from the differential to the wheel. Constant-velocity joints at its ends keep the wheel turning evenly while the shaft tilts with suspension travel. It is cut off near the differential.',
   'Кульковий шарнір рівних кутових швидкостей біля маточини. Кермом це колесо не повертається, тож кути в шарнірі невеликі, а довжини він не змінює.':
     'A ball-type constant-velocity joint at the hub. This wheel does not steer, so the joint works at small angles, and it does not change length.',
+  // The axle as a whole (axle-model.ts).
+  'Стабілізатор': 'Anti-roll bar',
+  'Пружний сталевий пруток поперек авто, кінцями з’єднаний з обома колесами осі. Коли кузов нахиляється в повороті, одне колесо йде вгору, а друге вниз, пруток закручується й опирається крену. Коли обидва колеса йдуть разом, він не працює.':
+    'A springy steel bar across the car, its ends joined to both wheels of the axle. When the body leans in a corner, one wheel rises and the other drops, so the bar twists and resists the roll. When both wheels move together, it does nothing.',
+  'Стійка стабілізатора': 'Anti-roll bar link',
+  'Коротка тяга з кульовими шарнірами на кінцях. Передає зусилля з кінця стабілізатора на підвіску колеса й дає їм рухатися одне відносно одного.':
+    'A short link with a ball joint at each end. It passes the force from the end of the anti-roll bar to the wheel’s suspension and lets the two move relative to each other.',
+  'Зубчаста рейка в картері, закріпленому на підрамнику. Шестерня на кінці рульового вала рухає її вбік, і рейка тягне за собою обидві рульові тяги. Гофровані пильники захищають внутрішні шарніри тяг.':
+    'A toothed rack in a housing bolted to the subframe. A pinion on the end of the steering shaft moves it sideways, and the rack pulls both tie rods with it. Pleated boots protect the tie rods’ inner joints.',
+  // The body shell of the chassis (src/scene/car/parts.ts), which the car overview shares.
+  'Оболонка за розмірами справжнього авто: довжина, ширина й висота, база й колія, звиси, лінії капота, лобового скла й даху. Форма між цими точками приблизна, а дверей, ручок і фар немає: кузов тут лише показує, де все стоїть. Колісні ніші зроблено за тим, куди ходить колесо, тож шина не торкається кузова навіть на повному повороті керма.':
+    'A shell with the real car’s dimensions: length, width and height, wheelbase and track, overhangs, and the lines of the hood, windshield and roof. The shape between those points is approximate, and there are no doors, handles or lights: here the body only shows where everything sits. The wheel wells follow where the wheel travels, so the tire never touches the body, even at full steering lock.',
+  'Капот': 'Hood',
+  'Кришка моторного відсіку спереду. Її межі — це межі відсіку, у який має вміститися двигун, а кузов над відсіком ніде не нижчий за його верх. Тож двигун, який уміщується у відсік, крізь капот не стирчить.':
+    'The lid of the engine bay at the front. Its edges are the edges of the bay the engine has to fit in, and the body over the bay is nowhere lower than the bay’s top. So an engine that fits the bay never pokes through the hood.',
+  'Кришка моторного відсіку': 'Engine lid',
+  'Двигун тут стоїть позаду водія, тож відсік закриває кришка в задній частині кузова. Її межі — це межі відсіку, у який має вміститися двигун, а кузов над відсіком ніде не нижчий за його верх.':
+    'Here the engine sits behind the driver, so a lid in the rear of the body closes the bay. Its edges are the edges of the bay the engine has to fit in, and the body over the bay is nowhere lower than the bay’s top.',
+  'Моторний щит': 'Firewall',
+  'Перегородка між моторним відсіком і салоном. Тримає жар, шум і запахи двигуна подалі від людей.':
+    'The wall between the engine bay and the cabin. It keeps the engine’s heat, noise and fumes away from the people inside.',
 };

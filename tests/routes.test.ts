@@ -9,8 +9,8 @@ import { DEFAULT_DESIGN, type Design } from '../src/designer/design.ts';
 import { designFromSpec } from '../src/designer/presets.ts';
 import { Router, type RouterWindow } from '../src/shell/router.ts';
 import { CONTEXT_KEYS, formatRoute, HOME, parseRoute, PATTERNS, QUERY_KEYS, RESERVED, type Route, type SectionId } from '../src/shell/routes.ts';
-import { designerRoute, DesignerPage } from '../src/ui/designer/designer-page.ts';
-import { catalogueEngineId, enginesPage } from '../src/ui/engines/routes.ts';
+import { designerAddress, designerRoute, DesignerPage } from '../src/ui/designer/designer-page.ts';
+import { catalogueEngineId, enginesPage, featureQuery, routeLayers } from '../src/ui/engines/routes.ts';
 import { SumpPage } from '../src/ui/sump/sump-page.ts';
 
 const ROOT = join(import.meta.dirname, '..');
@@ -74,7 +74,7 @@ const HASHES = [
   ...ENGINE_IDS.slice(0, 8).map((id) => `#/sump/${id}?k=dry&t=slick&o=-1&a=1&w=rear`),
   `#/sump/design/${CODES[0]}`,
   `#/sump/design/${CODES[1]}?k=baffled&t=semi&o=0&a=0&w=front`,
-  // Sections that have no pages yet open the engines' catalogue, as any unknown address did.
+  // Sections without pages yet: the engines read them as their catalogue, and the shell covers them with its card.
   '#/gearboxes',
   '#/gearboxes/manual-rwd',
   '#/suspensions/macpherson/civic-type-r-fk8',
@@ -192,6 +192,20 @@ describe('routes', () => {
     }
   });
 
+  it('reads the dyno and the layers from an address', () => {
+    expect(parseRoute('#/engines/i4?m=dyno').query.m).toBe('dyno');
+    expect(enginesPage(parseRoute('#/engines/i4?m=dyno'))).toBe('catalogue');
+    expect(routeLayers(parseRoute('#/engines/i4'))).toBeNull();
+    expect(routeLayers(parseRoute('#/engines/i4?l=air,oil,nonsense'))).toEqual(['oil', 'air']);
+    expect(routeLayers(parseRoute('#/engines/i4?l=oil%2Cfuel'))).toEqual(['oil', 'fuel']);
+    expect(routeLayers(parseRoute('#/engines/i4?l='))).toEqual([]);
+    for (const [key, value] of Object.entries(featureQuery(true, ['air', 'fuel', 'coolant', 'oil']))) {
+      const known = QUERY_KEYS.find((k) => k.key === key)!;
+      expect(known.sections, key).toContain('engines');
+      if (known.values?.engines) expect(known.values.engines, key).toContain(value);
+    }
+  });
+
   it('has one table of query keys without two meanings for one key', () => {
     const keys = QUERY_KEYS.map((k) => k.key);
     expect(new Set(keys).size).toBe(keys.length);
@@ -234,6 +248,32 @@ describe('router', () => {
     expect(win.writes).toHaveLength(1);
   });
 
+  it('keeps the context, the dyno and the layers through several edits in the designer', () => {
+    const start = encodeDesign(DEFAULT_DESIGN);
+    const win = fakeWindow(`#/designer/${start}?m=dyno&l=oil,coolant&car=civic-type-r-fk8&ret=car`);
+    const router = new Router(() => win);
+    for (const cylinders of [6, 8, 3]) {
+      const design: Design = { ...DEFAULT_DESIGN, cylinders };
+      router.replace(designerAddress(design, router.current));
+      expect(win.location.hash).toBe(`#/designer/${encodeDesign(design)}?m=dyno&l=oil,coolant&car=civic-type-r-fk8&ret=car`);
+    }
+    // Without them the designer writes its code and the context alone, as it always did.
+    const plain = fakeWindow(`#/designer/${start}?car=civic-type-r-fk8`);
+    new Router(() => plain).replace(designerAddress(DEFAULT_DESIGN, parseRoute(plain.location.hash)));
+    expect(plain.location.hash).toBe(`#/designer/${start}?car=civic-type-r-fk8`);
+  });
+
+  it('writes the dyno and the layers into the address in place, with the context kept', () => {
+    const win = fakeWindow('#/engines/i4?car=civic-type-r-fk8');
+    const router = new Router(() => win);
+    router.replace({ query: { ...router.current.query, ...featureQuery(true, ['coolant', 'oil']) } });
+    expect(win.location.hash).toBe('#/engines/i4?car=civic-type-r-fk8&m=dyno&l=oil,coolant');
+    expect(parseRoute(win.location.hash).query).toMatchObject({ m: 'dyno', l: 'oil,coolant', car: 'civic-type-r-fk8' });
+    router.replace({ query: { ...router.current.query, ...featureQuery(false, []) } });
+    expect(win.location.hash).toBe('#/engines/i4?car=civic-type-r-fk8');
+    expect(win.writes).toHaveLength(2);
+  });
+
   it('drops the context only when asked, and never shares it', () => {
     const design: Design = { ...DEFAULT_DESIGN, cylinders: 6 };
     const code = encodeDesign(design);
@@ -243,6 +283,20 @@ describe('router', () => {
     expect(router.href({ section: 'engines', page: 'catalogue', path: ['i4'] })).toBe('#/engines/i4?car=civic-type-r-fk8&ret=car');
     router.replace({ ...designerRoute(design), query: { car: null, ret: null } });
     expect(win.location.hash).toBe(`#/designer/${code}`);
+  });
+
+  it("puts the visitor's context on the pages' own links, except where it leads back to", () => {
+    const win = fakeWindow('#/engines/i4/civic-type-r-k20c1?car=civic-type-r-fk8');
+    const router = new Router(() => win);
+    // «Змінити в конструкторі» and a variant are plain hrefs in the page's markup.
+    expect(router.link('#/designer/from/i4/civic-type-r-k20c1')).toBe('#/designer/from/i4/civic-type-r-k20c1?car=civic-type-r-fk8');
+    expect(router.link('#/engines/i4?l=oil')).toBe('#/engines/i4?l=oil&car=civic-type-r-fk8');
+    // A link that names its own car keeps it; the car's pages are where the context leads and carry none.
+    expect(router.link('#/sump/i4?car=other')).toBe('#/sump/i4?car=other');
+    expect(router.link('#/car/civic-type-r-fk8?focus=engine')).toBe('#/car/civic-type-r-fk8?focus=engine');
+    // Without a context every link opens as it is written.
+    win.location.hash = '#/engines/i4';
+    for (const hash of ['#/', '#/designer', '#/no/such/page']) expect(router.link(hash)).toBe(hash);
   });
 
   it('is the only code that writes the address', () => {

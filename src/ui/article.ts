@@ -1,14 +1,19 @@
 // The knowledge panel: figures, explanation, and charts computed from the engine's own geometry.
 
+import { CAR_LIST } from '../data/cars.ts';
 import { ENGINES, engineFacts } from '../data/engines.ts';
+import { GEARBOX_PAGE_NAMES } from '../data/gearbox-names.ts';
 import type { EngineFacts } from '../designer/catalogue.ts';
 import { ALL_LAYERS, BalanceForces, atRpm, massesOf, roughly } from '../engine/balance-forces.ts';
 import { COOLING_NAMES, FUEL_SYSTEM_NAMES } from '../designer/systems.ts';
 import { SUMP_NAMES } from '../designer/lubrication.ts';
 import { balance, groupIntervals, torqueCurve, type Engine } from '../engine/kinematics.ts';
-import { ASPIRATION_NAMES, VALVETRAIN_NAMES, type EngineSpec } from '../engine/spec.ts';
+import { ASPIRATION_NAMES, VALVETRAIN_NAMES } from '../data/engine-names.ts';
+import type { EngineSpec } from '../engine/spec.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
+import { pageShown } from '../shell/registry.ts';
+import { carLinks, carsWithEngine, pageIndex } from '../vehicle/links.ts';
 import { VALVETRAIN_FIELD_NAMES, valvetrainArticleHtml, valvetrainFigures } from './valvetrain-article.ts';
 
 const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { maximumFractionDigits: digits, minimumFractionDigits: digits });
@@ -50,6 +55,18 @@ const figures = (engine: Engine): Array<[string, string]> => {
   rows.push([t('Межа обертів'), t('{rpm} об/хв', { rpm: num(s.redlineRpm) })]);
   rows.push(...valvetrainFigures(engine));
   return rows;
+};
+
+/** The gearbox row: the gearbox of each car with this engine, when its page can be opened (the whole-car plan's cross links). */
+const gearboxRows = (s: EngineSpec): string => {
+  const pages = pageIndex({ gearboxes: (page) => pageShown('gearboxes', page) });
+  return carsWithEngine(s.id, CAR_LIST)
+    .flatMap((car) =>
+      carLinks(car, pages)
+        .filter((link) => link.section === 'gearboxes')
+        .map((link) => `<div><dt>${t('Коробка')}</dt><dd><a class="sibling" href="${link.href}">${escapeHtml(GEARBOX_PAGE_NAMES[link.target] ?? link.target)}</a>, ${escapeHtml(car.name)}</dd></div>`),
+    )
+    .join('');
 };
 
 const BAL_LABELS: Array<[keyof ReturnType<typeof balance>, string, string]> = [
@@ -209,7 +226,7 @@ export function articleHtml(engine: Engine): string {
     ${isVariant ? '' : `<p class="lead">${escapeHtml(a.lead)}</p>`}
     <dl class="figures">${figures(engine)
       .map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`)
-      .join('')}</dl>
+      .join('')}${gearboxRows(s)}</dl>
     ${verify}
     ${engine.isRotary ? '' : `<p class="note">${t('{link}: як олива в піддоні поводиться на треку і чи дістане її насос.', { link: `<a class="sibling" href="#/sump/${s.id}">${t('Мащення на треку')}</a>` })}</p>`}
     ${facts ? factsHtml(facts, voiceText(s)) : ''}

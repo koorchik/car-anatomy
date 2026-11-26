@@ -9,7 +9,8 @@ import { turboCountOf } from '../../systems/size.ts';
 import { airFlowShare } from '../../systems/thermal.ts';
 import { sumpLayout } from '../../systems/sump.ts';
 import type { EngineModel, ViewMode } from '../model-types.ts';
-import { PARTS } from '../parts-info.ts';
+import { FLUID } from '../palette.ts';
+import { registerParts } from '../parts-registry.ts';
 import { SYSTEM_PARTS } from './parts.ts';
 import type { EngineAnchors, SystemsLook } from './anchors.ts';
 import { SystemLayer } from './layer.ts';
@@ -25,7 +26,7 @@ import type { LayerPlan } from './route.ts';
 export { LAYER_IDS, LAYER_STYLES, type LayerId } from './styles.ts';
 
 // The layers' parts explain themselves on click once their code is loaded, as the model's own parts do.
-Object.assign(PARTS, SYSTEM_PARTS);
+registerParts(SYSTEM_PARTS);
 
 /** Velocity in a passage, m/s, from a flow in L/min and a nominal bore in metres. */
 const speedOf = (litresPerMin: number, bore: number): number => litresPerMin / 60000 / ((Math.PI / 4) * bore * bore);
@@ -236,10 +237,10 @@ function airFeed(engine: Engine, anchors: EngineAnchors, layer: SystemLayer): (s
   };
 }
 
-const COOL = new THREE.Color('#3fa9f5');
-const NORMAL = new THREE.Color('#2fd3a0');
-const HOT = new THREE.Color('#ff5a3c');
-const AIR = new THREE.Color('#bfe6ff');
+const COOL = new THREE.Color(FLUID.coolantCold);
+const NORMAL = new THREE.Color(FLUID.coolant);
+const HOT = new THREE.Color(FLUID.coolantHot);
+const AIR = new THREE.Color(FLUID.airCooled);
 
 /** Coolant channels from the pump's flow and the thermostat; the colour follows the coolant's temperature. */
 function coolantFeed(engine: Engine, anchors: EngineAnchors, layer: SystemLayer): (state: SystemsState) => void {

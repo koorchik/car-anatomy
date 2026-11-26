@@ -12,7 +12,7 @@
 // phase from topology.ts, the bevel pair at phases set here (tooth on tooth's gap where the pitch cones touch). The
 // differential's case and the stubs turn with the case: on the table both wheels turn alike.
 //
-// Implements the SceneModel<GearboxFrame> contract structurally (scene-base.ts).
+// A SceneModel<GearboxFrame> (model-types.ts); what every gearbox model does the same way is in scene-base.ts.
 
 import * as THREE from 'three';
 import { transaxleFrame, TRANSAXLE_LAYOUT, type GearboxPoint, type TransaxleFrame } from '../../drivetrain/layouts/transaxle.ts';
@@ -20,7 +20,7 @@ import type { GearDef, SleevePlace } from '../../drivetrain/spec.ts';
 import type { Gearbox } from '../../drivetrain/topology.ts';
 import { extrude, gearShape, hullShape, merge, MM, zCylinder, type Pulley2D } from '../geometry.ts';
 import { brassMaterial, castAluminiumMaterial } from '../materials.ts';
-import { tag } from '../model-types.ts';
+import { tag, type SceneModel } from '../model-types.ts';
 import { acquireBevelGeometry, bevelSize } from './bevel-mesh.ts';
 import { acquireGearGeometry, drawnGear, type MeshQuality } from './gear-mesh.ts';
 import type { GearboxFrame } from './gearbox-model.ts';
@@ -89,7 +89,7 @@ interface SleeveView {
   travel: number;
 }
 
-export class TransaxleModel extends GearboxSceneBase {
+export class TransaxleModel extends GearboxSceneBase implements SceneModel<GearboxFrame> {
   readonly box: Gearbox;
   readonly layout: TransaxleFrame;
   private readonly quality: MeshQuality;
