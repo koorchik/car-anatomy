@@ -46,7 +46,9 @@ node -e '
 const lanes = require(process.argv[1]);
 const ids = lanes.flatMap((l) => l.stages.map((s) => s.id));
 const merged = new Set(process.argv[2].split(/\s+/).filter(Boolean));
-const done = ids.filter((id) => merged.has(id));
+let partial = {};
+try { partial = require(require("path").join(require("path").dirname(process.argv[1]), "partial.json")); } catch (e) {}
+const done = ids.filter((id) => merged.has(id) && !(id in partial));
 console.error(done.length + " of " + ids.length + " stages already merged into next");
-console.log(JSON.stringify({ repo: process.argv[3], wt: process.argv[4], date: "2026-11-13", trailer: "<the attribution lines this session gives for commits>", maxLive: 16, done }, null, 1));
+console.log(JSON.stringify({ repo: process.argv[3], wt: process.argv[4], date: "2026-11-13", trailer: "<the attribution lines this session gives for commits>", maxLive: 16, done, partial }, null, 1));
 ' "$HERE/dag.json" "$merged" "$REPO" "$WT"
