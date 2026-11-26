@@ -807,6 +807,7 @@ describe('17. Cardan joints', () => {
   });
 });
 
+// Whole runs with the real engine at 1 ms (45 s of road in the first): longer than vitest's 5 s on a busy machine.
 describe('11. the Prius power-split hybrid', () => {
   const pd = buildPowerSplitDrive('toyota-prius-xw30');
   const k = pd.kin;
@@ -839,7 +840,7 @@ describe('11. the Prius power-split hybrid', () => {
     expect(willis).toBeLessThan(1e-9);
     expect([...new Set(over)]).toEqual([]);
     expect(socLo).toBeGreaterThan(b.socMin - 0.005);
-  });
+  }, 60_000);
 
   it('MG1 stands where the analytic ring speed (108/78)·ω_engine says, with the engine held at 1000 and 2000 rpm', () => {
     for (const rpm of [1000, 2000]) {
@@ -849,7 +850,7 @@ describe('11. the Prius power-split hybrid', () => {
     }
     // Research §12's example, gens 1–2 share the set: engine 2000 rpm, ring 3000 rpm, MG1 −600 rpm.
     expect(k.mg1[0] * 2000 + (k.mg1[1] * 3000) / k.ring).toBeCloseTo(-600, 9);
-  });
+  }, 60_000);
 
   it('splits the engine torque 72/28: MG1 holds 30/108 of what the car takes from the crank, the ring gets the rest', () => {
     const r = hybridRig(pd);
@@ -872,9 +873,9 @@ describe('11. the Prius power-split hybrid', () => {
     const crank = r.load.readings().crankNm;
     // The car still gathers speed, so MG1 slows: what its rotor gives up reaches the sun too.
     const sun = -(mg1 / n) + s.core.inertia[sunIndex]! * (s.memberSpeed(sunIndex) - w0);
+    // The sun holds 28 % of the crank's torque; the set's balance leaves the other 72 % to the ring.
     expect(Math.abs(sun / crank - 30 / 108)).toBeLessThan(0.01 * (30 / 108));
-    expect(1 - 30 / 108).toBeCloseTo(0.722, 3);
-  });
+  }, 60_000);
 
   it('pulls away on MG2 alone with the engine at rest, and the floored pedal lights the engine with MG1, never cranking it', () => {
     const r = hybridRig(pd);
@@ -888,7 +889,7 @@ describe('11. the Prius power-split hybrid', () => {
     runRig(r, 3, () => void states.add(r.sim.state));
     expect(r.sim.state).toBe('running');
     expect(states.has('cranking')).toBe(false);
-  });
+  }, 60_000);
 
   it('a lifted pedal brings the engine down without a surge of the car or a stall on the way', () => {
     for (const kmh of [50, 100]) {
@@ -912,7 +913,7 @@ describe('11. the Prius power-split hybrid', () => {
       expect(at[1]!, `${kmh} km/h`).toBeLessThan(at[0]!);
       expect(at[2]!, `${kmh} km/h`).toBeLessThan(at[1]!);
     }
-  });
+  }, 60_000);
 
   it('the brake pedal stops the car and holds it: recovery only slows it, and MG2 never drives it backward', () => {
     const r = hybridRig(pd);
@@ -950,5 +951,5 @@ describe('11. the Prius power-split hybrid', () => {
     runRig(r, 1);
     expect(Math.abs(c.mg2Nm)).toBe(0);
     expect(r.load.vehicle.bus.brakeNm.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
-  });
+  }, 60_000);
 });

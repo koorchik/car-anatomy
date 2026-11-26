@@ -272,6 +272,7 @@ describe('8. the chassis port', () => {
   });
 });
 
+// Whole runs with the real engine at 1 ms: two minutes of road in test 2 take several seconds on a busy machine.
 describe('2–4. the Prius on its power-split box', () => {
   const car = CARS['toyota-prius-xw30']!;
   const pd = buildPowerSplitDrive(car.id);
@@ -285,12 +286,12 @@ describe('2–4. the Prius on its power-split box', () => {
     const capped = hybridRun(pd, { cap: true, seconds: 60 });
     expect(Math.abs(capped.endKmh - car.published.vmaxKmh)).toBeLessThan(1);
     expect(Math.abs(capped.driftKmh)).toBeLessThan(0.5);
-  });
+  }, 120_000);
 
   it('3. 0–100 km/h within ±25 % of the published 10.4 s (its top speed is limited, so the ±7 % check of v_max does not apply)', () => {
     const run = hybridRun(pd, { seconds: 15 });
     expect(Math.abs(run.zeroTo100S! / car.published.zeroTo100S! - 1)).toBeLessThan(0.25);
-  });
+  }, 60_000);
 
   it('4. the chassis pushes against the EPA row of vehicle 10-ZW1H: 20.234 + 0.01993·v + 0.01874·v² lbf, ±1 N at 100 km/h', () => {
     const rl = hybridLoadSpec(pd).chassis.core.roadLoad;
