@@ -244,6 +244,105 @@ export const SUSPENSION_EN: Record<string, string> = {
     'Carries torque from the differential to the wheel. Constant-velocity joints at its ends keep the wheel turning evenly while the shaft tilts with suspension travel. It is cut off near the differential.',
   'Кульковий шарнір рівних кутових швидкостей біля маточини. Кермом це колесо не повертається, тож кути в шарнірі невеликі, а довжини він не змінює.':
     'A ball-type constant-velocity joint at the hub. This wheel does not steer, so the joint works at small angles, and it does not change length.',
+  // The rough road and the shaker (src/ui/suspensions/road-scene.ts, shaker-scene.ts, ride-text.ts, ride-chart.ts,
+  // frf-chart.ts) and their article (ride-article.ts).
+  'Погана дорога': 'Rough road',
+  'Стенд': 'Shaker rig',
+  '{value} %': '{value}%',
+  'не неприємно': 'not uncomfortable',
+  'трохи неприємно': 'a little uncomfortable',
+  'досить неприємно': 'fairly uncomfortable',
+  'неприємно': 'uncomfortable',
+  'дуже неприємно': 'very uncomfortable',
+  'вкрай неприємно': 'extremely uncomfortable',
+  ' або ': ' or ',
+  '{value} м/с²': '{value} m/s²',
+  'Зчеплення шини': 'Tire grip',
+  'коливання {value}': 'swing {value}',
+  'у повітрі {air} · зчеплення {grip}': 'airborne {air} · grip {grip}',
+  'СКВ {value} мм': 'RMS {value} mm',
+  'відбійник стиснуто на {value} мм': 'bump stop squeezed by {value} mm',
+  'до відбійника {value} мм': '{value} mm left to the bump stop',
+  'Колесо втрачає дорогу {value} часу.': 'The wheel loses the road {value} of the time.',
+  'Один амортизатор не може бути найкращим і для спини, і для шини: на цій дорозі комфорт найкращий при ζ {comfort}, зчеплення — при ζ {grip}.':
+    'One shock absorber cannot be best for both your back and the tire: on this road comfort is best at ζ {comfort}, grip at ζ {grip}.',
+  'На {hz} Гц кузов рухається майже однаково з будь-яким амортизатором: три криві для ζ 0,1, 0,3 і 0,7 відходять від однієї точки щонайбільше на {spread}.':
+    'At {hz} Hz the body moves almost the same with any shock absorber: the three curves for ζ 0.1, 0.3 and 0.7 stray from one point by {spread} at most.',
+  'Точно в одну точку їм не дає зійтися шина: вона теж трохи гасить коливання, її сила залежить від того, як рухається колесо, а рух колеса залежить від амортизатора. Вимкни «Демпфування шини», і криві зійдуться.':
+    'The tire keeps them from meeting exactly: it damps a little too, its force depends on how the wheel moves, and the wheel’s motion depends on the shock absorber. Turn off “Tire damping” and the curves meet.',
+  'На {hz} Гц кузов рухається однаково з будь-яким амортизатором: три криві для ζ 0,1, 0,3 і 0,7 проходять через одну точку, розкид {spread}.':
+    'At {hz} Hz the body moves the same with any shock absorber: the three curves for ζ 0.1, 0.3 and 0.7 pass through one point, spread {spread}.',
+  'Без демпфування шини криві сходяться точно. На частоті √(k_t/m_u) колесо гойдається на шині, як вантаж на пружині у власному резонансі: скільки сили його рух забирає в шини, рівно стільки йде на розгін самого колеса. Тож кузову дістається та сама сила, з якою шина тиснула б під нерухомим колесом, хоч який стоїть амортизатор.':
+    'Without tire damping the curves meet exactly. At √(k_t/m_u) the wheel bounces on the tire like a weight on a spring at its own resonance: whatever force its motion takes out of the tire is exactly what accelerates the wheel itself. So the body gets the same force the tire would push with under a wheel that did not move, whatever the shock absorber.',
+  'Тут не допоможе ні амортизатор, ні навіть активна підвіска між кузовом і колесом, лише легше колесо: воно зсуває точку на вищу частоту, а на графіку опускає її.':
+    'Neither a shock absorber nor even an active suspension between the body and the wheel helps here, only a lighter wheel: it moves the point to a higher frequency and, on the chart, lower.',
+  'Комфорт, м/с²': 'Comfort, m/s²',
+  'Коливання навантаження шини, %': 'Tire load swing, %',
+  'Прискорення кузова, м/с²': 'Body acceleration, m/s²',
+  'Сила в плямі контакту, Н': 'Contact patch force, N',
+  'Гц': 'Hz',
+  'кузов {hz} Гц': 'body {hz} Hz',
+  'колесо {hz} Гц': 'wheel {hz} Hz',
+  'незмінна точка': 'invariant point',
+  'пунктир: ζ {zetas}': 'dashed: ζ {zetas}',
+  'A: дуже рівна': 'A: very smooth',
+  'B: звичайна': 'B: ordinary',
+  'C: розбита': 'C: broken',
+  'D: дуже погана': 'D: very bad',
+  'Дорога за ISO 8608': 'Road by ISO 8608',
+  'Швидкість': 'Speed',
+  'Розбита дорога на 140 км/год': 'Broken road at 140 km/h',
+  'Запам’ятати як A': 'Remember as A',
+  'Забути A': 'Forget A',
+  'Амортизатор міняй у розділі «Пружина, амортизатор, шина» нижче: стовпчики покажуть, що стало з комфортом, шиною й ходом, а точка на графіку — де це налаштування серед усіх можливих.':
+    'Change the shock absorber under “Spring, shock absorber, tire” below: the bars show what happened to comfort, the tire and travel, and the dot on the chart shows where this setting sits among all the possible ones.',
+  'Маса колеса з усім, що рухається з ним': 'Mass of the wheel and everything moving with it',
+  'Маса колеса': 'Wheel mass',
+  '{value} кг': '{value} kg',
+  'Графік: комфорт і коливання навантаження шини залежно від ступеня демпфування ζ': 'Chart: comfort and tire load swing against the damping ratio ζ',
+  'рахую новий проїзд…': 'computing a new run…',
+  'Заміряно {seconds} с дороги класу {road} на {speed} км/год, ζ {zeta}, колесо {kg} кг. Довший стовпчик — гірше.':
+    'Measured over {seconds} s of a class {road} road at {speed} km/h, ζ {zeta}, {kg} kg wheel. A longer bar is worse.',
+  'Циліндр під колесом трусить шину синусом, від 0,5 до 25 Гц. Криві — розрахунок, точки — заміри симуляції: на кожній частоті вона чекає, доки коливання встановляться, і міряє за цілу кількість періодів.':
+    'A post under the wheel shakes the tire with a sine from 0.5 to 25 Hz. The curves are the calculation, the dots are what the simulation measures: at each frequency it waits until the motion settles, then measures over a whole number of periods.',
+  'Частота циліндра': 'Post frequency',
+  'Демпфування шини': 'Tire damping',
+  'Незмінна точка √(k_t/m_u)': 'Invariant point √(k_t/m_u)',
+  'Точки від кривої': 'Dots off the curve',
+  'На стенді амортизатор однаковий на стиск і відбій, тому його точно описує одна крива. Справжній м’якший на стиск, ніж на відбій, а такий нелінійний амортизатор відходить від кривої до 3 %. Точки міряно на швидкості циліндра 0,02 м/с, а в 3D циліндр рухається в 2,5 раза сильніше, щоб гойдання було видно.':
+    'On the rig the shock absorber is the same in bump and rebound, so one curve describes it exactly. A real one is softer in bump than in rebound, and such a nonlinear shock strays from the curve by up to 3%. The dots are measured at a post speed of 0.02 m/s; in 3D the post moves 2.5 times harder so the swing shows.',
+  'Графік: прискорення кузова залежно від частоти циліндра': 'Chart: body acceleration against the post frequency',
+  'Графік: сила в плямі контакту залежно від частоти циліндра': 'Chart: contact patch force against the post frequency',
+  'Тримати частоту': 'Hold the frequency',
+  'Прохід частот': 'Sweep the frequencies',
+  '{value} Гц, ζ {zeta}': '{value} Hz, ζ {zeta}',
+  '({value} Н·с/м)': '({value} N·s/m)',
+  'міряю…': 'measuring…',
+  '{n} з {total}, до {gap}': '{n} of {total}, up to {gap}',
+  'усі {total}, до {gap}': 'all {total}, up to {gap}',
+  'Як міряють ефективність підвіски': 'How a suspension’s performance is measured',
+  'Одного числа «яка підвіска краща» немає. Інженери дивляться на три речі одразу, і їх зручно уявити трикутником: комфорт (як трясе людей у кузові), зчеплення (наскільки рівно шина тисне на дорогу) і хід (скільки місця колесу треба до відбійника). Внизу сцени ці три кути — стовпчики, і що довший стовпчик, то гірше.':
+    'There is no single number for “which suspension is better”. Engineers look at three things at once, and they are easiest to picture as a triangle: comfort (how much the people in the body are shaken), grip (how evenly the tire presses on the road) and travel (how much room the wheel needs before the bump stop). Under the scene these three corners are bars, and the longer the bar, the worse.',
+  'Комфорт: зважене прискорення за ISO 2631-1': 'Comfort: weighted acceleration by ISO 2631-1',
+  'Стандарт ISO 2631-1 бере вертикальне прискорення там, де сидить людина, і зважує його за частотою фільтром Wk. Найважче він рахує 4–8 Гц: на цих частотах резонують органи черевної порожнини, і людині найнеприємніше. Повільне гойдання на 1–2 Гц важить приблизно вдвічі менше. Середньоквадратичне значення зваженого прискорення стандарт перекладає в слова: до 0,315 м/с² «не неприємно», 0,315–0,63 «трохи неприємно», 0,5–1 «досить неприємно» і так далі. Смуги навмисно перекриваються, бо люди відчувають по-різному.':
+    'The ISO 2631-1 standard takes the vertical acceleration where a person sits and weights it by frequency with the Wk filter. It counts 4–8 Hz the heaviest: the abdominal organs resonate there, and it is most unpleasant. The slow bounce at 1–2 Hz weighs about half as much. The standard turns the RMS of the weighted acceleration into words: up to 0.315 m/s² “not uncomfortable”, 0.315–0.63 “a little uncomfortable”, 0.5–1 “fairly uncomfortable” and so on. The bands overlap on purpose, because people feel it differently.',
+  'Prosig про ISO 2631': 'Prosig on ISO 2631',
+  'Чверть авто в цій сцені не має сидіння, гумових опор і сайлентблоків, які в справжньому авто гасять дрижання колеса. Тому її цифри комфорту, найімовірніше, завищені, а слова варто читати як порівняння двох налаштувань, а не як оцінку авто. Межі двох верхніх смуг узято з вторинних джерел, із текстом стандарту їх не звірено.':
+    'The quarter car of this scene has no seat, rubber mounts or bushings, which in a real car soak up the wheel’s buzz. So its comfort figures are most likely too high, and the words are best read as a comparison of two setups, not as a rating of a car. The limits of the top two bands come from secondary sources and have not been checked against the text of the standard.',
+  'Зчеплення: як коливається навантаження шини': 'Grip: how the tire load swings',
+  'Шина тримає дорогу силою, з якою її притиснуто. На нерівній дорозі ця сила коливається довкола ваги, що припадає на колесо, і міра цього коливання — середньоквадратичне відхилення, поділене на статичне навантаження (у літературі про вантажівки й дорожнє покриття його називають коефіцієнтом динамічного навантаження). Що більше коливання, то частіше шина недовантажена, а коли сила падає до нуля, колесо в повітрі й не тримає зовсім. До того ж шина з удвічі більшим навантаженням дає менше ніж удвічі більшу силу, тож навіть без відривів коливання з’їдає частину зчеплення: це показує цифра «зчеплення» в стовпчику.':
+    'A tire holds the road with the force pressing it down. On an uneven road that force swings about the weight on the wheel, and the measure of the swing is its RMS deviation over the static load (the literature on trucks and pavements calls it the dynamic load coefficient). The bigger the swing, the more often the tire is underloaded, and when the force drops to zero the wheel is in the air and does not hold at all. On top of that, a tire with twice the load gives less than twice the force, so even without lifting off the swing eats some of the grip: that is the “grip” figure on the bar.',
+  'Buhari та ін.': 'Buhari et al.',
+  'М’яка підвіска добре ізолює кузов, але колесу треба більше місця. Сцена показує середньоквадратичний хід і скільки лишилося до відбійника в найглибшій точці проїзду. Удар у відбійник — це і різкий поштовх у кузов, і стрибок навантаження шини.':
+    'A soft suspension isolates the body well, but the wheel needs more room. The scene shows the RMS travel and how much was left to the bump stop at the deepest point of the run. Hitting the bump stop is both a sharp jolt into the body and a jump in the tire load.',
+  'Чому немає єдиного балу': 'Why there is no single score',
+  'Графік поруч зі стовпчиками показує, що комфорт і зчеплення хочуть різного амортизатора: комфорт — м’якого, шина — значно твердішого. Це не вада якоїсь конструкції, а властивість самої системи «кузов — пружина — колесо — шина»: Хедрік і Бутсуен (1990) показали, що з трьох відгуків чверті авто (прискорення кузова, хід і прогин шини) незалежно можна задати лише один, а решта випливають з нього. Будь-який єдиний бал — це вибір ваг між трьома кутами трикутника, тобто вибір, для чого авто: для таксі, для траси чи для бездоріжжя.':
+    'The chart beside the bars shows that comfort and grip want different shock absorbers: comfort a soft one, the tire a much firmer one. That is not a flaw of any one design but a property of the body–spring–wheel–tire system itself: Hedrick and Butsuen (1990) showed that of the quarter car’s three responses (body acceleration, travel and tire deflection) only one can be set independently, and the others follow from it. Any single score is a choice of weights between the three corners of the triangle, that is, a choice of what the car is for: a taxi, a track or rough country.',
+  'Стенд і незмінна точка': 'The rig and the invariant point',
+  'Ще одна межа видна на стенді. На частоті √(k_t/m_u), близько 13 Гц для цього кута, кузов рухається майже однаково з будь-яким амортизатором: криві для різних ζ проходять майже через одну точку, а без демпфування шини точно через неї. Змінити її можна лише масою колеса. Швидкий прохід частот тут збрехав би: кузову на 1,2 Гц треба кілька секунд, щоб розгойдатися, тому стенд зупиняється на кожній частоті й чекає.':
+    'One more limit shows on the rig. At √(k_t/m_u), about 13 Hz for this corner, the body moves almost the same with any shock absorber: the curves for different ζ pass almost through one point, and exactly through it without tire damping. Only the wheel’s mass can move it. A quick frequency sweep would lie here: the body at 1.2 Hz needs a few seconds to build up its swing, so the rig stops at each frequency and waits.',
+  'Стенди в шиномонтажі (метод EUSAMA) теж трусять колесо, але міряють найменше навантаження шини біля 10–20 Гц і так перевіряють, чи живий амортизатор. Оцінкою підвіски на дорозі це не є: з демпфуванням показник росте дедалі повільніше і навіть за широкої зміни демпфування змінюється менш ніж на 35 пунктів, а тертя в підвісці додає до нього до 30 пунктів.':
+    'Shop testers (the EUSAMA method) shake the wheel too, but they measure the lowest tire load around 10–20 Hz and so check whether the shock absorber is still alive. That is not a rating of the suspension on the road: the figure grows ever more slowly with damping and moves by less than 35 points even over a wide range of damping, while friction in the suspension adds up to 30 points to it.',
   // The axle as a whole (axle-model.ts).
   'Стабілізатор': 'Anti-roll bar',
   'Пружний сталевий пруток поперек авто, кінцями з’єднаний з обома колесами осі. Коли кузов нахиляється в повороті, одне колесо йде вгору, а друге вниз, пруток закручується й опирається крену. Коли обидва колеса йдуть разом, він не працює.':
@@ -334,7 +433,6 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Зовнішній ШРУС: кут': 'Outer CV joint: angle',
   'Ступенів свободи кулака': 'Knuckle’s degrees of freedom',
   'Ступенів свободи: {value}': 'Degrees of freedom: {value}',
-  '{value} кг': '{value} kg',
   'Про цю компоновку загалом': 'About this layout in general',
   '{value} мм рейки': '{value} mm of rack',
 };
