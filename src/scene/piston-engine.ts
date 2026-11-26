@@ -1054,6 +1054,35 @@ export class PistonEngineModel implements EngineModel {
     });
   }
 
+  private readonly ghostBase = new Map<THREE.Material, { opacity: number; transparent: boolean; depthWrite: boolean }>();
+
+  /**
+   * Fades the whole engine toward a faint ghost while another system of a car is in focus (model-types.ts); 1 gives
+   * back what the view draws. The engine page never calls it. Both looks of each shell fade, so a view chosen while the
+   * engine is a ghost keeps it one.
+   */
+  setGhost(alpha: number): void {
+    const a = Math.min(1, Math.max(0, alpha));
+    const materials = new Set<THREE.Material>(Object.values(this.materials) as THREE.Material[]);
+    for (const { solid, glass } of this.shellMeshes) materials.add(solid).add(glass);
+    this.mounted.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      for (const mat of Array.isArray(m) ? m : m ? [m] : []) materials.add(mat);
+    });
+    for (const mat of materials) {
+      let base = this.ghostBase.get(mat);
+      if (!base) {
+        base = { opacity: mat.opacity, transparent: mat.transparent, depthWrite: mat.depthWrite };
+        this.ghostBase.set(mat, base);
+      }
+      const transparent = base.transparent || a < 1;
+      if (mat.transparent !== transparent) mat.needsUpdate = true;
+      mat.transparent = transparent;
+      mat.opacity = base.opacity * a;
+      mat.depthWrite = base.depthWrite && a >= 1;
+    }
+  }
+
   /**
    * Adds `base` to every renderOrder the model set while building (2–7), so that in a car its glass sorts in a band of
    * its own (the whole-car plan, transparency). The engine page leaves the base at 0.

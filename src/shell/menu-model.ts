@@ -2,7 +2,9 @@
 // still say 'coming soon', the tabs of each and the way back to the car the visitor came from. Built from the sections'
 // registry (registry.ts), so a section that registers a page gets its item without touching the menu.
 
+import { carById } from '../data/cars.ts';
 import { t } from '../i18n/t.ts';
+import { focusForRoute } from '../vehicle/car-systems.ts';
 import type { SectionEntry } from './registry.ts';
 import { formatRoute, type Route, type SectionId } from './routes.ts';
 
@@ -36,9 +38,6 @@ const TAB_LABELS: Record<string, () => string> = {
   'car/drive': () => t('Їзда'),
   'car/designer': () => t('Зібрати авто'),
 };
-
-/** The system of the car a section's pages are about, for the way back: `#/car/<car>?focus=<system>`. */
-const FOCUS: Partial<Record<SectionId, string>> = { engines: 'engine', gearboxes: 'gearbox', suspensions: 'suspension' };
 
 export interface MenuTab {
   key: string;
@@ -100,6 +99,7 @@ export function routeEntry(route: Route, sections: readonly SectionEntry[]): Sec
 export function backToCar(route: Route): string | null {
   const car = route.query.car;
   if (!car || route.section === 'car' || route.section === 'not-found') return null;
-  const focus = route.section === 'engines' && route.page === 'sump' ? 'oil' : FOCUS[route.section];
+  // The system the page is about: the overview brings back the one the visitor came from (car-systems.ts).
+  const focus = focusForRoute(route, carById(car));
   return formatRoute({ section: 'car', page: 'overview', path: [car], query: focus ? { focus } : {} });
 }
