@@ -16,13 +16,14 @@ export class ShellAudio implements AudioHost {
   }
 
   /**
-   * Between two sections, after the one left has let go: the load comes off, the crank is free and the engine stops,
-   * so a new section starts from a quiet engine whatever the last one left on it.
+   * Between two sections, after the one left has let go: the load comes off, the throttle closes, the crank is free and
+   * the engine stops, so a new section starts from a quiet engine whatever the last one left on it.
    */
   release(): void {
     const drive = this.current;
     if (!drive) return;
     drive.setLoad(null);
+    drive.setPedal(0);
     drive.lock(null);
     drive.stop();
   }
