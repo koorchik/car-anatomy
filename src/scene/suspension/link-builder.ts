@@ -34,6 +34,8 @@ const EYE_R = 0.2;
 const EYE_LENGTH = 0.36;
 const BUSH_R = 0.15;
 const BUSH_LENGTH = 0.44;
+/** Tube radius of a single pivot arm, which carries the hub: stouter than a wishbone's. */
+const RIGID_ARM_R = 0.22;
 
 /** A wishbone: two tubes and a web from its bushes to its ball joint, turning about the bush axis. */
 export class ArmView {
@@ -194,11 +196,22 @@ export class LinkSet {
 
   /** `rodLengths`: the solver's length of each rod (scene units), in the order of `link.rods`. */
   constructor(link: CornerLinkage, rodLengths: number[], wheelCentreY: number, m: CornerMaterials) {
+    // A single pivot arm written as links (rigidArm): the arm is one stout piece with the hub, without a ball joint,
+    // and the links that only hold it to its axis are not drawn.
+    const hidden = new Set(link.rigidArm?.hidden ?? []);
     this.arms = link.wishbones.map((w) => {
       const below = toScene(w.ball).y < wheelCentreY;
-      return new ArmView(w, m, below, below ? 0.16 : 0.13);
+      const rigid = w.id === link.rigidArm?.arm;
+      const arm = new ArmView(w, m, below, rigid ? RIGID_ARM_R : below ? 0.16 : 0.13);
+      if (rigid) arm.joint.visible = false;
+      arm.object.visible = !hidden.has(w.id);
+      return arm;
     });
-    this.rods = link.rods.map((r, i) => new RodView(r, rodLengths[i]!, m));
+    this.rods = link.rods.map((r, i) => {
+      const rod = new RodView(r, rodLengths[i]!, m);
+      rod.object.visible = !hidden.has(r.id);
+      return rod;
+    });
     for (const arm of this.arms) {
       this.group.add(arm.object);
       this.drawn.push(...arm.drawn());
@@ -206,7 +219,7 @@ export class LinkSet {
     for (const rod of this.rods) {
       this.group.add(rod.object);
       this.drawn.push(rod.link);
-      if (!rod.tie) this.bushAt.push({ rod, y: () => 0 }, { rod, y: () => rod.length });
+      if (!rod.tie && !hidden.has(rod.spec.id)) this.bushAt.push({ rod, y: () => 0 }, { rod, y: () => rod.length });
     }
     if (this.bushAt.length > 0) {
       const geo = new THREE.CylinderGeometry(BUSH_R, BUSH_R, BUSH_LENGTH, 16).rotateX(Math.PI / 2);

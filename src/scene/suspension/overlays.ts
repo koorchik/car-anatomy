@@ -72,6 +72,11 @@ export class ForceArrows {
     this.arrows.hide(FORCE_ARROWS.indexOf(which));
   }
 
+  /** Hides the arrow of link `i` (one the drawing leaves out). */
+  hideLink(i: number): void {
+    this.arrows.hide(FORCE_ARROWS.length + i);
+  }
+
   hideLinks(): void {
     for (let i = 0; i < this.links; i++) this.arrows.hide(FORCE_ARROWS.length + i);
   }

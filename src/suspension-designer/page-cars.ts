@@ -7,8 +7,9 @@
 // stays typical, as catalogue.ts has it: the hardpoints (the templates' typical geometry on the car's track and tyres),
 // the springs (the typical ride frequency), the dampers («comfort»), the bars (BAR_TYPICAL_MM) and the unsprung masses.
 
-import type { CornerSpec, KnuckleKind } from '../suspension/spec.ts';
+import type { ChassisSpec, CornerSpec, KnuckleKind } from '../suspension/spec.ts';
 import { SPLIT_KNUCKLE_DEFAULTS } from '../suspension/templates/macpherson.ts';
+import { asLinksCorner } from '../suspension/pivot-links.ts';
 import { CG_HEIGHT_ESTIMATE_M, drivingMassKg, type CarRecord } from '../vehicle/car.ts';
 import { parseTyreSize } from '../vehicle/tyre-size.ts';
 import { CARS } from '../data/cars.ts';
@@ -88,11 +89,17 @@ export function recordFigures(car: CarRecord, layouts: CarFigures['layouts'], ex
 
 /** The left corner of one axle of a design, with the sprung and unsprung masses over it. */
 export function designCorner(design: ChassisDesign, end: AxleEnd): CornerSpec {
-  const spec = catalogueChassis(design);
+  return specCorner(design, catalogueChassis(design), end);
+}
+
+/** The left corner of one axle of a design's ChassisSpec, with the masses over it. */
+export function specCorner(design: ChassisDesign, spec: ChassisSpec, end: AxleEnd): CornerSpec {
   const axle = end === 'F' ? spec.front : spec.rear;
-  if (axle.axle.linkage.kind !== 'links') throw new Error(`The ${end} axle of ${design.car ?? 'the design'} is not a corner on links`);
+  const link = axle.axle.linkage;
+  if (link.kind !== 'links' && link.kind !== 'pivot') throw new Error(`The ${end} axle of ${design.car ?? 'the design'} is not an independent corner`);
   return {
-    axle: { ...axle.axle, linkage: axle.axle.linkage },
+    // A single pivot arm goes as the same arm written as links (pivot-links.ts): the scenes and the 3D take links.
+    axle: asLinksCorner({ ...axle.axle, linkage: link }),
     sprungKg: cornerSprungKg(design, end),
     unsprungKg: axle.unsprungKg,
     tyre: design.tyre,
@@ -119,7 +126,13 @@ export interface PageCar {
 export interface SuspensionPage {
   id: SuspensionPageId;
   /** The axle the page's own corner stands for, and the corner; a function, so the page builds it only when shown. */
-  base: { end: AxleEnd; corner: () => CornerSpec; geometry: 'measured' | 'typical' };
+  base: {
+    end: AxleEnd;
+    corner: () => CornerSpec;
+    geometry: 'measured' | 'typical';
+    /** The design the page's own corner comes from, where the page needs it (the pivot pages' sweep slider). */
+    design?: () => ChassisDesign;
+  };
   cars: readonly PageCar[];
 }
 
@@ -132,4 +145,18 @@ export function pageCorner(page: SuspensionPage, car: PageCar | null): CornerSpe
  *  wishbone in front and a multilink at the back, and a little more of its weight at the rear. Estimates throughout. */
 export const TYPICAL_RWD: ChassisDesign = Object.freeze(
   designOf({ ...DEFAULT_CAR, drive: 'rwd', frontShare: 0.52 }, typicalAxle('double-wishbone', 'F'), typicalAxle('multilink', 'R')),
+);
+
+/** The typical car of the trailing-arm page: the default compact front-driven car on trailing arms at the rear. */
+export const TYPICAL_FWD_TRAILING: ChassisDesign = Object.freeze(designOf(DEFAULT_CAR, typicalAxle('macpherson', 'F'), typicalAxle('trailing-arm', 'R')));
+
+/** The typical car of the semi-trailing page: the default design driven at the rear on semi-trailing arms. */
+export const TYPICAL_RWD_SEMI: ChassisDesign = Object.freeze(
+  designOf({ ...DEFAULT_CAR, drive: 'rwd', frontShare: 0.52 }, typicalAxle('macpherson', 'F'), typicalAxle('semi-trailing', 'R')),
+);
+
+/** The typical car of the swing-axle page: a small car with its engine at the back over a driven swing axle, most of
+ *  its weight on the rear wheels. Estimates throughout. */
+export const TYPICAL_REAR_ENGINE: ChassisDesign = Object.freeze(
+  designOf({ ...DEFAULT_CAR, massKg: 1000, drive: 'rwd', frontShare: 0.42 }, typicalAxle('macpherson', 'F'), typicalAxle('swing-axle', 'R')),
 );
