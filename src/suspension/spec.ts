@@ -144,6 +144,22 @@ export type BeamLinkage = TwistBeamLinkage | SolidAxleLinkage;
 
 export type SpringKind = 'coil' | 'torsion' | 'leaf' | 'air' | 'hydro';
 
+/**
+ * A rocker (bell crank) on the body between a push or pull rod and the spring and damper (stage P14-core, rocker.ts):
+ * it turns about the body axis through `pivot` along `axis`; the rod runs from the element's `wheel` end (on `on`) to
+ * `rodEnd`, a rocker point, and keeps its length; the element runs from its `body` point to `elementEnd`, another
+ * rocker point. Points at design.
+ */
+export interface RockerSpec { pivot: Vec3; axis: Vec3; rodEnd: Vec3; elementEnd: Vec3 }
+
+/**
+ * The third (heave) spring of a pushrod axle: across the car between a point of the left rocker and its mirror on the
+ * right one. Both rockers turn alike in heave and the spring is squeezed; in roll they turn against each other and its
+ * length barely changes, so it adds heave stiffness and almost no roll stiffness. Linear around design both ways (a
+ * preloaded unit), N/m along it.
+ */
+export interface ThirdSpringSpec { rockerPoint: Vec3; rate: number }
+
 export interface SpringSpec {
   kind: SpringKind;
   /** Along the spring, N/m. */
@@ -157,6 +173,8 @@ export interface SpringSpec {
   /** Id of the wishbone or rod that carries the `wheel` end; absent when it sits on the knuckle. A rod carries it on
    *  its own line (its spin about that line is free). */
   on?: string;
+  /** Moved by a rocker on the body instead of directly (a pushrod): `wheel` is then the rod's outer end. */
+  rocker?: RockerSpec;
   /** For a coil on a strut: how far the upper seat sits below the top mount and the lower seat above the strut's lower
    *  point, m. The spring's length is the strut length minus both; only drawings and the perch need it. */
   strutSeats?: { upperM: number; lowerM: number };
@@ -170,6 +188,8 @@ export interface DamperSpec {
   wheel: Vec3 | 'strut';
   /** Id of the wishbone or rod that carries the `wheel` end, as for the spring. */
   on?: string;
+  /** Moved by a rocker, as the spring may be. */
+  rocker?: RockerSpec;
   /** N·s/m along the damper, below the knee. */
   compression: number;
   rebound: number;
@@ -218,6 +238,8 @@ export interface AxleSpec<L extends AnyCornerLinkage | BeamLinkage = CornerLinka
   diff: 'body' | 'axle' | 'none';
   /** Driven corners with the differential on the body; null otherwise. */
   halfshaft: HalfshaftSpec | null;
+  /** The third spring of a pushrod axle (on the spring's rocker); absent on other axles. */
+  thirdSpring?: ThirdSpringSpec;
   /** Wheel travel from design ride height to the end stops, m: bump to a fully pressed bump stop, droop to damper
    *  top-out. The kinematic tables cover this range. */
   travel: { bumpM: number; droopM: number };

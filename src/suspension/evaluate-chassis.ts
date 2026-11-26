@@ -20,7 +20,7 @@
 // the road load of the car on top; the brake balance says which axle gets there first. Each figure says what it leaves
 // out where it is defined.
 
-import type { AnyAxleLinkage, AxleSpec, ChassisSpec, SolidAxleLinkage, SwayBarSpec, TwistBeamLinkage } from './spec.ts';
+import type { AnyAxleLinkage, AxleSpec, ChassisSpec, DamperKind, SolidAxleLinkage, SwayBarSpec, TwistBeamLinkage } from './spec.ts';
 import { buildChassis, type Chassis } from './chassis.ts';
 import { ChassisAxle, newWheelSample } from './chassis-axle.ts';
 import { buildAxleLite, LITE_ROLL_RAD, type AxleLite } from './axle-lite.ts';
@@ -29,7 +29,8 @@ import { TwistBeamSolver } from './solve-twist-beam.ts';
 import { SolidAxle, newSolidSample } from './solid-kinematics.ts';
 import { rollModel, type RollModel } from './statics.ts';
 import { antiGeometry, type AntiGeometry } from './anti.ts';
-import { coilForce, G } from './forces.ts';
+import { G, gasSpringRate, levelGasSpring, springForce } from './forces.ts';
+import { ADAPTIVE_SCALES, controlledLinear } from './damper-control.ts';
 import {
   EVALUATE_ROADS, invariantPoints, quarterGains, quarterModes, roughRoadEstimate, newQuarterGains, type InvariantPoints,
   type QuarterLinear, type QuarterMode, type RoughRoadEstimate,
@@ -57,6 +58,8 @@ const MAX_ACC = 3 * G;
 const INCLINATION_MAX = 0.15;
 /** Braking from 100 km/h. */
 const BRAKING_FROM_MS = 100 / 3.6;
+/** Payload of the laden car, kg, at its centre of mass: four adults and luggage (a choice of the page). */
+export const LADEN_PAYLOAD_KG = 300;
 
 /** Everything the designer reads about one axle. Angles in radians, lengths in metres. */
 export interface AxlePerformance {
@@ -98,6 +101,10 @@ export interface AxlePerformance {
   /** Load transfer per g by Milliken's terms, N, and the roll stiffness of the axle's suspension, N·m/rad. */
   transferPerG: { elastic: number; geometric: number; unsprung: number; total: number };
   rollStiffness: number;
+  /** The car laden with LADEN_PAYLOAD_KG: the ride frequency and how far the body sank over this axle, m. A coil keeps
+   *  its rate and sinks; a levelled air spring or hydropneumatic strut keeps the height and changes its rate
+   *  (spring-types.ts). */
+  laden: { rideHz: number; sagM: number };
   /** Largest share of a half-shaft joint's limit (angle of either joint, plunge) over the travel at straight ahead;
    *  NaN without half-shafts. Steering lock is not in it (the designer has no rack yet, P13-core). */
   jointUse: number;
@@ -123,6 +130,9 @@ export interface ChassisPerformance {
   comfortBands: ComfortBand[];
   /** Grip on a bad road: the grip left on the class C road at 15 m/s, of the axle that keeps less (0..1). */
   roughGrip: number;
+  /** Whether active dampers hold the body level in a steady turn and under braking (then roll and pitch are the tyres'
+   *  alone: the actuators cancel the suspension's part, the load transfer stays where the springs and bars put it). */
+  levelled: boolean;
   /** Body roll over the road per g, rad; front axle's share of the lateral load transfer; geometric and elastic shares
    *  of the total transfer (the same at any lateral acceleration in the linear model, read at 0.5 g). */
   rollPerG: number;
@@ -381,9 +391,9 @@ function axleLinear(c: Chassis, k: 0 | 1): QuarterLinear {
   const R = newWheelSample();
   const support = (q: number): number => {
     ax.sample(q, q, L, R);
-    const fL = coilForce(cL.spring.rate, cL.spring.freeM, L.springLen, cL.spring.rate2, cL.spring.fromM);
-    const fR = coilForce(cR.spring.rate, cR.spring.freeM, R.springLen, cR.spring.rate2, cR.spring.fromM);
-    return fL * L.mrSpring + fR * R.mrSpringCross;
+    const fL = springForce(cL.spring, L.springLen);
+    const fR = springForce(cR.spring, R.springLen);
+    return fL * L.mrSpring + fR * R.mrSpringCross + 2 * c.thirdRates[k] * q;
   };
   const eps = 1e-4;
   const k1 = (support(eps) - support(-eps)) / (2 * eps);
@@ -410,6 +420,46 @@ function quarterRide(lin: QuarterLinear, patchM: number, tyre: Tyre): QuarterRid
     const opts = { patchM, tyre };
     return { body, hop, smooth: roughRoadEstimate(lin, EVALUATE_ROADS.smooth, opts), rough: roughRoadEstimate(lin, EVALUATE_ROADS.rough, opts) };
   });
+}
+
+/**
+ * The ride of an axle with its damper kind (damper-control.ts): MagneRide and active dampers as the linear skyhook; an
+ * adaptive damper takes, on each road, the setting that does best there (the softest that gives the best comfort on
+ * the smooth road, the one that keeps the most grip on the rough road), its modes at its own setting.
+ */
+function controlledRide(lin: QuarterLinear, kind: DamperKind, patchM: number, tyre: Tyre): QuarterRide {
+  if (kind !== 'adaptive') return quarterRide(controlledLinear(lin, kind), patchM, tyre);
+  const rides = ADAPTIVE_SCALES.map((s) => quarterRide(controlledLinear(lin, kind, s), patchM, tyre));
+  const own = rides[ADAPTIVE_SCALES.indexOf(1)];
+  const smooth = rides.reduce((a, b) => (b.smooth.comfortAw < a.smooth.comfortAw ? b : a)).smooth;
+  const rough = rides.reduce((a, b) => (b.rough.availableGrip > a.rough.availableGrip ? b : a)).rough;
+  return { body: own.body, hop: own.hop, smooth, rough };
+}
+
+/**
+ * Axle k laden with its share of `payloadKg` (spring-types.ts): its ride frequency with the tyre in series, and the
+ * body's sag. A coil's heave rate stays; a gas spring (levelled) changes its rate along the element as its pressure
+ * follows the load, which reaches the wheel through the heave motion ratio squared.
+ */
+function ladenAxle(c: Chassis, k: 0 | 1, lin: QuarterLinear, payloadKg: number): { rideHz: number; sagM: number } {
+  const corner = c.corners[2 * k];
+  const share = k === 0 ? c.frontShare : 1 - c.frontShare;
+  const dm = (payloadKg * share) / 2;
+  const L = newWheelSample();
+  const R = newWheelSample();
+  c.axles[k].sample(0, 0, L, R);
+  const mrHeave = L.mrSpring + L.mrSpringCross;
+  let rate = lin.k;
+  let sagM = (dm * G) / lin.k;
+  const gas = corner.spring.gas;
+  if (gas) {
+    const along = gasSpringRate(gas, L.springLen);
+    const laden = gasSpringRate(levelGasSpring(gas, corner.spring.staticN + (dm * G) / mrHeave), L.springLen);
+    rate = lin.k + (laden - along) * mrHeave * mrHeave;
+    sagM = 0;
+  }
+  const ride = (rate * lin.kt) / (rate + lin.kt);
+  return { rideHz: Math.sqrt(ride / (lin.ms + dm)) / (2 * Math.PI), sagM };
 }
 
 /** Gains of an axle's quarter car on a logarithmic grid of frequencies, for the graph of its response. */
@@ -530,7 +580,14 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
     const a = Math.max(-2 * A, Math.min(2 * A, at));
     return [0, 1, 2, 3].map((i) => parabola(t[0][i], t[1][i], t[2][i], A, a)) as WheelAngles;
   };
-  const phi = (a: number): number => roll.gradient * a;
+  // Active dampers on both axles hold the body level: no suspension roll (the wheels stay at rest travel, the body rolls
+  // only on its tyres), and no suspension pitch on the brakes.
+  const levelled = spec.front.axle.damper.kind === 'active' && spec.rear.axle.damper.kind === 'active';
+  const suspensionShare = levelled ? 0 : 1;
+  const tyreGradient = [0, 1].map((k) => roll.gradient - roll.suspensionGradient[k]);
+  const rollGradient = levelled ? (tyreGradient[0] + tyreGradient[1]) / 2 : roll.gradient;
+  /** Body roll over the road at axle k for lateral acceleration a. */
+  const phi = (k: number, a: number): number => (levelled ? tyreGradient[k] : roll.gradient) * a;
   const share = c.lateralShare;
   const staticN = [c.corners[0].staticN, c.corners[2].staticN];
   const transfer = (k: number, a: number): number => roll.transferPerAy[k].total * a;
@@ -541,8 +598,8 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
     return inner > 0 ? [inner, staticN[k] + t] : [0, 2 * staticN[k]];
   };
   const inclinations = (k: number, a: number, rolled: boolean): [number, number] => {
-    const [cL, cR] = rolled ? anglesAt(k, a) : anglesAt(k, 0);
-    const p = rolled ? phi(a) : 0;
+    const [cL, cR] = rolled ? anglesAt(k, a * suspensionShare) : anglesAt(k, 0);
+    const p = rolled ? phi(k, a) : 0;
     const lim = (g: number): number => Math.max(-INCLINATION_MAX, Math.min(INCLINATION_MAX, g));
     return [lim(inclinationOf('left', cL - p)), lim(inclinationOf('right', cR + p))];
   };
@@ -567,7 +624,7 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
   const kTyres = gradient((a) => slipAngles(a, false, false));
   const kTransfer = gradient((a) => slipAngles(a, true, false));
   const kCamber = gradient((a) => slipAngles(a, true, true));
-  const kRollSteer = gradient((a) => steerOf(1, a) - steerOf(0, a));
+  const kRollSteer = gradient((a) => steerOf(1, a * suspensionShare) - steerOf(0, a * suspensionShare));
   const understeerPerG = kCamber + kRollSteer;
   const L = c.wheelbaseM;
   const criticalSpeedMs = understeerPerG < 0 ? Math.sqrt((-L * G) / understeerPerG) : Infinity;
@@ -601,7 +658,7 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
 
   // Rollover: m·a·h = m·g·(t/2 − e), with the sprung centre of mass moved sideways by h′·φ in roll.
   const tMean = (c.tracks[0] + c.tracks[1]) / 2;
-  const shift = (c.sprung.massKg / m) * roll.hPrimeM * roll.gradient;
+  const shift = (c.sprung.massKg / m) * roll.hPrimeM * rollGradient;
   const rolloverAcc = (G * tMean) / 2 / (c.cgHeightM + G * shift);
   const liftOffAcc = Math.min(...[0, 1].map((k) => (roll.transferPerAy[k].total > 0 ? staticN[k] / roll.transferPerAy[k].total : Infinity)));
 
@@ -654,12 +711,12 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
   const rides = lins.map((lin, k) => {
     const corner = c.corners[2 * k];
     const patch = patchLengthM(corner.tyre.freeRadiusM, corner.staticN / corner.tyre.kt);
-    return quarterRide(lin, patch, tyreAt(spec.tyre, corner.staticN));
+    return controlledRide(lin, axleSpecs[k].axle.damper.kind, patch, tyreAt(spec.tyre, corner.staticN));
   });
   const transferN = (m * G * h) / L;
   const sink = (k: number, antiPct: number): number => {
     const lin = lins[k];
-    return (transferN / 2) * ((1 - antiPct / 100) / lin.k + 1 / lin.kt);
+    return (transferN / 2) * ((suspensionShare * (1 - antiPct / 100)) / lin.k + 1 / lin.kt);
   };
   const pitchPerG = (sink(0, anti.braking[0]) + sink(1, anti.braking[1])) / L;
 
@@ -693,14 +750,14 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
     const lite = probe[k].lite;
     const d = lite?.design;
     const t = roll.transferPerAy[k];
-    const outer = anglesAt(k, OUTER_CAMBER_AT)[1] + phi(OUTER_CAMBER_AT);
+    const outer = anglesAt(k, OUTER_CAMBER_AT * suspensionShare)[1] + phi(k, OUTER_CAMBER_AT);
     // Roll steer per radian of suspension roll, from the parabola's slope at rest.
     const dA = 0.01 * G;
     const phiS = roll.suspensionGradient[k] * dA;
     const rollSteer = phiS !== 0 ? (steerOf(k, dA) - steerOf(k, -dA)) / (2 * phiS) : 0;
     const rideRate = (lin.k * lin.kt) / (lin.k + lin.kt);
     return {
-      linear: lin,
+      linear: controlledLinear(lin, axleSpecs[k].axle.damper.kind),
       rideHz: Math.sqrt(rideRate / lin.ms) / (2 * Math.PI),
       body: ride.body,
       hop: ride.hop,
@@ -725,6 +782,7 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
       transferPerG: { elastic: t.elastic * G, geometric: t.geometric * G, unsprung: t.unsprung * G, total: t.total * G },
       rollStiffness: roll.stiffness[k].total,
       jointUse: probe[k].jointUse,
+      laden: ladenAxle(c, kk, lin, LADEN_PAYLOAD_KG),
     } satisfies AxlePerformance;
   }) as [AxlePerformance, AxlePerformance];
 
@@ -739,7 +797,8 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
     comfortAw,
     comfortBands: comfortBands(comfortAw),
     roughGrip: Math.min(rides[0].rough.availableGrip, rides[1].rough.availableGrip),
-    rollPerG: roll.gradient * G,
+    levelled,
+    rollPerG: rollGradient * G,
     frontTransferShare: roll.transferPerAy[0].total / totalTransfer,
     geometricShare: geometric / totalTransfer,
     elasticShare: elastic / totalTransfer,
