@@ -73,6 +73,27 @@ describe('on the table', () => {
     expect(Object.values(drive.frame().sleeves).every((p) => p === 0)).toBe(true);
   });
 
+  it('a box changed on the panel turns on from where the old one stood, mid-shift too', () => {
+    const old = new TableDrive(e30, '2');
+    for (let i = 0; i < 30; i++) old.step(1 / 60, 900);
+    old.select('3');
+    old.step(SLEEVE_TRAVEL_S / 2, 900);
+    const input = e30.members.indexOf('input');
+    const was = old.frame().angles[input]!;
+    const sleeve = old.frame().sleeves['2-3']!;
+    expect(sleeve).toBeCloseTo(0.5, 9);
+    // The same box with a sixth speed: other members, the same input shaft and sleeves.
+    const six = buildGearbox(layshaftSpec(withSpeedCount(e30Desc, 6)));
+    const next = new TableDrive(six, '3');
+    next.continueFrom(old);
+    expect(next.frame().angles[six.members.indexOf('input')]).toBeCloseTo(was, 12);
+    expect(next.frame().sleeves['2-3']).toBeCloseTo(sleeve, 12);
+    // The shift goes on through neutral into third rather than starting there.
+    expect(next.engaged).toBe('N');
+    for (let i = 0; i < 120; i++) next.step(1 / 240, 900);
+    expect(next.engaged).toBe('3');
+  });
+
   it('reverse turns the output backward', () => {
     const drive = new TableDrive(e30, 'R');
     const out = e30.members.indexOf('output');

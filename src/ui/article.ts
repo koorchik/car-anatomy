@@ -1,6 +1,8 @@
 // The knowledge panel: figures, explanation, and charts computed from the engine's own geometry.
 
+import { CAR_LIST } from '../data/cars.ts';
 import { ENGINES, engineFacts } from '../data/engines.ts';
+import { GEARBOX_PAGE_NAMES } from '../data/gearbox-names.ts';
 import type { EngineFacts } from '../designer/catalogue.ts';
 import { ALL_LAYERS, BalanceForces, atRpm, massesOf, roughly } from '../engine/balance-forces.ts';
 import { COOLING_NAMES, FUEL_SYSTEM_NAMES } from '../designer/systems.ts';
@@ -10,6 +12,8 @@ import { ASPIRATION_NAMES, VALVETRAIN_NAMES } from '../data/engine-names.ts';
 import type { EngineSpec } from '../engine/spec.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
+import { pageShown } from '../shell/registry.ts';
+import { carLinks, carsWithEngine, pageIndex } from '../vehicle/links.ts';
 import { VALVETRAIN_FIELD_NAMES, valvetrainArticleHtml, valvetrainFigures } from './valvetrain-article.ts';
 
 const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { maximumFractionDigits: digits, minimumFractionDigits: digits });
@@ -53,6 +57,18 @@ const figures = (engine: Engine): Array<[string, string]> => {
   return rows;
 };
 
+/** The gearbox row: the gearbox of each car with this engine, when its page can be opened (the whole-car plan's cross links). */
+const gearboxRows = (s: EngineSpec): string => {
+  const pages = pageIndex({ gearboxes: (page) => pageShown('gearboxes', page) });
+  return carsWithEngine(s.id, CAR_LIST)
+    .flatMap((car) =>
+      carLinks(car, pages)
+        .filter((link) => link.section === 'gearboxes')
+        .map((link) => `<div><dt>${t('Коробка')}</dt><dd><a class="sibling" href="${link.href}">${escapeHtml(GEARBOX_PAGE_NAMES[link.target] ?? link.target)}</a>, ${escapeHtml(car.name)}</dd></div>`),
+    )
+    .join('');
+};
+
 const BAL_LABELS: Array<[keyof ReturnType<typeof balance>, string, string]> = [
   ['force1', t('Сила, 1-й порядок'), t('Трусить двигун з частотою обертів')],
   ['force2', t('Сила, 2-й порядок'), t('Трусить удвічі частіше за оберти')],
@@ -83,7 +99,11 @@ const forcesAtRedline = (engine: Engine): string => {
           : bf.higherLeft()
             ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а {after} 1-й і 2-й порядки гасять одне одного. Лишаються лише слабкі вищі порядки, до {force} Н.', values)
             : t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, але {after} всі вони гасять одна одну.', values);
-  return `<p>${text} <button type="button" class="btn forces-show" data-show-forces>${t('Показати стрілки сил на моделі')}</button></p>`;
+  // The card's force polygon shows what the bars and figures only state: which forces cancel and which are left.
+  const polygon = engine.isRotary
+    ? ''
+    : ` ${t('Чому так, видно в картці сил поруч із моделлю: многокутник складає сили голова до хвоста й замикається лише там, де вони гасять одна одну, а слово під ним каже, як хитає двигун те, що лишилось.')}`;
+  return `<p>${text}${polygon} <button type="button" class="btn forces-show" data-show-forces>${t('Показати сили на моделі й на схемі')}</button></p>`;
 };
 
 const balanceChart = (engine: Engine): string => {
@@ -210,7 +230,7 @@ export function articleHtml(engine: Engine): string {
     ${isVariant ? '' : `<p class="lead">${escapeHtml(a.lead)}</p>`}
     <dl class="figures">${figures(engine)
       .map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`)
-      .join('')}</dl>
+      .join('')}${gearboxRows(s)}</dl>
     ${verify}
     ${engine.isRotary ? '' : `<p class="note">${t('{link}: як олива в піддоні поводиться на треку і чи дістане її насос.', { link: `<a class="sibling" href="#/sump/${s.id}">${t('Мащення на треку')}</a>` })}</p>`}
     ${facts ? factsHtml(facts, voiceText(s)) : ''}

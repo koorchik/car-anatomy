@@ -171,4 +171,4 @@ export const DEFAULT_CAR: CarParams = {
   tyre: 'street',
 };
 
-export const DEFAULT_CHASSIS: ChassisDesign = designOf(DEFAULT_CAR, typicalAxle('macpherson', 'F'), typicalAxle('multilink', 'R'));
+export const DEFAULT_CHASSIS: ChassisDesign = Object.freeze(designOf(DEFAULT_CAR, typicalAxle('macpherson', 'F'), typicalAxle('multilink', 'R')));
