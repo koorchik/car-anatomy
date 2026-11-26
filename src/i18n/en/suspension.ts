@@ -298,6 +298,7 @@ export const SUSPENSION_EN: Record<string, string> = {
     'Change the shock absorber under “Spring, shock absorber, tire” below: the bars show what happened to comfort, the tire and travel, and the dot on the chart shows where this setting sits among all the possible ones.',
   'Маса колеса з усім, що рухається з ним': 'Mass of the wheel and everything moving with it',
   'Маса колеса': 'Wheel mass',
+  '{value} кг': '{value} kg',
   'Графік: комфорт і коливання навантаження шини залежно від ступеня демпфування ζ': 'Chart: comfort and tire load swing against the damping ratio ζ',
   'рахую новий проїзд…': 'computing a new run…',
   'Заміряно {seconds} с дороги класу {road} на {speed} км/год, ζ {zeta}, колесо {kg} кг. Довший стовпчик — гірше.':

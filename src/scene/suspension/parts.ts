@@ -194,13 +194,29 @@ export const AXLE_PARTS: Record<string, PartInfo> = {
   },
 };
 
+/** A pushrod corner's own parts (stage P14): the rod, the rocker and the third spring. */
+const ROCKER_PARTS: Record<string, PartInfo> = {
+  'susp.pushrod': {
+    name: t('Штовхач'),
+    text: t('Тонка тяга від нижнього важеля до коромисла на кузові. Коли колесо йде вгору, вона штовхає коромисло й працює на стиск, тому мусить бути товстішою, ніж тяга, що тягне (pullrod).'),
+  },
+  'susp.rocker': {
+    name: t('Коромисло'),
+    text: t('Важіль на осі в кузові: одним плечем його повертає штовхач, другим він стискає пружину з амортизатором. Відношення плечей і кути між ними задають, на скільки стискається пружина за міліметр ходу колеса і як це відношення росте на ході.'),
+  },
+  'susp.third-spring': {
+    name: t('Третя пружина'),
+    text: t('Пружина поперек авто між коромислами лівого й правого колеса. Коли обидва колеса йдуть угору, коромисла повертаються в один бік і стискають її; на крені вони повертаються назустріч, і її довжина майже не змінюється. Тож вона тримає кузов на підйомі, а крену майже не помічає.'),
+  },
+};
+
 /**
  * What the suspensions section registers (parts-registry.ts), as one dictionary: a corner's cards with the axle's own
  * keys (the anti-roll bar and its links). Both name 'susp.rack', a corner its end and an axle the whole rack, and the
  * registry refuses one key from two dictionaries; the corner's text wins here, and an axle hands its own through its
  * model's `parts`, which the stage reads first. tests/parts-registry.test.ts registers this very object.
  */
-export const SUSPENSION_REGISTERED: Readonly<Record<string, PartInfo>> = { ...AXLE_PARTS, ...SUSPENSION_PARTS };
+export const SUSPENSION_REGISTERED: Readonly<Record<string, PartInfo>> = { ...AXLE_PARTS, ...SUSPENSION_PARTS, ...ROCKER_PARTS };
 
 /** A coilover (or a lone coil) on an arm, on a link or on the knuckle. */
 const SPRING_ON_ARM: PartInfo = {
@@ -283,20 +299,9 @@ const DRIVEN_UNSTEERED: Record<string, PartInfo> = {
   },
 };
 
-/** A pushrod corner (stage P14): the rod, the rocker and the third spring, and the coilover inside the body. */
+/** A pushrod corner's cards: its own parts and the coilover inside the body. */
 const ON_ROCKER: Record<string, PartInfo> = {
-  'susp.pushrod': {
-    name: t('Штовхач'),
-    text: t('Тонка тяга від нижнього важеля до коромисла на кузові. Коли колесо йде вгору, вона штовхає коромисло й працює на стиск, тому мусить бути товстішою, ніж тяга, що тягне (pullrod).'),
-  },
-  'susp.rocker': {
-    name: t('Коромисло'),
-    text: t('Важіль на осі в кузові: одним плечем його повертає штовхач, другим він стискає пружину з амортизатором. Відношення плечей і кути між ними задають, на скільки стискається пружина за міліметр ходу колеса і як це відношення росте на ході.'),
-  },
-  'susp.third-spring': {
-    name: t('Третя пружина'),
-    text: t('Пружина поперек авто між коромислами лівого й правого колеса. Коли обидва колеса йдуть угору, коромисла повертаються в один бік і стискають її; на крені вони повертаються назустріч, і її довжина майже не змінюється. Тож вона тримає кузов на підйомі, а крену майже не помічає.'),
-  },
+  ...ROCKER_PARTS,
   'susp.spring': {
     name: t('Пружина'),
     text: t('Тримає вагу авто й приймає удари від дороги. Стоїть усередині кузова разом з амортизатором, а стискає її коромисло, тож вона не важить на колесі й не заважає повітрю.'),
