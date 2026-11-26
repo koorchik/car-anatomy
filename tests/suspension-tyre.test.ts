@@ -27,6 +27,10 @@ import {
 } from '../src/vehicle/tyre.ts';
 import { BRUSH_SLIP_STIFFNESS, MF_185_80R14, SEDAN_PAC02, TYRE_FILES, TYRE_SETS, type MfSet } from '../src/vehicle/tyre-data.ts';
 import { G, TYRE_IDS, TYRES, type TyreId } from '../src/vehicle/vehicle.ts';
+import { aligningPeak, camberNumbers, frictionEnvelope, lateralPeak, toeNumbers, tyrePoint } from '../src/vehicle/tyre-curves.ts';
+import { contactPatch, shearAt, slidesAt } from '../src/vehicle/tyre-patch.ts';
+import { decodeSidewall, LOAD_INDEX_KG, SPEED_SYMBOL_KMH } from '../src/vehicle/tyre-sidewall.ts';
+import { outerDiameterM, parseTyreSize } from '../src/vehicle/tyre-size.ts';
 
 const DEG = Math.PI / 180;
 const o = newMfForces();
@@ -658,5 +662,138 @@ describe('relaxation and low speed', () => {
     long.step(a, 61, 0.33, 20, 4000, 1, dt, fa);
     long.step(b, 61.001, 0.33, 20, 4000, 1, dt, fb);
     expect((fb.fx - fa.fx) / 0.001 / fa.dFxdOmega).toBeCloseTo(1, 2);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Stage P11, the tyre scene: the sidewall code, the brush picture of the patch, and the numbers the scene quotes.
+
+describe('the sidewall code', () => {
+  it('reads 245/40 R18 97Y as the plan has it', () => {
+    const c = decodeSidewall('245/40 R18 97Y')!;
+    expect(c.size).toEqual({ widthMm: 245, aspect: 40, rimIn: 18, speed: '' });
+    expect(c.construction).toBe('radial');
+    expect(c.sidewallMm).toBe(98);
+    expect(c.rimMm).toBeCloseTo(457.2, 6);
+    expect(Math.round(c.outerDiameterMm)).toBe(653);
+    expect(c.outerDiameterMm).toBeCloseTo(outerDiameterM(parseTyreSize('245/40 R18')) * 1000, 9);
+    expect([c.loadIndex, c.loadKg, c.speedSymbol, c.speedKmh, c.speedAbove]).toEqual([97, 730, 'Y', 300, false]);
+  });
+
+  it('reads the other forms on a sidewall', () => {
+    expect(decodeSidewall('245/40ZR18 (97Y)')).toMatchObject({ speedSymbol: '(Y)', speedKmh: 300, speedAbove: true, loadKg: 730 });
+    expect(decodeSidewall('245/40 R18 97(Y)')).toMatchObject({ speedSymbol: '(Y)', speedAbove: true });
+    expect(decodeSidewall('185/80-14')).toMatchObject({ construction: 'bias', loadIndex: null, speedSymbol: null });
+    expect(decodeSidewall('185/80 D14 90T')).toMatchObject({ construction: 'bias', loadKg: 600, speedKmh: 190 });
+    expect(decodeSidewall('6.50/80 B13')).toBeNull();
+    expect(decodeSidewall('205/55 B16 91V')).toMatchObject({ construction: 'bias-belted', speedKmh: 240 });
+    expect(decodeSidewall('P225/75R15 102S')).toMatchObject({ loadKg: 850, speedKmh: 180 });
+    // Before 1991 the letter stood before the R: VR meant over 210 km/h, ZR over 240.
+    expect(decodeSidewall('205/60 VR15')).toMatchObject({ speedSymbol: 'V', speedKmh: 210, speedAbove: true });
+    expect(decodeSidewall('235/40 ZR19')).toMatchObject({ speedSymbol: 'Z', speedKmh: 240, speedAbove: true });
+    expect(decodeSidewall('245/40 R18 97Y')).toEqual(decodeSidewall(' 245 / 40 r18 97y '));
+  });
+
+  it('gives null, not an exception, for anything that is not a code', () => {
+    for (const bad of ['', 'abc', '245/40', '245/40 R18 97Y extra', '24/40 R18', '245/40 R40', '245/40 R18 9']) expect(decodeSidewall(bad)).toBeNull();
+  });
+
+  it('has a load table that grows with the index and a speed table in order', () => {
+    const lis = Object.keys(LOAD_INDEX_KG).map(Number).sort((a, b) => a - b);
+    expect(lis[0]).toBe(50);
+    expect(lis.at(-1)).toBe(130);
+    for (let i = 1; i < lis.length; i++) expect(LOAD_INDEX_KG[lis[i]!]!).toBeGreaterThan(LOAD_INDEX_KG[lis[i - 1]!]!);
+    // A step of the index is about 2.5 % of load all along (the table is a geometric series, rounded).
+    for (let i = 1; i < lis.length; i++) expect(LOAD_INDEX_KG[lis[i]!]! / LOAD_INDEX_KG[lis[i - 1]!]!).toBeGreaterThan(1.01);
+    const order = ['L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'H', 'V', 'W', 'Y'];
+    for (let i = 1; i < order.length; i++) expect(SPEED_SYMBOL_KMH[order[i]!]!.kmh).toBeGreaterThan(SPEED_SYMBOL_KMH[order[i - 1]!]!.kmh);
+  });
+});
+
+describe('the brush picture of the patch', () => {
+  const tyre = tyreAt('street', 4000);
+  const vertical = TYRE_FILES['sedan-pac02'];
+  const patchAt = (alphaDeg: number, fz = 4000, kappa = 0, camberDeg = 0) =>
+    contactPatch({ set: tyre.set, fz, alpha: (alphaDeg * Math.PI) / 180, kappa, camber: (camberDeg * Math.PI) / 180, freeRadiusM: 0.3266, ktNm: vertical.ktNm, widthM: 0.196 });
+
+  it('grows the sliding zone from the trailing edge as the slip angle grows', () => {
+    let last = 1;
+    for (const a of [0.5, 1, 2, 3, 4, 6, 8]) {
+      const p = patchAt(a);
+      expect(1 - p.adhesion).toBeGreaterThan(1 - last);
+      last = p.adhesion;
+      // Behind the boundary the tread slides, in front of it it sticks.
+      expect(slidesAt(p.phi, p.adhesion + 0.01)).toBe(true);
+      expect(slidesAt(p.phi, Math.max(0, p.adhesion - 0.01))).toBe(false);
+    }
+    expect(patchAt(0).adhesion).toBe(1);
+    expect(patchAt(12).adhesion).toBe(0);
+  });
+
+  it('is the same tyre as the Magic Formula: same slope at small slip, same peak, full sliding near the MF peak', () => {
+    const small = patchAt(0.3);
+    const mf = tyrePoint(tyre.set, 4000, (0.3 * Math.PI) / 180, 0, 0).fy - tyrePoint(tyre.set, 4000, 0, 0, 0).fy;
+    expect(small.forceN / mf).toBeCloseTo(1, 1);
+    expect(patchAt(20).forceN).toBeCloseTo(lateralPeakN(tyre.set, 4000), 6);
+    // The brush slides all over within a degree of the angle where the MF peaks.
+    let full = 0;
+    for (let a = 0; a < 20 && !full; a += 0.05) if (patchAt(a).adhesion === 0) full = a;
+    expect(Math.abs(full - lateralPeak(tyre.set, 4000).alphaDeg)).toBeLessThan(1);
+  });
+
+  it('drags the tread the way the force pulls it, and shears it no more than the friction parabola allows', () => {
+    expect(patchAt(4).dirY).toBe(-1);
+    expect(patchAt(0, 4000, 0.05).dirX).toBe(1);
+    for (const phi of [0.2, 0.6, 1.2]) for (let xi = 0; xi <= 1; xi += 0.05) expect(shearAt(phi, xi)).toBeLessThanOrEqual(xi * (1 - xi) + 1e-12);
+  });
+
+  it('gets longer under load and shorter with more pressure, as ℓ ≈ 2·√(2·r·δ) says', () => {
+    expect(patchAt(4, 6000).lengthM).toBeGreaterThan(patchAt(4, 4000).lengthM);
+    const p = patchAt(4);
+    expect(p.deflectionM).toBeCloseTo(4000 / vertical.ktNm, 12);
+    expect(p.lengthM).toBeCloseTo(2 * Math.sqrt(2 * 0.3266 * p.deflectionM - p.deflectionM ** 2), 12);
+  });
+});
+
+describe('the numbers of the tyre scene', () => {
+  const tyre = tyreAt('street', 4000);
+
+  it('shows load sensitivity on its four loads: twice the load makes less than twice the force', () => {
+    const peaks = [2000, 4000, 6000, 8000].map((fz) => lateralPeak(tyre.set, fz).fy);
+    for (let i = 1; i < peaks.length; i++) expect(peaks[i]!).toBeGreaterThan(peaks[i - 1]!);
+    expect(peaks[1]!).toBeLessThan(2 * peaks[0]!);
+    expect(peaks[3]!).toBeLessThan(2 * peaks[1]!);
+    expect(peaks[3]! / peaks[0]!).toBeLessThan(3.5);
+  });
+
+  it('quotes camber as the plan does: about 0.05° of slip per degree, the peak up with a lean into the force', () => {
+    const c = camberNumbers(tyre.set, 4000, 2);
+    expect(c.slipPerCamber).toBeGreaterThan(0.03);
+    expect(c.slipPerCamber).toBeLessThan(0.08);
+    // Research §13.1: +1.4 % and −0.9 % on the file's own nominal load; ours is fitted to 4 kN.
+    expect(c.gainPct).toBeGreaterThan(1);
+    expect(c.gainPct).toBeLessThan(2);
+    expect(c.lossPct).toBeLessThan(-0.4);
+    expect(c.lossPct).toBeGreaterThan(-1.5);
+  });
+
+  it('peaks the aligning moment before the side force', () => {
+    for (const fz of [2000, 4000, 8000]) expect(aligningPeak(tyre.set, fz).alphaDeg).toBeLessThan(lateralPeak(tyre.set, fz).alphaDeg);
+  });
+
+  it('gives toe a drag that grows with the square of the angle', () => {
+    const one = toeNumbers(tyre.set, 4000, 1, 0.653);
+    const two = toeNumbers(tyre.set, 4000, 2, 0.653);
+    expect(one.perWheelDeg).toBeCloseTo(0.0439, 3);
+    expect(one.scrubMmPerKm).toBeCloseTo(766, -1);
+    expect(two.dragN / one.dragN).toBeCloseTo(4, 1);
+  });
+
+  it('draws a friction envelope that reaches both peaks', () => {
+    const env = frictionEnvelope(tyre.set, 4000, 0, 48);
+    const maxFx = Math.max(...env.map(([fx]) => fx));
+    const maxFy = Math.max(...env.map(([, fy]) => fy));
+    expect(maxFx / longitudinalPeakN(tyre.set, 4000)).toBeCloseTo(1, 1);
+    expect(maxFy / lateralPeakN(tyre.set, 4000)).toBeCloseTo(1, 1);
   });
 });
