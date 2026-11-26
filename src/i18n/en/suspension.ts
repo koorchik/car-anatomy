@@ -435,4 +435,30 @@ export const SUSPENSION_EN: Record<string, string> = {
   '{value} кг': '{value} kg',
   'Про цю компоновку загалом': 'About this layout in general',
   '{value} мм рейки': '{value} mm of rack',
+  // The pushrod page (stage P14): its name and line, its part cards, the third spring's block and unverified names.
+  'Штовхач і коромисло': 'Pushrod and rocker',
+  'Передня підвіска гоночного авто · пружина в кузові, третя пружина · типова геометрія': 'Front suspension of a racing car · spring inside the body, third spring · typical geometry',
+  'колісна база': 'wheelbase',
+  'пружини': 'springs',
+  'треті пружини': 'third springs',
+  'Штовхач': 'Pushrod',
+  'Тонка тяга від нижнього важеля до коромисла на кузові. Коли колесо йде вгору, вона штовхає коромисло й працює на стиск, тому мусить бути товстішою, ніж тяга, що тягне (pullrod).':
+    'A thin rod from the lower arm to the rocker on the body. When the wheel rises it pushes the rocker and works in compression, so it has to be thicker than a rod that pulls (pullrod).',
+  'Коромисло': 'Rocker',
+  'Важіль на осі в кузові: одним плечем його повертає штовхач, другим він стискає пружину з амортизатором. Відношення плечей і кути між ними задають, на скільки стискається пружина за міліметр ходу колеса і як це відношення росте на ході.':
+    'A lever on an axis in the body: the pushrod turns it by one arm, and with the other it compresses the spring and the shock absorber. The ratio of the arms and the angles between them set how far the spring compresses per millimeter of wheel travel and how that ratio rises over the travel.',
+  'Третя пружина': 'Third spring',
+  'Пружина поперек авто між коромислами лівого й правого колеса. Коли обидва колеса йдуть угору, коромисла повертаються в один бік і стискають її; на крені вони повертаються назустріч, і її довжина майже не змінюється. Тож вона тримає кузов на підйомі, а крену майже не помічає.':
+    'A spring across the car between the rockers of the left and right wheels. When both wheels rise, the rockers turn the same way and compress it; in roll they turn against each other and its length barely changes. So it holds the body in heave and hardly notices roll.',
+  'Тримає вагу авто й приймає удари від дороги. Стоїть усередині кузова разом з амортизатором, а стискає її коромисло, тож вона не важить на колесі й не заважає повітрю.':
+    'Carries the car’s weight and takes the blows from the road. It sits inside the body with the shock absorber and the rocker compresses it, so it adds no weight to the wheel and stays out of the airflow.',
+  'Вона стоїть поперек авто між коромислами лівого й правого колеса. Посунь повзунок: жорсткість на підйом росте, а на крен майже не змінюється.':
+    'It sits across the car between the rockers of the left and right wheels. Move the slider: the heave stiffness grows, and the roll stiffness barely changes.',
+  'Додає кожному колесу на підйомі': 'Adds to each wheel in heave',
+  'На підйом': 'In heave',
+  'На крен': 'In roll',
+  'Бліда позначка — без третьої пружини. Жорсткість на підйом — на кожне колесо, коли обидва йдуть угору на 10 мм; на крен — від пружин, коли одне колесо йде вгору, а друге вниз (без стабілізатора). Сцени з одним колесом третьої пружини не бачать: вона працює, лише коли рухаються обидва.':
+    'The pale mark is without the third spring. Heave stiffness is per wheel, with both rising 10 mm; roll stiffness is from the springs, with one wheel rising and the other dropping (no anti-roll bar). The single-wheel scenes do not see the third spring: it works only when both wheels move.',
+  '{value} Н·м/°': '{value} N·m/°',
+  '{change} до значення без третьої пружини': '{change} against the value without the third spring',
 };

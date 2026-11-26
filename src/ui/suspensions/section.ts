@@ -42,6 +42,7 @@ import { LOWER_M, TravelScene, travelDashHtml } from './travel-scene.ts';
 import { DEFAULT_SCENE, isRideScene, sceneOf, stepScene, type SceneId } from './scenes.ts';
 import { ShakerScene } from './shaker-scene.ts';
 import { SetupPanel } from './setup-panel.ts';
+import { ThirdSpringPanel } from './third-spring-panel.ts';
 import { StripChart } from './strip-chart.ts';
 import './suspensions.css';
 
@@ -107,6 +108,7 @@ export class SuspensionSection implements Section {
   private resolved!: ResolvedCorner;
   private model!: CornerModel;
   private setupPanel!: SetupPanel;
+  private thirdSpring!: ThirdSpringPanel;
   private strip!: StripChart;
   /** The rough road and the shaker (stage P3): each resolves its own corner on the wheel the shared mass control picks. */
   private road!: RoadScene;
@@ -161,6 +163,8 @@ export class SuspensionSection implements Section {
     slots.table.head.add(allTableHeadHtml());
     this.strip = new StripChart(this.$<HTMLCanvasElement>('susp-strip'));
     this.setupPanel = new SetupPanel(this.$('susp-panel'), factory, () => (this.dirty = true));
+    this.thirdSpring = new ThirdSpringPanel(this.$('susp-panel'));
+    this.thirdSpring.setCorner(this.pageCorner);
     this.road = new RoadScene(slots.root, this.corner, () => (this.dirty = true));
     this.shaker = new ShakerScene(slots.root, this.corner, this.road.scene.unsprungKg, () => (this.dirty = true));
     setSegment(this.$('susp-ride-mass'), String(this.road.scene.unsprungKg));
@@ -216,6 +220,7 @@ export class SuspensionSection implements Section {
     this.pageCorner = pageCorner(choice.page, choice.car);
     this.road.setCorner(this.pageCorner);
     this.shaker.setCorner(this.pageCorner);
+    this.thirdSpring.setCorner(this.pageCorner);
     const spec = this.pageCorner.axle;
     this.setupPanel.setFactory(factorySetup(this.pageCorner));
     this.setupPanel.setAdjusters({ camber: !!spec.linkage.strut, toe: spec.linkage.rods.some((r) => r.steer) });

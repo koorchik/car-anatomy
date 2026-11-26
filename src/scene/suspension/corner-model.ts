@@ -34,6 +34,7 @@ import { cornerParts, isCoilover } from './parts.ts';
 import { armTo, Bellows, boss, knuckleGeometry, lathe, latheAlong, ringProfile, rodBetween, toScene, tyreProfile, type KnuckleEnd } from './geometry.ts';
 import { linkBody, strutBody } from './corner-body.ts';
 import { DamperUnit, LoneSpring } from './damper-unit.ts';
+import { RockerView } from './rocker-view.ts';
 import { DRAWING, springWireM } from './drawing.ts';
 import { HalfshaftView } from './halfshaft.ts';
 import { armPlane, axisPivots, holdEnd, PIVOT_BOSS, type DiscRoom, type Hold } from './knuckle-shapes.ts';
@@ -164,6 +165,8 @@ export class CornerModel implements SceneModel<CornerFrame> {
   readonly carrier: THREE.Group | null;
   readonly damper: DamperUnit;
   readonly loneSpring: LoneSpring | null;
+  /** A pushrod's rod, rocker and third spring: the coilover then runs from the body to the rocker (rocker-view.ts). */
+  readonly rockerView: RockerView | null;
   readonly halfshaft: HalfshaftView | null;
   /** The knuckle's pose this frame (solver layout) and the travel and rack it was solved for. */
   readonly pose = new Float64Array(POSE_SIZE);
@@ -241,6 +244,7 @@ export class CornerModel implements SceneModel<CornerFrame> {
   private readonly lower = new THREE.Vector3();
   private readonly springTop = new THREE.Vector3();
   private readonly springLower = new THREE.Vector3();
+  private readonly rodOuter = new THREE.Vector3();
   private readonly wheelCentre = new THREE.Vector3();
   private readonly axis = new THREE.Vector3();
   private readonly inPlaneUp = new THREE.Vector3();
@@ -318,7 +322,8 @@ export class CornerModel implements SceneModel<CornerFrame> {
       this.unitSeat = { kind: 'knuckle', at: this.lower0, iso: strut.lower };
     } else {
       this.top0 = toScene(spec.damper.body);
-      this.lower0 = toScene(damperWheel as Vec3);
+      // On a pushrod the coilover's lower end is on the rocker; its seat on the arm is where the rod pushes.
+      this.lower0 = toScene(spec.damper.rocker ? spec.damper.rocker.elementEnd : (damperWheel as Vec3));
       this.unitSeat = seatOf(damperWheel as Vec3, spec.damper.on);
     }
     const seats = strut
@@ -356,6 +361,10 @@ export class CornerModel implements SceneModel<CornerFrame> {
     this.solidOnly.push(unit.topMount, unit.upper, unit.rod, unit.bumpStop, unit.tube);
     this.xrayOnly.push(unit.piston, unit.oil);
     this.shells.push({ mesh: unit.bumpStop, solid: m.bumpStop, glass: m.bumpStopGlass }, { mesh: unit.tube, solid: m.strut, glass: m.strutGlass });
+    if (!strut && spec.damper.rocker) {
+      this.rockerView = new RockerView(spec.damper.rocker, damperWheel as Vec3, spec.thirdSpring?.rockerPoint ?? null, this.springWire, m);
+      this.body.add(this.rockerView.group);
+    } else this.rockerView = null;
     if (!coilOnUnit && spec.spring.wheel !== 'strut') {
       this.loneSpring = new LoneSpring(meanR * 10, DRAWING.springTurns, DRAWING.springEndTurns, this.springWire, m);
       this.springTop0 = toScene(spec.spring.body);
@@ -912,7 +921,10 @@ export class CornerModel implements SceneModel<CornerFrame> {
       this.lower.copy(this.lower0).applyMatrix4(C);
     } else {
       this.top.copy(this.top0);
-      this.seatPoint(this.unitSeat, this.lower);
+      if (this.rockerView) {
+        this.seatPoint(this.unitSeat, this.rodOuter);
+        this.rockerView.update(this.rodOuter, this.top, this.lower, e, mech);
+      } else this.seatPoint(this.unitSeat, this.lower);
     }
     this.damper.update(this.top, this.lower, e, mech);
     if (this.loneSpring && this.springSeat && this.springTop0) {
@@ -1048,7 +1060,11 @@ export class CornerModel implements SceneModel<CornerFrame> {
     const spec = this.axle.spec;
     const unitN = f.damperN + f.stopN + (this.loneSpring ? 0 : f.springN);
     if (unit.size.strut) s.carrierForce(spec.linkage.strut!.lower, down.z * unitN, down.x * unitN, down.y * unitN);
-    else this.seatPush(this.unitSeat, this.lower, this.push.copy(down).multiplyScalar(unitN));
+    else if (this.rockerView) {
+      // The rocker turns the unit's push into the rod's, which pushes the arm away from the rocker.
+      const rv = this.rockerView;
+      this.seatPush(this.unitSeat, this.rodOuter, rv.rodDirection(this.rodOuter, this.push).multiplyScalar(-unitN * rv.rodPerElement));
+    } else this.seatPush(this.unitSeat, this.lower, this.push.copy(down).multiplyScalar(unitN));
     if (this.loneSpring && this.springSeat) this.seatPush(this.springSeat, this.springLower, this.push.copy(springDir).multiplyScalar(f.springN));
     if (!s.solve()) {
       arrows.hideLinks();

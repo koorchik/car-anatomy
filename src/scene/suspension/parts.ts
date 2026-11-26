@@ -283,6 +283,26 @@ const DRIVEN_UNSTEERED: Record<string, PartInfo> = {
   },
 };
 
+/** A pushrod corner (stage P14): the rod, the rocker and the third spring, and the coilover inside the body. */
+const ON_ROCKER: Record<string, PartInfo> = {
+  'susp.pushrod': {
+    name: t('Штовхач'),
+    text: t('Тонка тяга від нижнього важеля до коромисла на кузові. Коли колесо йде вгору, вона штовхає коромисло й працює на стиск, тому мусить бути товстішою, ніж тяга, що тягне (pullrod).'),
+  },
+  'susp.rocker': {
+    name: t('Коромисло'),
+    text: t('Важіль на осі в кузові: одним плечем його повертає штовхач, другим він стискає пружину з амортизатором. Відношення плечей і кути між ними задають, на скільки стискається пружина за міліметр ходу колеса і як це відношення росте на ході.'),
+  },
+  'susp.third-spring': {
+    name: t('Третя пружина'),
+    text: t('Пружина поперек авто між коромислами лівого й правого колеса. Коли обидва колеса йдуть угору, коромисла повертаються в один бік і стискають її; на крені вони повертаються назустріч, і її довжина майже не змінюється. Тож вона тримає кузов на підйомі, а крену майже не помічає.'),
+  },
+  'susp.spring': {
+    name: t('Пружина'),
+    text: t('Тримає вагу авто й приймає удари від дороги. Стоїть усередині кузова разом з амортизатором, а стискає її коромисло, тож вона не важить на колесі й не заважає повітрю.'),
+  },
+};
+
 /** The spring's card for where it sits: on a wishbone, on a rod, or on the knuckle. */
 function springCard(spec: AxleSpec): PartInfo | null {
   const s = spec.spring;
@@ -312,5 +332,6 @@ export function cornerParts(spec: AxleSpec): Record<string, PartInfo> {
   const wishbones = link.wishbones.length >= 2;
   const knuckle = wishbones ? (steered ? ON_WISHBONES : ON_WISHBONES_UNSTEERED) : steered ? ON_LINKS : ON_LINKS_UNSTEERED;
   const spring = springCard(spec);
-  return { ...SUSPENSION_PARTS, ...knuckle, ...(isCoilover(spec) ? ON_COILOVER : SPRING_APART), ...(spring ? { 'susp.spring': spring } : {}), ...wheel };
+  const rocker = spec.spring.rocker ? ON_ROCKER : {};
+  return { ...SUSPENSION_PARTS, ...knuckle, ...(isCoilover(spec) ? ON_COILOVER : SPRING_APART), ...(spring ? { 'susp.spring': spring } : {}), ...rocker, ...wheel };
 }

@@ -23,7 +23,7 @@ export const LOWER_M = 0.04;
 /** The tie-rod height pad's reach either way, mm (suspensions plan, step 6). */
 export const TIE_PAD_MM = 15;
 /** Each page's colour on the chart and in its legend. */
-export const PAGE_COLORS: Record<SuspensionPageId, string> = { macpherson: '#ffb36b', 'double-wishbone': '#7fd3ff', multilink: '#b5e48c' };
+export const PAGE_COLORS: Record<SuspensionPageId, string> = { macpherson: '#ffb36b', 'double-wishbone': '#7fd3ff', multilink: '#b5e48c', pushrod: '#f2a7ff' };
 const TOE_BEFORE = '#ece6d6';
 /** Size of the wobble along each free motion: the wheel centre's move plus this many metres per radian of turn. */
 const WOBBLE_M = 0.012;
