@@ -21,7 +21,8 @@ import { bitePedal, pullAwayDemo, shiftDrop, shiftingDemo, SHIFT_DEMO_RPM, type 
 import { DriveMeter, DriveStrip, STRIP_RATE, STRIP_SECONDS } from '../src/ui/gearboxes/drive-meter.ts';
 import { DEFAULT_DRIVE_SETTINGS, gradeRad } from '../src/ui/gearboxes/drive-panel.ts';
 import { constrain, gateLayout } from '../src/ui/gearboxes/gate.ts';
-import { mapTorque, runTorque, sameEngine, shiftHint, traction } from '../src/ui/gearboxes/traction.ts';
+import { DYNO_RUNS_KEY, mapTorque, runTorque, sameEngine, shiftHint, traction } from '../src/ui/gearboxes/traction.ts';
+import { DYNO_RUNS } from '../src/ui/dyno/dyno-panel.ts';
 import { wheelSlip } from '../src/ui/gearboxes/wheel-road.ts';
 import type { Run } from '../src/ui/dyno/runs.ts';
 import { VehicleLoad } from '../src/vehicle/vehicle-load.ts';
@@ -296,6 +297,8 @@ describe('the full dash in the car', () => {
   });
 
   it('draws the traction from the core\'s own force, and from the last dyno run only when it was made on this engine', () => {
+    // The car reads the runs where the dyno keeps them: the key is spelled twice to keep the dyno out of the car's chunk.
+    expect(DYNO_RUNS_KEY).toBe(DYNO_RUNS);
     const cd = buildCarDrive(CAR);
     const tr = traction(cd, 0, null);
     expect(tr.source).toBe('map');
