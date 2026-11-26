@@ -5,7 +5,9 @@
 //   the force the solver puts through that mesh. On a layshaft box it grows with the constant-mesh ratio and the pair's
 //   own ratio and falls with the centre distance, as the plan's F_t = T_in·i_main·(1 + u)/a says.
 // - Bending: σ_F = F_t/(b·m_n)·Y_FS(z_n)·Y_β with Y_FS ≈ 3.47 + 13.2/z_n [estimate, to check with ISO 6336-3],
-//   z_n = z/cos³β and Y_β = max(0.75, 1 − ε_β·β/120°), on both gears of the mesh; the weaker counts.
+//   z_n = z/cos³β and Y_β = max(0.75, 1 − ε_β·β/120°), on both gears of the mesh; the weaker counts. Y_FS is the
+//   unshifted tooth's: a positive profile shift thickens the root of a small pinion (the 911's 11/43 first pair runs
+//   x = +0.4), which this does not credit, so a shifted pinion's bending comes out on the safe side.
 // - Contact: σ_H = Z_E·Z_H·Z_ε·Z_β·√(F_t/(d₁·b)·(u + 1)/u) on the smaller gear's reference circle, Z_E = 189.8 √MPa
 //   (steel on steel), Z_H, Z_ε and Z_β = √cos β as in ISO 6336-2 [textbook].
 // - One bending constant: the first pair 19/43 of the Tremec TR-6060 MZ6 (the only real tooth counts of a passenger
@@ -13,7 +15,8 @@
 //   1170 MPa there (research §2.5): the finite-life limit of case-hardened steel, not a fudge to 1. Its life factor
 //   over σ_FE = 2σ_Flim ≈ 1000 MPa [textbook, unverified] carries over to the contact limit σ_Hlim ≈ 1500 MPa
 //   [unverified], so the MZ6 pair's contact load at its rating only checks the order (scripts/gearbox-table.ts).
-// - Past 1.0 a gear lasts N = N₁·load^−8.7 full-throttle starts [exponent: estimate, gearbox plan], N₁ from TTAC's
+// - Past 1.0 a gear lasts N = N₁·load^−8.7 full-throttle starts [exponent: estimate, gearbox plan; it is the slope of
+//   ISO 6336-3's life factor for case-hardened steel, 2.5 at 10³ cycles to 1 at 3·10⁶, to check], N₁ from TTAC's
 //   estimate that the MZ6's first gear lasts about 12 000 starts behind 450 lb-ft (secondary, the author's estimate).
 //
 // A transaxle's final drive is left out: a crown wheel is judged by other rules (ISO 10300), and in the low gears the
