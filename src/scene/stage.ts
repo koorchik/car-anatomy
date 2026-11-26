@@ -121,7 +121,6 @@ export class Stage {
   private width = 1;
   private height = 1;
   private readonly quality = new QualityGovernor();
-  private groundY = 0;
   private groundSize: number | null = null;
   /** A camera move under way (setCameraPreset, focus); null when the camera rests or the visitor holds it. */
   private move: CameraMove | null = null;
@@ -199,7 +198,6 @@ export class Stage {
    * follow the framed radius unless `size` fixes the floor's side.
    */
   setGround(ground: Ground): void {
-    this.groundY = ground.y;
     this.groundSize = ground.size ?? null;
     this.floor.position.y = ground.y - 0.02;
     if (this.groundSize !== null) this.floor.scale.set(this.groundSize, this.groundSize, 1);

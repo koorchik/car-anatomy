@@ -8,6 +8,8 @@ import type { Engine } from '../../engine/kinematics.ts';
 import { liveScratch, liveTiming, type ValveState } from '../../engine/valve-control.ts';
 import { plural, t } from '../../i18n/t.ts';
 import type { EngineModel, ViewMode } from '../../scene/model-types.ts';
+import { PARTS } from '../../scene/parts-info.ts';
+import { registerParts } from '../../scene/parts-registry.ts';
 import { PistonEngineModel } from '../../scene/piston-engine.ts';
 import { RotaryEngineModel } from '../../scene/rotary-engine.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
@@ -70,6 +72,8 @@ export class EnginesSection implements Section {
 
   mount(ctx: SectionContext): void {
     this.ctx = ctx;
+    // The engines' parts, with the dyno's and the valve gear's; the layers and the oil page add theirs as they load.
+    registerParts(PARTS);
     const { slots } = ctx;
     slots.backdrop.add(badgeHtml());
     slots.actions.add(actionsHtml());
@@ -180,7 +184,12 @@ export class EnginesSection implements Section {
     // A rotary explains itself from the front, a piston engine from a three-quarter view.
     // The same scale for a whole page, or for a design as its sliders move, so that size can be seen.
     const onSump = this.sump.on;
-    stage.setModel(newModel, next.isRotary ? [0.34, 0.22, 1] : onSump ? [0.95, 0.1, 0.7] : undefined, keepCamera, true, this.onDesigner || onSump ? 1 : this.catalogue.pageFrameScale(next));
+    stage.setModel(newModel, {
+      home: next.isRotary ? [0.34, 0.22, 1] : onSump ? [0.95, 0.1, 0.7] : undefined,
+      keepCamera,
+      keepScale: true,
+      frameScale: this.onDesigner || onSump ? 1 : this.catalogue.pageFrameScale(next),
+    });
     this.model = newModel;
     newModel.setView(view.mode);
     newModel.setExplode(this.explode);

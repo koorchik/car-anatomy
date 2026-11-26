@@ -106,12 +106,13 @@ export class EngineFeatures {
     const { DynoPanel } = await DYNO.load();
     if (this.dyno) return this.dyno;
     const s = this.section;
-    const { stage, panels, time, view } = s.ctx;
+    const { stage, panels, time, view, runs } = s.ctx;
     const dyno = new DynoPanel({
       drive: s.drive,
+      runs,
       extras: stage.extras,
       setFloor(y) {
-        stage.setFloor(y);
+        stage.setGround({ y });
       },
       layout() {
         panels.relayout();
