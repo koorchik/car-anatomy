@@ -111,6 +111,15 @@ describe('keys of the site', () => {
     expect(steps).toEqual([1, 1]);
   });
 
+  it('leaves Space to a focused button, so the keyboard can press it', () => {
+    let events = 0;
+    const space = suspensionKeys({ event: () => (events++, true), scene: noop }).find((b) => b.codes.includes('Space'))!;
+    const press = (target: unknown) => space.down({ code: 'Space', target, preventDefault: noop } as unknown as KeyboardEvent) !== false;
+    expect(press({ closest: (selector: string) => (selector.includes('button') ? {} : null) })).toBe(false);
+    expect(press({ closest: () => null })).toBe(true);
+    expect(events).toBe(1);
+  });
+
   it('gives the suspension pages the scene on the arrows up and down and V for the views', () => {
     const keys = siteKeys();
     const help = keyHelp([...SUSPENSION_KEY_CONTEXTS, SHELL_KEYS], (context) => keys.of(context));

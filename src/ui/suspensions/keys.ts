@@ -22,6 +22,8 @@ export function suspensionKeys(actions: SuspensionKeyActions): KeyBinding[] {
       codes: ['Space'],
       label: t('Наїхати на перешкоду'),
       down: (event) => {
+        // A focused button or link takes Space itself, as a keyboard expects: «Пауза» pauses, a choice is chosen.
+        if (inside(event.target, 'button, a[href], [role="button"]')) return false;
         if (!actions.event()) return false;
         event.preventDefault();
         return true;
@@ -32,7 +34,7 @@ export function suspensionKeys(actions: SuspensionKeyActions): KeyBinding[] {
       label: t('Інша сцена'),
       down: (event) => {
         // The panel and its article scroll on the arrows once focused (tabindex), as a page does: leave them that.
-        if (inScrollPanel(event.target)) return false;
+        if (inside(event.target, '.panel-scroll')) return false;
         event.preventDefault();
         actions.scene(event.code === 'ArrowUp' ? -1 : 1);
       },
@@ -40,8 +42,8 @@ export function suspensionKeys(actions: SuspensionKeyActions): KeyBinding[] {
   ];
 }
 
-/** Whether a key went to the panel's scrolling column or something inside it. */
-function inScrollPanel(target: EventTarget | null): boolean {
+/** Whether a key went to an element that matches `selector` or to something inside one. */
+function inside(target: EventTarget | null, selector: string): boolean {
   const el = target as { closest?: (selector: string) => unknown } | null;
-  return typeof el?.closest === 'function' && el.closest('.panel-scroll') !== null;
+  return typeof el?.closest === 'function' && el.closest(selector) !== null;
 }
