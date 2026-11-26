@@ -11,7 +11,7 @@ export const GEARBOX_AUTOMATIC_UI_EN: Record<string, string> = {
   'На столі коробка крутиться без авто й поки без гідротрансформатора: двигун крутить вхідний вал напряму, вихід крутиться вільно, а муфти й гальма замикаються одразу. Замикайте елементи кнопками A–E, і модель та номограма покажуть, що вони лишають.':
     'On the table the transmission turns without the car and, for now, without the torque converter: the engine turns the input shaft directly, the output turns freely, and the clutches and brakes close at once. Close the elements with the A–E buttons, and the model and the lever diagram show what they leave.',
   'Три з п’яти': 'Three of five',
-  'Чотири ряди, з’єднані між собою, мають чотири ступені свободи. Кожен замкнений елемент забирає один, тож три лишають рівно один рух: це передача. Перша — {closed}, число {ratio}. На номограмі праворуч швидкість кожного ряду лежить на прямій, а вихід стоїть на висоті 1/{ratio}.':
+  'Чотири ряди, з’єднані між собою, мають чотири ступені свободи. Кожен замкнений елемент забирає один, тож три лишають рівно один рух: це передача. Перша — {closed}, число {ratio}. На номограмі швидкість кожного ряду лежить на прямій, а вихід стоїть на висоті 1/{ratio}.':
     'Four gearsets joined to each other have four degrees of freedom. Each closed element takes one away, so three leave exactly one motion: a gear. First is {closed}, ratio {ratio}. On the lever diagram the speeds of each set lie on a straight line, and the output stands at a height of 1/{ratio}.',
   'Друга: один елемент': 'Second: one element',
   '{off} відпускає, {on} замикає, решта лишаються. Так влаштоване кожне послідовне перемикання 8HP: момент переходить з однієї муфти на другу без розриву. Число {ratio}.':
