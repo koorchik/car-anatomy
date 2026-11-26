@@ -21,6 +21,7 @@ import { vehicleLoadSpec } from '../../drivetrain/car-load.ts';
 import { carDriveOf, type CarDrive, type CarDriveRecords } from '../../drivetrain/car-model.ts';
 import type { GearboxRecord } from '../../drivetrain/catalogue.ts';
 import { DrivePose } from '../../drivetrain/drive-pose.ts';
+import { clampPedal } from '../../drivetrain/elements.ts';
 import type { LayshaftDesc } from '../../drivetrain/layouts/layshaft.ts';
 import type { TablePose } from '../../drivetrain/table-drive.ts';
 import { numberLocale } from '../../i18n/locale.ts';
@@ -174,7 +175,7 @@ export class CarMode {
   /** The pedal position the auto clutch's clamp stands for now. */
   private autoPedal(): number {
     const f = this.drive().snapshot().vehicle;
-    return f ? Math.min(1, 0.35 + 0.4 * (1 - f.clutch)) * (f.clutch < 1 ? 1 : 0) : 0;
+    return f ? clampPedal(f.clutch) : 0;
   }
 
   holdClutchKey(on: boolean): void {

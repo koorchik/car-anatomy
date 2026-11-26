@@ -12,6 +12,7 @@ import { engineById } from '../src/data/engines.ts';
 import { GEARBOX_PAGES } from '../src/data/gearboxes.ts';
 import { vehicleLoadSpec } from '../src/drivetrain/car-load.ts';
 import { DriveStory, runStory } from '../src/drivetrain/drive-story.ts';
+import { clampPedal, pedalClamp } from '../src/drivetrain/elements.ts';
 import { forceFromInput } from '../src/drivetrain/runs.ts';
 import { buildEngine } from '../src/engine/kinematics.ts';
 import { LoadedCrank } from '../src/engine/loaded-crank.ts';
@@ -182,6 +183,12 @@ describe('the full dash in the car', () => {
     const shaft = (r.load.vehicle.solver.memberSpeed(r.load.control.spec.input) * 30) / Math.PI;
     expect(Math.abs(r.sim.rpm - shaft) / shaft).toBeLessThan(0.1);
   }, 60_000);
+
+  it('takes the pedal over from the auto clutch where its clamp is: the pedal for a clamp gives that clamp back', () => {
+    for (let c = 0; c <= 1.0001; c += 0.05) expect(pedalClamp(clampPedal(c))).toBeCloseTo(Math.min(1, c), 9);
+    expect(clampPedal(1)).toBe(0);
+    expect(clampPedal(0)).toBeCloseTo(0.75, 12);
+  });
 
   it('stalls when the driver drops the clutch in first without gas, and the auto clutch never does', () => {
     for (const auto of [false, true]) {
