@@ -31,9 +31,17 @@ export function suspensionKeys(actions: SuspensionKeyActions): KeyBinding[] {
       codes: ['ArrowUp', 'ArrowDown'],
       label: t('Інша сцена'),
       down: (event) => {
+        // The panel and its article scroll on the arrows once focused (tabindex), as a page does: leave them that.
+        if (inScrollPanel(event.target)) return false;
         event.preventDefault();
         actions.scene(event.code === 'ArrowUp' ? -1 : 1);
       },
     },
   ];
+}
+
+/** Whether a key went to the panel's scrolling column or something inside it. */
+function inScrollPanel(target: EventTarget | null): boolean {
+  const el = target as { closest?: (selector: string) => unknown } | null;
+  return typeof el?.closest === 'function' && el.closest('.panel-scroll') !== null;
 }

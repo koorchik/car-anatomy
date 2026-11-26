@@ -97,6 +97,20 @@ describe('keys of the site', () => {
     expect(catalogue[0]!.rows.find((row) => row.caps.includes('↑'))?.caps).toEqual(['Пробіл', '↑']);
   });
 
+  it('leaves the arrows to the panel when it is focused, so its article scrolls', () => {
+    const steps: number[] = [];
+    const arrows = suspensionKeys({ event: () => true, scene: (d) => steps.push(d) }).find((b) => b.codes.includes('ArrowDown'))!;
+    const press = (target: unknown) => {
+      let prevented = false;
+      const event = { code: 'ArrowDown', target, preventDefault: () => (prevented = true) } as unknown as KeyboardEvent;
+      return { handled: arrows.down(event) !== false, prevented };
+    };
+    expect(press({ closest: () => ({}) })).toEqual({ handled: false, prevented: false });
+    expect(press({ closest: () => null })).toEqual({ handled: true, prevented: true });
+    expect(press(null)).toEqual({ handled: true, prevented: true });
+    expect(steps).toEqual([1, 1]);
+  });
+
   it('gives the suspension pages the scene on the arrows up and down and V for the views', () => {
     const keys = siteKeys();
     const help = keyHelp([...SUSPENSION_KEY_CONTEXTS, SHELL_KEYS], (context) => keys.of(context));
