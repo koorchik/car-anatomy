@@ -47,7 +47,8 @@ describe('phases', () => {
 });
 
 describe('planets', () => {
-  // Every planet copy of every set of every planetary box, in 12 positions of a gear in which the whole set turns.
+  // Every planet copy of every set of every planetary box, in 12 positions of the gear in which its planets roll
+  // fastest on their pins (in first gear the 8HP's set 1 stands still, so one gear for all would test it once).
   const planetary = boxes.filter((box) => box.spec.kind === 'planetary');
   const sets = planetary.flatMap((box) =>
     Object.entries(box.planets).map(([member, copies]) => {
@@ -62,9 +63,11 @@ describe('planets', () => {
   });
 
   it.each(sets.map((s) => [`${s.box.spec.id} ${s.member} ×${s.copies.angles.length}`, s] as const))(
-    '%s: no planet overlaps its sun or its ring in 12 positions of first gear, half a planet pitch off it does',
+    '%s: no planet overlaps its sun or its ring in 12 positions of a gear, half a planet pitch off it does',
     (_name, { box, member, copies, planet, own }) => {
-      const state = box.states.find((s) => s.name === '1')!;
+      const rolling = (s: (typeof box.states)[number]) => Math.abs(s.speeds![box.members.indexOf(member)]! - s.speeds![box.members.indexOf(copies.carrier)]!);
+      const state = box.states.filter((s) => s.kind === 'gear').reduce((best, s) => (rolling(s) > rolling(best) ? s : best));
+      expect(rolling(state), 'the planets roll').toBeGreaterThan(0.1);
       const speed = (m: string) => state.speeds![box.members.indexOf(m)]!;
       const origin = { x: 0, y: 0 };
       // An input turn after which every member has moved by a whole number of nothing: just an awkward angle.
