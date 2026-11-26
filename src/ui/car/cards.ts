@@ -50,7 +50,7 @@ export const systemName = (system: CarSystem): string =>
     'rear-suspension': t('Задня підвіска'),
     steering: t('Кермо'),
     wheels: t('Колеса й шини'),
-    brakes: t('Гальма'),
+    brakes: t('Гальмівна система'),
     exhaust: t('Вихлоп'),
     oil: t('Олива'),
     cooling: t('Охолодження'),
@@ -212,9 +212,12 @@ export function systemCards(car: CarRecord, assembly: CarAssembly): Record<CarSy
     t('Рейка йде поперек авто, а рульові тяги з’єднують її кінці з поворотними кулаками обох коліс. Внутрішнє колесо в повороті повертається на більший кут, ніж зовнішнє, бо описує менше коло.'),
     [
       ...(turning?.kind === 'radius' ? [[t('Радіус розвороту'), t('{m} м', { m: num(turning.m, 1) })] as [string, string]] : []),
-      ...(lock ? [[t('Повний поворот: зовнішнє, внутрішнє колесо'), estimate(`${num(lock.outerRad * DEG, 1)}°, ${num(lock.innerRad * DEG, 1)}°`)] as [string, string]] : []),
+      // The outer wheel's lock alone: it follows from the published turning radius and the wheelbase (sin δ = L / R).
+      // The inner one would come from the typical linkage of the suspension's template, whose steering arms are not
+      // the car's, and it could even contradict the text above.
+      ...(lock ? [[t('Повний поворот зовнішнього колеса'), estimate(`${num(lock.outerRad * DEG, 1)}°`)] as [string, string]] : []),
     ],
-    lock ? t('Кути повного повороту виведено з опублікованого радіуса розвороту й геометрії моделі.') : null,
+    lock ? t('Кут повного повороту виведено з опублікованого радіуса розвороту й колісної бази.') : null,
   );
   const sizeF = car.tyre.size;
   const sizeR = car.tyre.sizeRear ?? car.tyre.size;
