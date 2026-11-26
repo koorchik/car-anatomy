@@ -651,6 +651,16 @@ describe('no control is dead', () => {
     }
   }
 
+  it('every choice tells its options apart by label', () => {
+    for (const [, d] of boxes) {
+      for (const c of gearboxControls(d)) {
+        if (c.kind !== 'choice') continue;
+        const labels = c.options(d).map(([, label]) => label);
+        expect(new Set(labels).size, c.id).toBe(labels.length);
+      }
+    }
+  });
+
   it('both types are covered, with every group of controls', () => {
     const types = new Set(boxes.map(([, d]) => d.type));
     expect([...types].sort()).toEqual(['layshaft', 'transaxle']);

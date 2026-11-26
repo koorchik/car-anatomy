@@ -4,7 +4,7 @@
 
 import { CARS } from '../data/cars.ts';
 import { DRIVE_CARS } from '../data/drive-cars.ts';
-import { engineById } from '../data/engines.ts';
+import { engineById, pageChoices } from '../data/engines.ts';
 import { t } from '../i18n/t.ts';
 import type { TyreId } from '../vehicle/vehicle.ts';
 import type { NumericKey } from './constraints.ts';
@@ -81,7 +81,9 @@ const engineOptions = (d: GearboxDesign): Array<[string, string]> => {
   const ids = [...new Set([d.engine, ...Object.keys(DRIVE_CARS).flatMap((id) => (CARS[id] ? [CARS[id]!.engine] : []))])];
   return ids.flatMap((id) => {
     const e = engineById(id);
-    return e ? [[id, e.title] as [string, string]] : [];
+    // The engine's own name (BMW M3 E30 (S14)), not its layout's page title, which two fours share.
+    const name = pageChoices(id).find((c) => c.id === id)?.name ?? e?.title;
+    return e && name ? [[id, name] as [string, string]] : [];
   });
 };
 
