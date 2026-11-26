@@ -50,6 +50,7 @@ import { catalogueChassis, catalogueEntry } from '../suspension-designer/catalog
 import { axleOf, withAxle, type AxleEnd, type ChassisDesign } from '../suspension-designer/design.ts';
 import { springRateNm } from '../suspension-designer/to-spec.ts';
 import { evaluateChassis, type ChassisPerformance } from '../suspension/evaluate-chassis.ts';
+import type { ChassisSpec } from '../suspension/spec.ts';
 import { cgHeightM, drivingMassKg, vehicleSpec, type CarRecord, type Vec3 } from '../vehicle/car.ts';
 import { AIR_DENSITY, G } from '../vehicle/constants.ts';
 import { CANONICAL_LAP_LEVEL, type LapLevel, type LapTrace } from '../vehicle/lap.ts';
@@ -83,6 +84,7 @@ const perfs = new Map<string, Performance>();
 const reliabilities = new Map<string, Reliability>();
 const copies = new Map<string, GearboxDesign>();
 const gearboxes = new Map<string, GearboxPerformance>();
+const chassisSpecs = new Map<string, ChassisSpec | null>();
 const chassisPerfs = new Map<string, ChassisPerformance | null>();
 const masses = new Map<string, number>();
 
@@ -330,10 +332,23 @@ function rebaseChassis(d: ChassisDesign, car: CarRecord, tyre: { id: TyreId; siz
   };
 }
 
+/** The suspension model's spec of a chassis design; null when it cannot be built. */
+function chassisSpec(d: ChassisDesign): ChassisSpec | null {
+  return remember(chassisSpecs, JSON.stringify(d), () => {
+    try {
+      return catalogueChassis(d);
+    } catch {
+      return null;
+    }
+  });
+}
+
 function chassisPerf(d: ChassisDesign): ChassisPerformance | null {
   return remember(chassisPerfs, JSON.stringify(d), () => {
+    const spec = chassisSpec(d);
+    if (!spec) return null;
     try {
-      return evaluateChassis(catalogueChassis(d));
+      return evaluateChassis(spec);
     } catch {
       return null;
     }
@@ -441,6 +456,7 @@ export function* evaluateSteps(input: unknown): Generator<void, CarPerformance, 
   const donorOwn = donorEngine(donor);
   const design = engineDesign(build);
   const perf = enginePerf(design);
+  yield;
   const parts = engineParts(build, design, perf);
   yield;
   const donorPerf = enginePerf(donorOwn.design);
@@ -505,6 +521,8 @@ export function* evaluateSteps(input: unknown): Generator<void, CarPerformance, 
     lapBox = { kind: 'ideal', ideal };
   } else {
     const own = kind === 'donor' ? donorBox! : kind === 'catalogue' ? gearboxCopy((g as { catalogue: string }).catalogue) : (g as { design: GearboxDesign }).design;
+    // A new box's copy picks its teeth, and its mass builds it: two heavy parts.
+    if (kind !== 'donor') yield;
     gearboxMassKgNow = kind === 'donor' ? donorGearboxMassKg : gearboxMassKg(own);
     car = place(gearboxMassKgNow - donorGearboxMassKg);
     gearboxDesign = own;
@@ -530,10 +548,16 @@ export function* evaluateSteps(input: unknown): Generator<void, CarPerformance, 
   // The chassis.
   const ownChassis = build.suspension === null ? donorChassis(donor) : 'catalogue' in build.suspension ? (catalogueEntry(build.suspension.catalogue)?.design ?? null) : build.suspension.design;
   const chassisDesign = ownChassis ? rebaseChassis(ownChassis, car, tyre) : null;
+  // The chassis's spec and its model are two heavy parts.
+  if (chassisDesign) chassisSpec(chassisDesign);
+  yield;
   const chassis = chassisDesign ? chassisPerf(chassisDesign) : null;
   yield;
   const donorOwnChassis = donorChassis(donor);
-  const donorChassisPerf = donorOwnChassis ? chassisPerf(rebaseChassis(donorOwnChassis, donor, { id: donor.tyre.id, size: drivenTyreSize(donor) })) : null;
+  const donorChassisDesign = donorOwnChassis ? rebaseChassis(donorOwnChassis, donor, { id: donor.tyre.id, size: drivenTyreSize(donor) }) : null;
+  if (donorChassisDesign) chassisSpec(donorChassisDesign);
+  yield;
+  const donorChassisPerf = donorChassisDesign ? chassisPerf(donorChassisDesign) : null;
   yield;
 
   // The lap.
