@@ -22,7 +22,7 @@ export function suspensionKeys(actions: SuspensionKeyActions): KeyBinding[] {
       codes: ['Space'],
       label: t('Наїхати на перешкоду'),
       down: (event) => {
-        // A focused button or link takes Space itself, as a keyboard expects: «Пауза» pauses, a choice is chosen.
+        // A focused button or link takes Space itself, as a keyboard expects: the pause button pauses, a choice is chosen.
         if (inside(event.target, 'button, a[href], [role="button"]')) return false;
         if (!actions.event()) return false;
         event.preventDefault();
