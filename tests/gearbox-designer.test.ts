@@ -5,7 +5,7 @@ import { DRIVE_CARS } from '../src/data/drive-cars.ts';
 import { ALL_GEARBOXES, gearboxById } from '../src/data/gearboxes.ts';
 import { buildCarDrive } from '../src/data/car-drive.ts';
 import { gearboxSpec } from '../src/drivetrain/catalogue.ts';
-import { centreDistance, helixForCentre, shiftSumForCentre, undercut } from '../src/drivetrain/gear-geometry.ts';
+import { centreDistance, gearGeometry, helixForCentre, shiftSumForCentre, undercut } from '../src/drivetrain/gear-geometry.ts';
 import { gcd } from '../src/drivetrain/gear-pick.ts';
 import { quasiStaticRun } from '../src/drivetrain/runs.ts';
 import { decodeGearboxDesign, encodeGearboxDesign } from '../src/gearbox-designer/codec.ts';
@@ -265,6 +265,38 @@ describe('2. ratios from the teeth', () => {
       }
     }
     expect(shifted).toBeGreaterThan(20);
+  });
+});
+
+describe('2b. reverse clear of the shafts', () => {
+  it('a compound reverse keeps every gear clear of the shaft that passes through its plane, picked or set by hand', () => {
+    // From the spec alone: the gear's tip radius (gear-geometry.ts) plus the 3D's thickest shaft, 0.2·a, must fit
+    // between its own axis and the other shaft's. The input gear and the first idler gear share a plane the output
+    // shaft runs through; the second idler gear and the output gear one the input shaft runs through.
+    const random = seeded(4242);
+    let compound = 0;
+    for (let i = 0; i < 120; i++) {
+      const raw = randomDesign(random);
+      const d = resolveGearboxDesign({ ...raw, type: 'transaxle', reverse: null, reverseRatio: between(random, 2.5, 5.5), lowModule: between(random, 1.5, 4.5) } as GearboxDesign);
+      const spec = designBuild(d).spec;
+      const gear = (id: string) => spec.gears.find((g) => g.id === id);
+      if (!gear('idler-R2')) continue;
+      compound++;
+      const axis = (id: string) => spec.axes.find((a) => a.id === id)!;
+      const axisOf = (g: { member: string }) => axis(spec.members.find((m) => m.id === g.member)!.axis);
+      const a = d.centreMm;
+      for (const [id, other] of [['in-R', 'output'], ['idler-R', 'output'], ['idler-R2', 'input'], ['out-R', 'input']] as const) {
+        const g = gear(id)!;
+        const from = axisOf(g);
+        const to = axis(other);
+        expect(gearGeometry(g).ra + 0.2 * a, `${id} ${spec.gears.filter((x) => /R/.test(x.id)).map((x) => x.teeth)} at ${a} mm`).toBeLessThanOrEqual(Math.hypot(from.x - to.x, from.y - to.y) + 1e-6);
+      }
+    }
+    expect(compound).toBeGreaterThan(20);
+    // A hand-set compound reverse whose output gear would cut into the input shaft goes back to the picker.
+    const civic = catalogueGearboxPresets().find((c) => c.id === 'manual-transaxle')!.design;
+    expect(resolveGearboxDesign({ ...civic, reverse: { teeth: [19, 34, 20, 52], module: 2.75, helix: 0, faceWidth: 18 } }).reverse).toBeNull();
+    expect(resolveGearboxDesign(civic).reverse).toEqual(civic.reverse);
   });
 });
 

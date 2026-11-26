@@ -311,12 +311,26 @@ export function pickReverse(kind: 'layshaft' | 'transaxle', ratio: number, centr
 }
 
 /**
+ * Whether the four gears of a compound reverse clear, by `clearance` mm, the shaft that passes through their plane
+ * without meshing: the output shaft through the plane of the input gear and the first idler gear, the input shaft
+ * through the plane of the second idler gear and the output gear (shafts shaftRadius() thick, gears unshifted as the
+ * layout cuts them). The 911's 18/25/18/46 at 85 mm clears by 2 mm, the Civic's 19/34/20/42 at 80 mm by 3.5.
+ */
+export function compoundClears(teeth: readonly number[], m: number, helix: number, a: number, pressureAngle: number, clearance: number): boolean {
+  const [zIn, zI1, zI2, zOut] = teeth as [number, number, number, number];
+  const shaft = shaftRadius(a);
+  const d1 = centreDistance(m, zIn, zI1, helix, pressureAngle);
+  const d2 = centreDistance(m, zI2, zOut, helix, pressureAngle);
+  const tip = (z: number) => tipRadius(z, m, helix, 0) + shaft + clearance;
+  return tip(zIn) <= a + 1e-9 && tip(zOut) <= a + 1e-9 && tip(zI1) <= d2 + 1e-9 && tip(zI2) <= d1 + 1e-9;
+}
+
+/**
  * A compound idler: input gear zIn drives idler gear zI1; idler gear zI2 on the same shaft drives the output gear
- * zOut; i = (zI1/zIn)·(zOut/zI2). Each idler gear's tips must clear the other shaft that passes through its plane.
+ * zOut; i = (zI1/zIn)·(zOut/zI2). Every gear's tips clear the shaft that passes through its plane by 2 mm.
  */
 function compoundReverse(ratio: number, a: number, m: number, faceWidth: number, pressureAngle: number): PickedReverse | null {
   const min = unshiftedMinTeeth(pressureAngle);
-  const shaft = shaftRadius(a);
   let best: { teeth: number[]; err: number; size: number } | null = null;
   for (let zIn = min; zIn <= min + 10; zIn++) {
     for (let zI2 = min; zI2 <= min + 12; zI2++) {
@@ -327,7 +341,7 @@ function compoundReverse(ratio: number, a: number, m: number, faceWidth: number,
         const d2 = centreDistance(m, zI2, zOut, 0, pressureAngle);
         const h = idlerOffset(a, d1, d2);
         if (!(h >= 0.25 * a)) continue;
-        if (d2 < tipRadius(zI1, m, 0, 0) + shaft + 2 || d1 < tipRadius(zI2, m, 0, 0) + shaft + 2) continue;
+        if (!compoundClears([zIn, zI1, zI2, zOut], m, 0, a, pressureAngle, 2)) continue;
         const err = Math.abs((zI1 / zIn) * (zOut / zI2) - ratio);
         const size = zI1 + zOut;
         if (!best || err < best.err - 1e-12 || (Math.abs(err - best.err) <= 1e-12 && size < best.size)) best = { teeth: [zIn, zI1, zI2, zOut], err, size };

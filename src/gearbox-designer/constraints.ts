@@ -18,7 +18,7 @@ import {
   type ReverseSetting,
 } from './design.ts';
 import { bevelMaxFace, designBuild, faceFor, handRatios } from './to-spec.ts';
-import { maxModuleFor, minModuleFor, pickCylPair } from './teeth.ts';
+import { compoundClears, maxModuleFor, minModuleFor, pickCylPair } from './teeth.ts';
 
 export interface Range {
   min: number;
@@ -260,6 +260,9 @@ export function resolveGearboxDesign(input: GearboxDesign): GearboxDesign {
   d.centreMm = clamp(num('centreMm'), { min: 50, max: 120 });
   for (const key of ['module', 'lowModule', 'mainModule'] as const) d[key] = num(key);
   settleTeeth(d);
+  // A compound reverse set by hand whose gears would cut into a shaft goes back to the picker.
+  const r = d.reverse;
+  if (r && r.teeth.length === 4 && !compoundClears(r.teeth, r.module, r.helix, d.centreMm, d.pressureAngle, 0)) d.reverse = null;
 
   d.faceWidth = clamp(num('faceWidth'), paramRange(d, 'faceWidth'));
 
