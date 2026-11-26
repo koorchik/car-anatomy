@@ -111,9 +111,8 @@ function springRange(d: ChassisDesign, end: AxleEnd, g: AxleGeometry | Error): R
   return { min: at(RIDE_HZ[0]), max: at(RIDE_HZ[1]), minWhy: 'ride-frequency', maxWhy: 'ride-frequency' };
 }
 
-/** Limits of one axle parameter, given the others. */
-export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey): Range {
-  const a = axleOf(d, end);
+/** Limits of one axle parameter, given the others (`a` is the axle of `d` at `end`, when the caller has it). */
+export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey, a: AxleParams = axleOf(d, end)): Range {
   const front = end === 'F';
   const half = a.trackMm / 2;
   const rimMm = rimRadiusM(a) * 1000;
@@ -286,16 +285,23 @@ function typed(input: unknown): ChassisDesign {
 
 /** The axle's numbers clamped in CLAMP_ORDER (the spring is left for later). */
 function clampAxle(d: ChassisDesign, end: AxleEnd): ChassisDesign {
-  let out = d;
+  // The axle is clamped in place and written back once: every limit reads only the car and this axle.
+  const a = { ...axleOf(d, end) };
+  const patch: Partial<Record<AxleNumericKey, number>> = {};
+  let changed = false;
   for (const key of CLAMP_ORDER) {
-    const v = axleOf(out, end)[key];
+    const v = a[key];
     let next: number;
-    if (key === 'barMm') next = v < 5 ? 0 : clamp(v, axleRange(out, end, key));
-    else if (key === 'barWallMm') next = v < 0.75 ? 0 : clamp(v, axleRange(out, end, key));
-    else next = clamp(v, axleRange(out, end, key));
-    if (next !== v) out = withAxle(out, end, { [key]: next });
+    if (key === 'barMm') next = v < 5 ? 0 : clamp(v, axleRange(d, end, key, a));
+    else if (key === 'barWallMm') next = v < 0.75 ? 0 : clamp(v, axleRange(d, end, key, a));
+    else next = clamp(v, axleRange(d, end, key, a));
+    if (next !== v) {
+      a[key] = next;
+      patch[key] = next;
+      changed = true;
+    }
   }
-  return out;
+  return changed ? withAxle(d, end, patch) : d;
 }
 
 /** The axle clamped and built; falls back to typical geometry, then the typical tyre and track, then the end's typical
@@ -317,7 +323,8 @@ function buildable(d: ChassisDesign, end: AxleEnd): ChassisDesign {
   throw new Error(`The typical ${fallback} does not build on this car`);
 }
 
-/** A buildable design from anything: typed, clamped, every axle assembling over its travel. */
+/** A buildable design from anything: typed, clamped, every axle assembling over its travel. The design is frozen:
+ *  axleOf remembers the axles of each design object, so a design changed in place would keep its old axles. */
 export function resolveChassis(input: unknown): ChassisDesign {
   let d = typed(input);
   for (const key of Object.keys(CAR_RANGES) as CarNumericKey[]) {
@@ -334,7 +341,7 @@ export function resolveChassis(input: unknown): ChassisDesign {
       if (v !== spring) d = withAxle(d, end, { springNmm: v });
     }
   }
-  return d;
+  return Object.freeze(d);
 }
 
 /** Whether two designs are the same, field by field. */
