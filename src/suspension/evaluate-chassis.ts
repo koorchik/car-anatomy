@@ -16,8 +16,9 @@
 // Ride: each axle as a linear quarter car about rest (evaluate.ts): the heave rate of its wheel from the springs
 // through their motion ratios (a beam's cross terms included), the damper through its heave motion ratio, the tyre
 // fitted to the corner's static load. Handling: the linear roll model gives the wheel loads and each axle's roll; the
-// Magic Formula tyre of the car turns them into slip angles. Braking: an ideal ABS holds both axles at their peaks in
-// the brake balance, with the road load of the car on top. Each figure says what it leaves out where it is defined.
+// Magic Formula tyre of the car turns them into slip angles. Braking: an ideal ABS holds both axles at their peaks, with
+// the road load of the car on top; the brake balance says which axle gets there first. Each figure says what it leaves
+// out where it is defined.
 
 import type { AnyAxleLinkage, AxleSpec, ChassisSpec, SolidAxleLinkage, SwayBarSpec, TwistBeamLinkage } from './spec.ts';
 import { buildChassis, type Chassis } from './chassis.ts';
@@ -106,7 +107,8 @@ export interface UndersteerTerms {
   tyres: number;
   /** What the lateral load transfer adds. */
   transfer: number;
-  /** What the cambers of the steady turn add (static camber, camber in roll, the body's roll to the road). */
+  /** What the cambers of the steady turn add over the static ones (camber in roll, the body's roll to the road); the
+   *  static camber is already in `tyres`. */
   camber: number;
   /** What the roll steer of the two axles adds. */
   rollSteer: number;
@@ -140,11 +142,15 @@ export interface ChassisPerformance {
   rolloverAcc: number;
   /** Lateral acceleration at which an inner wheel would leave the road by the linear transfer, m/s². */
   liftOffAcc: number;
-  /** Braking from 100 km/h with an ideal ABS at the brake balance: distance, m, the tyres' share of the deceleration,
-   *  m/s², and whether the rear wheels would leave the road first. */
+  /** Braking from 100 km/h with an ideal ABS, both axles at their peaks: distance, m, the tyres' share of the
+   *  deceleration, m/s², and whether the rear wheels would leave the road first. */
   brakingM: number;
   brakingAcc: number;
   rearLift: boolean;
+  /** At the brake balance: the deceleration at which the first axle reaches its peak, m/s² (where a car without ABS
+   *  would lock it; ABS works from there on), and which axle that is (0 front, 1 rear). */
+  lockAcc: number;
+  firstLock: 0 | 1;
   /** Body pitch per g of braking, rad (nose down positive). */
   pitchPerG: number;
   anti: AntiGeometry;
@@ -155,7 +161,8 @@ export interface ChassisPerformance {
   /** A live axle under drive at 0.3 g: the load the propshaft torque takes off one rear wheel over its static load
    *  (NaN without a driven axle whose differential sits on it). */
   propUnload: number;
-  /** The models behind the numbers, for the graphs. */
+  /** The models behind the numbers. Unless `full`, the chassis's axle tables cover only ±LITE_WINDOW_M around design
+   *  and extrapolate past it: a graph over the travel needs its own solves (buildAxleLite's `at`) or a full table. */
   roll: RollModel;
   chassis: Chassis;
 }
@@ -597,25 +604,39 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
   const rolloverAcc = (G * tMean) / 2 / (c.cgHeightM + G * shift);
   const liftOffAcc = Math.min(...[0, 1].map((k) => (roll.transferPerAy[k].total > 0 ? staticN[k] / roll.transferPerAy[k].total : Infinity)));
 
-  // Braking with an ideal ABS at the brake balance β.
+  // Braking with an ideal ABS: each axle's valves hold its wheels at their peak while the pedal pressure keeps rising for
+  // the other, so both axles end at their peaks whatever the brake balance β. β only decides which axle reaches its
+  // peak first (and where a car without ABS would lock it).
   const h = c.cgHeightM;
   const beta = spec.longitudinal.brakeFront;
   const axleLoad = (a: number): [number, number] => [m * G * c.frontShare + (m * a * h) / L, m * G * (1 - c.frontShare) - (m * a * h) / L];
-  const brakes = (a: number): boolean => {
+  const peaks = (a: number): [number, number] => {
     const [ff, fr] = axleLoad(a);
-    if (fr < 0) return false;
-    return beta * m * a <= 2 * longitudinalPeakN(tyre.set, ff / 2) && (1 - beta) * m * a <= 2 * longitudinalPeakN(tyre.set, fr / 2);
+    return [2 * longitudinalPeakN(tyre.set, ff / 2), 2 * longitudinalPeakN(tyre.set, Math.max(0, fr) / 2)];
   };
-  let blo = 0;
-  let bhi = MAX_ACC;
-  for (let i = 0; i < 40; i++) {
-    const mid = (blo + bhi) / 2;
-    if (brakes(mid)) blo = mid;
-    else bhi = mid;
-  }
-  const brakingAcc = blo;
-  // The search stopped where the rear wheels leave the road before either axle saturates.
-  const rearLift = axleLoad(bhi)[1] <= 0;
+  const search = (holds: (a: number) => boolean): [number, number] => {
+    let lo = 0;
+    let hi = MAX_ACC;
+    for (let i = 0; i < 40; i++) {
+      const mid = (lo + hi) / 2;
+      if (holds(mid)) lo = mid;
+      else hi = mid;
+    }
+    return [lo, hi];
+  };
+  const [brakingAcc, brakingStop] = search((a) => {
+    if (axleLoad(a)[1] < 0) return false;
+    const [pf, pr] = peaks(a);
+    return m * a <= pf + pr;
+  });
+  // The search stopped where the rear wheels leave the road before the axles saturate.
+  const rearLift = axleLoad(brakingStop)[1] <= 0;
+  const [lockAcc, lockStop] = search((a) => {
+    const [pf, pr] = peaks(a);
+    return beta * m * a <= pf && (1 - beta) * m * a <= pr;
+  });
+  const [pfLock] = peaks(lockStop);
+  const firstLock: 0 | 1 = beta * m * lockStop > pfLock ? 0 : 1;
   const rl = spec.longitudinal.roadLoad;
   // s = ∫ v dv / (a + R(v)/m), Simpson on 40 intervals.
   const steps = 40;
@@ -731,6 +752,8 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
     brakingM,
     brakingAcc,
     rearLift,
+    lockAcc,
+    firstLock,
     pitchPerG,
     anti,
     unsprungShare: unsprung / m,

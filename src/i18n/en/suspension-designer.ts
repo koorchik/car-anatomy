@@ -136,6 +136,7 @@ export const SUSPENSION_DESIGNER_EN: Record<string, string> = {
   'Недостатня поворотність': 'Understeer',
   'Межа на скідпеді': 'Skidpad limit',
   'Гальмівний шлях 100–0': 'Braking distance 100–0',
+  'Межа гальмування без ABS': 'Braking limit without ABS',
   'Тангаж на гальмах': 'Pitch under braking',
   'Поріг перекидання': 'Rollover threshold',
   'Розвал зовнішнього колеса на 0,8 g спереду': 'Front outer wheel camber at 0.8 g',

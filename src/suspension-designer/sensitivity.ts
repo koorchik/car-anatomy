@@ -40,6 +40,7 @@ export function chassisMetrics(perf: ChassisPerformance): Metric[] {
     val('understeer', t('Недостатня поворотність'), perf.understeerPerG * DEG, t('°/g'), 2, 1),
     pct('skidpad', t('Межа на скідпеді'), perf.skidpadAcc / G),
     pct('braking', t('Гальмівний шлях 100–0'), perf.brakingM),
+    pct('lockup', t('Межа гальмування без ABS'), perf.lockAcc / G),
     pct('pitch', t('Тангаж на гальмах'), perf.pitchPerG),
     pct('rollover', t('Поріг перекидання'), perf.rolloverAcc / G),
     val('outerCamberF', t('Розвал зовнішнього колеса на 0,8 g спереду'), f.outerCamberRoad * DEG, deg, 1, 1),

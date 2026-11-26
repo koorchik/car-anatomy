@@ -415,6 +415,27 @@ describe('evaluateChassis', () => {
     expect(t.tyres + t.transfer + t.camber + t.rollSteer).toBeCloseTo(base.understeerPerG, 12);
   });
 
+  it('with an ideal ABS the brake balance sets which axle locks first, not the stopping distance', () => {
+    const at = (brakeFront: number) => evaluateChassis(chassisToSpec(editChassis(DEFAULT_CHASSIS, { brakeFront })));
+    const front = at(0.9);
+    const rear = at(0.4);
+    // ABS holds the axle that reaches its peak there while the other one's pressure keeps rising to its own peak.
+    expect(front.brakingM).toBeCloseTo(rear.brakingM, 9);
+    expect(front.firstLock).toBe(0);
+    expect(rear.firstLock).toBe(1);
+    // Without ABS a balance far from the grip of each axle locks sooner; the best balance reaches what ABS gets.
+    for (const p of [front, rear]) expect(p.lockAcc).toBeLessThan(p.brakingAcc);
+    let best = 0;
+    for (let beta = 0.4; beta <= 0.9; beta += 0.005) best = Math.max(best, at(beta).lockAcc);
+    expect(best).toBeGreaterThan(0.995 * front.brakingAcc);
+    expect(best).toBeLessThanOrEqual(front.brakingAcc * (1 + 1e-9));
+    // A rear-engined car (the Corvair, 38 % on the front) stops in about the same distance as a front-heavy one on the
+    // same tyres, though the typical balance of 0.7 locks its front wheels early.
+    const corvair = evaluateChassis(chassisToSpec(chassisPreset('corvair-swing-axle')!.design()));
+    expect(corvair.firstLock).toBe(0);
+    expect(corvair.lockAcc).toBeLessThan(0.8 * corvair.brakingAcc);
+  });
+
   it('a live axle under drive unloads one rear wheel, and the final drive sets how much', () => {
     const live = editChassis(editChassis(DEFAULT_CHASSIS, { drive: 'rwd' }), { layoutR: 'live-axle' });
     const short = evaluateChassis(chassisToSpec(live)).propUnload;
