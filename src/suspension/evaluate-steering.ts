@@ -10,8 +10,8 @@
 
 import type { AxleSpec, ChassisSpec, SolidAxleLinkage } from './spec.ts';
 import {
-  ackermannShare, CornerSteering, GEAR_EFFICIENCY, gearInputFor, gearOutput, gearOutputRate, linkTravel, linkTravelRate,
-  SteeredBeam, turningCircleM, type SteerSample,
+  ackermannShare, CornerSteering, GEAR_EFFICIENCY, gearInputFor, gearOutput, gearOutputRate, LINK_ARMS_AHEAD, linkTravel,
+  linkTravelRate, SteeredBeam, turningCircleM, type SteerSample,
 } from './steering.ts';
 import {
   driverTorque, manualTorque, sideForceMoment, spindleMoment, splitMuSteer, standstillMoment, tyreAligning,
@@ -102,9 +102,12 @@ function remember(key: string, make: () => Kinematics): Kinematics {
 function kinematicsOf(spec: ChassisSpec): Kinematics {
   const axle = spec.front.axle;
   const beam = spec.steering?.beam ?? null;
+  const gear = spec.steering?.gear;
+  // A box on an independent axle moves the tie rods' inner joints on its centre link's arc.
+  const linkArcM = !beam && gear && gear.kind !== 'rack' ? LINK_ARMS_AHEAD * gear.pitmanArmM : 0;
   const spring = { ...axle.spring, rate: 0, progressive: null };
   const damper = { ...axle.damper, compression: 0, rebound: 0, kneeMs: 0, highRatio: 0 };
-  const key = JSON.stringify([{ ...axle, spring, damper }, beam]);
+  const key = JSON.stringify([{ ...axle, spring, damper }, beam, linkArcM]);
   return remember(key, () => {
     const link = axle.linkage;
     if (link.kind === 'solid') {
@@ -121,7 +124,7 @@ function kinematicsOf(spec: ChassisSpec): Kinematics {
       };
     }
     if (link.kind !== 'links') throw new Error(`A ${axle.layout} front axle is not steered`);
-    const steering = new CornerSteering(axle as AxleSpec);
+    const steering = new CornerSteering(axle as AxleSpec, linkArcM);
     const d = steering.design;
     return {
       steering,

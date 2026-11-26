@@ -396,12 +396,15 @@ export class Axle<L extends AnyCornerLinkage = CornerLinkage> {
     this.solver.point(pose, b.knuckle, q);
     const ay = a.steer ? rack : 0;
     const by = b.steer ? rack : 0;
+    const rackX = this.solver.rackX(rack);
+    const ax = a.steer ? rackX : 0;
+    const bx = b.steer ? rackX : 0;
     // Lines P + s·d (from the rod's knuckle end to its body end) and Q + t·e, w = P − Q. Scalars: the 3D may call this
     // every frame.
-    const dx = a.body[0] - p[0];
+    const dx = a.body[0] + ax - p[0];
     const dy = a.body[1] + ay - p[1];
     const dz = a.body[2] - p[2];
-    const ex = b.body[0] - q[0];
+    const ex = b.body[0] + bx - q[0];
     const ey = b.body[1] + by - q[1];
     const ez = b.body[2] - q[2];
     const wx = p[0] - q[0];

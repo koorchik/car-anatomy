@@ -10,9 +10,11 @@
 // Linkages.
 //   - Rack: the tie rods' inner joints move with the rack along y (CornerSolver's `rack`).
 //   - Box on an independent axle (decision 20's front axle with a pitman arm, a centre link and an idler arm): the
-//     pitman and idler arms are equal and parallel, so the centre link moves across the car by `pitmanArmM·sin φ`,
-//     and the tie rods' inner joints with it. Its fore-and-aft motion, pitmanArmM·(1 − cos φ) (about 15 mm at 25° on
-//     a 140 mm arm), is left out: the corner solver moves the inner joints along y only.
+//     pitman and idler arms are equal and parallel, so the centre link is the coupler of a parallelogram. It moves
+//     across the car by `pitmanArmM·sin φ` and toward the arms' pivots by pitmanArmM·(1 − cos φ) (about 15 mm at 25°
+//     on a 140 mm arm, which turns the inner wheel more than a degree at the lock), and the tie rods' inner joints
+//     with it (CornerSolver's `linkArcM`). The arms point back from their pivots to the link (LINK_ARMS_AHEAD), a
+//     choice of the model: which way a given car's arms point is not in its published data.
 //   - Box on a steered solid axle (SteeredBeam): the pitman arm swings across the car on the body, a drag link runs
 //     from it to the steering arm of the right knuckle, and a tie rod joins the two knuckles. The knuckles turn about
 //     their kingpins in the axle, which the solid axle solver places (solid-kinematics.ts); the drag link's length then
@@ -58,6 +60,10 @@ export interface SteeringGear {
   /** Gain of the gear past the ramp over its gain on centre: 1 is a constant ratio, above 1 quicker toward the lock. */
   variable: number;
 }
+
+/** +1: the pitman and idler arms' pivots are ahead of the centre link, so it moves forward as they swing (a model
+ *  choice, see the header); −1 would put them behind it. */
+export const LINK_ARMS_AHEAD = 1;
 
 /** Steering-wheel angle over which a variable ratio reaches its end gain, rad (half a turn; a model choice). */
 export const VARIABLE_RAMP_RAD = Math.PI;
@@ -229,10 +235,15 @@ export class CornerSteering {
   private readonly v: Float64Array;
   private readonly sample = newCornerSample();
 
-  constructor(spec: AxleSpec) {
+  /**
+   * `linkArcM`: 0 when a rack moves the tie rods' inner joints, or the pitman and idler arms' length when a centre link
+   * does (signed by LINK_ARMS_AHEAD; CornerSolver's `linkArcM`).
+   */
+  constructor(spec: AxleSpec, linkArcM = 0) {
     if (!spec.linkage.rods.some((r) => r.steer)) throw new Error('The corner has no steered rod');
     this.axle = new Axle(spec, { table: false });
     const solver = this.axle.solver;
+    solver.linkArcM = linkArcM;
     const pose = CornerSolver.identity();
     const res = solver.solve(pose, 0, 0, 40);
     if (!res.ok) throw new Error(`The corner does not assemble at design: ${res.worst}`);
