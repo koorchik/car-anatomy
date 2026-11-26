@@ -110,6 +110,8 @@ export class GearboxSection implements Section {
   private toolsHBefore = '';
   /** Last texts of the readouts, so the DOM is touched only when they change. */
   private shown = { input: '', output: '', gear: '', note: '' };
+  /** What the readouts were last built from: the texts are built only when it changes, not every frame. */
+  private readoutsFor = { rpm: NaN, engaged: '', selected: '', box: null as Gearbox | null };
   private readonly unlit = { angles: [] as ArrayLike<number>, sleeves: {} as Readonly<Record<string, number>>, meshPower: [] as number[] };
 
   /** The one Drive of the site, as this section uses it. */
@@ -573,6 +575,13 @@ export class GearboxSection implements Section {
   /** Shaft speeds and the gear's ratio under the dash's gear buttons. */
   private readouts(rpm: number): void {
     const engaged = this.table.engaged;
+    const was = this.readoutsFor;
+    const whole = Math.round(rpm);
+    if (whole === was.rpm && engaged === was.engaged && this.table.selected === was.selected && this.box === was.box) return;
+    was.rpm = whole;
+    was.engaged = engaged;
+    was.selected = this.table.selected;
+    was.box = this.box;
     const state = this.box.states.find((s) => s.name === engaged);
     const ratio = state?.kind === 'gear' ? state.ratio! : null;
     const input = t('{rpm} об/хв', { rpm: num(rpm) });
