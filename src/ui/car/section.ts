@@ -88,6 +88,8 @@ export class CarSection implements Section {
   private touched: CarSystem | null = null;
   private small = false;
   private focusCard!: HTMLElement;
+  /** True while setFocus lays the page out, so laidOut leaves the camera to it. */
+  private relaying = false;
 
   mount(ctx: SectionContext): void {
     this.ctx = ctx;
@@ -366,6 +368,16 @@ export class CarSection implements Section {
     model.focusSystem(system);
     model.highlightSystem(system);
     model.setCards(this.hoverCards, system);
+    this.ctx.slots.partCard.hidden = true;
+    this.drawFocus();
+    const now = this.ctx.router.current.query.focus;
+    if ((system ?? undefined) !== now) this.ctx.router.replace({ query: { focus: system } });
+    // On a wide screen the card lives in the right panel, which a focus opens if the visitor had closed it. The page is
+    // laid out before the camera moves: a relayout frames the stage again (Stage.resize), which would stop the move.
+    if (system && !this.small && !this.ctx.panels.isOpen('right')) this.ctx.panels.setOpen('right', true);
+    this.relaying = true;
+    this.ctx.panels.relayout();
+    this.relaying = false;
     const stage = this.ctx.stage;
     const options = durationS === undefined ? {} : { durationS };
     if (changed || durationS === 0) {
@@ -377,13 +389,12 @@ export class CarSection implements Section {
         stage.focusWhole(options);
       }
     }
-    this.ctx.slots.partCard.hidden = true;
-    this.drawFocus();
-    const now = this.ctx.router.current.query.focus;
-    if ((system ?? undefined) !== now) this.ctx.router.replace({ query: { focus: system } });
-    // On a wide screen the card lives in the right panel, which a focus opens if the visitor had closed it.
-    if (system && !this.small && !this.ctx.panels.isOpen('right')) this.ctx.panels.setOpen('right', true);
-    this.ctx.panels.relayout();
+  }
+
+  /** A relayout (a resized window, a panel opened) framed the whole car again: a system in focus is framed back. */
+  laidOut(): void {
+    if (!this.shown || this.relaying || !this.focused || !this.model) return;
+    this.ctx.stage.focus(this.model.systemBox(this.focused), { durationS: 0 });
   }
 
   /** The card of the system in focus and the chips' state. */

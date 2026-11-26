@@ -1,5 +1,7 @@
-/* The car overview, under body.section-car. Only the 3D at stage C1a: no dash, no engine hints, no side panels and,
- * while the car stands still, no choice of time. The section's chunk loads it after the shell's styles. */
+/* The car overview, under body.section-car: no dash, no engine hints and, while the car stands still, no choice of
+ * time. The right panel holds the article and, in focus, the system's card (a sheet at the bottom on a phone). The
+ * section's chunk loads it after the shell's styles, and the engines' styles may not be loaded, so the article's own
+ * classes are styled here. */
 
 body.section-car {
   --dash-h: 0px;
@@ -7,9 +9,309 @@ body.section-car {
 
 body.section-car .dash,
 body.section-car #hint,
-body.section-car #panel,
-body.section-car #panel-open,
-body.section-car #panel-toggle-closed,
 body.section-car .view-tools .tool:has(#speed) {
   display: none;
+}
+
+.car-title {
+  pointer-events: auto;
+  max-width: min(620px, calc(100vw - var(--panel-w, 0px) - 36px));
+}
+
+.car-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 8px 0 0;
+}
+
+.car-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.car-list[hidden] {
+  display: none;
+}
+
+.car-item {
+  color: var(--bone-dim);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.car-item:hover,
+.car-item.current {
+  color: var(--bone);
+  border-bottom-color: var(--ignition);
+}
+
+.car-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.car-chip {
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--bone);
+  background: rgba(14, 42, 51, 0.72);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.car-chip:hover {
+  background: var(--petrol-up);
+}
+
+.car-chip[aria-pressed='true'] {
+  background: var(--bone);
+  color: var(--petrol-deep);
+  border-color: var(--bone);
+  font-weight: 600;
+}
+
+.car-chip:focus-visible,
+.car-focus .btn:focus-visible {
+  outline: 2px solid var(--ignition);
+  outline-offset: 1px;
+}
+
+/* The card of the system in focus: at the top of the right panel. */
+.car-focus {
+  margin: 0 0 18px;
+  padding: 12px 14px 14px;
+  background: var(--bone);
+  color: var(--petrol-deep);
+  border-radius: 3px;
+}
+
+.car-focus[hidden] {
+  display: none;
+}
+
+.car-focus h2 {
+  font-family: var(--display);
+  font-size: 24px;
+  line-height: 1.1;
+  margin: 0 0 2px;
+}
+
+.car-focus .car-focus-kind {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.car-focus .car-focus-text {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.38;
+}
+
+.car-focus .car-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.38;
+  color: var(--petrol-lit);
+}
+
+.car-focus .car-note[hidden],
+.car-focus .car-focus-kind[hidden],
+.car-focus .btn[hidden] {
+  display: none;
+}
+
+.car-figures {
+  margin: 0;
+  display: grid;
+  border-top: 1px solid rgba(14, 42, 51, 0.18);
+}
+
+.car-figures > div {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(14, 42, 51, 0.18);
+  font-size: 13.5px;
+}
+
+.car-figures dt {
+  color: var(--petrol-lit);
+}
+
+.car-figures dd {
+  margin: 0;
+}
+
+.car-focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.car-focus .btn {
+  color: var(--petrol-deep);
+  background: transparent;
+  border-color: rgba(14, 42, 51, 0.35);
+  text-decoration: none;
+  font: inherit;
+  font-size: 14px;
+}
+
+.car-focus .btn.primary {
+  background: var(--petrol-deep);
+  border-color: var(--petrol-deep);
+  color: var(--bone);
+}
+
+.car-focus kbd {
+  font: inherit;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* The article "About this car". */
+.car-panel {
+  padding: 14px 16px 24px;
+}
+
+.car-panel h3 {
+  margin: 18px 0 8px;
+}
+
+.car-panel .lead {
+  font-size: 15px;
+  line-height: 1.45;
+  margin: 0 0 14px;
+}
+
+.car-panel .figures {
+  margin: 0;
+  display: grid;
+  border-top: 1px solid var(--rule);
+}
+
+.car-panel .figures > div {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.car-panel .figures dt {
+  color: var(--bone-dim);
+  font-size: 13.5px;
+}
+
+.car-panel .figures dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+.car-panel .note {
+  color: var(--bone-dim);
+  font-size: 13.5px;
+  line-height: 1.42;
+}
+
+.car-panel .note.small {
+  margin-top: 18px;
+  font-size: 12.5px;
+}
+
+.car-panel .verify {
+  margin-top: 10px;
+  font-size: 13px;
+  border-left: 3px solid var(--ignition);
+  padding-left: 9px;
+  color: var(--bone-dim);
+}
+
+.car-links {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+
+.car-panel a,
+.car-table a {
+  color: var(--intake);
+}
+
+/* The table "All cars". */
+.car-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.car-table th,
+.car-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.car-table th {
+  color: var(--bone-dim);
+  font-weight: 500;
+}
+
+.car-table tr.current td {
+  background: rgba(236, 230, 214, 0.06);
+}
+
+@media (max-width: 860px) {
+  .car-title {
+    max-width: none;
+  }
+
+  .car-title h1 {
+    font-size: 26px;
+  }
+
+  /* One row that scrolls sideways, so the chips do not cover the model. */
+  .car-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: calc(100vw - 32px);
+    scrollbar-width: none;
+    margin-top: 8px;
+  }
+
+  .car-chip {
+    font-size: 12.5px;
+    padding: 2px 8px;
+    flex: none;
+  }
+
+  /* On a phone the card is a sheet at the bottom of the stage; the model is framed above it (layout()). */
+  .car-focus {
+    position: absolute;
+    z-index: 9;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    max-height: min(42vh, 320px);
+    overflow-y: auto;
+    border-radius: 6px 6px 0 0;
+    box-shadow: 0 -6px 18px rgba(0, 15, 20, 0.35);
+  }
+
+  .car-figures > div {
+    grid-template-columns: 120px 1fr;
+  }
 }
