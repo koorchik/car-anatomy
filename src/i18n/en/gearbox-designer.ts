@@ -293,12 +293,11 @@ export const GEARBOX_DESIGNER_EN: Record<string, string> = {
   'Постійна пара {ratio}. ': 'Constant-mesh pair {ratio}. ',
   'Пер.': 'Gear',
   'Крок': 'Step',
-  'км/год на відсічці': 'km/h at the limiter',
-  'Оберти після': 'Revs after',
+  'Після': 'After',
   'Згин': 'Bending',
   'Контакт': 'Contact',
-  'Головна передача {final}, задній хід {reverse}, діапазон {range}. Згин і контакт — навантаження найслабшої пари передачі на піковому моменті {torque} Н·м, де 100 % — межа.':
-    'Final drive {final}, reverse {reverse}, spread {range}. Bending and contact are the load of the gear\'s weakest pair at the peak torque of {torque} N·m, where 100 % is the limit.',
+  'Головна передача {final}, задній хід {reverse}, діапазон {range}. Км/год — швидкість на відсічці; «після» — оберти, коли з цієї передачі перемкнулися на наступну. Згин і контакт — навантаження найслабшої пари передачі на піковому моменті {torque} Н·м, де 100 % — межа.':
+    'Final drive {final}, reverse {reverse}, spread {range}. Km/h is the speed at the rev limiter; "after" is the revs once shifted from this gear to the next. Bending and contact are the load of the gear\'s weakest pair at the peak torque of {torque} N·m, where 100 % is the limit.',
   'На цій коробці майже нічого на це не впливає.': 'On this transmission hardly anything affects it.',
   'Що найбільше змінює це навантаження, якщо рухати контрол на десяту частину його діапазону:': 'What changes this load the most when a control moves a tenth of its range:',
   'Оберти на 100 і 120 км/год у вищій': 'Revs at 100 and 120 km/h in top',

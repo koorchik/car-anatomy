@@ -223,9 +223,9 @@ export class GearboxResultsPanel {
       .join('');
     const main = perf.mainRatio === null ? '' : t('Постійна пара {ratio}. ', { ratio: num(perf.mainRatio, 3) });
     this.gears.innerHTML = `<div class="gbd-scroll"><table>
-        <thead><tr><th scope="col">${t('Пер.')}</th><th scope="col">${t('Зубці')}</th><th scope="col">${t('Число')}</th><th scope="col">${t('Крок')}</th><th scope="col">${t('км/год на відсічці')}</th><th scope="col">${t('Оберти після')}</th><th scope="col">${t('Згин')}</th><th scope="col">${t('Контакт')}</th></tr></thead>
+        <thead><tr><th scope="col">${t('Пер.')}</th><th scope="col">${t('Зубці')}</th><th scope="col">${t('Число')}</th><th scope="col">${t('Крок')}</th><th scope="col">${t('км/год')}</th><th scope="col">${t('Після')}</th><th scope="col">${t('Згин')}</th><th scope="col">${t('Контакт')}</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
-      <p class="note small">${main}${t('Головна передача {final}, задній хід {reverse}, діапазон {range}. Згин і контакт — навантаження найслабшої пари передачі на піковому моменті {torque} Н·м, де 100 % — межа.', {
+      <p class="note small">${main}${t('Головна передача {final}, задній хід {reverse}, діапазон {range}. Км/год — швидкість на відсічці; «після» — оберти, коли з цієї передачі перемкнулися на наступну. Згин і контакт — навантаження найслабшої пари передачі на піковому моменті {torque} Н·м, де 100 % — межа.', {
         final: num(perf.finalDrive, 2),
         reverse: num(perf.reverse.ratio, 2),
         range: num(perf.range, 2),
