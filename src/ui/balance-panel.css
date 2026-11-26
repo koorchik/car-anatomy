@@ -87,7 +87,7 @@
 .forces-diagram-open {
   display: block;
   width: 100%;
-  margin: 2px 0 4px;
+  margin: 0 0 2px;
   padding: 0;
   border: 0;
   background: none;
@@ -112,16 +112,38 @@
 
 .forces-fig svg {
   display: block;
-  width: 136px;
-  height: 136px;
+  width: 120px;
+  height: 120px;
   overflow: visible;
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.2);
 }
 
 .forces-fig.couple svg {
-  width: 92px;
-  height: 92px;
+  width: 100px;
+  height: 100px;
+}
+
+/*
+ * The full card is laid over the stage and shares its right with the systems (shareStage): each line it saves keeps it
+ * full on a 900 px screen. There the name of each diagram goes into its box, and the word under it wraps to the box.
+ */
+.forces-card:not(.compact) .forces-fig {
+  position: relative;
+  width: 120px;
+}
+
+.forces-card:not(.compact) .forces-fig.couple {
+  width: 100px;
+}
+
+.forces-card:not(.compact) .forces-fig figcaption span {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .forces-fig figcaption {
@@ -198,7 +220,7 @@
 }
 
 .forces-chains {
-  margin: 5px 0 0;
+  margin: 3px 0 0;
   color: var(--bone-dim);
   font-size: 12px;
   line-height: 1.35;
