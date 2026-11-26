@@ -141,5 +141,8 @@ export function tableLayout(record: GearboxRecord, axleFinalDrive: number | null
       return layshaftLayout(record.layout.desc, axleFinalDrive);
     case 'transaxle':
       return transaxleLayout(record.layout.desc);
+    case 'planetary':
+      // The planetary automatic has a page of its own (pages.ts), not the layshaft table.
+      throw new Error(`${record.id}: a planetary box is shown on its own page, not on the table`);
   }
 }
