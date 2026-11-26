@@ -51,14 +51,30 @@ describe('solid axle rig', () => {
 
   it('binds four parallel links and a Panhard rod once the upper links are not parallel to the lower ones', () => {
     const roll = { rollRad: 3 * DEG, heaveM: 0, bumpM: 0 };
-    const parallel = new SolidRig(solidAxle(SOLID_TYPICAL.panhard)).solve(roll).bindM;
+    const parallel = new SolidRig(solidAxle(SOLID_TYPICAL.panhard));
     const crossed = new SolidRig(solidAxle({ ...SOLID_TYPICAL.panhard, upperAngleDeg: 0 }));
+    // At design, links parallel in the side view leave both motions: each side keeps the axle's pitch to first order.
+    expect(parallel.freeMotions()).toBe(2);
+    // Converging links ask each side for its own pitch in roll: the housing cannot give both, the rods stretch.
+    expect(crossed.freeMotions()).toBe(1);
+    const p = parallel.solve(roll).bindM;
     const out = crossed.solve(roll);
-    expect(parallel).toBeLessThan(1e-5);
     expect(out.bindM).toBeGreaterThan(5e-4);
     expect(out.worst).not.toBe('');
-    // In statics the set can no longer roll: one free motion is left.
-    expect(crossed.freeMotions()).toBe(1);
+    // Pure roll moves the sides by ±q, and parallel links pitch the axle by ~q² on either side alike: only a
+    // higher-order trace is left, two orders below the converging set's.
+    expect(p).toBeLessThan(out.bindM / 100);
+  });
+
+  it('binds parallel links of unequal length in roll with heave, and leaves a parallelogram free', () => {
+    // Heave h with roll ±q: a link pitches the axle by ~(h ± q)², no longer alike on the two sides, unless upper and
+    // lower links are as long as each other (a parallelogram keeps the pitch at any travel).
+    const input = { rollRad: 3 * DEG, heaveM: 0.03, bumpM: 0 };
+    const unequal = new SolidRig(solidAxle(SOLID_TYPICAL.panhard)).solve(input).bindM;
+    const equal = new SolidRig(solidAxle({ ...SOLID_TYPICAL.panhard, upperLinkM: SOLID_TYPICAL.panhard.lowerLinkM })).solve(input).bindM;
+    expect(SOLID_TYPICAL.panhard.upperLinkM).not.toBe(SOLID_TYPICAL.panhard.lowerLinkM);
+    expect(unequal).toBeGreaterThan(1e-4);
+    expect(equal).toBeLessThan(unequal / 100);
   });
 
   it('never binds three links with a Panhard rod or Watt’s linkage, nor four triangulated links', () => {
