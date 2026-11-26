@@ -16,7 +16,7 @@
 
 import type { AxleSpec, HalfshaftSpec, Vec3, Wishbone } from '../spec.ts';
 import { add, cross, dot, scale, sub, unit } from '../vec.ts';
-import { Axle, newCornerSample } from '../kinematics.ts';
+import { buildAxleLite } from '../axle-lite.ts';
 import { CornerSolver } from '../solve.ts';
 
 const DEG = Math.PI / 180;
@@ -230,14 +230,13 @@ export function halfshaftFor(W: Vec3, axisGround: Vec3, axisDir: Vec3, diffOutpu
   };
 }
 
-/** Sets the bump-stop gap so the stop touches `BUMP_STOP_TRAVEL_M` into bump, and the spring rate for the wheel rate. */
+/** Sets the bump-stop gap so the stop touches `BUMP_STOP_TRAVEL_M` into bump, and the spring rate for the wheel rate.
+ *  Two exact solves (buildAxleLite), not the whole table: the designer draws dozens of these a second. */
 export function finishElements(spec: AxleSpec, wheelRateNm: number): AxleSpec {
-  const axle = new Axle(spec);
-  const s = newCornerSample();
-  axle.measureAt(0, s);
-  const design = s.damperLen;
-  const mr = s.mrSpring;
-  axle.measureAt(BUMP_STOP_TRAVEL_M, s);
+  const lite = buildAxleLite(spec);
+  const design = lite.design.damperLen;
+  const mr = lite.design.mrSpring;
+  const s = lite.at(BUMP_STOP_TRAVEL_M);
   return {
     ...spec,
     spring: { ...spec.spring, rate: wheelRateNm / (mr * mr) },
