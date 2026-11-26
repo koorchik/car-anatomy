@@ -131,7 +131,10 @@ export interface GearboxPreset {
 
 /** Copies of the catalogue: every gearbox record that sits in a car of the site. */
 export const catalogueGearboxPresets = (): GearboxPreset[] =>
-  ALL_GEARBOXES.filter((g) => g.car && driveCarById(g.car)).map((g) => ({ id: g.id, name: designFromRecord(g).name, design: designFromRecord(g) }));
+  ALL_GEARBOXES.filter((g) => g.car && driveCarById(g.car)).map((g) => {
+    const design = designFromRecord(g);
+    return { id: g.id, name: design.name, design };
+  });
 
 /**
  * Moves a design to another type with what that type usually has: a layshaft box drives the rear wheels through a

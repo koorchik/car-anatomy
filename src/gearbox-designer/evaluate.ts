@@ -483,7 +483,8 @@ function startGrade(m: Model): number {
   const engine = forceFrom(m, first, torque, 0);
   const pulls = (theta: number): boolean => {
     const grip = 2 * longitudinalPeakN(v.tyre.set, drivenAxleN(v, 0, theta) / 2);
-    return Math.min(engine, grip) >= v.massKg * G * Math.sin(theta) + v.roadLoad.a;
+    // Rolling resistance presses with the weight's share normal to the road.
+    return Math.min(engine, grip) >= v.massKg * G * Math.sin(theta) + v.roadLoad.a * Math.cos(theta);
   };
   if (!pulls(0)) return 0;
   let lo = 0;
