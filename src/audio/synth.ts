@@ -401,9 +401,10 @@ export class EngineSynth {
     const cycle = this.cfg.sim.cycle;
     const noise = this.noise;
 
+    const every = this.stepSamples;
     for (let s = 0; s < n; s++) {
-      if (s % this.stepSamples === 0) {
-        sim.step(dt * this.stepSamples);
+      if (s % every === 0) {
+        sim.step(dt * every);
         if (this.cfg.valves) this.updateLive();
       }
       if (this.fadeRate > 0) {
