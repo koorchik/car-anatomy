@@ -63,6 +63,7 @@ export const POWER = '#ea6a15';
 /** Hover highlight of a whole system in the car overview, as each section tints its own materials. */
 export const HIGHLIGHT = {
   gearbox: '#3d7fd9',
+  /** A corner, an axle and the body shell the chassis stands in. */
   suspension: '#ffb35c',
 } as const;
 

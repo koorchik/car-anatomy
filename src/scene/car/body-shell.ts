@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import { glassMaterial } from '../materials.ts';
 import { markDamaged, tag, type ViewMode } from '../model-types.ts';
+import { HIGHLIGHT } from '../palette.ts';
 import type { PartInfo } from '../parts-info.ts';
 import type { CarRecord, Vec3 } from '../../vehicle/car.ts';
 import { BODY_PARTS } from './parts.ts';
@@ -640,7 +641,7 @@ export class BodyShell {
       if (!(m instanceof THREE.MeshStandardMaterial)) continue;
       const before = m.emissive.clone();
       const intensity = m.emissiveIntensity;
-      m.emissive.set('#ffb35c');
+      m.emissive.set(HIGHLIGHT.suspension);
       m.emissiveIntensity = 0.28;
       this.highlightUndo.push(() => {
         m.emissive.copy(before);

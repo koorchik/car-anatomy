@@ -11,10 +11,11 @@
 // not what the body or the bar look like (docs/suspension-model.md, the chassis section). The bar's ends turn about its
 // torsion section to keep each link its length, so the links never stretch as a steered strut turns them.
 //
-// Implements the shell's SceneModel<AxleFrame> structurally (whole-car plan, the Stage section) until O2b adds the type.
+// Every axle is a SceneModel<AxleFrame> (model-types.ts) with all of its optional methods, as a chassis needs them.
 
 import * as THREE from 'three';
-import { markDamaged, tag, type ViewMode } from '../model-types.ts';
+import { markDamaged, tag, type SceneModel, type ViewMode } from '../model-types.ts';
+import { HIGHLIGHT } from '../palette.ts';
 import { merge } from '../geometry.ts';
 import { glassMaterial } from '../materials.ts';
 import type { PartInfo } from '../parts-info.ts';
@@ -38,7 +39,7 @@ export interface AxleFrame {
 export const axleFrame = (): AxleFrame => ({ travel: [0, 0], rack: 0, spin: [0, 0] });
 
 /** An axle as a chassis holds it. */
-export interface AxleModel {
+export interface AxleModel extends SceneModel<AxleFrame> {
   readonly group: THREE.Group;
   readonly which: 'front' | 'rear';
   /** Cards of every part key the axle tags; keys are in the axle's space (susp.front.spring). */
@@ -607,7 +608,7 @@ export class IndependentAxleModel implements AxleModel {
     for (const mat of Object.values(this.m)) {
       const before = mat.emissive.clone();
       const intensity = mat.emissiveIntensity;
-      mat.emissive.set('#ffb35c');
+      mat.emissive.set(HIGHLIGHT.suspension);
       mat.emissiveIntensity = 0.28;
       this.highlightUndo.push(() => {
         mat.emissive.copy(before);

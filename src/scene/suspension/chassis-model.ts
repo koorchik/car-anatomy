@@ -7,12 +7,11 @@
 // puts it into a car with a translation (suspensions plan, 3D). Records and the shell are in the front-axle frame;
 // carFrameToCg moves each axle and the shell into place. Scene = (y, z, x)·10 as everywhere in the section.
 //
-// Implements the shell's SceneModel<ChassisFrame> structurally (whole-car plan, the Stage section) until O2b adds the
-// type. The body draws in its own band, BODY_BAND above the chassis's, so with the overview's chassis band 30 it lands
+// A SceneModel<ChassisFrame> (model-types.ts), the contract of every model on the stage. The body draws in its own band, BODY_BAND above the chassis's, so with the overview's chassis band 30 it lands
 // on the body's 90 and sorts after every other model's glass.
 
 import * as THREE from 'three';
-import type { ViewMode } from '../model-types.ts';
+import type { SceneModel, ViewMode } from '../model-types.ts';
 import type { PartInfo } from '../parts-info.ts';
 import { factorySetup, resolveCorner } from '../../suspension/setup.ts';
 import type { CarChassis, ChassisAxle } from '../../suspension/car-chassis.ts';
@@ -41,7 +40,7 @@ function independentAxle(axle: ChassisAxle): AxleModel {
   return new IndependentAxleModel({ which: axle.which, corner: resolved, wheel: { rimRadiusM, rimWidthM, tyreWidthM }, antiRollBar: axle.antiRollBar });
 }
 
-export class ChassisModel {
+export class ChassisModel implements SceneModel<ChassisFrame> {
   readonly group = new THREE.Group();
   readonly chassis: CarChassis;
   readonly front: AxleModel;
