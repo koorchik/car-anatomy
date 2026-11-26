@@ -104,6 +104,8 @@ export class CameraMove {
   /** Moves the clock on by `dt` seconds and writes where the camera and its target stand now. */
   step(dt: number, position: THREE.Vector3, target: THREE.Vector3): void {
     this.elapsed = Math.min(this.durationS, this.elapsed + Math.max(0, dt));
+    // Frame times summed up miss the end by a rounding error; the move should not take a frame more for it.
+    if (this.durationS - this.elapsed < 1e-6) this.elapsed = this.durationS;
     const k = this.durationS > 0 ? ease(this.elapsed / this.durationS) : 1;
     target.lerpVectors(this.from.target, this.to.target, k);
     this.partial.identity().slerp(this.turn, k);
