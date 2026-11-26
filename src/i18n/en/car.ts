@@ -25,8 +25,8 @@ export const CAR_EN: Record<string, string> = {
   'Труба від турбіни (або від колектора в двигуна без турбіни) під днищем до зрізу ззаду. Її шлях задає компоновка авто, а не звук: довжину для звуку підібрано окремо, тож глушник стоїть там, куди її доводить звук, якщо лінія це дозволяє.':
     'The pipe from the turbine (or from the manifold on an engine without one) under the floor to the tailpipe at the back. Its path is set by the layout of the car, not by the sound: the length for the sound is tuned separately, so the muffler sits where the sound puts it, if the line has room.',
   'Каталізатор': 'Catalytic converter',
-  'Кераміка з тонкими каналами, вкритими платиною й родієм, допалює те, що не згоріло в циліндрах. Стоїть одразу за двигуном, бо працює лише гарячим. Розмір тут типовий.':
-    'A ceramic block of fine channels coated with platinum and rhodium burns what did not burn in the cylinders. It sits right behind the engine because it only works hot. The size here is typical.',
+  'Кераміка з тонкими каналами, вкритими платиною, паладієм і родієм, допалює те, що не згоріло в циліндрах, і розкладає оксиди азоту. Стоїть одразу за двигуном, бо працює лише гарячим. Розмір тут типовий.':
+    'A ceramic block of fine channels coated with platinum, palladium and rhodium burns what did not burn in the cylinders and breaks up nitrogen oxides. It sits right behind the engine because it only works hot. The size here is typical.',
   'Глушник': 'Muffler',
   'Камери й перфоровані труби гасять імпульси вихлопу, перш ніж вони вийдуть назовні. Від того, як далеко він від колектора, залежить, які частоти чути найбільше. Розмір і форма тут типові.':
     'Chambers and perforated tubes damp the exhaust pulses before they get out. How far it is from the manifold decides which frequencies are heard most. The size and shape here are typical.',
