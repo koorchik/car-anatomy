@@ -159,8 +159,7 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   'м/с³': 'm/s³',
   'Н·м на колесах': 'N·m at the wheels',
   // Demonstrations 2 and 3, in the car.
-  'рушаємо': 'pulling away',
-  'перемикання': 'shifting',
+  'Демонстрації': 'Demonstrations',
   'Ще раз': 'Again',
   '{demo} · {n} з {count}': '{demo} · {n} of {count}',
   'Рушаємо': 'Pulling away',

@@ -557,7 +557,7 @@ export class GearboxSection implements Section {
     this.lend('#results-open', panelName);
     this.lend('.results-head h2', panelName);
     this.el<HTMLButtonElement>('gbx-demo-open').hidden = mode === 'drive' || !this.data.layout.demo;
-    for (const id of ['gbx-demo-pull', 'gbx-demo-shift']) this.el(id).hidden = mode !== 'drive';
+    this.el('gbx-car-demos').hidden = mode !== 'drive';
     this.el('gbx-engine-tool').hidden = mode !== 'drive';
     // The engine stands in front of the box only in the car.
     if ((this.composite !== null) !== (this.withEngine && mode === 'drive' && this.engineView !== null)) this.buildModel(false);

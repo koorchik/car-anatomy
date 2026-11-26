@@ -64,7 +64,7 @@ export class TractionChart extends Canvas {
     const kmh = Math.max(20, traction.maxKmh * 1.04);
     const force = Math.max(1000, traction.maxForce * 1.08);
     const xs = niceStep(kmh, 5);
-    const ys = niceStep(force / 1000, 4);
+    const ys = niceStep(force / 1000, 6);
     this.axes = {
       kmh,
       force,

@@ -26,8 +26,11 @@ export const titleHtml = (): string => `<div class="gbx-title" id="gbx-title-blo
     <div class="gbx-title-row">
       <button class="btn" id="gbx-setup-toggle" type="button" aria-controls="results-panel">${t('Налаштувати')}</button>
       <button class="btn" id="gbx-demo-open" type="button">${t('Демонстрація')}<span class="gbx-long">: ${t('чому шестерні крутяться завжди')}</span></button>
-      <button class="btn" id="gbx-demo-pull" type="button" data-car-demo="pull-away" hidden><span class="gbx-long">${t('Демонстрація')}: </span>${t('рушаємо')}</button>
-      <button class="btn" id="gbx-demo-shift" type="button" data-car-demo="shifting" hidden><span class="gbx-long">${t('Демонстрація')}: </span>${t('перемикання')}</button>
+      <span class="gbx-car-demos" id="gbx-car-demos" hidden>
+        <span class="gbx-car-demos-label">${t('Демонстрації')}:</span>
+        <button class="btn" id="gbx-demo-pull" type="button" data-car-demo="pull-away">${t('Рушаємо')}</button>
+        <button class="btn" id="gbx-demo-shift" type="button" data-car-demo="shifting">${t('Перемикання і оберти')}</button>
+      </span>
       <span class="gbx-steps" id="gbx-steps"></span>
     </div>
     <div class="gbx-nav" id="gbx-nav"></div>
