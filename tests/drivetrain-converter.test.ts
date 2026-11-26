@@ -168,6 +168,14 @@ describe('the lab (demonstration 9)', () => {
     expect(run.speedKmh[to]!).toBeGreaterThan(5);
   });
 
+  it('in drive at a standstill the engine idles a little under its idle speed, the converter at stall loading it', () => {
+    const idle = run.engineRpm[frameAt(run.phases.stall - 0.05)]!;
+    expect(idle).toBeLessThan(input.map.idleRpm);
+    expect(idle).toBeGreaterThan(0.9 * input.map.idleRpm);
+    // What the pump takes at that speed with the turbine standing, (n/K)², is what the engine gives.
+    expect(run.pumpNm[frameAt(run.phases.stall - 0.05)]!).toBeCloseTo((idle / run.kStall) ** 2, 0);
+  });
+
   it('the stator is held below the coupling point and freewheels past it', () => {
     for (let i = frameAt(run.phases.pull); i < frameAt(run.phases.cruise); i++) {
       if (run.sr[i]! < run.coupling - 1e-3) expect(run.statorFree[i]).toBe(0);

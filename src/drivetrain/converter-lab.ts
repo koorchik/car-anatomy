@@ -33,9 +33,11 @@ const RPM = 30 / Math.PI;
 
 /**
  * Gain of the idle governor in drive, charge per relative speed error [estimate]: stronger than the stub's, since the
- * converter at stall loads the idling engine; the idle still sags in drive, as a real one does a little.
+ * converter at stall loads the idling engine. A proportional governor leaves the idle a little low in drive, as a real
+ * one sags a little: the B58 idles about 60 rpm under its 940 against the 8HP51's converter (a gain of 8 left it
+ * 170 rpm under, while the lab said the engine was back at idle).
  */
-const IDLE_GAIN = 8;
+const IDLE_GAIN = 30;
 
 /** The lab's step, s (gearbox plan: labs run offline at 0.25 ms). */
 export const LAB_STEP_S = 0.00025;
