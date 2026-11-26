@@ -171,8 +171,8 @@ export interface KeyBinding {
   codes: readonly string[];
   /**
    * What the key does, through t(), for the help «?». Null leaves the binding out of the help: a key a page only holds
-   * back, so that a context under it does not get it (the layer keys on the oil page), or one that adds to what a later
-   * context's binding of the code already says (Esc closing the dyno's help before the shell closes the table).
+   * back, so that a context under it does not get it (the layer keys on the oil page). The help then lists nothing a
+   * context under it binds to that key either.
    */
   label: string | null;
   /** Pressed. Return false when the key did nothing after all, and the next context gets it. */

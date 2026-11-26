@@ -1,5 +1,6 @@
-// The shell: the page's skeleton and its layout, the stage, the frame loop, the address, the keys, the time and the
-// parts' cards. Sections (section.ts) fill the skeleton and draw their pages; the shell hands them the context.
+// The shell: the page's skeleton and its layout, the stage, the frame loop, the address, the menu, the keys and their
+// help, the time and the parts' cards. Sections (section.ts) fill the skeleton and draw their pages; the shell hands
+// them the context. An address no section shows gets the card 'no such page' instead of a page.
 
 import './shell.css';
 import { locale, switchLocale, type Locale } from '../i18n/locale.ts';
@@ -8,20 +9,39 @@ import { Stage } from '../scene/stage.ts';
 import { ShellAudio } from './audio-host.ts';
 import type { FreezeOptions } from './freeze.ts';
 import { ShellIdle } from './idle.ts';
-import { SHELL_KEYS, ShellKeys } from './keys.ts';
+import { helpHtml, keyHelp } from './key-help.ts';
+import { SHELL_KEYS, shellBindings, ShellKeys } from './keys.ts';
+import { ShellMenu } from './menu.ts';
+import { NotFound } from './not-found.ts';
 import { partUi } from './part-ui.ts';
-import type { SectionEntry } from './registry.ts';
-import { router } from './router.ts';
+import { routeEntry, type SectionEntry } from './registry.ts';
+import { router, type Router } from './router.ts';
 import type { Route } from './routes.ts';
 import { ShellRuns } from './run-store.ts';
 import { ScaleBar } from './scale-bar.ts';
-import type { KeyBinding, PanelControl, PanelSide, Section, SectionContext, TimeCapabilities } from './section.ts';
+import type { AudioHost, KeyBinding, PanelControl, PanelSide, Section, SectionContext, TimeCapabilities } from './section.ts';
 import { skeletonHtml, skeletonOf, type SkeletonElements } from './skeleton.ts';
 import { ShellTime } from './time.ts';
 import { ShellView } from './view.ts';
 
+// For checks in the browser console and the snapshots: the shell's parts, the sections loaded so far, and freeze.
+declare global {
+  interface Window {
+    __app: {
+      router: Router;
+      stage: Stage;
+      audio: AudioHost;
+      readonly sections: Readonly<Record<string, Section>>;
+      freeze: (options: FreezeOptions | null) => void;
+    };
+  }
+}
+
 /** Below this width the side panels are sheets over the stage. */
 const PHONE_WIDTH = 860;
+
+/** A stage narrower than this between the panels leaves the page's name no room for the tabs: the sheet holds them. */
+const TABS_STAGE_WIDTH = 720;
 
 /** What the time control offers before any section is shown. */
 const NO_SECTION: TimeCapabilities = { modes: ['slow', 'readable', 'real'] };
@@ -41,8 +61,17 @@ export class Shell {
   /** The key of the first view, whose name in the help of the keys follows the section shown. */
   private readonly solidKey: KeyBinding;
   private readonly scaleBar: ScaleBar;
+  private readonly menu: ShellMenu;
+  private readonly keys: ShellKeys;
+  private readonly lost: NotFound;
   private readonly mounted = new Set<Section>();
+  /** The sections made so far, by id (window.__app.sections). */
+  private readonly made: Record<string, Section> = {};
   private shown: Section | null = null;
+  /** True while the card 'no such page' stands in for a page: the section shown has been left. */
+  private away = false;
+  /** Where focus was before the help of the keys opened, to go back to when it closes. */
+  private focusBeforeHelp: HTMLElement | null = null;
   private route: Route | null = null;
   /** Counts the addresses gone to, so that a section that loads late does not cover a later one. */
   private navigation = 0;
@@ -71,8 +100,13 @@ export class Shell {
     this.open = { right: !small, left: !small };
     this.wasSmall = small;
 
-    const keys = new ShellKeys(window, () => slots.table.isOpen);
-    this.time = new ShellTime(elements.speed, () => this.shown?.time() ?? NO_SECTION);
+    this.menu = new ShellMenu(elements.menu, sections, router);
+    this.lost = new NotFound(elements.notFound);
+    const help = elements.keysHelp;
+    // Under an overlay only the keys that reach everywhere work: Esc, mostly.
+    const keys = new ShellKeys(window, () => slots.table.isOpen || this.menu.sheetOpen || !help.hidden || this.away);
+    this.keys = keys;
+    this.time = new ShellTime(elements.speed, () => this.shown?.time() ?? NO_SECTION, { factor: elements.slowdownFactor, clock: elements.timeClock });
     const view = new ShellView(elements.view);
     this.view = view;
     const panels: PanelControl = {
@@ -84,13 +118,24 @@ export class Shell {
     };
     this.context = { stage: this.stage, audio: this.audio, slots, router, idle: this.idle, runs: new ShellRuns(), keys, time: this.time, view, panels };
 
-    this.solidKey = { codes: ['Digit1'], label: t('Двигун'), down: () => view.set('solid') };
-    keys.bind(SHELL_KEYS, [
-      { codes: ['Escape'], label: t('Закрити'), reach: 'always', down: () => slots.table.open(false) },
-      this.solidKey,
-      { codes: ['Digit2'], label: t('Рентген'), down: () => view.set('xray') },
-      { codes: ['Digit3'], label: t('Механізм'), down: () => view.set('mechanism') },
-    ]);
+    const shellKeys = shellBindings({
+      // Esc closes what is on top: the help, the sheet, the table, then the part's card.
+      close: () => {
+        if (!help.hidden) this.showHelp(false);
+        else if (this.menu.sheetOpen) this.menu.openSheet(false);
+        else if (slots.table.isOpen) slots.table.open(false);
+        else slots.partCard.hidden = true;
+      },
+      view: (mode) => view.set(mode),
+      currentView: () => view.mode,
+      help: () => this.showHelp(true),
+    });
+    this.solidKey = shellKeys[0]!;
+    keys.bind(SHELL_KEYS, shellKeys);
+    elements.keysHelpClose.addEventListener('click', () => this.showHelp(false));
+    help.addEventListener('click', (event) => {
+      if (event.target === help) this.showHelp(false);
+    });
     const setPanel = (side: PanelSide, open: boolean): void => {
       this.open[side] = open;
       this.relayout();
@@ -115,6 +160,13 @@ export class Shell {
     this.scaleBar = new ScaleBar(this.stage, elements.scaleLine, elements.scaleLabel);
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) this.stage.setOrbit(false);
     window.addEventListener('hashchange', () => this.go(router.current));
+    window.__app = {
+      router,
+      stage: this.stage,
+      audio: this.audio,
+      sections: this.made,
+      freeze: (options) => this.freeze(options),
+    };
   }
 
   /**
@@ -128,7 +180,10 @@ export class Shell {
     new ResizeObserver(() => this.relayout()).observe(this.root);
     this.relayout();
     this.route = route;
+    this.mark(route);
     section.enter(route, null);
+    // The home section came because nobody else claims the address; it waits behind the card, ready for a link.
+    if (!routeEntry(route, this.sections)) this.lose(route);
     requestAnimationFrame(this.frame);
   }
 
@@ -160,6 +215,7 @@ export class Shell {
   private show(section: Section): void {
     if (!this.mounted.has(section)) {
       this.mounted.add(section);
+      this.made[section.id] = section;
       section.mount(this.context);
     }
     this.shown = section;
@@ -171,6 +227,10 @@ export class Shell {
   /** Another address. A section not shown yet loads first; the page stays as it is until then. */
   private go(route: Route): void {
     const ticket = ++this.navigation;
+    if (!routeEntry(route, this.sections)) {
+      this.lose(route);
+      return;
+    }
     const entry = this.entryFor(route);
     if (this.shown?.id === entry.id) {
       this.enter(this.shown, route);
@@ -188,6 +248,11 @@ export class Shell {
   private enter(section: Section, route: Route): void {
     const from = this.route;
     this.route = route;
+    this.mark(route);
+    if (this.away) {
+      this.away = false;
+      this.lost.show(null);
+    }
     if (section !== this.shown) {
       this.shown?.leave(route);
       this.audio.release();
@@ -195,6 +260,42 @@ export class Shell {
       this.relayout();
     }
     section.enter(route, from);
+  }
+
+  /** No section shows this address: the card says so, and the page under it is left as on going to another section. */
+  private lose(route: Route): void {
+    this.route = route;
+    this.mark(route);
+    this.lost.show(route, this.menu.items);
+    if (this.away) return;
+    this.away = true;
+    this.showHelp(false);
+    this.context.slots.table.open(false);
+    this.shown?.leave(route);
+    this.audio.release();
+  }
+
+  /** The menu and the body's attributes follow the address, before the section draws the page. */
+  private mark(route: Route): void {
+    // Another address closes the sheet, whichever way it came: a link in the sheet, Back, or a link on the page.
+    this.menu.openSheet(false);
+    this.menu.update(route);
+    document.body.dataset.section = route.section;
+    document.body.dataset.page = route.page;
+  }
+
+  /** The help of the keys: what each key does on the page shown now. */
+  private showHelp(on: boolean): void {
+    const { keysHelp, keysHelpBody, keysHelpClose } = this.elements;
+    if (on === !keysHelp.hidden) return;
+    if (on) {
+      const groups = keyHelp(this.keys.stack, (context) => this.keys.of(context));
+      keysHelpBody.innerHTML = helpHtml(groups);
+      this.focusBeforeHelp = document.activeElement as HTMLElement | null;
+    }
+    keysHelp.hidden = !on;
+    if (on) keysHelpClose.focus();
+    else this.focusBeforeHelp?.focus?.();
   }
 
   /** The panels from the section's sizes, the stage's insets, then the section's charts. */
@@ -228,6 +329,7 @@ export class Shell {
     css.setProperty('--stage-left', `${leftW}px`);
     css.setProperty('--panel-w', `${panelW}px`);
     css.setProperty('--stage-x', `${((leftW + (width - leftW - panelW) / 2) / width) * 100}%`);
+    document.body.classList.toggle('narrow-stage', !small && width - leftW - panelW < TABS_STAGE_WIDTH);
     // The view options wrap into more rows on a narrower stage; the model is framed above them as before.
     const toolsH = el.tools.offsetHeight + 8;
     const topH = small ? 90 : 60;
@@ -243,6 +345,8 @@ export class Shell {
     this.lastFrame = now;
     this.audio.tick(dt, frozen);
     this.idle.run();
+    // Behind the card of a lost address nothing is drawn.
+    if (this.away) return;
     this.shown?.frame(dt, now);
     this.stage.render(dt);
     this.scaleBar.update();

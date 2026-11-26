@@ -13,7 +13,7 @@ import { registerParts } from '../../scene/parts-registry.ts';
 import { PistonEngineModel } from '../../scene/piston-engine.ts';
 import { RotaryEngineModel } from '../../scene/rotary-engine.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
-import type { KeyBinding, PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
+import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
 import { readableDegreesPerSecond } from '../../shell/time.ts';
 import { shownAdvance, type SystemsFrame } from '../../systems/sim.ts';
 import { tableHtml } from '../table.ts';
@@ -23,6 +23,7 @@ import { EngineDash } from './dash.ts';
 import type { DesignerHost } from './designer-host.ts';
 import { $ } from './dom.ts';
 import { EngineFeatures } from './features.ts';
+import { ENGINE_KEY_CONTEXTS, engineKeys } from './keys.ts';
 import { actionsHtml, afterDashHtml, badgeHtml, dashHtml, panelHtml, resultsHtml, SLOW_RPM_DEFAULT, statusHtml, tableHeadHtml, titleHtml, toolsHtml } from './markup.ts';
 import { enginesPage, type EnginesPage } from './routes.ts';
 import { SumpMode } from './sump-host.ts';
@@ -57,7 +58,7 @@ export class EnginesSection implements Section {
   /** The freeze the camera has gone home for (see TimeControl.frozen). */
   private homedFor: FreezeOptions | null = null;
   /** Between leave() and the next enter(): another section is shown. */
-  private away = false;
+  away = false;
   /** Reused every frame: the systems step allocates nothing. */
   private readonly systemsFrame: SystemsFrame = { theta: 0, advance: 0, rpm: 0, load: 0, throttle: 0, boost: 0, running: false, cranking: false, fuelCut: true, live: false, dt: 0, timeScale: 1 };
   /** Valve events and firing cylinders for the systems layers, written in place each frame. */
@@ -100,11 +101,8 @@ export class EnginesSection implements Section {
 
   enter(_route: Route, from: Route | null): void {
     if (this.away) this.resume();
-    if (from === null || this.page() !== 'catalogue' || this.onDesigner || this.sump.on) {
-      this.applyRoute();
-      return;
-    }
-    this.catalogue.enter();
+    if (from === null || this.page() !== 'catalogue' || this.onDesigner || this.sump.on) this.applyRoute();
+    else this.catalogue.enter();
   }
 
   /** The page the address opens now. Read afresh, because leaving a page may rewrite the address in place. */
@@ -138,7 +136,7 @@ export class EnginesSection implements Section {
 
   /** The keys of the page shown: the oil page's own over the engines'. */
   useKeys(): void {
-    this.ctx.keys.use(this.sump.on ? ['engines/sump', 'engines'] : ['engines']);
+    this.ctx.keys.use(this.sump.on ? ENGINE_KEY_CONTEXTS.sump : ENGINE_KEY_CONTEXTS.catalogue);
   }
 
   private applyView(mode: ViewMode): void {
@@ -287,8 +285,6 @@ export class EnginesSection implements Section {
       this.onDesigner = on;
       document.body.classList.toggle('designer-mode', on);
       stage.fitScale = on ? 0.82 : 0.68;
-      $('nav-engines').classList.toggle('current', !on);
-      $('nav-designer').classList.toggle('current', on);
       $('article').hidden = on;
       $('designer-host').hidden = !on;
       $('results-panel').hidden = !on;
@@ -355,76 +351,25 @@ export class EnginesSection implements Section {
   private bindKeys(): void {
     const { keys, slots } = this.ctx;
     const pedal = this.dash.pedal;
-    const gas: Pick<KeyBinding, 'label' | 'down' | 'up'> = {
-      label: t('Газ'),
-      down: (event) => {
-        event.preventDefault();
-        if (event.repeat) return;
-        pedal.holdKey(true);
+    const { engines, sump } = engineKeys({
+      gas: (on) => {
+        pedal.holdKey(on);
+        if (!on) return;
         (document.activeElement as HTMLElement | null)?.blur?.();
         void this.pressThrottle();
       },
-      up: (event) => {
-        event.preventDefault();
-        pedal.holdKey(false);
+      ignition: () => void this.toggleIgnition(),
+      step: (direction) => {
+        if (!this.onDesigner) this.catalogue.step(direction);
       },
-    };
-    const layer = (code: string, id: 'oil' | 'coolant' | 'fuel' | 'air', label: string): KeyBinding => ({
-      codes: [code],
-      label,
-      down: () => {
-        this.features.systems.toggle(id);
-      },
+      table: () => slots.table.open(true),
+      mute: () => this.dash.toggleMute(),
+      layer: (id) => this.features.systems.toggle(id),
+      closeHelp: () => this.features.dyno?.closeHelp(),
+      lap: (event) => this.sump.page?.key(event) ?? false,
     });
-    keys.bind('engines', [
-      // Esc closes the dyno's help and then goes on to the shell, which closes the table: Esc closes whatever is open.
-      {
-        codes: ['Escape'],
-        label: null,
-        reach: 'always',
-        down: () => {
-          this.features.dyno?.closeHelp();
-          return false;
-        },
-      },
-      // Space works on a slider too: it is the gas wherever the visitor is.
-      { codes: ['Space'], reach: 'controls', ...gas },
-      { codes: ['ArrowUp'], ...gas },
-      { codes: ['KeyS'], label: t('Запустити двигун'), down: () => void this.toggleIgnition() },
-      {
-        codes: ['ArrowLeft'],
-        label: t('Попередній двигун'),
-        down: () => {
-          if (!this.onDesigner) this.catalogue.step(-1);
-        },
-      },
-      {
-        codes: ['ArrowRight'],
-        label: t('Наступний двигун'),
-        down: () => {
-          if (!this.onDesigner) this.catalogue.step(1);
-        },
-      },
-      { codes: ['KeyT'], label: t('Усі двигуни'), down: () => slots.table.open(true) },
-      { codes: ['KeyM'], label: t('Вимкнути звук'), down: () => this.dash.toggleMute() },
-      layer('Digit4', 'oil', t('Олива')),
-      layer('Digit5', 'coolant', t('Охолодження')),
-      layer('Digit6', 'fuel', t('Паливо')),
-      layer('Digit7', 'air', t('Повітря')),
-    ]);
-    // The oil page plays its lap with Space and moves through it with the arrows; its engine is the lap's to drive.
-    const lap = (event: KeyboardEvent): boolean => {
-      const page = this.sump.page;
-      if (!page || !page.key(event)) return false;
-      event.preventDefault();
-      return true;
-    };
-    const digits = Array.from({ length: 10 }, (_, i) => `Digit${i}`);
-    keys.bind('engines/sump', [
-      { codes: ['Space'], label: t('Поїхали або пауза'), down: lap },
-      { codes: ['ArrowLeft', 'ArrowRight'], label: t('На 5 с назад або вперед'), down: lap },
-      { codes: [...digits, 'KeyS'], label: null, down: lap },
-    ]);
+    keys.bind('engines', engines);
+    keys.bind('engines/sump', sump);
     this.useKeys();
   }
 

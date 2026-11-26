@@ -1,11 +1,40 @@
 // The site's keys (KeyMap in section.ts). Each context binds a key once; the section says which of its contexts
-// listen, and the shell's own come last. This is the simplest form, with the keys the engine pages always had; the
-// help «?» comes later on top of bindings().
+// listen, and the shell's own come last. The help «?» lists what listens now (key-help.ts).
 
+import { t } from '../i18n/t.ts';
+import type { ViewMode } from '../scene/model-types.ts';
 import type { KeyBinding, KeyMap, KeyReach } from './section.ts';
 
 /** The shell's own context: keys that mean the same on every page. */
 export const SHELL_KEYS = 'shell';
+
+/** The order V goes through the views. */
+const VIEWS: readonly ViewMode[] = ['solid', 'xray', 'mechanism'];
+
+/** What the shell's keys do; the shell wires them to its overlays and the view. */
+export interface ShellKeyActions {
+  /** Closes what is on top: the help, the sheet, the table, the part's card. */
+  close(): void;
+  view(mode: ViewMode): void;
+  /** The view chosen now, for V to go on from. */
+  currentView(): ViewMode;
+  help(): void;
+}
+
+/**
+ * The keys of every page. The first view's key comes first: its label is the section's name for the model whole
+ * (Section.solidLabel), which the shell sets on it when another section shows.
+ */
+export function shellBindings(actions: ShellKeyActions): KeyBinding[] {
+  return [
+    { codes: ['Digit1'], label: t('Двигун'), down: () => actions.view('solid') },
+    { codes: ['Escape'], label: t('Закрити'), reach: 'always', down: () => actions.close() },
+    { codes: ['Digit2'], label: t('Рентген'), down: () => actions.view('xray') },
+    { codes: ['Digit3'], label: t('Механізм'), down: () => actions.view('mechanism') },
+    { codes: ['KeyV'], label: t('Наступний вигляд'), down: () => actions.view(VIEWS[(VIEWS.indexOf(actions.currentView()) + 1) % VIEWS.length]!) },
+    { codes: ['Slash'], label: t('Усі клавіші'), down: () => actions.help() },
+  ];
+}
 
 type Focus = 'page' | 'control' | 'text';
 
@@ -57,9 +86,19 @@ export class ShellKeys implements KeyMap {
     return [...this.contexts].flatMap(([context, list]) => list.map((binding) => ({ context, binding })));
   }
 
+  /** The contexts that listen now, in the order a key is offered to them: the section's, then the shell's. */
+  get stack(): readonly string[] {
+    return [...this.active.filter((c) => c !== SHELL_KEYS), SHELL_KEYS];
+  }
+
+  /** The bindings of one context, in the order they were bound. */
+  of(context: string): readonly KeyBinding[] {
+    return this.contexts.get(context) ?? [];
+  }
+
   /** The bindings that listen now, in the order they are asked. */
   private listening(): KeyBinding[] {
-    return [...this.active.filter((c) => c !== SHELL_KEYS), SHELL_KEYS].flatMap((context) => this.contexts.get(context) ?? []);
+    return this.stack.flatMap((context) => this.of(context));
   }
 
   private down(event: KeyboardEvent): void {

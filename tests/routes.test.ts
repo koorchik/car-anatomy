@@ -74,7 +74,7 @@ const HASHES = [
   ...ENGINE_IDS.slice(0, 8).map((id) => `#/sump/${id}?k=dry&t=slick&o=-1&a=1&w=rear`),
   `#/sump/design/${CODES[0]}`,
   `#/sump/design/${CODES[1]}?k=baffled&t=semi&o=0&a=0&w=front`,
-  // Sections that have no pages yet open the engines' catalogue, as any unknown address did.
+  // Sections without pages yet: the engines read them as their catalogue, and the shell covers them with its card.
   '#/gearboxes',
   '#/gearboxes/manual-rwd',
   '#/suspensions/macpherson/civic-type-r-fk8',
