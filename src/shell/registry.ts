@@ -55,7 +55,9 @@ export const SECTIONS: readonly SectionEntry[] = [
     openPages: GEARBOX_PAGES_SHOWN,
     pages: [{ key: 'catalogue', href: `#/gearboxes/${GEARBOX_PAGES_SHOWN[0]!}` }],
   },
-  { id: 'suspensions', load: loadSuspensions, pages: [{ key: 'catalogue', href: '#/suspensions' }] },
+  // In the menu since P1d, but its page does not read a suspension type or a car from the address yet (P4), so no link
+  // from another section (#/suspensions/<type>/<car>) leads there.
+  { id: 'suspensions', load: loadSuspensions, openPages: [], pages: [{ key: 'catalogue', href: '#/suspensions' }] },
 ];
 
 /** The entry of the section a route belongs to. */
