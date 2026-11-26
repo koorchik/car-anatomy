@@ -238,11 +238,12 @@ export class GearboxSection implements Section {
     this.present();
   }
 
-  layout({ width }: Viewport): PanelSizes {
+  layout({ width, small }: Viewport): PanelSizes {
     const narrow = width < 1500;
     return {
       right: narrow ? 360 : 400,
-      left: narrow ? 300 : 340,
+      // The box is set up on the table: in the car a phone has no settings sheet, as a desktop has its button disabled.
+      left: small && this.mode === 'drive' ? 0 : narrow ? 300 : 340,
       dash: this.ctx.slots.dash.parent.offsetHeight,
       rightLabel: t('Про коробку'),
     };
@@ -389,7 +390,7 @@ export class GearboxSection implements Section {
     if (!sameMembers) this.sinceRebuild = REBUILD_S;
     if (this.demo) this.demo.steps = alwaysTurningSteps(box, this.data.engine.spec.idleRpm);
     this.showDemoStep();
-    // In the car (the phone's settings sheet stays open to it) the car takes the new box, standing in neutral.
+    // The panel is closed in the car, but should the box change there all the same, the car takes it, standing in neutral.
     if (this.car?.on) void this.setMode('drive');
   }
 
@@ -457,9 +458,10 @@ export class GearboxSection implements Section {
       this.car?.leave();
       if (this.pausedForMute) this.drive.pause(false);
       this.pausedForMute = false;
-      // The table's box takes on in the gear the car was in.
+      // The buttons show the table's own gear again.
       this.pressedGear = '';
       this.pressGear(this.table.selected);
+      panels.relayout();
     }
     time.refresh();
     if (mode === 'table' && this.timeBefore) {
