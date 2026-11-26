@@ -6,7 +6,7 @@ import { t } from '../i18n/t.ts';
 import { backToCar, menuItems, type MenuItem } from './menu-model.ts';
 import type { SectionEntry } from './registry.ts';
 import type { Router } from './router.ts';
-import { parseRoute, type Route } from './routes.ts';
+import type { Route } from './routes.ts';
 import type { MenuElements } from './skeleton.ts';
 
 const esc = (text: string): string => text.replace(/[&<>"]/g, (c) => `&${{ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot' }[c]};`);
@@ -50,11 +50,7 @@ export class ShellMenu {
 
   /** Draws the menu for the route shown: which item and tab are current, the visitor's context on every link. */
   update(route: Route): void {
-    const link = (hash: string): string => {
-      const target = parseRoute(hash);
-      return this.router.href({ section: target.section, page: target.page, path: target.path, query: target.query });
-    };
-    const items = menuItems(this.sections, route, link);
+    const items = menuItems(this.sections, route, (hash) => this.router.link(hash));
     const back = backToCar(route);
     const key = JSON.stringify([items, back]);
     if (key === this.drawn) return;

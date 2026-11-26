@@ -285,6 +285,20 @@ describe('router', () => {
     expect(win.location.hash).toBe(`#/designer/${code}`);
   });
 
+  it("puts the visitor's context on the pages' own links, except where it leads back to", () => {
+    const win = fakeWindow('#/engines/i4/civic-type-r-k20c1?car=civic-type-r-fk8');
+    const router = new Router(() => win);
+    // «Змінити в конструкторі» and a variant are plain hrefs in the page's markup.
+    expect(router.link('#/designer/from/i4/civic-type-r-k20c1')).toBe('#/designer/from/i4/civic-type-r-k20c1?car=civic-type-r-fk8');
+    expect(router.link('#/engines/i4?l=oil')).toBe('#/engines/i4?l=oil&car=civic-type-r-fk8');
+    // A link that names its own car keeps it; the car's pages are where the context leads and carry none.
+    expect(router.link('#/sump/i4?car=other')).toBe('#/sump/i4?car=other');
+    expect(router.link('#/car/civic-type-r-fk8?focus=engine')).toBe('#/car/civic-type-r-fk8?focus=engine');
+    // Without a context every link opens as it is written.
+    win.location.hash = '#/engines/i4';
+    for (const hash of ['#/', '#/designer', '#/no/such/page']) expect(router.link(hash)).toBe(hash);
+  });
+
   it('is the only code that writes the address', () => {
     const files: string[] = [];
     const walk = (dir: string): void => {

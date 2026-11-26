@@ -17,7 +17,7 @@ import { NotFound } from './not-found.ts';
 import { partUi } from './part-ui.ts';
 import type { SectionEntry } from './registry.ts';
 import { router, type Router } from './router.ts';
-import type { Route } from './routes.ts';
+import { parseRoute, type Route } from './routes.ts';
 import { ShellRuns } from './run-store.ts';
 import { ScaleBar } from './scale-bar.ts';
 import type { AudioHost, KeyBinding, PanelControl, PanelSide, Section, SectionContext, TimeCapabilities } from './section.ts';
@@ -161,6 +161,17 @@ export class Shell {
     this.scaleBar = new ScaleBar(this.stage, elements.scaleLine, elements.scaleLabel);
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) this.stage.setOrbit(false);
     window.addEventListener('hashchange', () => this.go(router.current));
+    // The pages' own links (a variant, «Змінити в конструкторі», a row of the table) are plain `#/…` in their markup.
+    // Followed, they keep the visitor's context as the router's writes do, so «← До авто» stays on the next page too.
+    document.addEventListener('click', (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = (event.target as Element | null)?.closest?.<HTMLAnchorElement>('a[href^="#/"]');
+      if (!link || link.target) return;
+      const written = link.getAttribute('href')!;
+      if (router.link(written) === written) return;
+      event.preventDefault();
+      router.push(parseRoute(written));
+    });
     window.__app = {
       router,
       stage: this.stage,
