@@ -13,7 +13,7 @@ export const SUSPENSION_MACPHERSON_EN: Record<string, string> = {
   'Як це відчувається': 'How it feels',
   'Пружина тримає кузов, а амортизатор гасить гойдання: зі зношеним колесо після горба підстрибує кілька разів, і шина на мить зовсім не тисне на дорогу, а з трековим кузов смикається сильніше. Кузов і колесо мають різні власні частоти, близько 1 Гц і близько 14 Гц, тому коротка перешкода на швидкості трясе колесо, а повільний горб гойдає кузов. Легше колесо швидше повертається на дорогу, а кузов цієї різниці майже не помічає.':
     'The spring holds the body up and the shock calms the bouncing: with a worn shock the wheel hops several times after a bump and for a moment the tire does not press on the road at all, while a track shock jerks the body harder. The body and the wheel have different natural frequencies, about 1 Hz and about 14 Hz, so a short obstacle at speed shakes the wheel and a slow hump rocks the body. A lighter wheel gets back onto the road sooner, and the body hardly notices the difference.',
-  'Що змінює «Налаштувати»': 'What “Setup” changes',
+  'Що змінює «Налаштувати»': 'What “Adjust” changes',
   'Жорсткість пружини змінює частоту кузова, але авто стоїть на тій самій висоті: опора пружини підлаштовується, як у різьбовій підвісці. Висота кузова переставляє опору, тож колесо в спокої опиняється в іншій точці ходу, і розвал зі сходженням змінюються самі. Розвал змінюють зсувом верхньої опори стійки, сходження — довжиною рульової тяги, і після зсуву опори сходження виставляють знову, як у майстерні. Тиск у шині змінює лише її вертикальну жорсткість.':
     'The spring rate changes the body frequency, but the car stands at the same height: the spring seat follows, as on coilovers. Ride height moves the seat, so at rest the wheel sits at another point of its travel and the camber and toe change by themselves. Camber is set by sliding the strut mount, toe by the tie rod length, and after the mount moves the toe is set again, as a shop does it. Tire pressure changes only the tire’s vertical stiffness.',
   'Звідки взялася': 'Where it came from',
@@ -22,4 +22,10 @@ export const SUSPENSION_MACPHERSON_EN: Record<string, string> = {
   'Вікіпедія': 'Wikipedia',
   'Не звірено: маси кута (400 кг кузова й 40 кг колеса — еталонна чверть авто з розрахунків, а не маси авто JTEKT); заводський амортизатор (ступінь демпфування 0,25, пресет «Комфорт»); зміна маси колеса з дисками. Сталевий диск важчий за литий приблизно на 2,3 кг (5 фунтів для 16 дюймів, за даними продавця коліс), кований легший за литий до чверті (за MotorTrend), а маса литого диска 8 кг — наша оцінка.':
     'Not verified: the masses of the corner (400 kg of body and 40 kg of wheel are the reference quarter car of the calculations, not the JTEKT car’s); the factory shock (damping ratio 0.25, the “Comfort” preset); the change of wheel mass with the rims. A steel wheel is about 2.3 kg heavier than a cast one (5 lb for 16 inches, by a wheel retailer’s figure), a forged one up to a quarter lighter than cast (per MotorTrend), and the 8 kg of the cast wheel is our estimate.',
+  // The page's real car (src/data/suspensions/macpherson.ts).
+  'Спереду стійка Макферсон з кулаком на двох осях (dual-axis): колесо повертається відносно стійки на власній осі, ближчій до колеса, тож стійка не повертається разом із ним.':
+    'A MacPherson strut in front with a dual-axis knuckle: the wheel steers relative to the strut about its own axis, closer to the wheel, so the strut does not turn with it.',
+  'Плече обкатки на осі колеса через це менше, ніж у звичайної стійки, і кермо менше смикає, коли 320 к.с. ідуть на передні колеса.':
+    'The kingpin offset at the hub is smaller than a plain strut’s for it, and the steering tugs less when 320 hp go to the front wheels.',
+  'Ззаду багаторичажна підвіска, на обох осях стабілізатори.': 'A multi-link suspension at the rear, sway bars on both axles.',
 };
