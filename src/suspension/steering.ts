@@ -262,7 +262,9 @@ export class CornerSteering {
     const walk = this.walks[dir];
     const solver = this.axle.solver;
     const step = RACK_STEP_M;
-    const need = Math.ceil(Math.abs(rack) / step - 1e-9);
+    // Walked only up to the pose below: the last part of a step solves from there, so a travel just short of where the
+    // linkage stops is still reached.
+    const need = Math.floor(Math.abs(rack) / step);
     while (walk.length <= need) {
       const k = walk.length;
       const from = walk[k - 1];
@@ -277,7 +279,7 @@ export class CornerSteering {
       walk.push(next);
     }
     // From the nearest walked pose below.
-    const k = Math.min(need, Math.max(0, Math.floor(Math.abs(rack) / step)));
+    const k = need;
     const pose = new Float64Array(POSE_SIZE);
     pose.set(walk[k]);
     const r0 = k * step * dir;
@@ -321,23 +323,29 @@ const steerOf = (s: SteerSample): number => Math.max(s.left, s.right);
 
 /**
  * Where `steerOf` of a linkage's sample reaches `lockRad` (to 10⁻⁶ rad), walking out from straight ahead, `first`
- * and then in `step`s of its input to `max`, and closing in by secant steps; the last sample the linkage reaches when
- * it stops short or turns back.
+ * and then in `step`s of its input to `max`, and closing in by secant steps. Where the linkage stops short or turns
+ * back, the walk halves its step until it closes in on that point and returns the last sample it reached there.
  */
 function findLock(at: (x: number) => SteerSample, lockRad: number, step: number, max: number, first = step): SteerSample {
   let lo = 0;
   let loSample = at(0);
   let hi = 0;
   let hiSample: SteerSample | null = null;
-  while (hi < max) {
-    const next = Math.min(max, hi === 0 ? first : hi + step);
-    let s: SteerSample;
+  let stride = first;
+  while (lo < max) {
+    const next = Math.min(max, lo + stride);
+    let s: SteerSample | null;
     try {
       s = at(next);
     } catch {
-      return loSample;
+      s = null;
     }
-    if (!(steerOf(s) > steerOf(loSample))) return loSample;
+    if (!s || !(steerOf(s) > steerOf(loSample))) {
+      // The linkage does not get there (or turns back): a shorter step, until the gap is too small to matter.
+      if (stride < 1e-6 * max) return loSample;
+      stride /= 2;
+      continue;
+    }
     if (steerOf(s) >= lockRad) {
       hi = next;
       hiSample = s;
@@ -345,7 +353,7 @@ function findLock(at: (x: number) => SteerSample, lockRad: number, step: number,
     }
     lo = next;
     loSample = s;
-    hi = next;
+    stride = Math.min(stride, step);
   }
   if (!hiSample) return loSample;
   // The Illinois variant of regula falsi: a plain one stalls on one side of a curved bracket.

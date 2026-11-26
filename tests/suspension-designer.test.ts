@@ -545,6 +545,21 @@ describe('sensitivity', () => {
 });
 
 describe('the steering group (P13-core)', () => {
+  it('turns the inner wheel to the lock on every front layout and gear, random designs too', () => {
+    const designs: ChassisDesign[] = [];
+    for (const layoutF of FRONT_LAYOUTS) {
+      const d = editChassis(DEFAULT_CHASSIS, { drive: 'rwd', layoutF });
+      designs.push(d, editChassis(d, { steeringGearF: 'worm-roller' }));
+    }
+    const random = seededRandom(13);
+    for (let i = 0; i < 20; i++) designs.push(randomChassis(random));
+    for (const d of designs) {
+      const s = evaluateSteering(chassisToSpec(d))!;
+      // The knuckle's stop, not where the walk out from straight ahead happened to give up.
+      expect(Math.max(s.lock.left, s.lock.right) / DEG, `${d.layoutF} ${d.steeringGearF}`).toBeCloseTo(38, 3);
+    }
+  });
+
   it('steers a live axle with a box, whatever a link says, and takes only numbers or null for the arms', () => {
     const d = resolveChassis({ ...DEFAULT_CHASSIS, drive: 'rwd', layoutF: 'live-axle', steeringGearF: 'rack', ackermannF: 'wide', assistF: 'magic' });
     expect(d.layoutF).toBe('live-axle');
