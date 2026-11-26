@@ -116,7 +116,7 @@ export const tyreDashHtml = (): string => `<footer class="susp-dash susp-tyre-da
           <span style="--c: ${SLIDE_COLOR}">${t('Протектор ковзає')}</span>
           <span class="tyre-dash-note" id="tyre-patch-note"></span>
         </div>
-        <canvas id="tyre-patch" role="img" aria-label="${t('Пляма контакту згори: рух ліворуч, зелена зона зчеплення від передньої кромки, червона зона ковзання від задньої')}"></canvas>
+        <canvas id="tyre-patch" role="img" aria-label="${t('Пляма контакту згори: рух праворуч, зелена зона зчеплення від передньої кромки, червона зона ковзання від задньої')}"></canvas>
       </section>
       <section class="susp-dash-chart">
         <div class="susp-strip-legend">
@@ -379,7 +379,9 @@ export class TyreScene {
     if (!ctx || w < 20 || h < 20) return;
     ctx.clearRect(0, 0, w, h);
     const p = this.reading.patch;
-    // The patch keeps its true proportions, as large as the box allows, with room for the arrow of travel.
+    // The patch keeps its true proportions, as large as the box allows, with room for the arrow of travel. Seen from
+    // above with the travel to the right, up is the wheel's left, as paintPatch draws it; travel to the left would
+    // mirror the drag.
     const ratio = p.widthM > 0 && p.lengthM > 0 ? p.widthM / p.lengthM : 1;
     let pw = w - 48;
     let ph = pw * ratio;
@@ -387,22 +389,23 @@ export class TyreScene {
       ph = h - 16;
       pw = ph / ratio;
     }
-    const x0 = (w - pw) / 2 + 14;
+    const x0 = (w - pw) / 2 - 14;
     const y0 = (h - ph) / 2;
-    paintPatch(ctx, { phi: p.phi, across: p.dirY, x0, y0, w: pw, h: ph, leadRight: false, lines: true });
-    // The direction of travel: to the left, where the leading edge is.
+    paintPatch(ctx, { phi: p.phi, across: p.dirY, x0, y0, w: pw, h: ph, leadRight: true, lines: true });
+    // The direction of travel: to the right, where the leading edge is.
     ctx.strokeStyle = 'rgba(241, 239, 230, 0.8)';
     ctx.fillStyle = 'rgba(241, 239, 230, 0.8)';
     ctx.lineWidth = 1.5;
     const ay = y0 + ph / 2;
+    const x1 = x0 + pw;
     ctx.beginPath();
-    ctx.moveTo(x0 - 6, ay);
-    ctx.lineTo(x0 - 26, ay);
+    ctx.moveTo(x1 + 6, ay);
+    ctx.lineTo(x1 + 26, ay);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(x0 - 30, ay);
-    ctx.lineTo(x0 - 22, ay - 4);
-    ctx.lineTo(x0 - 22, ay + 4);
+    ctx.moveTo(x1 + 30, ay);
+    ctx.lineTo(x1 + 22, ay - 4);
+    ctx.lineTo(x1 + 22, ay + 4);
     ctx.closePath();
     ctx.fill();
   }

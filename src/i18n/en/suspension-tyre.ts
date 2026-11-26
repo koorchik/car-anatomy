@@ -13,8 +13,8 @@ export const SUSPENSION_TYRE_EN: Record<string, string> = {
   'Протектор ковзає': 'Tread slides',
   'Ковзає {slide} % плями': '{slide}% of the patch slides',
   'Одна шина на скляній дорозі: сили, пляма контакту й будова': 'One tire on a glass road: its forces, contact patch and construction',
-  'Пляма контакту згори: рух ліворуч, зелена зона зчеплення від передньої кромки, червона зона ковзання від задньої':
-    'The contact patch from above: travel to the left, the green zone where the tread sticks from the leading edge, the red zone where it slides from the trailing edge',
+  'Пляма контакту згори: рух праворуч, зелена зона зчеплення від передньої кромки, червона зона ковзання від задньої':
+    'The contact patch from above: travel to the right, the green zone where the tread sticks from the leading edge, the red zone where it slides from the trailing edge',
   'Бічна сила від кута відведення на чотирьох навантаженнях': 'Lateral force against slip angle at four loads',
   // The panel.
   'Навантаження': 'Load',
