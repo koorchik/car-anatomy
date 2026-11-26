@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  GAS_POLYTROPIC_N, gasSpringFor, gasSpringForce, gasSpringRate, levelGasSpring, P_ATM_PA,
+  damperForce, GAS_POLYTROPIC_N, gasSpringFor, gasSpringForce, gasSpringRate, levelGasSpring, P_ATM_PA,
 } from '../src/suspension/forces.ts';
 import { frequencyAtLoad, springUnderLoad } from '../src/suspension/spring-types.ts';
 import { jtektCorner } from '../src/suspension/templates/macpherson.ts';
@@ -124,6 +124,32 @@ describe('controlled dampers on the shaker', () => {
       expect(Math.abs(l.bodyAcc / runs[i].bodyAcc - 1)).toBeLessThan(0.03);
       expect(Math.abs(l.tyreForce / runs[i].tyreForce - 1)).toBeLessThan(0.05);
     }
+  });
+
+  it('a semi-active damper only dissipates, and the quarter car reports the force it makes', () => {
+    // A sine road at the body resonance: the skyhook asks for pushes the damper cannot give half the time.
+    const amp = 0.02;
+    const road = { heightAt: (x: number) => amp * Math.sin(2 * Math.PI * rc.bodyHz * x), slopeAt: () => 0 };
+    const sim = new QuarterSim(rc, road, 1);
+    sim.control = controllerFor('magneride', rc);
+    sim.reset(0);
+    const passive = new QuarterSim(rc, road, 1);
+    passive.reset(0);
+    let passiveSign = 0;
+    let differs = 0;
+    for (let i = 0; i < 20000; i++) {
+      sim.step();
+      passive.step();
+      const p = passive.out.damperN * passive.out.damperV;
+      if (Math.abs(p) > 1) passiveSign = Math.sign(p);
+      const o = sim.out;
+      // Power along the damper has the passive damper's sign (or is zero): it never pushes.
+      if (passiveSign !== 0) expect(o.damperN * o.damperV * passiveSign).toBeGreaterThanOrEqual(-1e-9);
+      // What it reports is the controlled force, not its passive curve at the same speed.
+      if (Math.abs(o.damperN - damperForce(o.damperV, rc.damper)) > 1) differs++;
+    }
+    expect(passiveSign).not.toBe(0);
+    expect(differs).toBeGreaterThan(1000);
   });
 
   it('a camera lets the active damper meet a bump: less body motion over a step', () => {

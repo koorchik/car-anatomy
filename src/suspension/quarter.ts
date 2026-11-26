@@ -157,7 +157,9 @@ export class QuarterSim {
           ? -bumpStopForce(Ld - c.topOutM, bs.rate, bs.lengthM)
           : 0;
     const ctl = this.control;
-    const S = ctl ? Fs * mrS + Fstop * mrD + ctl.support(vb, qd, Fd * mrD) : Fs * mrS + (Fd + Fstop) * mrD;
+    // A controlled damper's support at the wheel (with an active one's actuator, which is not the damper's).
+    const Sd = ctl ? ctl.support(vb, qd, Fd * mrD) : Fd * mrD;
+    const S = Fs * mrS + Fstop * mrD + Sd;
     const roadZ = this.road.heightAt(x);
     const defl = this.r - (w - roadZ);
     const deflRate = this.road.slopeAt(x) * this.speed - vw;
@@ -180,7 +182,9 @@ export class QuarterSim {
       o.wheelAcc = aw;
       o.tyreN = Fz;
       o.springN = Fs;
-      o.damperN = Fd;
+      // The force along the damper itself: the controller's for a semi-active or adaptive one, the passive curve under
+      // an active one's actuator.
+      o.damperN = ctl && ctl.kind !== 'active' && mrD !== 0 ? Sd / mrD : Fd;
       o.stopN = Fstop;
       o.damperV = vd;
       o.supportN = S;
@@ -196,11 +200,7 @@ export class QuarterSim {
   step(h = QUARTER_STEP_S): void {
     const s = this.state;
     const d = this.tmp;
-    const ctl = this.control;
-    if (ctl) {
-      const ahead = ctl.lookAheadM(this.speed);
-      ctl.advance(h, s[1], ahead > 0 ? { now: this.road.heightAt(this.x), ahead: this.road.heightAt(this.x + ahead) } : null);
-    }
+    this.advanceControl(h);
     this.derivs(s, this.x, d, true);
     s[1] += h * d[1];
     s[3] += h * d[3];
@@ -210,12 +210,21 @@ export class QuarterSim {
     this.t += h;
   }
 
+  /** A controlled damper's lag and preview, held through the step that follows. */
+  private advanceControl(h: number): void {
+    const ctl = this.control;
+    if (!ctl) return;
+    const ahead = ctl.lookAheadM(this.speed);
+    ctl.advance(h, this.state[1], ahead > 0 ? { now: this.road.heightAt(this.x), ahead: this.road.heightAt(this.x + ahead) } : null);
+  }
+
   /** One classic Runge-Kutta step: the reference for the tests, not for the page. `out` is left at the step's start. */
   stepRk4(h: number): void {
     const s = this.state;
     const tmp = this.tmp;
     const x = this.x;
     const v = this.speed;
+    this.advanceControl(h);
     this.derivs(s, x, this.k1, true);
     for (let i = 0; i < STATE; i++) tmp[i] = s[i] + (h / 2) * this.k1[i];
     this.derivs(tmp, x + (h / 2) * v, this.k2, false);
