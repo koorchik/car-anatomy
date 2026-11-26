@@ -378,6 +378,12 @@ export class CarSection implements Section {
     this.relaying = true;
     this.ctx.panels.relayout();
     this.relaying = false;
+    // A new card starts at its top: on a phone the sheet scrolls on its own, and on a wide screen the panel may have
+    // been scrolled down the article, past the card above it.
+    if (system && changed) {
+      this.focusCard.scrollTop = 0;
+      if (!this.small) revealTop(this.focusCard);
+    }
     const stage = this.ctx.stage;
     const options = durationS === undefined ? {} : { durationS };
     if (changed || durationS === 0) {
@@ -490,6 +496,20 @@ export class CarSection implements Section {
   time(): TimeCapabilities {
     // The car stands still: nothing here runs on time until the lift (stage C2).
     return { modes: ['real'] };
+  }
+}
+
+/**
+ * Scrolls the nearest scrolling ancestor back so the element's top shows. Not scrollIntoView: that would also scroll
+ * the page's clipped containers while the panel slides in.
+ */
+function revealTop(el: HTMLElement): void {
+  for (let box = el.parentElement; box; box = box.parentElement) {
+    const overflow = getComputedStyle(box).overflowY;
+    if (overflow !== 'auto' && overflow !== 'scroll') continue;
+    const above = box.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    if (above > 0) box.scrollTop -= above;
+    return;
   }
 }
 
