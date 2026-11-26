@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { CameraMove, DEFAULT_MOVE_S, fitDistance, presetDirection, type CameraPose, type CameraPreset, type Insets, type MoveOptions } from './camera-moves.ts';
+import { CAMERA_FAR, CameraMove, DEFAULT_MOVE_S, farPlane, fitDistance, presetDirection, type CameraPose, type CameraPreset, type Insets, type MoveOptions } from './camera-moves.ts';
 import type { SceneModel } from './model-types.ts';
 import { partInfo, type PartInfo } from './parts-registry.ts';
 import { QualityGovernor } from './stage-quality.ts';
@@ -145,7 +145,7 @@ export class Stage {
     this.scene.environment = buildStudioEnv(this.renderer);
     this.scene.environmentIntensity = 0.95;
 
-    this.camera = new THREE.PerspectiveCamera(28, 1, 0.1, 200);
+    this.camera = new THREE.PerspectiveCamera(28, 1, 0.1, CAMERA_FAR);
     this.camera.position.set(6, 3.2, 7);
 
     this.controls = new OrbitControls(this.camera, canvas);
@@ -287,6 +287,11 @@ export class Stage {
     this.camera.position.copy(target).addScaledVector(direction, distance);
     this.controls.minDistance = sphere.radius * 0.6;
     this.controls.maxDistance = Math.max(fitted * 2.2, distance);
+    const far = farPlane(this.controls.maxDistance, sphere.radius * Math.max(1, this.frameScale));
+    if (far !== this.camera.far) {
+      this.camera.far = far;
+      this.camera.updateProjectionMatrix();
+    }
 
     // Up to an engine's radius the floor, the shadow's reach and the key light stand as they always have; a bigger
     // frame (a car, up to a radius of 2.6 m) scales them with it. The light keeps its direction, so nothing shades
@@ -321,6 +326,10 @@ export class Stage {
     // A chosen view holds: the slow orbit picks itself back up only after the visitor has left the page alone a while.
     this.controls.autoRotate = false;
     this.idleSince = performance.now();
+    // The controls clamp the camera's distance every frame; a close look at one part of a big model may be nearer
+    // than the whole model allows, and the move should end where it was sent.
+    this.controls.minDistance = Math.min(this.controls.minDistance, to.distance);
+    this.controls.maxDistance = Math.max(this.controls.maxDistance, to.distance);
     this.move = new CameraMove(this.pose(), to, durationS);
     if (durationS === 0) this.stepMove(0);
   }

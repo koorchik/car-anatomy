@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { CameraMove, ease, fitDistance, presetDirection, type FrameView } from '../src/scene/camera-moves.ts';
+import { CAMERA_FAR, CameraMove, ease, farPlane, fitDistance, presetDirection, type FrameView } from '../src/scene/camera-moves.ts';
 import { fitBox, partKeyOf, systemOf } from '../src/scene/stage.ts';
 import { FAST_SECONDS_TO_RAISE, QUALITY_BEST, QUALITY_LEAST, QualityGovernor, SLOW_FRAMES_TO_DROP } from '../src/scene/stage-quality.ts';
 
@@ -77,6 +77,25 @@ describe('framing', () => {
     const tall: FrameView = { ...view, width: 4000 };
     const d = fitDistance(1, tall, 1);
     expect(Math.asin(1 / d) * 2).toBeCloseTo((28 * Math.PI) / 180);
+  });
+});
+
+describe('the far plane', () => {
+  // The stage lets the visitor zoom out to 2.2 times the fitted distance (Stage.fit).
+  const farthest = (radius: number, view: FrameView): number => fitDistance(radius, view, 0.68) * 2.2;
+  const phone: FrameView = { fovDeg: 28, width: 390, height: 844, insets: { left: 0, right: 0, top: 90, bottom: 200 } };
+
+  it('keeps a whole car in the picture on a phone zoomed all the way out', () => {
+    // The whole-car plan frames cars up to a radius of 2.6 m: 26 scene units.
+    const radius = 26;
+    const out = farthest(radius, phone);
+    expect(out + radius).toBeGreaterThan(CAMERA_FAR);
+    expect(farPlane(out, radius)).toBeGreaterThanOrEqual(out + radius);
+  });
+
+  it('leaves an engine on the stage the far plane it always had', () => {
+    // A large engine on the dyno is under a metre in radius.
+    expect(farPlane(farthest(9, phone), 9)).toBe(CAMERA_FAR);
   });
 });
 
@@ -175,11 +194,18 @@ describe('render quality', () => {
     expect(q.scale).toBe(1);
   });
 
-  it('stands still while nothing feeds it, as on a frozen page', () => {
+  it('counts frames that take no time as no time: a held page never earns a raise', () => {
+    // While the shell holds the page still it passes dt = 0 until the section freezes the stage.
     const q = new QualityGovernor();
-    q.set(1);
-    expect(q.scale).toBe(1);
-    q.set(0.6);
-    expect(q.scale).toBe(0.6);
+    q.set(0.8);
+    for (let i = 0; i < 100000; i++) q.frame(0);
+    expect(q.scale).toBe(0.8);
+  });
+
+  it('shrugs off a hitch now and then on a machine that keeps up', () => {
+    // One frame in sixty at 10 fps, as when a page builds a new model: the quick frames between pay it back.
+    const q = new QualityGovernor();
+    for (let i = 0; i < 60 * 120; i++) q.frame(i % 60 === 0 ? 0.1 : 1 / 60);
+    expect(q.scale).toBe(QUALITY_BEST);
   });
 });

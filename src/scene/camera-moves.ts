@@ -65,6 +65,18 @@ export function fitDistance(radius: number, view: FrameView, fitScale: number): 
   return Math.max(heightLimit, widthLimit) * fitScale;
 }
 
+/** The camera's far plane for anything up to an engine's frame, scene units. */
+export const CAMERA_FAR = 200;
+
+/**
+ * A far plane that keeps the whole model in the picture at the farthest the visitor may zoom out (`maxDistance` from
+ * the model's centre). An engine never gets near CAMERA_FAR; a car on a phone's narrow screen does: a radius of 26 is
+ * framed from some 150 units away and may be zoomed out to twice that.
+ */
+export function farPlane(maxDistance: number, radius: number): number {
+  return Math.max(CAMERA_FAR, maxDistance + 2 * radius);
+}
+
 /** Slow out, slow in. */
 export const ease = (x: number): number => {
   const t = Math.min(1, Math.max(0, x));
@@ -88,6 +100,7 @@ export class CameraMove {
   private readonly durationS: number;
   private readonly turn = new THREE.Quaternion();
   private readonly partial = new THREE.Quaternion();
+  private readonly direction = new THREE.Vector3();
   private elapsed = 0;
 
   constructor(from: CameraPose, to: CameraPose, durationS: number) {
@@ -109,7 +122,7 @@ export class CameraMove {
     const k = this.durationS > 0 ? ease(this.elapsed / this.durationS) : 1;
     target.lerpVectors(this.from.target, this.to.target, k);
     this.partial.identity().slerp(this.turn, k);
-    const direction = this.from.direction.clone().applyQuaternion(this.partial);
+    const direction = this.direction.copy(this.from.direction).applyQuaternion(this.partial);
     const distance = this.from.distance + (this.to.distance - this.from.distance) * k;
     position.copy(target).addScaledVector(direction, distance);
   }
