@@ -14,7 +14,7 @@ import { CARS } from '../data/cars.ts';
 import { tyreVertical } from '../vehicle/tyre-data.ts';
 import {
   AXLE_KEYS, CAR_KEYS, DAMPER_CHOICES, DRIVES, FRONT_LAYOUTS, KNUCKLES, REAR_LAYOUTS, SOLID_LATERALS, SOLID_LINKS, TYRES,
-  axleOf, isDriven, withAxle, type AxleEnd, type AxleKey, type AxleParams, type ChassisDesign, type DesignKey,
+  axleOf, isDriven, withAxle, type AxleEnd, type AxleKey, type AxleParams, type ChassisDesign,
   type DesignLayout,
 } from './design.ts';
 import { DEFAULT_CHASSIS, layoutDefaults, typicalAxle } from './defaults.ts';
@@ -210,6 +210,10 @@ export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey): 
       return fixed(100, 30000);
     case 'damperRebound':
       return fixed(100, 60000);
+    case 'damperKneeMs':
+      return fixed(0.03, 0.5);
+    case 'damperHighRatio':
+      return fixed(0.1, 1.5);
     case 'barMm':
       return fixed(10, 45);
     case 'barWallMm': {
@@ -225,8 +229,11 @@ export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey): 
   }
 }
 
-/** Limits of any numeric parameter, by its key in the design ('massKg', 'springNmmR'). */
-export function paramRange(d: ChassisDesign, key: DesignKey): Range {
+/** A numeric parameter's key in the design: a car's, or an axle's with its end ('massKg', 'springNmmR'). */
+export type NumericKey = CarNumericKey | `${AxleNumericKey}${AxleEnd}`;
+
+/** Limits of any numeric parameter, by its key in the design. */
+export function paramRange(d: ChassisDesign, key: NumericKey): Range {
   if (Object.hasOwn(CAR_RANGES, key)) return CAR_RANGES[key as CarNumericKey];
   const end = key.at(-1) as AxleEnd;
   return axleRange(d, end, key.slice(0, -1) as AxleNumericKey);
@@ -238,8 +245,8 @@ const CLAMP_ORDER = [
   'upperArmMm', 'upperAngleDeg', 'lowerBallZMm', 'upperBallZMm', 'lowerPivotZMm', 'svAngleDeg', 'tieRodDzMm',
   'sweepDeg', 'pivotArmMm', 'pivotYMm', 'pivotDzMm', 'pivotSvDeg', 'beamPos', 'shearDzMm', 'beamArmMm', 'beamBushInMm',
   'beamBushDzMm', 'beamTorsionNmRad', 'lowerLinkMm', 'upperLinkMm', 'linkAngleDeg', 'upperLinkAngleDeg', 'lateralZMm',
-  'diffOutputYMm', 'diffOutputDzMm', 'camberDeg', 'toeDeg', 'damperCompression', 'damperRebound', 'barMm', 'barWallMm',
-  'barArmMm', 'unsprungKg',
+  'diffOutputYMm', 'diffOutputDzMm', 'camberDeg', 'toeDeg', 'damperCompression', 'damperRebound', 'damperKneeMs',
+  'damperHighRatio', 'barMm', 'barWallMm', 'barArmMm', 'unsprungKg',
 ] as const satisfies readonly AxleNumericKey[];
 
 const clamp = (v: number, r: Range): number => Math.min(r.max, Math.max(r.min, v));

@@ -45,6 +45,20 @@ describe('the default design', () => {
   });
 });
 
+describe('the spec', () => {
+  it('gives an own damper its coefficients, knee and slope, and a preset the templates\' knee', () => {
+    const own = editChassis(DEFAULT_CHASSIS, { damperR: 'custom', damperCompressionR: 3000, damperReboundR: 7000, damperKneeMsR: 0.2, damperHighRatioR: 0.8 });
+    expect(chassisToSpec(own).rear.axle.damper).toMatchObject({ compression: 3000, rebound: 7000, kneeMs: 0.2, highRatio: 0.8 });
+    expect(chassisToSpec(own).front.axle.damper.kneeMs).toBe(0.1);
+  });
+
+  it('puts inboard brakes only on a driven axle: their torque needs the half-shafts', () => {
+    const inboard = editChassis(DEFAULT_CHASSIS, { brakeInboardF: true, brakeInboardR: true });
+    expect(chassisToSpec(inboard).longitudinal.brakeInboard).toEqual([true, false]);
+    expect(chassisToSpec(editChassis(inboard, { drive: 'awd' })).longitudinal.brakeInboard).toEqual([true, true]);
+  });
+});
+
 describe('resolveChassis', () => {
   it('is idempotent on every preset and on 500 random designs', () => {
     for (const d of [...CHASSIS_PRESETS.map((p) => p.design()), ...RANDOM]) expect(sameDesign(resolveChassis(d), d)).toBe(true);

@@ -136,6 +136,9 @@ function baseAxle(end: AxleEnd): AxleParams {
     // About what the «comfort» preset gives the default car (to-spec.ts), so switching to 'custom' starts near it.
     damperCompression: 2500,
     damperRebound: 5500,
+    // The templates' knee and the slope past it (to-spec.ts used them for every own damper before they were parameters).
+    damperKneeMs: 0.1,
+    damperHighRatio: 0.5,
     // The typical chassis' bars: 22 mm in front, 16 mm at the rear, solid, on 0.2 m arms (estimates).
     barMm: front ? 22 : 16,
     barWallMm: 0,

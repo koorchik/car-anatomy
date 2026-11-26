@@ -1,8 +1,8 @@
 // English for the suspension designer (src/suspension-designer/): the names and notes of its starting designs. The
 // model itself holds no text; the page of the designer (P8c) registers this with its own words.
 export const SUSPENSION_DESIGNER_EN: Record<string, string> = {
-  'Справжнє авто каталогу: компоновка, маси й розміри від виробника, точки кріплення типові.':
-    'A real car from the catalog: layout, masses and dimensions from the maker, typical hardpoints.',
+  'Справжнє авто каталогу: компоновка, маси й розміри від виробника, а точки кріплення, пружини й амортизатори типові.':
+    'A real car from the catalog: layout, masses and dimensions from the maker; the hardpoints, springs and shock absorbers are typical.',
   'Комфортний седан': 'Comfortable sedan',
   "Задній привід, подвійні важелі спереду й багаторичажна ззаду, м'які амортизатори.":
     'Rear-wheel drive, double wishbones in front and a multilink at the rear, soft shock absorbers.',

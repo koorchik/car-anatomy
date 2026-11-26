@@ -1,7 +1,7 @@
 // A resolved design as the ChassisSpec that buildChassis, ChassisSim, statics and the 3D read (suspensions plan,
 // the designer's chain). The geometry comes from geometry.ts; here go the spring rate (the design's, or the typical
 // one for TYPICAL_RIDE_HZ), the damper (a preset's ζ at the corner's ride frequency, as setup.ts makes it, or the
-// design's own coefficients), the anti-roll bar on the typical arms and drop links (templates/typical-chassis.ts), the
+// design's own coefficients, knee and slope), the anti-roll bar on the typical arms and drop links (templates/typical-chassis.ts), the
 // masses, the tyre, the brakes and drive, and the road load.
 //
 // The road load is the generic car's (src/vehicle/constants.ts) unless the design came from a real car (`car`): then it
@@ -18,15 +18,15 @@ import { estimateInertia } from '../vehicle/body-estimate.ts';
 import { roadLoadCoeffs } from '../vehicle/road-load.ts';
 import { drivingMassKg } from '../vehicle/mass.ts';
 import { CARS } from '../data/cars.ts';
-import { axleOf, TYPICAL_RIDE_HZ, type AxleEnd, type ChassisDesign } from './design.ts';
+import { axleOf, isDriven, TYPICAL_RIDE_HZ, type AxleEnd, type ChassisDesign } from './design.ts';
 import { axleGeometry, freeRadiusM, type AxleGeometry } from './geometry.ts';
 import { cornerSprungKg, springForRideHz } from './constraints.ts';
 
 /** Twisting section of a bar: the track less 0.5 m for the bushes and the frame rails (typical-chassis.ts). */
 const BAR_INSIDE_TRACK_M = 0.5;
-/** Damper knee and the slope past it of the design's own damper: the templates' (0.1 m/s, half the slope). */
-const KNEE_MS = 0.1;
-const HIGH_RATIO = 0.5;
+/** Damper knee of a preset: the templates' 0.1 m/s (the preset's slope past it comes from dampingFromZeta). An own
+ *  damper takes the design's knee and slope. */
+const PRESET_KNEE_MS = 0.1;
 
 /** Spring rate along the spring, N/m: the design's, or the typical one for the axle's ride frequency. */
 export function springRateNm(d: ChassisDesign, end: AxleEnd, g: AxleGeometry = axleGeometry(d, end)): number {
@@ -46,10 +46,11 @@ function axleSpec(d: ChassisDesign, end: AxleEnd): ChassisAxleSpec {
   const a = axleOf(d, end);
   const g = axleGeometry(d, end);
   const rate = springRateNm(d, end, g);
+  const preset = (zeta: number) => ({ ...dampingFromZeta(zeta, rideHz(d, end, g), cornerSprungKg(d, end), g.mrDamper), kneeMs: PRESET_KNEE_MS });
   const coeffs =
     a.damper === 'custom'
-      ? { compression: a.damperCompression, rebound: a.damperRebound, highRatio: HIGH_RATIO }
-      : dampingFromZeta(DAMPER_PRESETS[a.damper], rideHz(d, end, g), cornerSprungKg(d, end), g.mrDamper);
+      ? { compression: a.damperCompression, rebound: a.damperRebound, kneeMs: a.damperKneeMs, highRatio: a.damperHighRatio }
+      : preset(DAMPER_PRESETS[a.damper]);
   const base = g.spec;
   let linkage = base.linkage;
   // A leaf is its own spring: the solver's leaf takes the same rate.
@@ -61,7 +62,7 @@ function axleSpec(d: ChassisDesign, end: AxleEnd): ChassisAxleSpec {
     ...base,
     linkage,
     spring: { ...base.spring, rate },
-    damper: { ...base.damper, compression: coeffs.compression, rebound: coeffs.rebound, kneeMs: KNEE_MS, highRatio: coeffs.highRatio },
+    damper: { ...base.damper, compression: coeffs.compression, rebound: coeffs.rebound, kneeMs: coeffs.kneeMs, highRatio: coeffs.highRatio },
   };
   const swayBar: SwayBarSpec | null =
     a.barMm > 0
@@ -89,7 +90,9 @@ export function designLongitudinal(d: ChassisDesign): ChassisLongitudinal {
   return {
     ...typical,
     brakeFront: d.brakeFront,
-    brakeInboard: [d.brakeInboardF, d.brakeInboardR],
+    // Inboard brakes send their torque to the wheel through the half-shafts (or sit on a live axle's differential), so
+    // only a driven axle can have them; on an undriven one the design's choice waits, as a layout's unread fields do.
+    brakeInboard: [d.brakeInboardF && isDriven(d.drive, 'F'), d.brakeInboardR && isDriven(d.drive, 'R')],
     driveFront: d.driveFront,
     finalDrive: d.finalDrive,
     roadLoad,

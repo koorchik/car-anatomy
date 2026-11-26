@@ -121,6 +121,9 @@ export interface AxleParams {
   /** Own damper, N·s/m along the damper below the knee (with `damper: 'custom'`). */
   damperCompression: number;
   damperRebound: number;
+  /** Own damper's knee, m/s, and its slope past the knee as a share of the slope below (below 1: digressive). */
+  damperKneeMs: number;
+  damperHighRatio: number;
   /** Anti-roll bar: outer diameter (0: none), wall thickness of a tube (0: solid), lever arm, mm. */
   barMm: number;
   barWallMm: number;
@@ -172,8 +175,8 @@ export const AXLE_KEYS = [
   'pivotArmMm', 'pivotYMm', 'pivotDzMm', 'pivotSvDeg', 'beamPos', 'shearDzMm', 'beamArmMm', 'beamBushInMm',
   'beamBushDzMm', 'beamTorsionNmRad', 'solidLateral', 'solidLinks', 'lowerLinkMm', 'upperLinkMm', 'linkAngleDeg',
   'upperLinkAngleDeg', 'lateralZMm', 'diffOutputYMm', 'diffOutputDzMm', 'camberDeg', 'toeDeg', 'springNmm', 'damper',
-  'damperCompression', 'damperRebound', 'barMm', 'barWallMm', 'barArmMm', 'unsprungKg', 'tyreWidthMm', 'tyreAspect',
-  'rimIn', 'brakeInboard',
+  'damperCompression', 'damperRebound', 'damperKneeMs', 'damperHighRatio', 'barMm', 'barWallMm', 'barArmMm',
+  'unsprungKg', 'tyreWidthMm', 'tyreAspect', 'rimIn', 'brakeInboard',
 ] as const satisfies readonly AxleKey[];
 
 export const CAR_KEYS = [

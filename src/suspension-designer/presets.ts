@@ -41,7 +41,7 @@ export const CATALOGUE_PRESETS: readonly ChassisPreset[] = CHASSIS_CATALOGUE.map
   id: entry.id,
   // A make and model reads the same in both languages.
   name: CARS[entry.id]!.name,
-  note: t('Справжнє авто каталогу: компоновка, маси й розміри від виробника, точки кріплення типові.'),
+  note: t('Справжнє авто каталогу: компоновка, маси й розміри від виробника, а точки кріплення, пружини й амортизатори типові.'),
   kind: 'catalogue',
   design: once(() => entry.design),
 }));
@@ -233,6 +233,8 @@ export function randomChassis(random: () => number = Math.random): ChassisDesign
       damper: pick(DAMPER_CHOICES),
       damperCompression: k(800, 6000),
       damperRebound: k(1500, 12000),
+      damperKneeMs: k(0.05, 0.3),
+      damperHighRatio: k(0.2, 1.2),
       barMm: random() < 0.3 ? 0 : k(12, 35),
       barWallMm: random() < 0.7 ? 0 : k(2, 6),
       barArmMm: k(150, 300),
