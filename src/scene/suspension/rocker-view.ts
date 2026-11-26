@@ -31,7 +31,8 @@ export class RockerView {
   rodPerElement = 1;
   private readonly pivot: THREE.Vector3;
   private readonly axis: THREE.Vector3;
-  private readonly thirdIso: Vec3 | null;
+  /** The third spring's rocker point at design, from the pivot (scene): the plate's turn carries it. */
+  private readonly third0: THREE.Vector3 | null;
   private readonly iso = [0, 0, 0] as unknown as Vec3;
   private readonly p = [0, 0, 0];
   private readonly rodEnd = new THREE.Vector3();
@@ -46,7 +47,7 @@ export class RockerView {
     this.rocker = new Rocker(spec, rodOuter);
     this.pivot = toScene(spec.pivot);
     this.axis = toScene(spec.axis).normalize();
-    this.thirdIso = third;
+    this.third0 = third ? toScene(third).sub(this.pivot) : null;
     // The rod: a unit cylinder along +Y, stretched and turned onto its two ends each frame.
     this.rod = tag(new THREE.Mesh(new THREE.CylinderGeometry(ROD_R, ROD_R, 1, 12).translate(0, 0.5, 0), m.chrome), 'susp.pushrod');
     // The plates at design, about the pivot: a triangle of bars between the pivot and the two arm ends, and the shaft.
@@ -108,8 +109,9 @@ export class RockerView {
     const rodLever = this.lever(this.rodEnd, d);
     const e = this.w.copy(this.elementEnd).sub(top).normalize();
     this.rodPerElement = rodLever > 1e-6 ? this.lever(this.elementEnd, e) / rodLever : 1;
-    if (this.third && this.thirdIso) {
-      toScene(r.pointOf(this.thirdIso, this.theta), this.thirdAt);
+    if (this.third && this.third0) {
+      // The plate turns about the axis through the pivot, as Rocker.pointOf does, without a new array each frame.
+      this.thirdAt.copy(this.third0).applyQuaternion(this.plate.quaternion).add(this.pivot);
       // The half up to the centre line, where the other rocker's half meets it.
       this.centre.set(0, this.thirdAt.y, this.thirdAt.z);
       this.third.update(this.centre, this.thirdAt, explode, thinCoil);
