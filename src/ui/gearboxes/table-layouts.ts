@@ -111,7 +111,10 @@ function transaxleLayout(desc: TransaxleDesc): TableLayout {
       through: null,
       gears: [t('шестерня первинного вала'), t('шестерня вторинного вала')],
       direct: '',
-      reverse: (ratio) => t('Задній хід: {ratio}, через подвійну проміжну шестерню', { ratio }),
+      reverse: (ratio) =>
+        desc.reverse.teeth.length === 4
+          ? t('Задній хід: {ratio}, через подвійну проміжну шестерню', { ratio })
+          : t('Задній хід: {ratio}, через проміжну шестерню', { ratio }),
     },
     ratios: (d) => transaxleRatios(d as TransaxleDesc),
     reverse: (d) => transaxleReverse(d as TransaxleDesc),

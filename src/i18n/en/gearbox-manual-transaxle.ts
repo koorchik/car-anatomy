@@ -25,13 +25,13 @@ export const GEARBOX_MANUAL_TRANSAXLE_EN: Record<string, GearboxTextEn> = {
 /** English for the manual-transaxle page's article. */
 export const GEARBOX_MANUAL_TRANSAXLE_ARTICLE_EN: GearboxArticle = {
   lead:
-    'A two-shaft manual transmission sits where the engine and the driven wheels are close together: beside the transverse engine of a front-wheel-drive car, or between the engine and the wheels of a rear-engine one. ' +
+    'A two-shaft manual transmission sits where the engine and the driven wheels are close together: beside the transverse engine of a front-wheel-drive car, or by the driven axle of a rear-engine car. ' +
     'It has only two shafts, the input shaft and the output shaft, and the final drive and the differential lie in the same case, so the halfshafts to the wheels leave the transmission itself.',
   how:
     'Each speed is one pair of gears: one on the input shaft, the other on the output shaft, and the gear ratio is the ratio of their tooth counts. ' +
     'As in a transmission with a countershaft, every pair is always in mesh, and one gear of each pair turns freely on its shaft until a synchronizer sleeve locks it to the shaft. ' +
     'The sleeves sit on both shafts: the input shaft gear of a low speed is made small, cut on the shaft itself, so the gear that turns freely is its mate on the output shaft. ' +
-    'A gear on the front end of the output shaft always turns the final drive gear on the differential case. In a transverse transmission this is a helical pair; when the shafts run along the car, as in the Porsche 911, it is a bevel pair, because the halfshafts run across. ' +
+    'A gear on the engine end of the output shaft always turns the final drive gear on the differential case. In a transverse transmission this is a helical pair; when the shafts run along the car, as in the Porsche 911, it is a bevel pair, because the halfshafts run across. ' +
     'So in any gear two pairs light up: the speed pair and the final drive. There is no direct drive here. Reverse runs through an idler that turns the direction around.',
   sound:
     'The speed gears are helical, so the pairs are quieter than straight-cut ones. Mostly the loaded meshes whine, and here two pairs are always loaded: there is no quiet direct drive as in a transmission with a countershaft. ' +
