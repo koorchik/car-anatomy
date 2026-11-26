@@ -87,6 +87,6 @@ const F1_2022: PageCar = {
 
 export const PUSHROD_PAGE: SuspensionPage = {
   id: 'pushrod',
-  base: { end: 'F', corner: () => designCorner(TYPICAL_PUSHROD, 'F'), geometry: 'typical' },
+  base: { end: 'F', corner: () => designCorner(TYPICAL_PUSHROD, 'F'), geometry: 'typical', design: () => TYPICAL_PUSHROD },
   cars: [F1_2022],
 };

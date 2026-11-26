@@ -50,11 +50,13 @@ export function designWithSetup(base: ChassisDesign, end: AxleEnd, setup: Corner
   return { design: Object.keys(patch).length ? editChassis(base, patch as Partial<ChassisDesign>) : base, dropped };
 }
 
-/** The design a suspension page stands for: its car's, or the typical car its own corner comes from. The macpherson
- *  page's own corner is the JTEKT's measured one, which belongs to no design: the default design, a strut in front,
- *  stands in for it. */
+/** The design a suspension page stands for: its car's, or the typical car its own corner comes from (the page names it;
+ *  a page that does not is the double wishbone and multilink pages' typical car). The macpherson page's own corner is
+ *  the JTEKT's measured one, which belongs to no design: the default design, a strut in front, stands in for it. */
 export function pageDesign(page: SuspensionPage, car: PageCar | null): ChassisDesign {
   if (car) return car.design;
+  const own = page.base.design?.();
+  if (own) return own;
   return page.base.geometry === 'typical' ? TYPICAL_RWD : DEFAULT_CHASSIS;
 }
 

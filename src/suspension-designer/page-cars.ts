@@ -130,7 +130,7 @@ export interface SuspensionPage {
     end: AxleEnd;
     corner: () => CornerSpec;
     geometry: 'measured' | 'typical';
-    /** The design the page's own corner comes from, where the page needs it (the pivot pages' sweep slider). */
+    /** The design the page's own corner comes from: the pivot pages' sweep slider and the designer link read it. */
     design?: () => ChassisDesign;
   };
   cars: readonly PageCar[];

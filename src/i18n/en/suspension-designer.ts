@@ -404,7 +404,7 @@ export const SUSPENSION_DESIGNER_EN: Record<string, string> = {
   'Звичайний': 'Conventional',
   'На двох осях': 'Dual-axis',
   'Тяга Панара': 'Panhard rod',
-  'Механізм Ватта': "Watt's linkage",
+  'Механізм Ватта': 'Watt’s linkage',
   'Косі тяги': 'Angled links',
   'Ресори': 'Leaf springs',
   'Чотири': 'Four',
