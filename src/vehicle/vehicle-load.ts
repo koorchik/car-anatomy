@@ -81,6 +81,9 @@ export interface VehicleSnapshot {
   values: Float64Array;
 }
 
+/** The snapshot's own values ahead of the vehicle's and the control's: the crank's angle and speed, and the clock. */
+const HEAD = 3;
+
 export class VehicleLoad implements CrankLoad<VehicleReadings> {
   readonly spec: VehicleLoadSpec;
   readonly vehicle: VehicleStep;
@@ -89,6 +92,8 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
   /** The crank as the drivetrain sees it: angle, rad, unwrapped, and speed, rad/s. */
   crankAngle = 0;
   crankSpeed = 0;
+  /** Seconds the car has been on the crank, by the simulation's own clock: the dash times 0–100 km/h by it. */
+  time = 0;
   private readonly damper: number;
   private readonly torque: LoadTorque = { torqueNm: 0, dTorque: 0 };
   private readonly request: EngineRequest = {};
@@ -125,6 +130,7 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
     const s = veh.solver;
     this.crankAngle += dt * input.omega;
     this.crankSpeed = input.omega;
+    this.time += dt;
     this.pedal = input.pedal;
     s.anchorAngle[CRANK_SLOT] = this.crankAngle;
     s.anchorSpeed[CRANK_SLOT] = input.omega;
@@ -215,15 +221,16 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
   }
 
   private size(): number {
-    return 2 + this.vehicle.snapshotSize() + this.control.snapshotSize();
+    return HEAD + this.vehicle.snapshotSize() + this.control.snapshotSize();
   }
 
   snapshot(): VehicleSnapshot {
     const values = new Float64Array(this.size());
     values[0] = this.crankAngle;
     values[1] = this.crankSpeed;
-    this.vehicle.snapshot(values, 2);
-    this.control.snapshot(values, 2 + this.vehicle.snapshotSize());
+    values[2] = this.time;
+    this.vehicle.snapshot(values, HEAD);
+    this.control.snapshot(values, HEAD + this.vehicle.snapshotSize());
     return { kind: 'vehicle', values };
   }
 
@@ -233,7 +240,8 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
     const v = snap.values;
     this.crankAngle = v[0]!;
     this.crankSpeed = v[1]!;
-    this.vehicle.restore(v, 2);
-    this.control.restore(v, 2 + this.vehicle.snapshotSize());
+    this.time = v[2]!;
+    this.vehicle.restore(v, HEAD);
+    this.control.restore(v, HEAD + this.vehicle.snapshotSize());
   }
 }

@@ -13,6 +13,8 @@ export interface VehicleFrame {
   speed: number;
   distance: number;
   accel: number;
+  /** Seconds the car has been on the crank, by the simulation's clock (VehicleLoad.time). */
+  time: number;
   /** The gear that holds ('N' while none does), the one the lever asks for, and the one whose sleeve is pushed in. */
   gear: string;
   selected: string;
@@ -54,6 +56,7 @@ export function vehicleFrame(load: VehicleLoad, into?: VehicleFrame): VehicleFra
           speed: 0,
           distance: 0,
           accel: 0,
+          time: 0,
           gear: 'N',
           selected: 'N',
           lever: 'N',
@@ -74,6 +77,7 @@ export function vehicleFrame(load: VehicleLoad, into?: VehicleFrame): VehicleFra
   f.speed = chassis.v;
   f.distance = chassis.x;
   f.accel = chassis.ax;
+  f.time = load.time;
   f.gear = control.gearIn(s);
   f.selected = control.target < 0 ? 'N' : gears[control.target]!.name;
   f.lever = control.sleeve < 0 ? 'N' : gears[control.sleeve]!.name;

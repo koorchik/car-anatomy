@@ -1,7 +1,8 @@
 // What the full dash of the car mode counts from one frame to the next (stage K3b): the heat the clutch took for the
 // last pull-away, the time to 100 km/h and over 400 m from a standstill, and the last ten seconds for the strip chart.
-// Everything comes from drive.snapshot()'s car frame (VehicleFrame) and the frame time; the meter keeps no physics of
-// its own, so its energy is the core's (tests/gearbox-dash.test.ts). No DOM.
+// Everything comes from drive.snapshot()'s car frame (VehicleFrame); the times go by the simulation's own clock in the
+// frame, so a slow or uneven frame rate does not stretch them. The meter keeps no physics of its own, so its energy is
+// the core's (tests/gearbox-dash.test.ts). No DOM.
 
 import type { VehicleFrame } from '../../vehicle/vehicle-frame.ts';
 
@@ -29,6 +30,8 @@ export class DriveMeter {
   private started = false;
   private time = 0;
   private fromX = 0;
+  /** The simulation's clock on the last frame, s; NaN before the first. */
+  private lastClock = Number.NaN;
   readonly figures: LaunchFigures = { launchJ: 0, to100: null, to400: null, kmhAt400: null };
 
   /** A new car on the crank: nothing counted yet. */
@@ -36,12 +39,19 @@ export class DriveMeter {
     this.baseJ = frame?.clutchJ ?? 0;
     this.started = false;
     this.time = 0;
+    this.lastClock = Number.NaN;
     Object.assign(this.figures, { launchJ: 0, to100: null, to400: null, kmhAt400: null });
   }
 
-  /** Takes the frame shown now, `dt` s after the last one. */
+  /**
+   * Takes the frame shown now, `dt` s of the page's time after the last one. The times go by the frame's own clock;
+   * `dt` stands in only where that clock went back (another car, or the state handed between threads).
+   */
   step(f: VehicleFrame, dt: number): LaunchFigures {
     const fig = this.figures;
+    const clock = f.time - this.lastClock;
+    this.lastClock = f.time;
+    if (clock >= 0) dt = clock;
     const still = Math.abs(f.speed) < STILL;
     if (still && Math.abs(f.clutchSlip) < NO_SLIP) {
       // Standing with the clutch at rest (open, or closed on a stalled engine): the next pull-away counts from here.

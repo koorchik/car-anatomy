@@ -436,6 +436,7 @@ export class Drive {
     shown.speed = at.speed;
     shown.distance = at.distance;
     shown.accel = at.accel;
+    shown.time = at.time;
     shown.gear = at.gear;
     shown.selected = at.selected;
     shown.lever = at.lever;

@@ -264,6 +264,20 @@ describe('the full dash in the car', () => {
     expect(shiftHint(cd, '5', 3000, 30, 0.3)).toBeNull();
   });
 
+  it('times 0–100 km/h by the simulation\'s clock, not by how often the page draws', () => {
+    const { load } = rig();
+    const meter = new DriveMeter();
+    const f = load.frame();
+    // A car gaining 5 m/s² reported every 10 ms of its own time on a page that draws slowly (0.25 s a frame, as on a
+    // software renderer): 100 km/h comes after 27.78 / 5 = 5.56 s of the car's time.
+    for (let k = 0; k <= 800; k++) {
+      const time = k * 0.01;
+      meter.step({ ...f, time, speed: 5 * time, distance: 2.5 * time * time, clutchSlip: 0 }, 0.25);
+    }
+    expect(meter.figures.to100!).toBeCloseTo(100 / 3.6 / 5, 1);
+    expect(meter.figures.to400).toBeNull();
+  });
+
   it('keeps ten seconds of the drive for the strip', () => {
     const { load } = rig();
     const strip = new DriveStrip();
