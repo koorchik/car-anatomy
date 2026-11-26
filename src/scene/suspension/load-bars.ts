@@ -34,6 +34,9 @@ interface Bar {
   tick: THREE.Mesh;
 }
 
+/** A load's height on the force scale, scene units (none below zero). */
+const h = (n: number): number => Math.max(0, n) * FORCE_SCALE;
+
 const material = (color: string, opacity: number): THREE.MeshBasicMaterial =>
   new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: opacity >= 1, toneMapped: false });
 
@@ -66,16 +69,14 @@ export class LoadBars {
   /** Bar i for this load. */
   set(i: number, load: WheelLoad): void {
     const bar = this.bars[i]!;
-    const h = (n: number): number => Math.max(0, n) * FORCE_SCALE;
-    const values = [load.geometric, load.elastic, load.unsprung];
-    const lost = values.reduce((s, v) => s + Math.min(0, v), 0);
+    const lost = Math.min(0, load.geometric) + Math.min(0, load.elastic) + Math.min(0, load.unsprung);
     // The grey is what is left of the static load after the parts that took some away.
     const grey = Math.max(0, load.staticN + lost);
     bar.base.scale.set(WIDTH, Math.max(1e-4, h(grey)), WIDTH);
     let up = h(load.staticN);
     let down = h(grey);
     for (let k = 0; k < 3; k++) {
-      const v = values[k]!;
+      const v = k === 0 ? load.geometric : k === 1 ? load.elastic : load.unsprung;
       const mesh = bar.parts[k]!;
       const part = LOAD_PARTS[k]!;
       if (v >= 0) {

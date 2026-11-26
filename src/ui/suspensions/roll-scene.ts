@@ -171,6 +171,8 @@ export class RollScene {
   private modelKey = '';
   /** Built cars by key: the factory car of each page (for the understeer it changes from) and the chart's references. */
   private readonly cache = new Map<string, Built>();
+  /** The chart's two references as built for the lowering they were built at (advanceSweeps reads them every frame). */
+  private refs: { lowered: boolean; built: Built[] } | null = null;
   private readonly state = newRollState();
   private dirty = true;
   private stateDirty = true;
@@ -436,8 +438,9 @@ export class RollScene {
       camber: sweep.states.map((s) => s.camberRoad[2 * axle + 1]!),
     });
     const own: CamberSeries = { label: this.ownLabel(k), color: PAGE_COLORS[page.id], faint: false, ...of(b.sweep, k) };
+    const built = this.references();
     const refs = REFERENCES.filter((r) => !(k === 0 && r.design === b.design)).map((r): CamberSeries => {
-      const ref = this.build(r.design, null, this.lowered);
+      const ref = built[REFERENCES.indexOf(r)]!;
       return { label: r.id === 'macpherson' ? t('Стійка JTEKT, типовий хот-хетч') : t('Подвійні важелі, типове авто'), color: PAGE_COLORS[r.id], faint: true, ...of(ref.sweep, 0) };
     });
     return [own, ...refs];
@@ -447,6 +450,14 @@ export class RollScene {
     const page = this.choice?.page ?? SUSPENSION_PAGES[0]!;
     const name = this.choice?.car ? this.choice.car.link.name : pageName(page.id);
     return `${name}, ${k === 0 ? t('передня вісь') : t('задня вісь')}`;
+  }
+
+  /** The references' built cars at the current lowering, the same array until the lowering changes. */
+  private references(): Built[] {
+    if (!this.refs || this.refs.lowered !== this.lowered) {
+      this.refs = { lowered: this.lowered, built: REFERENCES.map((r) => this.build(r.design, null, this.lowered)) };
+    }
+    return this.refs.built;
   }
 
   private writeLegend(): void {
@@ -463,10 +474,12 @@ export class RollScene {
   /** Builds more of the chart's sweeps within the frame's budget, redrawing when one grew. */
   private advanceSweeps(): void {
     if (this.chart.showing !== 'camber' || !this.built) return;
+    const refs = this.references();
+    if (this.built.sweep.done && refs.every((r) => r.sweep.done)) return;
     const until = performance.now() + SWEEP_BUDGET_MS;
     let grew = false;
-    const sweeps = [this.built.sweep, ...REFERENCES.map((r) => this.build(r.design, null, this.lowered).sweep)];
-    for (const s of sweeps) {
+    for (let i = -1; i < refs.length; i++) {
+      const s = i < 0 ? this.built.sweep : refs[i]!.sweep;
       if (s.done) continue;
       const before = s.states.length;
       s.advance(Math.max(0.5, until - performance.now()));
