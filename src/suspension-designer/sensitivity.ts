@@ -56,6 +56,11 @@ export function chassisMetrics(perf: ChassisPerformance): Metric[] {
     val('scrub', t('Плече обкатки'), f.scrubM * 1000, mm, 0, 20),
     val('trail', t('Винос'), f.trailM * 1000, mm, 0, 20),
     val('kpi', t('Нахил осі повороту'), f.kpi * DEG, deg, 1, 5),
+    // A rear corner on ball joints has the same axis, though nothing steers it: its caster, inclination and scrub are
+    // controls of their own (NaN, and so silent, on every other rear axle).
+    val('scrubR', t('Плече обкатки ззаду'), r.scrubM * 1000, mm, 0, 20),
+    val('trailR', t('Винос ззаду'), r.trailM * 1000, mm, 0, 20),
+    val('kpiR', t('Нахил осі повороту ззаду'), r.kpi * DEG, deg, 1, 5),
     val('antiDive', t('Анти-клювання'), perf.anti.braking[0], share, 0, 20),
     val('antiLift', t('Анти-підйом ззаду на гальмах'), perf.anti.braking[1], share, 0, 20),
     val('antiLiftDrive', t('Анти-підйом спереду під газом'), perf.anti.drive[0], share, 0, 20),
