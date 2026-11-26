@@ -60,7 +60,8 @@ export function assessGearbox(perf: GearboxPerformance): GearboxReliability {
   const flank = perf.strength.reduce((w, g) => (g.contact > w.contact ? g : w), perf.strength[0]!);
   const flankMesh = flank.meshes.reduce((w, m) => (!w || m.contact > w.contact ? m : w), flank.meshes[0]);
   const teeth = (pair: [number, number] | undefined): string => (pair ? `${pair[0]}/${pair[1]}` : '—');
-  const hardest = perf.synchro.shifts.reduce((w, s) => (!w || s.load > w.load ? s : w), perf.synchro.shifts[0]);
+  const done = perf.synchro.shifts.filter((s) => !s.fails);
+  const hardest = done.reduce((w, s) => (!w || s.load > w.load ? s : w), done[0]);
   const c = perf.clutch;
   const items: GearboxLimit[] = [
     {
@@ -95,7 +96,7 @@ export function assessGearbox(perf: GearboxPerformance): GearboxReliability {
           from: hardest.from, to: hardest.to, energy: n2(hardest.energyJPerMm2), power: n2(hardest.powerWPerMm2), eLimit: n2(CONE_TEST_LIMITS.energyJPerMm2), pLimit: n2(CONE_TEST_LIMITS.powerWPerMm2),
         })
         : t('Синхронізаторів немає.'),
-      fix: t('Більше конусів, ближчі числа передач або латунь замість вуглецю.'),
+      fix: t('Більше конусів або ближчі числа передач.'),
       failure: t('Кільця синхронізатора стерлися: передачі вмикаються з хрускотом.'),
     },
     {
@@ -121,7 +122,12 @@ export function assessGearbox(perf: GearboxPerformance): GearboxReliability {
   let lifeText: string;
   if (verdict === 'solid') lifeText = t('Сотні тисяч кілометрів');
   else if (verdict === 'rated') lifeText = t('Як серійна коробка під свій розрахунковий момент');
-  else if (verdict === 'doomed') lifeText = worst.id === 'clutch' ? t('Зчеплення ковзає вже на піковому моменті') : t('Зламається за кілька десятків стартів');
+  else if (verdict === 'doomed') {
+    if (worst.id === 'clutch') lifeText = t('Зчеплення ковзає вже на піковому моменті');
+    else if (starts < 1.5) lifeText = t('Зламається з першого ж старту');
+    else if (starts < 10) lifeText = t('Зламається за кілька стартів');
+    else lifeText = t('Зламається за кілька десятків стартів');
+  }
   else if (Number.isFinite(starts)) lifeText = t('Близько {starts} стартів на повному газу', { starts: startsText(starts) });
   else lifeText = t('Швидко зношується: {part}', { part: worst.name.toLowerCase() });
   return { items, worst, verdict, verdictName: names[verdict], lifeText, starts, weakestGear: weakest.weakest ? weakest.gear : 0 };

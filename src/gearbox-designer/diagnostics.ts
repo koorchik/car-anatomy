@@ -47,14 +47,18 @@ export function diagnoseGearbox(d: GearboxDesign, perf: GearboxPerformance, rel:
   const weakest = perf.strength.find((g) => g.gear === rel.weakestGear);
   if (weakest && weakest.bending > 1 && weakest.weakest) {
     const starts = startsAt(weakest.bending);
+    const at = { teeth: pair(weakest.weakest.teeth), starts: startsText(starts), pct: n0(weakest.bending * 100) };
     add(
       'teeth-break',
       starts < FATAL_STARTS ? 'fatal' : 'warning',
       t('Зубці {gear}-ї передачі зламаються', { gear: weakest.gear }),
-      t('На повному газу пара {teeth} витримає близько {starts} стартів: корінь зубця навантажено на {pct}% від межі.', {
-        teeth: pair(weakest.weakest.teeth), starts: startsText(starts), pct: n0(weakest.bending * 100),
-      }),
-      t('Ширший зубець, грубіший модуль першої, більша міжосьова або коротша головна пара.'),
+      starts < 1.5
+        ? t('На повному газу пара {teeth} зламається з першого ж старту: корінь зубця навантажено на {pct}% від межі.', at)
+        : t('На повному газу пара {teeth} витримає близько {starts} стартів: корінь зубця навантажено на {pct}% від межі.', at),
+      // First gear and reverse have a module of their own (lowModule); the other gears share one.
+      weakest.gear === 1
+        ? t('Ширший зубець, грубіший модуль першої, більша міжосьова або менше число першої.')
+        : t('Ширший зубець, грубіший модуль передач або більша міжосьова.'),
     );
   }
   const flank = perf.strength.reduce((w, g) => (g.contact > w.contact ? g : w), perf.strength[0]!);
@@ -75,13 +79,19 @@ export function diagnoseGearbox(d: GearboxDesign, perf: GearboxPerformance, rel:
   if (up12 && up12.timeS > SLOW_SYNC_S) {
     add('sync-slow', 'warning', t('Синхронізатор 1→2 не встигає'), t('На межі обертів він вирівнює швидкості {ms} мс: рука водія чекає на важелі.', { ms: n0(up12.timeS * 1000) }), t('Більше конусів, матеріал із більшим тертям, менший кут конуса або сильніше на важіль.'));
   }
-  const hot = perf.synchro.shifts.filter((s) => s.load > 1);
+  const stuck = perf.synchro.shifts.filter((s) => s.fails);
+  if (stuck.length) {
+    add('sync-drag', 'warning', t('Синхронізатор не розкручує вал'), t('При перемиканні вниз {shifts} опір прокручування в коробці гальмує вхідний вал сильніше, ніж його тягне конус: без перегазовки передача не ввімкнеться.', {
+      shifts: stuck.map((s) => `${s.from}→${s.to}`).join(', '),
+    }), t('Більше конусів, менший кут конуса або сильніше на важіль.'));
+  }
+  const hot = perf.synchro.shifts.filter((s) => !s.fails && s.load > 1);
   if (hot.length) {
     const s = hot.reduce((w, x) => (x.load > w.load ? x : w), hot[0]!);
     add('sync-hot', 'warning', t('Синхронізатор перегрівається'), t('Перемикання {from}→{to} кладе на конус {energy} Дж/мм² і {power} Вт/мм²: більше, ніж витримують кільця на випробуваннях.', { from: s.from, to: s.to, energy: n2(s.energyJPerMm2), power: n2(s.powerWPerMm2) }), t('Більше конусів або ближчі числа передач.'));
   }
   if (perf.synchro.blocking < 1) {
-    add('sync-crunch', 'warning', t('Кільце не блокує муфту'), t('Фаски провертають кільце раніше, ніж швидкості зрівняються (запас блокування {margin}): передачі вмикаються з хрускотом.', { margin: n2(perf.synchro.blocking) }), t('Гостріший кут даху, менший кут конуса або матеріал із більшим тертям.'));
+    add('sync-crunch', 'warning', t('Кільце не блокує муфту'), t('Фаски провертають кільце раніше, ніж швидкості зрівняються (запас блокування {margin}): передачі вмикаються з хрускотом.', { margin: n2(perf.synchro.blocking) }), t('Тупіший кут даху, менший кут конуса або матеріал із більшим тертям.'));
   }
   if (perf.synchro.sticks) {
     add('sync-sticks', 'warning', t('Кільце прилипає до конуса'), t('Кут конуса замалий для такого тертя: після перемикання кільце не відходить і гальмує шестерню.'), t('Більший кут конуса.'));

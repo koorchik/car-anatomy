@@ -21,7 +21,6 @@ export const GEARBOX_DESIGNER_EN: Record<string, string> = {
   'Найважче перемикання {from}→{to}: {energy} Дж/мм² і {power} Вт/мм² на конусі проти {eLimit} і {pLimit} на випробуваннях.':
     'Hardest shift {from}→{to}: {energy} J/mm² and {power} W/mm² on the cone against {eLimit} and {pLimit} in testing.',
   'Синхронізаторів немає.': 'There are no synchronizers.',
-  'Більше конусів, ближчі числа передач або латунь замість вуглецю.': 'More cones, closer ratios or brass instead of carbon.',
   'Кільця синхронізатора стерлися: передачі вмикаються з хрускотом.': 'The synchronizer rings are worn out: the gears grind going in.',
   'Зчеплення': 'Clutch',
   'Тримає {capacity} Н·м при піковому моменті {torque} Н·м: запас {margin}.': 'Holds {capacity} N·m against a peak torque of {torque} N·m: a margin of {margin}.',
@@ -35,6 +34,8 @@ export const GEARBOX_DESIGNER_EN: Record<string, string> = {
   'Як серійна коробка під свій розрахунковий момент': 'Like a production transmission at its torque rating',
   'Зчеплення ковзає вже на піковому моменті': 'The clutch slips at the peak torque already',
   'Зламається за кілька десятків стартів': 'Breaks within a few dozen starts',
+  'Зламається за кілька стартів': 'Breaks within a few starts',
+  'Зламається з першого ж старту': 'Breaks on the very first start',
   'Близько {starts} стартів на повному газу': 'About {starts} full-throttle starts',
   'Швидко зношується: {part}': 'Wears out fast: {part}',
 
@@ -42,7 +43,10 @@ export const GEARBOX_DESIGNER_EN: Record<string, string> = {
   'Зубці {gear}-ї передачі зламаються': 'The teeth of gear {gear} will break',
   'На повному газу пара {teeth} витримає близько {starts} стартів: корінь зубця навантажено на {pct}% від межі.':
     'At full throttle pair {teeth} lasts about {starts} starts: the tooth root is loaded to {pct}% of its limit.',
-  'Ширший зубець, грубіший модуль першої, більша міжосьова або коротша головна пара.': 'A wider face, a coarser module on first, a larger center distance or a lower constant-mesh ratio.',
+  'Ширший зубець, грубіший модуль першої, більша міжосьова або менше число першої.': 'A wider face, a coarser module on first, a larger center distance or a lower first gear ratio.',
+  'Ширший зубець, грубіший модуль передач або більша міжосьова.': 'A wider face, a coarser gear module or a larger center distance.',
+  'На повному газу пара {teeth} зламається з першого ж старту: корінь зубця навантажено на {pct}% від межі.':
+    'At full throttle pair {teeth} breaks on the very first start: its tooth root is loaded to {pct}% of the limit.',
   'Поверхня зубців викришиться': 'The tooth flanks will pit',
   'У {gear}-й передачі тиск на робочій поверхні {pct}% від межі: з часом на ній з’являться раковини.':
     'In gear {gear} the flank pressure is {pct}% of the limit: in time pits will form on it.',
@@ -56,13 +60,17 @@ export const GEARBOX_DESIGNER_EN: Record<string, string> = {
   'На межі обертів він вирівнює швидкості {ms} мс: рука водія чекає на важелі.': 'At the rev limit it takes {ms} ms to match the speeds: the driver\'s hand waits on the lever.',
   'Більше конусів, матеріал із більшим тертям, менший кут конуса або сильніше на важіль.': 'More cones, a lining with more friction, a smaller cone angle or a firmer push on the lever.',
   'Синхронізатор перегрівається': 'The synchronizer overheats',
+  'Синхронізатор не розкручує вал': 'The synchronizer cannot spin the shaft up',
+  'При перемиканні вниз {shifts} опір прокручування в коробці гальмує вхідний вал сильніше, ніж його тягне конус: без перегазовки передача не ввімкнеться.':
+    'On the downshift {shifts} the transmission\'s spin loss holds the input shaft back harder than the cone pulls it up: the gear will not go in without a throttle blip.',
+  'Більше конусів, менший кут конуса або сильніше на важіль.': 'More cones, a smaller cone angle or a firmer push on the lever.',
   'Перемикання {from}→{to} кладе на конус {energy} Дж/мм² і {power} Вт/мм²: більше, ніж витримують кільця на випробуваннях.':
     'The {from}→{to} shift puts {energy} J/mm² and {power} W/mm² on the cone: more than rings take in testing.',
   'Більше конусів або ближчі числа передач.': 'More cones or closer ratios.',
   'Кільце не блокує муфту': 'The blocker ring does not hold the sleeve',
   'Фаски провертають кільце раніше, ніж швидкості зрівняються (запас блокування {margin}): передачі вмикаються з хрускотом.':
     'The chamfers turn the ring aside before the speeds match (blocking margin {margin}): the gears grind going in.',
-  'Гостріший кут даху, менший кут конуса або матеріал із більшим тертям.': 'A sharper roof angle, a smaller cone angle or a lining with more friction.',
+  'Тупіший кут даху, менший кут конуса або матеріал із більшим тертям.': 'A blunter roof angle, a smaller cone angle or a lining with more friction.',
   'Кільце прилипає до конуса': 'The ring sticks to the cone',
   'Кут конуса замалий для такого тертя: після перемикання кільце не відходить і гальмує шестерню.':
     'The cone angle is too small for this friction: after the shift the ring does not let go and drags the gear.',

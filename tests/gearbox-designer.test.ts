@@ -566,6 +566,26 @@ describe('6. directions', () => {
     expect(base.clutch.damperHz).toBeGreaterThan(base.clutch.idleFiringHz);
   });
 
+  it('a blunter chamfer roof blocks better: the sleeve turns the ring aside with less torque (UTS, eq. 5)', () => {
+    const blocking = (roofAngle: number) => evaluateGearbox(editGearboxDesign(own, { roofAngle })).synchro.blocking;
+    expect(blocking(130)).toBeGreaterThan(blocking(100));
+  });
+
+  it('a downshift whose spin loss beats the cone fails, is told so, and does not count as the ring\'s heat', () => {
+    // A weak push on a single shallow-wedged cone against the spin loss of a wet clutch.
+    const weak = editGearboxDesign(own, { shiftForceN: 200, coneAngle: 15, clutch: 'wet', cones: own.cones.map(() => 1) });
+    const e = evaluateGearbox(weak);
+    const failing = e.synchro.shifts.filter((s) => s.fails);
+    expect(failing.length).toBeGreaterThan(0);
+    for (const s of failing) expect(s.direction).toBe('down');
+    expect(Number.isFinite(e.synchro.load)).toBe(true);
+    const rel = assessGearbox(e);
+    expect(rel.items.find((i) => i.id === 'synchro')!.detail).not.toMatch(/∞|Infinity|NaN/);
+    const diagnoses = diagnoseGearbox(weak, e, rel);
+    expect(diagnoses.map((x) => x.id)).toContain('sync-drag');
+    expect(diagnoses.map((x) => x.text).join(' ')).not.toMatch(/∞|Infinity|NaN/);
+  });
+
   it('a bigger clutch holds more, and a harder launch heats the plate more', () => {
     const big = evaluateGearbox(editGearboxDesign(own, { clutchMm: own.clutchMm + 20 })).clutch;
     expect(big.margin).toBeGreaterThan(base.clutch.margin);

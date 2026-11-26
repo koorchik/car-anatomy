@@ -22,13 +22,18 @@ export interface SyncFigures {
   timeS: number;
   energyJPerMm2: number;
   powerWPerMm2: number;
-  /** The larger of work and power over the test limits. */
+  /** The larger of work and power over the test limits; Infinity when the shift fails. */
   load: number;
+  /**
+   * The cone cannot close the gap: on a downshift the box's spin loss holds the input back harder than the cone pulls
+   * it up (synchro-math.ts syncTime), so the sleeve only gets through with a blip of the throttle or by force.
+   */
+  fails: boolean;
 }
 
 export interface SynchroFigures {
   shifts: SyncFigures[];
-  /** The worst load of the shifts judged. */
+  /** The worst load of the shifts judged that complete; a failing shift is told apart (SyncFigures.fails). */
   load: number;
   /** T_C/T_I of the rings (synchro-math.ts blockingMargin): below 1 the sleeve gets through early. */
   blocking: number;
@@ -93,7 +98,9 @@ export function synchroFigures(
     if (!s) return;
     const per = perConeArea(s.def, s.c);
     const load = Math.max(per.energyJPerMm2 / CONE_TEST_LIMITS.energyJPerMm2, per.powerWPerMm2 / CONE_TEST_LIMITS.powerWPerMm2);
-    shifts.push({ from, to, direction: s.c.direction, rpm: (omega * 30) / Math.PI, timeS: syncTime(s.c), ...per, load });
+    const timeS = syncTime(s.c);
+    const fails = !Number.isFinite(timeS);
+    shifts.push({ from, to, direction: s.c.direction, rpm: (omega * 30) / Math.PI, timeS, ...per, load: fails ? Infinity : load, fails });
   };
   for (let k = 1; k <= Math.min(2, overall.length - 1); k++) {
     judge(k, k + 1, shiftOmegas[k - 1]!);
@@ -103,7 +110,7 @@ export function synchroFigures(
   const defs = box.spec.elements.flatMap((e) => (e.synchro ? [e.synchro] : []));
   return {
     shifts,
-    load: Math.max(0, ...shifts.map((s) => s.load)),
+    load: Math.max(0, ...shifts.filter((s) => !s.fails).map((s) => s.load)),
     blocking: defs.length ? Math.min(...defs.map(blockingMargin)) : Infinity,
     sticks: defs.some(selfLocking),
   };
