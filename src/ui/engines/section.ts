@@ -496,7 +496,8 @@ export class EnginesSection implements Section {
       shake: demo ? 0 : this.shake,
       valves: demo ? undefined : snap.valves,
     });
-    balance?.frame(theta, demo ? spec.idleRpm : snap.rpm);
+    // The card's figure is for the speed "now": the one the tachometer shows, 0 before the first start.
+    balance?.frame(theta, snap.rpm);
     // The systems are worked out at idle in the demo and in slow motion: at 40 rpm oil would barely flow at all.
     const slowed = !lap && (demo || time.mode === 'slow');
     const systemsRpm = lap ? lap.rpm : slowed && shownRunning ? spec.idleRpm : snap.rpm;

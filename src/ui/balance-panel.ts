@@ -117,6 +117,8 @@ export class BalancePanel {
   private on = false;
   /** The card is redrawn with each engine and set of layers, and must not fold the note back up. */
   private noteOpen = false;
+  /** Speed of the last frame, and the one the figures were last written for. */
+  private rpm = 0;
   private shownRpm = -1;
   private lastText = 0;
 
@@ -304,11 +306,11 @@ export class BalancePanel {
 
   /** Every frame: the crank angle on screen and the speed the figures are for. */
   frame(theta: number, rpm: number): void {
+    this.rpm = rpm;
     if (!this.on || !this.overlay) return;
     this.overlay.update(theta);
     const now = performance.now();
     if (Math.abs(rpm - this.shownRpm) > Math.max(1, rpm * 0.01) && now - this.lastText > 250) {
-      this.shownRpm = rpm;
       this.lastText = now;
       this.updateNow();
     }
@@ -319,7 +321,9 @@ export class BalancePanel {
     const view = this.currentView();
     const line = this.card.querySelector('.forces-line-text');
     if (!view || !this.engine || !line) return;
-    const rpm = Math.max(0, this.shownRpm);
+    // The card may be drawn before the first frame with it on: the speed of the last frame is already known.
+    const rpm = Math.max(0, this.rpm);
+    this.shownRpm = rpm;
     const limit = this.engine.spec.redlineRpm;
     const force = view.force.locus.major;
     const couple = view.couple.locus.major;
