@@ -1,8 +1,9 @@
-// The gearbox designer's model up to strength (gearbox plan, the designer's model; stage K9a): ratios, steps and
-// range, traction of every gear against the road load, v_max and its gear, revs at 100 and 120 km/h in top, the drop
-// on every upshift and whether the engine stays in its power band, the steepest grade first gear pulls away on, and
-// the standing start to 100 km/h and over 400 m with the synchroniser's time on every shift, and each gear's
-// efficiency. Strength, the synchronisers' heat, the clutch, sound and mass come with stage K9b.
+// The gearbox designer's model (gearbox plan, the designer's model): ratios, steps and range, traction of every gear
+// against the road load, v_max and its gear, revs at 100 and 120 km/h in top, the drop on every upshift and whether
+// the engine stays in its power band, the steepest grade first gear pulls away on, and the standing start to 100 km/h
+// and over 400 m with the synchroniser's time on every shift, and each gear's efficiency (stage K9a); the teeth's
+// strength (strength.ts), the synchronisers' hard shifts (synchro.ts), the clutch and damper (clutch.ts), the mesh
+// tones (mesh-sound.ts) and the mass (mass.ts) (stage K9b).
 //
 // Quasi-static: the sensitivity checks run the model twice per control, and the plan wants it inside 15 ms on the
 // heaviest box (tests/gearbox-designer 7), where the whole core would need about 20 000 steps. The standing start
@@ -19,7 +20,6 @@
 // - the clutch: at the launch it passes no more than its kinetic capacity.
 // On a catalogue car both agree with the whole model within 3 % (tests/drivetrain-vehicle 7).
 
-import { coneTorque, syncTime } from '../drivetrain/synchro-math.ts';
 import { DISC_HUB } from '../drivetrain/elements.ts';
 import { speedRatio } from '../drivetrain/layouts/transaxle.ts';
 import { RUN } from '../drivetrain/runs.ts';
@@ -29,7 +29,12 @@ import { G } from '../vehicle/constants.ts';
 import { roadLoadN } from '../vehicle/road-load.ts';
 import { longitudinalPeakN, mfEval, newMfForces } from '../vehicle/tyre.ts';
 import type { MfSet } from '../vehicle/tyre-data.ts';
+import { clutchFigures, type ClutchFigures } from './clutch.ts';
 import type { GearboxDesign } from './design.ts';
+import { gearboxMass, type MassFigures } from './mass.ts';
+import { gearTones, type GearTones } from './mesh-sound.ts';
+import { gearboxStrength, type GearStrength } from './strength.ts';
+import { shiftTime, synchroFigures, type SynchroFigures } from './synchro.ts';
 import { designBuild, type DesignTeeth } from './to-spec.ts';
 import type { PickedPair } from './teeth.ts';
 import { clutchKineticNm, designVehicle, type DesignVehicle } from './vehicle.ts';
@@ -106,6 +111,14 @@ export interface GearboxPerformance {
   /** Inertia that changes speed with the input shaft while the clutch is open, kg·m². */
   inputInertia: number;
   traction: TractionCurves;
+  /** The engine's peak torque at the input, N·m: what the teeth are judged at. */
+  peakTorqueNm: number;
+  /** Per forward gear. */
+  strength: GearStrength[];
+  synchro: SynchroFigures;
+  clutch: ClutchFigures;
+  tones: GearTones[];
+  mass: MassFigures;
 }
 
 /** A forward gear as the quasi-static model drives it. */
@@ -275,39 +288,12 @@ function buildModel(d: GearboxDesign): Model {
   const shiftOmegas: number[] = [];
   for (let k = 0; k + 1 < gears.length; k++) {
     const omega = upshiftOmega(v, gears[k]!, gears[k + 1]!);
-    const t = upshiftSync(d, box, k + 2, gears[k]!.overall, gears[k + 1]!.overall, omega, inputInertia, v);
+    const t = shiftTime(d, box, k + 2, gears[k]!.overall, gears[k + 1]!.overall, omega, inputInertia, v);
     shiftOmegas.push(omega);
     syncs.push(t);
     pauses.push(Math.max(RUN.shiftS, t));
   }
   return { v, box, teeth, gears, states, mBody, omegaLaunch, omegaLimit, shiftOmegas, pauses, syncs, inputInertia };
-}
-
-/**
- * Synchronising time of gear `to` on an upshift at input speed omegaIn (synchro-math.ts): the input side slows by
- * ω_wheel·(N_from − N_to), the cone works on it through the ratio between the input and the side of the synchroniser
- * that turns with it, and the spin loss at the mean input speed helps.
- */
-function upshiftSync(d: GearboxDesign, box: Gearbox, to: number, nFrom: number, nTo: number, omegaIn: number, inputInertia: number, v: DesignVehicle): number {
-  const element = box.spec.elements.find((e) => e.id === `sync-${to}`);
-  if (!element || !element.synchro) return 0;
-  const col = box.basis.indexOf(box.spec.input);
-  const speedOf = (member: string | null): number => (member === null ? 0 : box.P[box.members.indexOf(member)]![col]!);
-  const sa = Math.abs(speedOf(element.a));
-  const sb = Math.abs(speedOf(element.b));
-  const side = Math.max(sa, sb);
-  if (!(side > 0)) return 0;
-  const wheel = omegaIn / nFrom;
-  const change = wheel * Math.abs(nFrom - nTo);
-  const after = wheel * nTo;
-  return syncTime({
-    inputInertia,
-    inputSpeedChange: change,
-    ratio: 1 / side,
-    coneNm: coneTorque(element.synchro, d.shiftForceN),
-    dragNm: spin(v, (omegaIn + after) / 2),
-    direction: 'up',
-  });
 }
 
 /** Force per unit slip of the driven tyres at rest on the level, N: at road-load forces the slip is linear in the force. */
@@ -575,5 +561,11 @@ export function evaluateGearbox(d: GearboxDesign): GearboxPerformance {
     powerBand: band,
     inputInertia: m.inputInertia,
     traction: traction(m, top.v),
+    peakTorqueNm: peakNm,
+    strength: gearboxStrength(box, d.gears, peakNm),
+    synchro: synchroFigures(d, box, m.gears.map((g) => g.overall), m.shiftOmegas, m.omegaLimit, m.inputInertia, v),
+    clutch: clutchFigures(d, v, m.gears[0]!, m.inputInertia, v.firingPerRev),
+    tones: gearTones(box, d.gears),
+    mass: gearboxMass(d, box.spec),
   };
 }
