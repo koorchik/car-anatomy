@@ -152,11 +152,15 @@ export class GearboxSection implements Section {
 
   enter(route: Route, from: Route | null): void {
     if (this.away) this.resume();
-    const id = this.pageId(route);
+    let id = this.pageId(route);
     if (!id) {
-      // An address of a page not built yet, or of none: the first page, with the address saying so.
-      this.ctx.router.replace({ section: 'gearboxes', page: 'catalogue', path: [GEARBOX_PAGES_SHOWN[0]!] });
-    } else if (id !== this.data.record.id) {
+      // An address of a page not built yet, or of none: the first page, with the address saying so; an unknown
+      // variant of a page shown: that page. The address is only rewritten, so the page shown follows here.
+      const page = route.page === 'catalogue' && route.path[0] ? this.pageId({ ...route, path: [route.path[0]] }) : null;
+      id = page ?? GEARBOX_PAGES_SHOWN[0]!;
+      this.ctx.router.replace({ section: 'gearboxes', page: 'catalogue', path: [id] });
+    }
+    if (id !== this.data.record.id) {
       this.data = this.pageData(id);
       // Another car of the page or another page: its own engine turns the box, running on if it ran.
       this.drive.setEngine(this.data.engine);
