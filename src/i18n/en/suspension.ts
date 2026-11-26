@@ -379,6 +379,31 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Авто з цією підвіскою': 'Cars with this suspension',
   'Подвійні поперечні важелі': 'Double wishbone',
   'Багаторичажна підвіска': 'Multi-link suspension',
+  'Поздовжні важелі': 'Trailing arms',
+  'Косі важелі': 'Semi-trailing arms',
+  'Хитний міст': 'Swing axle',
+  'Поздовжній важіль': 'Trailing arm',
+  'Важіль, що тягнеться від кузова назад до колеса й хитається на осі поперек авто. Колесо ходить по дузі в площині, паралельній боку авто, тож розвал відносно кузова не змінюється, а на крені колесо нахиляється разом із кузовом.':
+    'An arm that reaches back from the body to the wheel and swings on an axis across the car. The wheel moves on an arc in a plane parallel to the side of the car, so its camber relative to the body does not change, and in roll the wheel leans with the body.',
+  'Косий важіль': 'Semi-trailing arm',
+  'Трикутний важіль, вісь хитання якого повернута в плані на кут між поперечною й поздовжньою. На ході колесо набирає від’ємний розвал і трохи сходження, а піввісь мусить змінювати довжину, тож на ній два шарніри з осьовим ходом.':
+    'A triangular arm whose pivot axis is turned in plan to an angle between transverse and longitudinal. Over the travel the wheel gains negative camber and a little toe-in, and the halfshaft has to change length, so it has two joints with plunge.',
+  'Труба з піввіссю всередині, що хитається на шарнірі біля диференціала, і поздовжня тяга, яка тримає її від повороту. Колесо завжди перпендикулярне до піввісі, тому розвал змінюється сильно, а центр крену стоїть високо.':
+    'A tube with the halfshaft inside that swings on a joint by the differential, and a radius rod that keeps it from turning. The wheel is always square to the halfshaft, so camber changes a lot and the roll center stands high.',
+  'Маточина на важелі': 'Hub on the arm',
+  'Корпус підшипника маточини, жорстко прикручений до важеля або відлитий разом із ним. Окремих шарнірів між ними немає, тож колесо разом із важелем лише хитається навколо осі через два сайлентблоки.':
+    'The housing of the hub bearing, bolted rigidly to the arm or cast in one piece with it. There are no joints between them, so the wheel and the arm only swing together about the axis through two bushings.',
+  'Сидить на кінці піввісі в трубі хитного моста. Шарніра біля колеса немає, тому колесо завжди перпендикулярне до піввісі й нахиляється разом із нею.':
+    'Sits at the end of the halfshaft in the swing axle’s tube. There is no joint at the wheel, so the wheel is always square to the halfshaft and leans with it.',
+  'Кут осі хитання': 'Pivot axis angle',
+  'Підйом кузова від 1 кН бічної сили': 'Body lift from 1 kN of side force',
+  'Шарнір піввісі: кут': 'Halfshaft joint: angle',
+  '{value} Н': '{value} N',
+  'Задня підвіска передньопривідного авто · вісь хитання поперек авто · типова геометрія': 'Rear suspension of a front-wheel-drive car · pivot axis across the car · typical geometry',
+  'Задня підвіска задньопривідного авто · вісь хитання під кутом · типова геометрія': 'Rear suspension of a rear-wheel-drive car · pivot axis at an angle · typical geometry',
+  'Задня підвіска авто з двигуном ззаду · вісь хитання вздовж авто · типова геометрія': 'Rear suspension of a rear-engined car · pivot axis along the car · typical geometry',
+  '{layout}. Центр крену в спокої {rc} мм, вісь хитання на висоті {pivot} мм. 0° — вісь поперек авто, 90° — уздовж.':
+    '{layout}. Roll center at rest {rc} mm, pivot axis {pivot} mm up. 0°: the axis across the car, 90°: along it.',
   'Передня підвіска задньопривідного авто · типова геометрія': 'Front suspension of a rear-wheel-drive car · typical geometry',
   'Задня підвіска задньопривідного авто · п’ять тяг · типова геометрія': 'Rear suspension of a rear-wheel-drive car · five links · typical geometry',
   'Передня підвіска': 'Front suspension',
@@ -394,6 +419,9 @@ export const SUSPENSION_EN: Record<string, string> = {
   'опис підвіски': 'the description of the suspension',
   'плече осі повороту кулака': 'the knuckle’s kingpin offset',
   'нахил осі повороту кулака': 'the knuckle’s steering axis inclination',
+  'тип передньої підвіски': 'the front suspension type',
+  'передній стабілізатор': 'the front anti-roll bar',
+  'задній стабілізатор': 'the rear anti-roll bar',
   'Двигун цього авто': 'This car’s engine',
   'Точки кріплення важелів — типова геометрія цієї компоновки, поставлена на колію й шини авто: виробники їх не публікують. Пружини, амортизатори й стабілізатори теж типові.': 'The hardpoints are this layout’s typical geometry set on the car’s track and tires: makers do not publish them. The springs, shocks and sway bars are typical too.',
   'Не звірено: {list}.': 'Not verified: {list}.',

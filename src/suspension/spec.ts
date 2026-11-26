@@ -75,6 +75,11 @@ export type CornerLinkage = {
    * the lines of two named rods come closest. The pivots move with the links, as on the car.
    */
   virtualAxis?: { lower: readonly [string, string]; upper: readonly [string, string] };
+  /**
+   * A single pivot arm written as links (pivot-links.ts): the wishbone `arm` is the arm itself, rigid with the knuckle,
+   * and the links in `hidden` only hold the knuckle to the arm's axis. The 3D draws the arm alone.
+   */
+  rigidArm?: { arm: string; hidden: readonly string[] };
 };
 
 /**

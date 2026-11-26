@@ -48,9 +48,12 @@ function elements(input: FrontViewInput): { links: Array<[P, P, string]>; lower:
   const body = (b: Vec3): P => [b[1], b[2]];
   const mid = (a: P, b: P): P => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
   const links: Array<[P, P, string]> = [];
-  const arms = link.wishbones.map((w) => ({ inner: mid(body(w.front), body(w.rear)), outer: knuckle(w.ball), z: w.ball[2] }));
+  // A single pivot arm (rigidArm): the links that only hold it to its axis are not drawn, and its instant centre lies on
+  // the axis, not where two element lines meet, so it gets no construction lines.
+  const hidden = new Set(link.rigidArm?.hidden ?? []);
+  const arms = link.wishbones.filter((w) => !hidden.has(w.id)).map((w) => ({ inner: mid(body(w.front), body(w.rear)), outer: knuckle(w.ball), z: w.ball[2] }));
   for (const a of arms) links.push([a.inner, a.outer, 'arm']);
-  for (const r of link.rods) {
+  for (const r of link.rods.filter((r) => !hidden.has(r.id))) {
     const b: P = [r.body[1] + (r.steer ? rack : 0), r.body[2]];
     links.push([b, knuckle(r.knuckle), r.steer || r.id === 'toe-link' ? 'tie' : 'rod']);
   }
@@ -59,6 +62,7 @@ function elements(input: FrontViewInput): { links: Array<[P, P, string]>; lower:
   const sorted = [...arms].sort((a, b) => a.z - b.z);
   if (sorted[0]) lower = [sorted[0].inner, sorted[0].outer];
   if (sorted[1]) upper = [sorted[1].inner, sorted[1].outer];
+  if (link.rigidArm) lower = null;
   if (link.strut) {
     const shift = link.strut.topShift ?? [0, 0, 0];
     const top: P = [link.strut.top[1] + shift[1], link.strut.top[2] + shift[2]];

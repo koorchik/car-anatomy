@@ -22,7 +22,7 @@ import { merge } from '../geometry.ts';
 import { G } from '../../suspension/forces.ts';
 import { rotateQuatBy } from '../../suspension/vec.ts';
 import { KnuckleStatics } from '../../suspension/knuckle-statics.ts';
-import type { Axle } from '../../suspension/kinematics.ts';
+import { newCornerSample, type Axle } from '../../suspension/kinematics.ts';
 import type { QuarterOut } from '../../suspension/quarter.ts';
 import type { RoadProfile } from '../../suspension/road.ts';
 import type { ResolvedCorner } from '../../suspension/setup.ts';
@@ -47,6 +47,12 @@ import { ROAD_SAMPLES, roadPressUniforms, type RoadPressUniforms } from './tyre-
 import { caliperGeometry, discGeometry, wheelGeometry } from './wheel-geometry.ts';
 
 export { DRAWING, springWireM } from './drawing.ts';
+
+/**
+ * The sideways force the jacking arrows of a single pivot arm show, as a share of the tyre's load: a turn at about 0.6 g,
+ * where NHTSA's 1972 report put the early Corvair's limit of control. An illustration, not a run of the car.
+ */
+export const JACKING_SHARE = 0.6;
 export type { DrawnLink } from './link-builder.ts';
 
 /** What the corner shows this frame. Lengths in metres, forces in newtons along their elements (QuarterOut). */
@@ -231,8 +237,12 @@ export class CornerModel implements SceneModel<CornerFrame> {
   private readonly subframe: THREE.Mesh | null;
   /** The part keys' space (CornerModelOptions.partSpace). */
   private readonly space: string | undefined;
+  /** Links of a single pivot arm that only hold it to its axis (never drawn), and the arm itself, rigid with the hub. */
+  private readonly hiddenLinks: ReadonlySet<string>;
+  private readonly rigidArm: string | null;
 
   // Scratch, so update() allocates nothing.
+  private readonly jackSample = newCornerSample();
   private readonly v1 = new THREE.Vector3();
   private readonly v2 = new THREE.Vector3();
   private readonly v3 = new THREE.Vector3();
@@ -293,8 +303,15 @@ export class CornerModel implements SceneModel<CornerFrame> {
     this.linkSet = new LinkSet(link, rodLengths, this.c0.y, m);
     this.links = this.linkSet.drawn;
     this.body.add(this.linkSet.group);
-    for (const arm of this.linkSet.arms) this.solidOnly.push(arm.arm, arm.bushes, arm.joint);
-    for (const rod of this.linkSet.rods) this.solidOnly.push(rod.mesh);
+    // A single pivot arm (rigidArm): the links that only hold it to its axis stay hidden, and the arm has no ball joint.
+    this.hiddenLinks = new Set(link.rigidArm?.hidden ?? []);
+    this.rigidArm = link.rigidArm?.arm ?? null;
+    for (const arm of this.linkSet.arms) {
+      if (this.hiddenLinks.has(arm.spec.id)) continue;
+      this.solidOnly.push(arm.arm, arm.bushes);
+      if (arm.spec.id !== this.rigidArm) this.solidOnly.push(arm.joint);
+    }
+    for (const rod of this.linkSet.rods) if (!this.hiddenLinks.has(rod.spec.id)) this.solidOnly.push(rod.mesh);
     if (this.linkSet.bushes) this.solidOnly.push(this.linkSet.bushes);
     this.seatForce = [...this.linkSet.arms, ...this.linkSet.rods].map(() => new THREE.Vector3());
     this.steerRod = this.linkSet.rods.find((r) => r.tie) ?? null;
@@ -477,8 +494,8 @@ export class CornerModel implements SceneModel<CornerFrame> {
         axisTop = this.top0.y;
       } else {
         const holds: Hold[] = [
-          ...this.linkSet.arms.map((a): Hold => ({ at: a.ball0, kind: 'ball' })),
-          ...this.linkSet.rods.map((r): Hold => ({ at: r.knuckle0, kind: r.tie ? 'steer' : 'link' })),
+          ...this.linkSet.arms.filter((a) => !this.hiddenLinks.has(a.spec.id)).map((a): Hold => ({ at: a.ball0, kind: a.spec.id === this.rigidArm ? 'link' : 'ball' })),
+          ...this.linkSet.rods.filter((r) => !this.hiddenLinks.has(r.spec.id)).map((r): Hold => ({ at: r.knuckle0, kind: r.tie ? 'steer' : 'link' })),
         ];
         axisTop = Math.max(...holds.map((h) => h.at.y));
         if (this.unitSeat.kind === 'knuckle') holds.push({ at: this.unitSeat.at, kind: 'link' });
@@ -562,7 +579,8 @@ export class CornerModel implements SceneModel<CornerFrame> {
     }
 
     // ---- Halfshaft ----
-    if (spec.halfshaft) {
+    // A swing axle's shaft has no outer joint: it is the arm, drawn as the arm's tube from its joint to the hub.
+    if (spec.halfshaft && spec.halfshaft.outer !== 'none') {
       const outerLocal = toScene(spec.halfshaft.outerJoint).sub(this.c0);
       // In the hub frame: along the spin axis, so the design spin axis is local +X.
       const outerInHub = new THREE.Vector3(outerLocal.dot(this.spinAxis0), 0, 0);
@@ -581,7 +599,7 @@ export class CornerModel implements SceneModel<CornerFrame> {
     const tyreHalf = (resolved.tyre.widthM / 2) * 10;
     this.road = new RoadStrip(m.road, spec.wheelCentre[0], this.c0.x - tyreHalf - 2.2, this.c0.x + tyreHalf + 1.6);
     if (options.road !== false) this.group.add(this.road.mesh);
-    this.forces = new ForceArrows(this.linkSet.arms.length + this.linkSet.rods.length);
+    this.forces = new ForceArrows(this.linkSet.arms.length + this.linkSet.rods.length, this.rigidArm !== null);
     this.body.add(this.forces.group, this.laser.group);
     this.schematicPoints = this.schematicLayout(!!strut);
     this.schematic = new CornerSchematic(m, this.schematicPoints);
@@ -627,11 +645,14 @@ export class CornerModel implements SceneModel<CornerFrame> {
     const bars: SchematicPoints['bars'] = [];
     for (const arm of this.linkSet.arms) {
       const link = arm.spec.id;
-      joints.push({ at: arm.front, part: 'susp.bush', link }, { at: arm.rear, part: 'susp.bush', link }, { at: arm.ball, part: 'susp.ball-joint', link });
+      if (this.hiddenLinks.has(link)) continue;
+      joints.push({ at: arm.front, part: 'susp.bush', link }, { at: arm.rear, part: 'susp.bush', link });
+      if (link !== this.rigidArm) joints.push({ at: arm.ball, part: 'susp.ball-joint', link });
       bars.push({ a: arm.front, b: arm.ball, part: arm.spec.part, link }, { a: arm.rear, b: arm.ball, part: arm.spec.part, link });
     }
     for (const rod of this.linkSet.rods) {
       const link = rod.spec.id;
+      if (this.hiddenLinks.has(link)) continue;
       joints.push({ at: rod.bodyEnd, part: rod.tie ? 'susp.rack' : 'susp.bush', link }, { at: rod.knuckleEnd, part: rod.spec.part, link });
       bars.push({ a: rod.bodyEnd, b: rod.knuckleEnd, part: rod.spec.part, link });
     }
@@ -645,7 +666,7 @@ export class CornerModel implements SceneModel<CornerFrame> {
     return {
       joints,
       bars,
-      bushAxes: this.linkSet.arms.map((a): [THREE.Vector3, THREE.Vector3] => [a.front, a.rear]),
+      bushAxes: this.linkSet.arms.filter((a) => !this.hiddenLinks.has(a.spec.id)).map((a): [THREE.Vector3, THREE.Vector3] => [a.front, a.rear]),
       steer: { top: this.steerTop, road: this.steerRoad, shown: false },
       wheelCentre: this.wheelCentre,
       axis: this.axis,
@@ -690,8 +711,8 @@ export class CornerModel implements SceneModel<CornerFrame> {
    */
   setLinksRemoved(ids: readonly string[]): void {
     const gone = new Set(ids);
-    for (const arm of this.linkSet.arms) arm.object.visible = !gone.has(arm.spec.id);
-    for (const rod of this.linkSet.rods) rod.object.visible = !gone.has(rod.spec.id);
+    for (const arm of this.linkSet.arms) arm.object.visible = !gone.has(arm.spec.id) && !this.hiddenLinks.has(arm.spec.id);
+    for (const rod of this.linkSet.rods) rod.object.visible = !gone.has(rod.spec.id) && !this.hiddenLinks.has(rod.spec.id);
     for (const entry of [...this.schematicPoints.joints, ...this.schematicPoints.bars]) entry.hidden = entry.link !== undefined && gone.has(entry.link);
     this.update(this.frame);
   }
@@ -1048,6 +1069,11 @@ export class CornerModel implements SceneModel<CornerFrame> {
     else arrows.hide('stop');
     const weight = this.resolved.unsprungKg * G;
     arrows.set('weight', this.wheelCentre, v.set(0, -weight, 0));
+    // A single pivot arm's jacking: the tyre in a turn at JACKING_SHARE of its load sideways, and the lift it gives.
+    if (this.rigidArm !== null) {
+      this.axle.measure(this.pose, f.travel, f.rack, this.jackSample);
+      arrows.setJacking(this.contact, JACKING_SHARE * Math.max(0, f.tyreN), this.jackSample.tanBeta);
+    }
 
     // Statics of the knuckle under those forces, in the ISO body frame, metres: ISO (x, y, z) = scene (z, x, y)/10.
     const s = this.statics;
@@ -1075,8 +1101,19 @@ export class CornerModel implements SceneModel<CornerFrame> {
     // Rows: two per wishbone, then one per rod, then the strut's two (CornerSolver's order).
     const { arms, rods } = this.linkSet;
     const nW = arms.length;
-    for (let i = 0; i < nW; i++) arrows.setLink(i, arms[i]!.ball, this.rowSum(2 * i, 2 * i + 2, this.forceB).add(this.seatForce[i]!));
-    for (let j = 0; j < rods.length; j++) arrows.setLink(nW + j, rods[j]!.knuckleEnd, this.rowSum(2 * nW + j, 2 * nW + j + 1, this.forceB).add(this.seatForce[nW + j]!));
+    let rigidAt = -1;
+    for (let i = 0; i < nW; i++) {
+      const id = arms[i]!.spec.id;
+      if (id === this.rigidArm) rigidAt = i;
+      if (this.hiddenLinks.has(id)) arrows.hideLink(i);
+      else arrows.setLink(i, arms[i]!.ball, this.rowSum(2 * i, 2 * i + 2, this.forceB).add(this.seatForce[i]!));
+    }
+    for (let j = 0; j < rods.length; j++) {
+      if (this.hiddenLinks.has(rods[j]!.spec.id)) arrows.hideLink(nW + j);
+      else arrows.setLink(nW + j, rods[j]!.knuckleEnd, this.rowSum(2 * nW + j, 2 * nW + j + 1, this.forceB).add(this.seatForce[nW + j]!));
+    }
+    // A single pivot arm: what its holding links carry is the arm's too, so the arm's arrow shows the sum of every row.
+    if (rigidAt >= 0) arrows.setLink(rigidAt, arms[rigidAt]!.ball, this.rowSum(0, 2 * nW + rods.length, this.forceB).add(this.seatForce[rigidAt]!));
     if (unit.size.strut) {
       const n = s.solver.distanceRows;
       arrows.set('strutTop', this.top, this.rowSum(n, n + 2, this.forceB));

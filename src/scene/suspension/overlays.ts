@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { numberLocale } from '../../i18n/locale.ts';
 import { Arrows, arrowHeadGeometry, arrowShaftGeometry, ON_TOP, outOfFrame, overlayMaterial } from '../arrows.ts';
 import { MEASURE, OVERLAY_WHITE, SUSPENSION_FORCE } from '../palette.ts';
+import { jackingLift } from '../../suspension/travel-curves.ts';
 import { ToeLabel, writeToeLines } from './toe-laser.ts';
 
 /** Scene units per newton: 1 kN = 40 mm (suspensions plan, 3D overlays). */
@@ -42,11 +43,21 @@ export class ForceArrows {
   private readonly material = overlayMaterial(OVERLAY_WHITE);
 
   readonly links: number;
+  /** Index of the jacking pair (the tyre's sideways force and the body's lift), or -1 on a corner without it. */
+  private readonly jackAt: number;
 
-  /** `links`: how many links hold the knuckle, one arrow each. */
-  constructor(links: number) {
+  /**
+   * `links`: how many links hold the knuckle, one arrow each. `jacking`: two more arrows after them for a single pivot
+   * arm's body lift (setJacking), in the same two draw calls.
+   */
+  constructor(links: number, jacking = false) {
     this.links = links;
-    const colors = [...FORCE_ARROWS.map((k) => COLOR_OF[k]), ...Array.from({ length: links }, () => FORCE_COLORS.links)];
+    this.jackAt = jacking ? FORCE_ARROWS.length + links : -1;
+    const colors = [
+      ...FORCE_ARROWS.map((k) => COLOR_OF[k]),
+      ...Array.from({ length: links }, () => FORCE_COLORS.links),
+      ...(jacking ? [FORCE_COLORS.tyre, FORCE_COLORS.links] : []),
+    ];
     this.arrows = new Arrows(this.shaftGeo, this.headGeo, this.material, colors, colors.map(() => ARROW_WIDTH));
     this.group.add(this.arrows.shafts, this.arrows.heads);
     for (let i = 0; i < colors.length; i++) this.arrows.hide(i);
@@ -72,8 +83,33 @@ export class ForceArrows {
     this.arrows.hide(FORCE_ARROWS.indexOf(which));
   }
 
+  /** Hides the arrow of link `i` (one the drawing leaves out). */
+  hideLink(i: number): void {
+    this.arrows.hide(FORCE_ARROWS.length + i);
+  }
+
   hideLinks(): void {
     for (let i = 0; i < this.links; i++) this.arrows.hide(FORCE_ARROWS.length + i);
+  }
+
+  /**
+   * The jacking of a single pivot arm (suspensions plan, stage 5): a sideways force `lateralN` on the tyre at `contact`
+   * (scene), toward the middle of the car, and the lift `lateralN·tanβ` it gives the body, drawn where the force line
+   * from the patch crosses the car's centre line, at the roll centre. A lift under 1 N (a trailing arm) is not drawn.
+   */
+  setJacking(contact: THREE.Vector3, lateralN: number, tanBeta: number): void {
+    if (this.jackAt < 0) return;
+    const s = FORCE_SCALE;
+    this.arrows.set(this.jackAt, contact.x, contact.y, contact.z, -lateralN * s, 0, 0);
+    const lift = jackingLift(lateralN, tanBeta);
+    if (Math.abs(lift) < 1) this.arrows.hide(this.jackAt + 1);
+    else this.arrows.set(this.jackAt + 1, 0, contact.y + contact.x * tanBeta, contact.z, 0, lift * s, 0);
+  }
+
+  hideJacking(): void {
+    if (this.jackAt < 0) return;
+    this.arrows.hide(this.jackAt);
+    this.arrows.hide(this.jackAt + 1);
   }
 
   commit(): void {

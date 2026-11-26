@@ -22,6 +22,18 @@ export const SUSPENSION_PARTS: Record<string, PartInfo> = {
     name: t('Кульова опора'),
     text: t('Шарнір між важелем і кулаком: кулька в обоймі дає кулаку і хитатися разом із важелем, і повертатися з кермом. Разом із верхньою опорою стійки вона задає вісь повороту колеса.'),
   },
+  'susp.trailing-arm': {
+    name: t('Поздовжній важіль'),
+    text: t('Важіль, що тягнеться від кузова назад до колеса й хитається на осі поперек авто. Колесо ходить по дузі в площині, паралельній боку авто, тож розвал відносно кузова не змінюється, а на крені колесо нахиляється разом із кузовом.'),
+  },
+  'susp.semi-trailing-arm': {
+    name: t('Косий важіль'),
+    text: t('Трикутний важіль, вісь хитання якого повернута в плані на кут між поперечною й поздовжньою. На ході колесо набирає від’ємний розвал і трохи сходження, а піввісь мусить змінювати довжину, тож на ній два шарніри з осьовим ходом.'),
+  },
+  'susp.swing-axle': {
+    name: t('Хитний міст'),
+    text: t('Труба з піввіссю всередині, що хитається на шарнірі біля диференціала, і поздовжня тяга, яка тримає її від повороту. Колесо завжди перпендикулярне до піввісі, тому розвал змінюється сильно, а центр крену стоїть високо.'),
+  },
   'susp.strut': {
     name: t('Стійка'),
     text: t('Корпус амортизатора, жорстко з’єднаний з кулаком. У підвісці Макферсона він сам працює ланкою: його вісь тримає верх кулака, тому шток згинають бічні сили від колеса.'),
@@ -175,6 +187,22 @@ const ON_LINKS_UNSTEERED: Record<string, PartInfo> = {
   'susp.lower-link': {
     name: t('Нижня тяга'),
     text: t('Одна з двох нижніх тяг. Кожна тримає кулак лише вздовж себе, а пара разом працює як нижній важіль з уявною кульовою опорою там, де сходяться їхні лінії. Ця уявна опора рухається на ходу, тож довжини й кути тяг задають, як колесо змінює розвал і сходження.'),
+  },
+};
+
+/** A single pivot arm (trailing, semi-trailing, swing axle): the hub sits on the arm, and the arm turns on two bushes. */
+const ON_PIVOT_ARM: Record<string, PartInfo> = {
+  'susp.knuckle': {
+    name: t('Маточина на важелі'),
+    text: t('Корпус підшипника маточини, жорстко прикручений до важеля або відлитий разом із ним. Окремих шарнірів між ними немає, тож колесо разом із важелем лише хитається навколо осі через два сайлентблоки.'),
+  },
+};
+
+/** A swing axle's shaft is its arm: one joint by the differential and none at the wheel. */
+const ON_SWING_AXLE: Record<string, PartInfo> = {
+  'susp.hub': {
+    name: t('Маточина'),
+    text: t('Сидить на кінці піввісі в трубі хитного моста. Шарніра біля колеса немає, тому колесо завжди перпендикулярне до піввісі й нахиляється разом із нею.'),
   },
 };
 
@@ -332,6 +360,11 @@ export function cornerParts(spec: AxleSpec): Record<string, PartInfo> {
   const link = spec.linkage;
   const steered = link.rods.some((r) => r.steer);
   const wheel = spec.halfshaft ? (steered ? {} : DRIVEN_UNSTEERED) : UNDRIVEN;
+  if (link.rigidArm) {
+    const spring = springCard(spec);
+    const swing = spec.halfshaft?.outer === 'none' ? ON_SWING_AXLE : wheel;
+    return { ...SUSPENSION_PARTS, ...ON_PIVOT_ARM, ...(isCoilover(spec) ? ON_COILOVER : SPRING_APART), ...(spring ? { 'susp.spring': spring } : {}), ...swing };
+  }
   if (link.knuckle) return { ...SUSPENSION_PARTS, ...ON_SPLIT_STRUT, ...wheel };
   if (link.strut) return { ...SUSPENSION_PARTS, ...wheel };
   const wishbones = link.wishbones.length >= 2;
