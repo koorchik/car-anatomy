@@ -94,6 +94,11 @@ const MG1_SPEED_SHARE = 0.95;
 const REST_OMEGA = 5;
 /** The cap takes this much output torque away per m/s over it, N·m·s/m [estimate: under 1 km/h of droop at 180 km/h]. */
 const CAP_GAIN = 2000;
+/**
+ * Below this road speed recovery fades to nothing and the friction brakes take over, m/s [estimate: hybrids hand the
+ * last few km/h to the friction brakes]. Without it the brake pedal asks MG2 for a negative torque at standstill.
+ */
+const REGEN_FADE_SPEED = 2;
 /** Coasting with the foot off, the control recovers as an engine brake would: this share of the weight [estimate]. */
 const COAST_G = 0.02;
 const G = 9.81;
@@ -172,11 +177,14 @@ export class ThsControl {
     // 1. The asked output torque: a share of what the system gives, power-limited above its corner.
     const available = Math.min(sp.maxOutputNm, sp.systemW / Math.max(wo, 1e-3));
     let demand = this.pedal * available;
-    if (this.pedal < 0.02 && roadSpeed > 2) demand = -COAST_G * sp.massKg * G * sp.radius;
+    // Recovery only slows the car: it fades out towards standstill, so MG2 never pushes a stopping car backward.
+    const recover = clamp(roadSpeed / REGEN_FADE_SPEED, 0, 1);
+    if (this.pedal < 0.02) demand = -COAST_G * sp.massKg * G * sp.radius * recover;
     if (this.capOn && sp.vmaxCap !== null) demand = Math.min(demand, Math.max(0, CAP_GAIN * (sp.vmaxCap - roadSpeed)));
     // The brake pedal: MG2 recovers first, the friction brakes do the rest (blended below, once MG2's share is known).
     const brakeNm = this.brake * this.brakeTotal;
-    if (brakeNm > 0) demand = Math.min(demand, 0) - brakeNm;
+    const wanted = brakeNm > 0 ? Math.min(demand, 0) - brakeNm : demand;
+    if (brakeNm > 0) demand = Math.min(demand, 0) - brakeNm * recover;
     const asked = this.pedal * sp.systemW;
     const wheelW = Math.max(0, demand * wo);
 
@@ -252,7 +260,7 @@ export class ThsControl {
     this.outputNm = delivered;
 
     // 6. Friction brakes for what the motors did not recover.
-    const friction = brakeNm > 0 ? clamp((Math.max(0, -demand) - Math.max(0, -delivered)) / brakeNm, 0, 1) * this.brake : 0;
+    const friction = brakeNm > 0 ? clamp((Math.max(0, -wanted) - Math.max(0, -delivered)) / brakeNm, 0, 1) * this.brake : 0;
     for (let i = 0; i < WHEELS; i++) bus.brakeNm[i] = friction * sp.brakeNm[i]!;
   }
 

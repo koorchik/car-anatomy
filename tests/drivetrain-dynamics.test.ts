@@ -889,4 +889,35 @@ describe('11. the Prius power-split hybrid', () => {
     expect(r.sim.state).toBe('running');
     expect(states.has('cranking')).toBe(false);
   });
+
+  it('the brake pedal stops the car and holds it: recovery only slows it, and MG2 never drives it backward', () => {
+    const r = hybridRig(pd);
+    const c = r.load.control;
+    c.pedal = 0.5;
+    runRig(r, 30, () => r.load.chassis.v > 50 / 3.6);
+    c.pedal = 0;
+    c.brake = 0.4;
+    let vMin = 0;
+    let recovered = 0;
+    let pushedBack = 0;
+    runRig(r, 10, () => {
+      const v = r.load.chassis.v;
+      vMin = Math.min(vMin, v);
+      // MG2's mechanical power is negative while it recovers. Standing or rolling back, MG2 holds no torque (the
+      // control sees the speed a step late, hence a newton-metre's slack).
+      const p2 = c.mg2Nm * c.mg2Omega;
+      if (v > 5) recovered = Math.min(recovered, p2);
+      if (v <= 0) pushedBack = Math.max(pushedBack, Math.abs(c.mg2Nm));
+    });
+    expect(recovered).toBeLessThan(-10000);
+    expect(pushedBack).toBeLessThan(1);
+    // The tyres' own spring lets the body settle back a little once the wheels stand, nothing more.
+    expect(vMin * 3.6).toBeGreaterThan(-1);
+    expect(Math.abs(r.load.chassis.v * 3.6)).toBeLessThan(0.05);
+    // Standing on the brake with nothing asked, the motors hold no torque against it.
+    c.brake = 1;
+    runRig(r, 1);
+    expect(Math.abs(c.mg2Nm)).toBe(0);
+    expect(r.load.vehicle.bus.brakeNm.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+  });
 });
