@@ -4,11 +4,11 @@
 // cornerModel().
 
 import type { CornerSpec } from '../src/suspension/spec.ts';
-import { coilForce, bumpStopForce, G } from '../src/suspension/forces.ts';
 import { QUARTER_STEP_S, QuarterSim } from '../src/suspension/quarter.ts';
 import { EventRoad, RoadBuffer, type RoadEvent } from '../src/suspension/road.ts';
 import { DAMPER_PRESETS, SETUP_RANGES, factorySetup, resolveCorner, type CornerSetup, type DamperPreset } from '../src/suspension/setup.ts';
 import { CornerModel, cornerFrame, frameFromQuarter } from '../src/scene/suspension/corner-model.ts';
+import { rigFrame } from '../src/scene/suspension/rig-frame.ts';
 import type { ChoiceControl, Control, ModelDef, Values } from './model-api.ts';
 
 /** Scenes of the quarter car: where the event starts and how long a lap of the loop is, m. */
@@ -137,28 +137,6 @@ export function cornerModel(options: CornerViewerOptions): ModelDef {
         sim.reset(0);
       };
 
-      /** The rig: the body held at its height for this setup, a pad under the tyre following the wheel. */
-      const rig = (): void => {
-        const q = (values.travel as number) / 1000;
-        const axle = resolved.axle;
-        const springLen = axle.value('springLen', q);
-        const damperLen = axle.value('damperLen', q);
-        const sp = resolved.spring;
-        const springN = coilForce(sp.rate, sp.freeM, springLen, sp.rate2, sp.fromM);
-        const bs = resolved.bumpStop;
-        const stopN =
-          damperLen < bs.contactM ? bumpStopForce(bs.contactM - damperLen, bs.rate, bs.lengthM) : damperLen > resolved.topOutM ? -bumpStopForce(damperLen - resolved.topOutM, bs.rate, bs.lengthM) : 0;
-        const support = springN * axle.value('mrSpring', q) + stopN * axle.value('mrDamper', q);
-        frame.travel = q;
-        frame.bodyZ = resolved.bodyStaticM;
-        frame.roadX = 0;
-        frame.roadLift = q - resolved.staticTravelM;
-        frame.springN = springN;
-        frame.damperN = 0;
-        frame.stopN = stopN;
-        frame.tyreN = support + resolved.unsprungKg * G;
-      };
-
       model.setOverlays({ forces: values.forces as boolean, laser: values.laser as boolean });
       restart();
       return {
@@ -178,7 +156,7 @@ export function cornerModel(options: CornerViewerOptions): ModelDef {
             if (sim.x > scene.lapM) sim.reset(0);
             frameFromQuarter(sim.observe(), frame);
           } else {
-            rig();
+            rigFrame(resolved, (values.travel as number) / 1000, frame);
           }
           model.update(frame);
         },

@@ -15,6 +15,7 @@ import { router } from './router.ts';
 import type { Route } from './routes.ts';
 import { ShellRuns } from './run-store.ts';
 import { ScaleBar } from './scale-bar.ts';
+import { SectionDom } from './section-dom.ts';
 import type { KeyBinding, PanelControl, PanelSide, Section, SectionContext, TimeCapabilities } from './section.ts';
 import { skeletonHtml, skeletonOf, type SkeletonElements } from './skeleton.ts';
 import { ShellTime } from './time.ts';
@@ -41,6 +42,8 @@ export class Shell {
   /** The key of the first view, whose name in the help of the keys follows the section shown. */
   private readonly solidKey: KeyBinding;
   private readonly scaleBar: ScaleBar;
+  /** Hides what a section put into the shared places while another one is shown. */
+  private readonly sectionDom: SectionDom;
   private readonly mounted = new Set<Section>();
   private shown: Section | null = null;
   private route: Route | null = null;
@@ -60,6 +63,8 @@ export class Shell {
     root.innerHTML = skeletonHtml();
     const { slots, elements } = skeletonOf(root);
     this.elements = elements;
+    const places = [slots.backdrop, slots.actions, slots.title, slots.tools, slots.panel, slots.results, slots.dash, slots.table.head].map((slot) => slot.parent);
+    this.sectionDom = new SectionDom([root, ...places]);
     try {
       this.stage = new Stage(elements.canvas);
     } catch (error) {
@@ -165,7 +170,7 @@ export class Shell {
     this.shown = section;
     this.view.name(section.solidLabel);
     this.solidKey.label = section.solidLabel;
-    this.time.refresh();
+    this.time.showSection();
   }
 
   /** Another address. A section not shown yet loads first; the page stays as it is until then. */
@@ -189,9 +194,13 @@ export class Shell {
     const from = this.route;
     this.route = route;
     if (section !== this.shown) {
-      this.shown?.leave(route);
+      if (this.shown) {
+        this.shown.leave(route);
+        this.sectionDom.claim(this.shown.id);
+      }
       this.audio.release();
       this.show(section);
+      this.sectionDom.show(section.id);
       this.relayout();
     }
     section.enter(route, from);
@@ -222,6 +231,9 @@ export class Shell {
     el.panel.classList.toggle('closed', !this.open.right);
     document.body.classList.toggle('panel-closed', !this.open.right);
     el.panelToggleClosed.hidden = this.open.right || small;
+    // The button that brings a closed panel back stands over the right end of the top bar, which keeps clear of it.
+    if (el.panelToggleClosed.hidden) css.removeProperty('--panel-toggle-w');
+    else css.setProperty('--panel-toggle-w', `${el.panelToggleClosed.offsetWidth + 14}px`);
     el.panelOpen.hidden = !small;
     el.panelClose.textContent = small ? t('Закрити') : t('Сховати');
     css.setProperty('--stage-right', `${panelW}px`);

@@ -123,6 +123,8 @@ export class EnginesSection implements Section {
     this.drive.lock(null);
     this.drive.stop();
     this.ctx.keys.use([]);
+    // The engine and what hangs on it (the layers, the oil page's scene) wait off the stage for coming back.
+    if (this.model) this.ctx.stage.release(this.model);
   }
 
   /** Back from another section, which may have changed the shared view and time while this one was away. */
@@ -130,6 +132,10 @@ export class EnginesSection implements Section {
     this.away = false;
     const { view, time } = this.ctx;
     this.useKeys();
+    if (this.model) {
+      this.placeModel(this.model, false);
+      if (this.sump.on) this.sump.lookAtOil();
+    }
     this.applyView(view.mode);
     $('slow-tool').hidden = time.mode !== 'slow';
     // The oil page's lap holds the crank itself.
@@ -177,19 +183,11 @@ export class EnginesSection implements Section {
   showEngine(next: Engine, keepCamera: boolean): void {
     this.engine = next;
     const spec = next.spec;
-    const { stage, view, slots } = this.ctx;
+    const { view, slots } = this.ctx;
     const features = this.features;
     const { balance, systems, dyno, valves } = features;
     const newModel: EngineModel = next.isRotary ? new RotaryEngineModel(next) : new PistonEngineModel(next);
-    // A rotary explains itself from the front, a piston engine from a three-quarter view.
-    // The same scale for a whole page, or for a design as its sliders move, so that size can be seen.
-    const onSump = this.sump.on;
-    stage.setModel(newModel, {
-      home: next.isRotary ? [0.34, 0.22, 1] : onSump ? [0.95, 0.1, 0.7] : undefined,
-      keepCamera,
-      keepScale: true,
-      frameScale: this.onDesigner || onSump ? 1 : this.catalogue.pageFrameScale(next),
-    });
+    this.placeModel(newModel, keepCamera);
     this.model = newModel;
     newModel.setView(view.mode);
     newModel.setExplode(this.explode);
@@ -206,6 +204,20 @@ export class EnginesSection implements Section {
     $('badge').textContent = spec.badge;
     $('badge').style.setProperty('--badge-fit', String(spec.badge.length > 2 ? 0.46 : 0.62));
     slots.partCard.hidden = true;
+  }
+
+  /** Puts the engine's model on the stage, framed as its page frames it. */
+  private placeModel(model: EngineModel, keepCamera: boolean): void {
+    const next = this.engine;
+    // A rotary explains itself from the front, a piston engine from a three-quarter view.
+    // The same scale for a whole page, or for a design as its sliders move, so that size can be seen.
+    const onSump = this.sump.on;
+    this.ctx.stage.setModel(model, {
+      home: next.isRotary ? [0.34, 0.22, 1] : onSump ? [0.95, 0.1, 0.7] : undefined,
+      keepCamera,
+      keepScale: true,
+      frameScale: this.onDesigner || onSump ? 1 : this.catalogue.pageFrameScale(next),
+    });
   }
 
   setPanel(open: boolean): void {

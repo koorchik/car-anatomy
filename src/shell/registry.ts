@@ -2,6 +2,7 @@
 // function here: its code and its text come only when one of its addresses is opened.
 
 import { loadEngines } from '../ui/engines/load.ts';
+import { loadSuspensions } from '../ui/suspensions/load.ts';
 import type { Route, SectionId } from './routes.ts';
 import type { Section } from './section.ts';
 
@@ -12,7 +13,10 @@ export interface SectionEntry {
 }
 
 /** The first is the home of every address no other section claims. */
-export const SECTIONS: readonly SectionEntry[] = [{ id: 'engines', load: loadEngines }];
+export const SECTIONS: readonly SectionEntry[] = [
+  { id: 'engines', load: loadEngines },
+  { id: 'suspensions', load: loadSuspensions },
+];
 
 /** The entry of the section a route belongs to. */
 export function sectionEntry(route: Route): SectionEntry {

@@ -58,4 +58,27 @@ describe('ShellTime', () => {
     time.refresh();
     expect([time.mode, heard]).toEqual(['readable', []]);
   });
+
+  it('gives the next section back the mode the visitor chose, which a page with fewer modes only set aside', () => {
+    const { time, state } = setup({ modes: ['slow', 'readable', 'real'] });
+    time.set('slow');
+    // The suspensions' rig: real time only.
+    state.offer = { modes: ['real'] };
+    time.showSection();
+    expect(time.mode).toBe('real');
+    // Back on the engine pages.
+    state.offer = { modes: ['slow', 'readable', 'real'] };
+    time.showSection();
+    expect(time.mode).toBe('slow');
+  });
+
+  it('keeps a fallback within a page: only a change of section goes back to the chosen mode', () => {
+    const { time, state } = setup({ modes: ['slow', 'readable', 'real'] });
+    time.set('slow');
+    state.offer = { modes: ['slow', 'readable', 'real'], unavailable: { slow: 'dyno' } };
+    time.refresh();
+    state.offer = { modes: ['slow', 'readable', 'real'] };
+    time.refresh();
+    expect(time.mode).toBe('readable');
+  });
 });

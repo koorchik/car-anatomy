@@ -55,7 +55,8 @@ declare global {
   }
 }
 const engines = first as EnginesSection;
-window.__engine = {
+// Another section first (#/suspensions) has no engine to hand over: window.__engine is there from the engine pages.
+if (first.id === 'engines') window.__engine = {
   drive: engines.drive,
   stage: shell.stage,
   get designer() {

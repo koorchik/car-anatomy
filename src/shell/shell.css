@@ -34,7 +34,8 @@
   display: flex;
   align-items: center;
   gap: 22px;
-  padding: 0 18px;
+  /* Clear of the button for a closed panel (--panel-toggle-w, set while it is shown) */
+  padding: 0 calc(18px + var(--panel-toggle-w, 0px)) 0 18px;
   z-index: 5;
   pointer-events: none;
   container: topbar / inline-size;
@@ -801,4 +802,9 @@ input[type='range']::-moz-range-thumb {
 
 .segmented button:disabled:hover {
   background: none;
+}
+
+/* What another section put into the shared places (section-dom.ts) */
+[data-section-away] {
+  display: none !important;
 }
