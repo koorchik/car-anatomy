@@ -161,8 +161,8 @@ export class Shell {
     this.scaleBar = new ScaleBar(this.stage, elements.scaleLine, elements.scaleLabel);
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) this.stage.setOrbit(false);
     window.addEventListener('hashchange', () => this.go(router.current));
-    // The pages' own links (a variant, «Змінити в конструкторі», a row of the table) are plain `#/…` in their markup.
-    // Followed, they keep the visitor's context as the router's writes do, so «← До авто» stays on the next page too.
+    // The pages' own links (a variant, the way to the designer, a row of the table) are plain `#/…` in their markup.
+    // Followed, they keep the visitor's context as the router's writes do, so 'back to the car' stays on the next page.
     document.addEventListener('click', (event) => {
       if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       const link = (event.target as Element | null)?.closest?.<HTMLAnchorElement>('a[href^="#/"]');
