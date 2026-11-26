@@ -44,7 +44,7 @@ import { assessGearbox } from '../src/gearbox-designer/reliability.ts';
 import { resolveGearboxDesign } from '../src/gearbox-designer/constraints.ts';
 import { designBuild } from '../src/gearbox-designer/to-spec.ts';
 import {
-  BENDING_LIMIT_MPA, CALIBRATION_CONTACT_LOAD, CALIBRATION_TORQUE_NM, CONTACT_LIMIT_MPA, gearboxStrength,
+  BENDING_LIMIT_MPA, CALIBRATION_CONTACT_LOAD, CALIBRATION_TORQUE_NM, CONTACT_LIMIT_MPA, FLANK_LIMIT_MPA, gearboxStrength,
 } from '../src/gearbox-designer/strength.ts';
 
 const DEG = 180 / Math.PI;
@@ -257,7 +257,7 @@ function printCalibration(): void {
   console.log(
     `Bending calibration: TR-6060 MZ6 first pair ${first.weakest!.teeth.join('/')} at ${CALIBRATION_TORQUE_NM} N·m: ${first.weakest!.bendingMpa.toFixed(0)} MPa, ` +
       `load ${first.bending.toFixed(3)} (limit ${BENDING_LIMIT_MPA.toFixed(0)} MPa); contact load ${CALIBRATION_CONTACT_LOAD.toFixed(2)} ` +
-      `(limit ${CONTACT_LIMIT_MPA.toFixed(0)} MPa, 0.7–1.3 expected)`,
+      `(limit ${CONTACT_LIMIT_MPA.toFixed(0)} MPa, 0.7–1.3 expected; flanks judged against ${FLANK_LIMIT_MPA.toFixed(0)} MPa)`,
   );
   console.log('Tremec sets A–F, teeth reconstructed by the designer (rough check, ±25 %):');
   for (const set of TREMEC_SETS) {

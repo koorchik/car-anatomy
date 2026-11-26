@@ -51,7 +51,7 @@ export interface MeshStrength {
   forceN: number;
   bendingMpa: number;
   contactMpa: number;
-  /** Over the calibrated limits: 1 is the MZ6 first pair at its rating. */
+  /** Over the limits: bending 1 is the MZ6 first pair at its rating, contact 1 is FLANK_LIMIT_MPA. */
   bending: number;
   contact: number;
 }
@@ -123,6 +123,12 @@ export const BENDING_LIMIT_MPA = CAL.bending;
 export const CONTACT_LIMIT_MPA = REFERENCE_CONTACT_MPA * (BENDING_LIMIT_MPA / REFERENCE_BENDING_MPA);
 /** The MZ6 first pair's contact load at its rating: a check of the order, 0.7–1.3 expected (gearbox plan). */
 export const CALIBRATION_CONTACT_LOAD = CAL.contact / CONTACT_LIMIT_MPA;
+/**
+ * The flank stress a mesh's contact load is judged against, MPa: the textbook limit above, unless the calibration pair
+ * already runs higher at the rating GM validated it to. That pair does not pit there, so no box is told its flanks
+ * pit at a stress the reference box carries in service.
+ */
+export const FLANK_LIMIT_MPA = Math.max(CONTACT_LIMIT_MPA, CAL.contact);
 
 /** Full-throttle starts a gear lasts at this bending load; Infinity at 1 or below. */
 export function startsAt(load: number): number {
@@ -143,7 +149,7 @@ export function stateStrength(box: Gearbox, name: string, torqueNm: number): Mes
     const f = forces[j] ?? 0;
     if (m.bevel || !(f > 0) || (fd && (m.a === fd.pinion || m.b === fd.pinion))) return;
     const r = rawMesh(m, j, f * torqueNm);
-    out.push({ ...r, bending: r.bendingMpa / BENDING_LIMIT_MPA, contact: r.contactMpa / CONTACT_LIMIT_MPA });
+    out.push({ ...r, bending: r.bendingMpa / BENDING_LIMIT_MPA, contact: r.contactMpa / FLANK_LIMIT_MPA });
   });
   return out;
 }

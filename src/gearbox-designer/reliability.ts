@@ -14,7 +14,7 @@ import { CONE_TEST_LIMITS } from '../drivetrain/synchro-math.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import type { GearboxPerformance } from './evaluate.ts';
-import { BENDING_LIMIT_MPA, CONTACT_LIMIT_MPA, loadForStarts, startsAt } from './strength.ts';
+import { BENDING_LIMIT_MPA, FLANK_LIMIT_MPA, loadForStarts, startsAt } from './strength.ts';
 
 /** Full-throttle starts under which a gear counts as doomed [estimate: a few track days]. */
 export const FATAL_STARTS = 100;
@@ -81,7 +81,7 @@ export function assessGearbox(perf: GearboxPerformance): GearboxReliability {
       load: flank.contact,
       fatalAt: Infinity,
       detail: t('Пара {teeth} у {gear}-й передачі: {stress} МПа на робочій поверхні з {limit}. Понад межу поверхня викришується.', {
-        teeth: teeth(flankMesh?.teeth), gear: flank.gear, stress: n0(flankMesh?.contactMpa ?? 0), limit: n0(CONTACT_LIMIT_MPA),
+        teeth: teeth(flankMesh?.teeth), gear: flank.gear, stress: n0(flankMesh?.contactMpa ?? 0), limit: n0(FLANK_LIMIT_MPA),
       }),
       fix: t('Ширший зубець або більша міжосьова.'),
       failure: t('Поверхню зубців викришило: коробка завиває й тріщить.'),

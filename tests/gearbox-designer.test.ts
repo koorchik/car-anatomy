@@ -468,6 +468,8 @@ describe('3. bending calibration', () => {
     // The same constant reaches the contact limit: the plan expects the pair's contact load in 0.7–1.3.
     expect(CALIBRATION_CONTACT_LOAD).toBeGreaterThan(0.7);
     expect(CALIBRATION_CONTACT_LOAD).toBeLessThan(1.3);
+    // GM validated the box at this torque, so its flanks are not told they pit there.
+    expect(first.contact).toBeLessThanOrEqual(1 + 1e-12);
   });
 
   it('the designer, given the MZ6 teeth at 85 mm, loads its first pair 1.0 at 580 N·m and weighs the 66.3 kg of the TR-6060', () => {
