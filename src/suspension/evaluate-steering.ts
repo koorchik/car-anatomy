@@ -69,8 +69,10 @@ interface Kinematics {
   steering: CornerSteering | SteeredBeam;
   /** Steer of each wheel per unit of the linkage's input (rack m, pitman rad) on centre. */
   rate: number;
-  /** Caster, mechanical trail, scrub radius and kingpin offset at the hub of the left wheel at design. */
+  /** Caster, kingpin inclination, mechanical trail, scrub radius and kingpin offset at the hub of the left wheel at
+   *  design. */
   caster: number;
+  kpi: number;
   trail: number;
   scrub: number;
   kingpinOffset: number;
@@ -130,6 +132,7 @@ function kinematicsOf(spec: ChassisSpec): Kinematics {
       steering,
       rate: steering.ratePerM,
       caster: d.caster,
+      kpi: d.kpi,
       trail: d.trail,
       scrub: d.scrub,
       kingpinOffset: d.kingpinOffset,
@@ -180,7 +183,7 @@ export function evaluateSteering(spec: ChassisSpec): SteeringPerformance | null 
   const tyre = tyreAt(spec.tyre, (m * G) / 4);
   const fy = (m * STEER_LEVEL_G * G * spec.body.frontShare) / 2;
   const aligning = tyreAligning(tyre, fz, fy);
-  const bendNm = 2 * sideForceMoment(fy, aligning.mz, k.trail, k.caster);
+  const bendNm = 2 * sideForceMoment(fy, aligning.mz, k.trail, k.caster, k.kpi);
   const manualTorqueNm = manualTorque(bendNm, ratioCentre, eta);
   const mu = TYRE_MU[spec.tyre];
   const parkingNm = 2 * standstillMoment(mu, fz) + frontN * Math.abs(liftRate);

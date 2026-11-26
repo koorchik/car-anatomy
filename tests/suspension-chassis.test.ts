@@ -29,7 +29,7 @@ import { estimateInertia, GYRATION_RATIOS, NHTSA_CARS } from '../src/vehicle/bod
 import { tyreVertical } from '../src/vehicle/tyre-data.ts';
 import type { AxleSpec, ChassisLongitudinal, ChassisSpec, CornerLinkage, SolidAxleLinkage, TwistBeamLinkage } from '../src/suspension/spec.ts';
 import { evaluateSteering, ICE_MU } from '../src/suspension/evaluate-steering.ts';
-import { ASSIST_CURVES, ASSIST_THRESHOLD_NM, driverTorque, splitMuSteer, standstillMoment } from '../src/suspension/steering-forces.ts';
+import { ASSIST_CURVES, ASSIST_THRESHOLD_NM, driverTorque, sideForceMoment, splitMuSteer, standstillMoment } from '../src/suspension/steering-forces.ts';
 import { STEERING_ASSISTS } from '../src/suspension/steering.ts';
 import { DEFAULT_CHASSIS } from '../src/suspension-designer/defaults.ts';
 import { editChassis } from '../src/suspension-designer/edit.ts';
@@ -1109,6 +1109,23 @@ describe('the steering under braking, drive and in a bend (P13-core)', () => {
     expect(driverTorque('hydraulic', 30)).toBeCloseTo(ASSIST_THRESHOLD_NM + 29 / 9, 12);
     // Parking a heavy car: the column motor runs out first.
     expect(driverTorque('electric-column', 120)).toBeGreaterThan(driverTorque('electric-rack', 120));
+  });
+
+  it('a side force and the aligning moment act about the steering axis as the cross product says', () => {
+    // Left wheel, axis through the road at the origin leaning back by ν and in by σ; the patch n behind and s outboard
+    // of it, a side force F_y to the left and a moment M_z about the vertical.
+    const caster = 7 * DEG;
+    const kpi = 12 * DEG;
+    const n = 0.03;
+    const fy = 2000;
+    const mz = -40;
+    const u = [-Math.tan(caster), -Math.tan(kpi), 1];
+    const len = Math.hypot(u[0], u[1], u[2]);
+    const r = [-n, 0.01, 0];
+    // (r × F + M_z·ẑ)·u, aligning positive: a left force behind the axis turns the wheel to the right (−z).
+    const torque = [r[1] * 0 - r[2] * fy, r[2] * 0 - r[0] * 0, r[0] * fy - r[1] * 0 + mz];
+    const about = (torque[0] * u[0] + torque[1] * u[1] + torque[2] * u[2]) / len;
+    expect(sideForceMoment(fy, mz, n, caster, kpi)).toBeCloseTo(-about, 9);
   });
 
   it('a bend and a parking turn need more torque without assist, and parking more than a 0.3 g bend', () => {

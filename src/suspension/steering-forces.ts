@@ -3,8 +3,10 @@
 // hub. No text; conventions are at the top of kinematics.ts and steering.ts.
 //
 // Moments about a steering axis, per wheel, positive when they turn the wheel back to straight ahead (aligning):
-//   - side force F_y on the trail: F_y·(n·cos ν + t_p), n the mechanical trail at the road, t_p the tyre's pneumatic
-//     trail, which the Magic Formula gives through its aligning moment M_z (t_p = −M_z/F_y);
+//   - side force F_y on the trail: F_y·(n + t_p)·u_z, n the mechanical trail at the road, t_p the tyre's pneumatic
+//     trail, which the Magic Formula gives through its aligning moment M_z (t_p = −M_z/F_y), and u_z the vertical part of
+//     the axis' unit direction, 1/√(1 + tan²ν + tan²σ): both act about the vertical through the contact patch, and the
+//     steering axis, leaning back by the caster ν and in by the inclination σ, takes that share of them;
 //   - the body's weight lifted by the steer (the nose lift, steering.ts): F_z·dh/dδ, the work of raising the body;
 //   - standing still, the tyre twisting in its contact patch: M = (μ/3)·√(F_z³/p) with p the inflation pressure, a
 //     rule of thumb for a tyre turned on the spot (docs/suspension-model.md; its source is still to be checked). The scrub radius lets the
@@ -81,9 +83,10 @@ export function tyreAligning(tyre: Tyre, fz: number, fy: number): { alpha: numbe
   return { alpha, mz: mf.mz, pneumaticTrail: -mf.mz / mf.fy };
 }
 
-/** Moment about a steering axis from a side force on a wheel, aligning positive: F_y·n·cos ν − M_z. */
-export function sideForceMoment(fy: number, mz: number, trailM: number, caster: number): number {
-  return fy * trailM * Math.cos(caster) - mz;
+/** Moment about a steering axis from a side force on a wheel, aligning positive: (F_y·n − M_z)·u_z (see the header). */
+export function sideForceMoment(fy: number, mz: number, trailM: number, caster: number, kpi: number): number {
+  const uz = 1 / Math.sqrt(1 + Math.tan(caster) ** 2 + Math.tan(kpi) ** 2);
+  return (fy * trailM - mz) * uz;
 }
 
 /** Inflation pressure the standstill rule uses, Pa: a typical 2.3 bar (an estimate). */
