@@ -107,6 +107,25 @@ describe('controlled dampers on the shaker', () => {
     expect(quarterModes(controlledLinear(lin, 'magneride')).body.zeta).toBeGreaterThan(quarterModes(lin).body.zeta);
   });
 
+  it('the linear skyhook puts its reaction on the wheel: the invariant point holds and the tyre force follows the run', () => {
+    // Without tyre damping the body acceleration at √(k_t/m_u) is k_t/m_s per metre of road for any force between body
+    // and wheel (Hedrick & Butsuen); a skyhook to an inertial frame would move it.
+    const noCt = { ...lin, ct: 0 };
+    const hop = Math.sqrt(lin.kt / lin.mu) / (2 * Math.PI);
+    const g = newQuarterGains();
+    for (const kind of ['magneride', 'active'] as const) {
+      expect(quarterGains(controlledLinear(noCt, kind), hop, g).bodyAcc / (lin.kt / lin.ms)).toBeCloseTo(1, 9);
+    }
+    // Between the two modes, where the wheel's share of the skyhook's reaction shows in the tyre force.
+    const between = [3, 6];
+    const runs = new SteppedSine(rc, { freqsHz: between, velocityMs: 0.05, damperKind: 'active' }).run();
+    for (const [i, hz] of between.entries()) {
+      const l = quarterGains(controlledLinear(lin, 'active'), hz, g);
+      expect(Math.abs(l.bodyAcc / runs[i].bodyAcc - 1)).toBeLessThan(0.03);
+      expect(Math.abs(l.tyreForce / runs[i].tyreForce - 1)).toBeLessThan(0.05);
+    }
+  });
+
   it('a camera lets the active damper meet a bump: less body motion over a step', () => {
     // A 30 mm smoothed step at 15 m/s: the actuator's lag costs it the step without the preview.
     const road = { heightAt: (x: number) => 0.03 / (1 + Math.exp(-(x - 10) / 0.5)), slopeAt: () => 0 };

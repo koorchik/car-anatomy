@@ -163,10 +163,12 @@ function quarterGainsSquared(lin: QuarterLinear, hz: number, c: number, out: Flo
 const SCRATCH_GAINS = newQuarterGains();
 
 /**
- * Gains with a skyhook force −c_sky·H(s)·s·Z_s on the body, H = 1/(1 + s/ω_b) the actuator's lag (1 without one):
- *   B = m_s·s² + P + c_sky·H·s,  A = m_u·s² + P + T,  Δ = A·B − P²
+ * Gains with a skyhook force S·Z_s = −c_sky·H(s)·s·Z_s on the body, H = 1/(1 + s/ω_b) the actuator's lag (1 without
+ * one). The damper or actuator that makes it sits between the body and the wheel, so the wheel takes the reaction:
+ *   B = m_s·s² + P + S,  A = m_u·s² + P + T,  Δ = A·B − P·(P + S)
  *   Z_s = P·T·Y/Δ,  Z_u = T·B·Y/Δ,  travel = (B − P)·T·Y/Δ,  tyre force = T·(Δ − T·B)·Y/Δ
- * which are the passive formulas when c_sky = 0.
+ * which are the passive formulas when c_sky = 0. With the reaction the body keeps its invariant point at the wheel-hop
+ * frequency, as the quarter car in time does (a skyhook to an inertial frame would not).
  */
 function controlledGains(lin: QuarterLinear, hz: number, c: number, out: QuarterGains): QuarterGains {
   const w = TAU * hz;
@@ -188,8 +190,11 @@ function controlledGains(lin: QuarterLinear, hz: number, c: number, out: Quarter
   const bi = pi + skyIm;
   const ar = k + kt - mu * w2;
   const ai = (c + ct) * w;
-  const dr = ar * br - ai * bi - (pr * pr - pi * pi);
-  const di = ar * bi + ai * br - 2 * pr * pi;
+  // Δ = A·B − P·(P + S)
+  const qr = pr + skyRe;
+  const qi = pi + skyIm;
+  const dr = ar * br - ai * bi - (pr * qr - pi * qi);
+  const di = ar * bi + ai * br - (pr * qi + pi * qr);
   const dAbs = Math.hypot(dr, di);
   const tAbs = Math.hypot(tr, ti);
   // Δ − T·B
@@ -211,13 +216,14 @@ export interface QuarterMode {
 /** Body and wheel-hop modes from the four roots of Δ(s) = 0. With heavy damping a pair may be real (ζ > 1). */
 export function quarterModes(lin: QuarterLinear, c = lin.c): { body: QuarterMode; hop: QuarterMode } {
   const { ms, mu, k, kt, ct } = lin;
-  // A skyhook adds c_sky to the body's own damping (its actuator's lag is left out of the modes).
+  // A skyhook adds c_sky on the body's absolute speed, with its reaction on the wheel (Δ = A·B − P·(P + S), see
+  // controlledGains; its actuator's lag is left out of the modes).
   const cs = lin.skyNsm ?? 0;
   const poly = [
     mu * ms,
     mu * (c + cs) + (c + ct) * ms,
-    mu * k + (c + ct) * (c + cs) - c * c + (k + kt) * ms,
-    (c + ct) * k + (k + kt) * (c + cs) - 2 * c * k,
+    mu * k + ct * (c + cs) + (k + kt) * ms,
+    ct * k + kt * (c + cs),
     k * kt,
   ];
   const roots = polyRoots(poly);
