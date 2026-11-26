@@ -74,6 +74,9 @@ interface SetView {
   ring: GearDef;
   planetMember: string;
   carrier: string;
+  /** Indices of the planet and its carrier in `Gearbox.members`. */
+  planetIndex: number;
+  carrierIndex: number;
   sunMember: string;
   ringMember: string;
   hub: number;
@@ -224,6 +227,7 @@ export class PlanetaryModel extends GearboxSceneBase implements SceneModel<Plane
       carrierView.spin.add(planets);
       const set: SetView = {
         k, z, width, sun, planet, ring: ringDef, planetMember, carrier: copies.carrier, sunMember: sun.member, ringMember: ringDef.member,
+        planetIndex: box.members.indexOf(planetMember), carrierIndex: box.members.indexOf(copies.carrier),
         hub, plateIn, plateOut, rim, planets, phases: copies.phases[planet.id]!, angles: copies.angles, radius: copies.radius,
       };
       this.sets.push(set);
@@ -420,8 +424,7 @@ export class PlanetaryModel extends GearboxSceneBase implements SceneModel<Plane
 
   update(frame: PlanetaryFrame): void {
     for (const m of this.members) m.spin.rotation.z = -wrap(frame.angles[m.index] ?? 0);
-    const index = (id: string) => this.box.members.indexOf(id);
-    for (const set of this.sets) this.placePlanets(set, frame.angles[index(set.planetMember)] ?? 0, frame.angles[index(set.carrier)] ?? 0);
+    for (const set of this.sets) this.placePlanets(set, frame.angles[set.planetIndex] ?? 0, frame.angles[set.carrierIndex] ?? 0);
     for (const [id, material] of this.gearMaterials) {
       let glow = 0;
       for (const j of this.gearMeshes.get(id)!) glow = Math.max(glow, frame.meshPower[j] ?? 0);

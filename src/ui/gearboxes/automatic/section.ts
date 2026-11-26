@@ -402,6 +402,7 @@ export class AutomaticSection implements Section {
     }
     this.demoMode = false;
     this.stalled = false;
+    this.readoutsFor.key = '';
     this.starting = true;
     this.ignition.show(true);
     await drive.ensureAudio();
@@ -509,10 +510,12 @@ export class AutomaticSection implements Section {
 
   private readouts(rpm: number, rollRpm: number): void {
     const state = this.table.state;
-    const key = `${this.table.closed.join('+')}|${this.stalled}|${this.lastShift?.from ?? ''}`;
     const whole = Math.round(rpm);
-    if (whole === this.readoutsFor.rpm && key === this.readoutsFor.key) return;
-    this.readoutsFor = { rpm: whole, key };
+    // stateChanged() clears the key, so a frame with the same revs and elements builds no strings.
+    if (whole === this.readoutsFor.rpm && this.readoutsFor.key) return;
+    const key = `${this.table.key}|${this.stalled}|${this.lastShift?.from ?? ''}`;
+    this.readoutsFor.rpm = whole;
+    this.readoutsFor.key = key;
     const ratio = state.kind === 'gear' ? state.ratio! : null;
     const input = state.kind === 'input-locked' || state.kind === 'locked' ? t('стоїть') : t('{rpm} об/хв', { rpm: num(rpm) });
     const output =

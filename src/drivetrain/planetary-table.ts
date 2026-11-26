@@ -69,6 +69,9 @@ export class PlanetaryTable {
   readonly box: Gearbox;
   private closedSet = new Set<string>();
   private info: StateInfo;
+  /** Member speeds per unit of what drives the state (the input, or the output when the input is held); null: jammed. */
+  private per: number[] | null = null;
+  private closedKey = '';
   private readonly pose: PlanetaryPose;
   private readonly cache = new Map<string, StateInfo>();
 
@@ -82,6 +85,11 @@ export class PlanetaryTable {
   /** The closed elements, in the order of the spec. */
   get closed(): string[] {
     return this.box.spec.elements.map((e) => e.id).filter((id) => this.closedSet.has(id));
+  }
+
+  /** The closed elements joined by '+', in the order of the spec: the same string while they stay the same. */
+  get key(): string {
+    return this.closedKey;
   }
 
   /** What the closed elements leave: a gear, a neutral, the input held, or a jam. */
@@ -100,7 +108,12 @@ export class PlanetaryTable {
   set(closed: readonly string[]): void {
     this.closedSet.clear();
     for (const id of closed) this.closedSet.add(id);
-    this.info = this.analyse(this.closed);
+    const ids = this.closed;
+    this.closedKey = ids.join('+');
+    this.info = this.analyse(ids);
+    // Worked out once per change, not every frame: the neutral's and the held input's motions need a null space.
+    const kind = this.info.kind;
+    this.per = kind === 'gear' ? this.info.speeds! : kind === 'neutral' ? speedsWith(this.box, ids, 1, 0) : kind === 'input-locked' ? speedsWith(this.box, ids, 0, 1) : null;
   }
 
   /** Opens a closed element or closes an open one. */
@@ -126,21 +139,8 @@ export class PlanetaryTable {
     const roll = (rollRpm * Math.PI) / 30;
     const s = this.info;
     const speeds = this.pose.speeds;
-    let per: number[] | null;
-    let scale: number;
-    if (s.kind === 'gear') {
-      per = s.speeds;
-      scale = w;
-    } else if (s.kind === 'neutral') {
-      per = speedsWith(this.box, this.closed, 1, 0);
-      scale = w;
-    } else if (s.kind === 'input-locked') {
-      per = speedsWith(this.box, this.closed, 0, 1);
-      scale = roll;
-    } else {
-      per = null;
-      scale = 0;
-    }
+    const per = this.per;
+    const scale = s.kind === 'gear' || s.kind === 'neutral' ? w : s.kind === 'input-locked' ? roll : 0;
     for (let i = 0; i < speeds.length; i++) speeds[i] = per ? per[i]! : 0;
     const angles = this.pose.angles;
     for (let i = 0; i < angles.length; i++) angles[i]! += speeds[i]! * scale * dt;
