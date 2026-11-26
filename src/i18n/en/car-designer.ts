@@ -101,8 +101,6 @@ export const CAR_DESIGNER_EN: Record<string, string> = {
   'Інший картер': 'A different sump',
   'У двигуні {sump}: піддон мілкіший, тож двигун сидить на {mm} мм нижче.':
     'The engine has a {sump}: its pan is shallower, so it sits {mm} mm lower.',
-  'У двигуні {sump}. Двигун не опускається: до нього прикручено коробку з головною передачею, а її півосі мають лишатися на рівні маточин.':
-    'The engine has a {sump}. It does not go any lower: the transaxle is bolted to it, and its half-shafts have to stay level with the hubs.',
   'У двигуні {sump}.': 'The engine has a {sump}.',
   'Центр мас опустився на {mm} мм.': 'The center of mass is {mm} mm lower.',
   'Центр мас піднявся на {mm} мм.': 'The center of mass is {mm} mm higher.',

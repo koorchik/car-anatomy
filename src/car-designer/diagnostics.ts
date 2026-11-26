@@ -151,9 +151,7 @@ export function diagnoseBuild(p: CarPerformance): CarDiagnostic[] {
     const where =
       p.fit.crankDropMm > 0
         ? t('У двигуні {sump}: піддон мілкіший, тож двигун сидить на {mm} мм нижче.', { sump, mm: n0(p.fit.crankDropMm) })
-        : p.gearboxDesign.type === 'transaxle'
-          ? t('У двигуні {sump}. Двигун не опускається: до нього прикручено коробку з головною передачею, а її півосі мають лишатися на рівні маточин.', { sump })
-          : t('У двигуні {sump}.', { sump });
+        : t('У двигуні {sump}.', { sump });
     const cg = p.cgShiftMm;
     const height = cg < 0 ? t('Центр мас опустився на {mm} мм.', { mm: n0(-cg) }) : cg > 0 ? t('Центр мас піднявся на {mm} мм.', { mm: n0(cg) }) : '';
     add('sump', 'note', t('Інший картер'), height ? `${where} ${height}` : where);

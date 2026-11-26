@@ -6,9 +6,8 @@
 //   designer's model (the engine designer's estimate for both engines, the gearbox designer's for both gearboxes), so a
 //   difference of masses comes from one model; the change sits where the unit sits (the engine at its box's centre, the
 //   gearbox at the end of the donor engine's crank);
-// - centre of mass height: the donor's plus the engine's shift. Ahead of a separate gearbox and final drive the engine
-//   keeps its lowest point where the donor's engine had it, but never sits higher than the donor's crank, so a
-//   shallower (dry) pan lowers it; behind a transaxle the axle line holds the crank where it was;
+// - centre of mass height: the donor's plus the engine's shift. The engine keeps its lowest point where the donor's
+//   engine had it, but never sits higher than the donor's crank, so a shallower (dry) pan lowers it;
 // - 0–100, 0–400 m, v_max and its gear: the gearbox designer's quasi-static model (evaluateGearbox) with this engine's
 //   torque and this car's mass, tyres and road load; 80–120 km/h in fifth (or top) and first-gear wheelspin from its
 //   traction curves and its tyres' grip (drivenGripN);
@@ -172,9 +171,7 @@ export interface EngineFit {
 function fitOf(car: CarRecord, box: Box3, donorBox: Box3): EngineFit {
   const pack = car.packaging!;
   // The engine keeps its lowest point where the donor's engine had it, but never sits higher than the donor's crank.
-  // Behind a transaxle the crank cannot go down at all: the box with the final drive bolts to the engine and its
-  // output shafts stay level with the wheel hubs, so the axle line holds the crank's height.
-  const drop = donorGearboxType(car) === 'layshaft' ? Math.max(0, -donorBox.min[1] - -box.min[1]) : 0;
+  const drop = Math.max(0, -donorBox.min[1] - -box.min[1]);
   const at: Vec3 = [pack.crankFront[0], pack.crankFront[1], pack.crankFront[2] - drop];
   const placed = inCar(car, box, at);
   const bay = pack.bay;

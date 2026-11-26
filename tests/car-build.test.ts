@@ -100,16 +100,13 @@ describe('the odd presets', () => {
     expect(slicks.chassis!.brakingM).toBeLessThan(civic.chassis!.brakingM);
   });
 
-  it('let a dry sump lower the engine ahead of a separate gearbox, not behind a transaxle', () => {
-    // The E30's gearbox and final drive are apart, joined by a propshaft: a shallower pan lets the engine down.
-    const e30 = evaluateBuild(factoryBuild('bmw-m3-e30'));
-    const e30dry = evaluateBuild(resolveBuild({ ...factoryBuild('bmw-m3-e30'), lubrication: { sump: 'dry', oilL: 7 } }));
-    expect(e30dry.fit.crankDropMm).toBeGreaterThan(30);
-    expect(e30dry.cgHeightM).toBeLessThan(e30.cgHeightM);
-    // The Civic's transaxle bolts to the engine and its half-shafts stay level with the hubs: the crank stays put.
-    const civicDry = evaluateBuild(oddPresets()[2]!.build);
-    expect(civicDry.build.lubrication?.sump).toBe('dry');
-    expect(civicDry.fit.crankDropMm).toBe(0);
+  it('let a dry sump\'s shallow pan lower the engine and the centre of mass', () => {
+    for (const [donor, b] of [['civic-type-r-fk8', oddPresets()[2]!.build], ['bmw-m3-e30', resolveBuild({ ...factoryBuild('bmw-m3-e30'), lubrication: { sump: 'dry', oilL: 7 } })]] as const) {
+      const dry = evaluateBuild(b);
+      expect(dry.build.lubrication?.sump, donor).toBe('dry');
+      expect(dry.fit.crankDropMm, donor).toBeGreaterThan(30);
+      expect(dry.cgHeightM, donor).toBeLessThan(evaluateBuild(factoryBuild(donor)).cgHeightM);
+    }
   });
 });
 
