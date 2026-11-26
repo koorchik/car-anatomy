@@ -110,7 +110,7 @@ export class BalancePanel {
   private xrayed = false;
   private settingView = false;
   /** Height of the full card when it last showed, to tell whether it fits before showing it full again. */
-  private fullHeight = 270;
+  private fullHeight = 470;
   /** Viewport y the full card has to end above: other overlays on the right of the stage live under it. */
   private room: () => number = () => Infinity;
   private refit: () => void = () => {};
@@ -224,9 +224,12 @@ export class BalancePanel {
     const compact = this.card.classList.contains('compact');
     const full = !this.card.hidden && !compact;
     const height = full ? this.card.offsetHeight : 0;
+    // A full card that came out taller than the fit assumed (a new view, a longer legend) may no longer fit: ask again.
+    const grew = height > this.fullHeight + 1;
     if (height > 0) this.fullHeight = height;
     document.documentElement.style.setProperty('--forces-card-h', `${height}px`);
     document.documentElement.style.setProperty('--forces-compact-w', `${!this.card.hidden && compact ? this.card.offsetWidth : 0}px`);
+    if (grew) this.refit();
   }
 
   /**
