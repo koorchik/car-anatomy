@@ -57,14 +57,18 @@ const WALK = 9;
  * Moves the lever in gate units toward a point the way the gate lets it: along a plane, or across in neutral. A drag
  * that pulls sideways out of a plane takes the lever to neutral first.
  */
-export function constrain(at: { u: number; v: number }, to: { u: number; v: number }, planes: number): { u: number; v: number } {
+export function constrain(at: { u: number; v: number }, to: { u: number; v: number }, planes: number, slots: readonly GateSlot[] = []): { u: number; v: number } {
   const clampU = (u: number) => Math.min(planes - 1, Math.max(0, u));
-  const clampV = (v: number) => Math.min(1, Math.max(-1, v));
-  if (Math.abs(at.v) > NEUTRAL_BAND) return { u: Math.round(at.u), v: clampV(to.v) };
+  // A plane with a speed on one side only (a reverse alone, the odd top gear) has no slot on the other side.
+  const clampV = (plane: number, v: number) => {
+    const open = (up: boolean) => !slots.length || slots.some((s) => s.plane === plane && s.up === up);
+    return Math.min(open(false) ? 1 : 0, Math.max(open(true) ? -1 : 0, v));
+  };
+  if (Math.abs(at.v) > NEUTRAL_BAND) return { u: Math.round(at.u), v: clampV(Math.round(at.u), to.v) };
   const u = clampU(to.u);
   const plane = Math.round(u);
   // Into a plane only once the lever is lined up with it.
-  if (Math.abs(u - plane) < 0.2) return { u: plane, v: clampV(to.v) };
+  if (Math.abs(u - plane) < 0.2) return { u: plane, v: clampV(plane, to.v) };
   return { u, v: 0 };
 }
 
@@ -228,7 +232,7 @@ export class Gate {
     });
     svg.addEventListener('pointermove', (event) => {
       if (!this.dragging || !svg.hasPointerCapture(event.pointerId)) return;
-      this.at = constrain(this.at, this.toGate(event), this.layout.planes);
+      this.at = constrain(this.at, this.toGate(event), this.layout.planes, this.layout.slots);
       this.place();
       const slot = this.slotAt(this.at);
       if (slot && slot.name !== this.dragGear) {

@@ -282,6 +282,17 @@ describe('the full dash in the car', () => {
     expect(constrain({ u: 0, v: 1 }, { u: 1, v: 1 }, 3)).toEqual({ u: 0, v: 1 });
     expect(constrain({ u: 0, v: 0 }, { u: 0.5, v: 0.6 }, 3)).toEqual({ u: 0.5, v: 0 });
     expect(constrain({ u: 0.5, v: 0 }, { u: 1.05, v: 0.7 }, 3)).toEqual({ u: 1, v: 0.7 });
+    // A plane with a speed on one side only has no slot on the other: the lever stops at neutral there.
+    const six = gateLayout([
+      { id: 'a', front: 1, back: 2 },
+      { id: 'b', front: 3, back: 4 },
+      { id: 'c', front: 5, back: 6 },
+      { id: 'd', front: 'R', back: null },
+    ]);
+    expect(six.slots.find((s) => s.name === 'R')).toEqual({ name: 'R', plane: 3, up: false });
+    expect(constrain({ u: 3, v: 0 }, { u: 3, v: -1 }, six.planes, six.slots)).toEqual({ u: 3, v: 0 });
+    expect(constrain({ u: 3, v: 0 }, { u: 3, v: 0.9 }, six.planes, six.slots)).toEqual({ u: 3, v: 0.9 });
+    expect(constrain({ u: 0, v: 0.5 }, { u: 0, v: -0.8 }, six.planes, six.slots)).toEqual({ u: 0, v: -0.8 });
   });
 
   it('draws the traction from the core\'s own force, and from the last dyno run only when it was made on this engine', () => {
