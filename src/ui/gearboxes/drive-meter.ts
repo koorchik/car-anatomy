@@ -116,6 +116,10 @@ export class DriveStrip {
   private accel = 0;
   private lastAccel = 0;
   private jerk = 0;
+  /** The values of the last frame, in STRIP_KEYS order, to fill the samples a long frame spans; null before one. */
+  private readonly last = new Float64Array(STRIP_KEYS.length);
+  private hasLast = false;
+  private readonly now = new Float64Array(STRIP_KEYS.length);
 
   constructor() {
     this.series = Object.fromEntries(STRIP_KEYS.map((k) => [k, new Float32Array(this.size)])) as Record<StripKey, Float32Array>;
@@ -128,9 +132,14 @@ export class DriveStrip {
     this.accel = 0;
     this.lastAccel = 0;
     this.jerk = 0;
+    this.hasLast = false;
   }
 
-  /** Takes the frame shown now; a sample is kept every 1/STRIP_RATE s. True when one was. */
+  /**
+   * Takes the frame shown now; a sample is kept every 1/STRIP_RATE s of the page's time. A frame longer than that (a
+   * slow device draws 20 frames a second or fewer) fills every sample it spans, along the line from the last frame, so
+   * the strip always spans STRIP_SECONDS. True when a sample was kept.
+   */
   step(f: VehicleFrame, rpm: number, dt: number): boolean {
     if (!(dt > 0)) return false;
     const k = Math.min(1, dt / JERK_S);
@@ -138,19 +147,29 @@ export class DriveStrip {
     const slope = (this.accel - this.lastAccel) / dt;
     this.lastAccel = this.accel;
     this.jerk += (slope - this.jerk) * k;
+    const now = this.now;
+    now[0] = rpm;
+    now[1] = f.speed * 3.6;
+    now[2] = this.accel;
+    now[3] = this.jerk;
+    now[4] = f.driveNm;
+    const last = this.hasLast ? this.last : now;
+    const period = 1 / STRIP_RATE;
+    const before = this.due;
     this.due += dt;
-    if (this.due < 1 / STRIP_RATE) return false;
-    this.due = Math.min(this.due - 1 / STRIP_RATE, 1 / STRIP_RATE);
-    const s = this.series;
-    const i = this.head;
-    s.rpm[i] = rpm;
-    s.kmh[i] = f.speed * 3.6;
-    s.accel[i] = this.accel;
-    s.jerk[i] = this.jerk;
-    s.driveNm[i] = f.driveNm;
-    this.head = (i + 1) % this.size;
-    this.count = Math.min(this.size, this.count + 1);
-    return true;
+    const n = Math.min(this.size, Math.floor(this.due / period));
+    this.due -= Math.floor(this.due / period) * period;
+    for (let j = 1; j <= n; j++) {
+      // Where the j-th sample falls between the last frame (0) and this one (1).
+      const at = Math.min(1, (j * period - before) / dt);
+      const i = this.head;
+      for (let q = 0; q < STRIP_KEYS.length; q++) this.series[STRIP_KEYS[q]!][i] = last[q]! + (now[q]! - last[q]!) * at;
+      this.head = (i + 1) % this.size;
+      this.count = Math.min(this.size, this.count + 1);
+    }
+    this.last.set(now);
+    this.hasLast = true;
+    return n > 0;
   }
 
   /** The i-th sample held, 0 the oldest. */

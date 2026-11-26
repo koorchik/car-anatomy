@@ -413,5 +413,15 @@ describe('the full dash in the car', () => {
     // The newest is last, the oldest ten seconds back.
     expect(strip.at('kmh', strip.count - 1)).toBeCloseTo((20 * 60 - 1) * 3.6, 0);
     expect(strip.at('kmh', strip.count - 1) - strip.at('kmh', 0)).toBeCloseTo((STRIP_SECONDS * 60 - 2) * 3.6, -1);
+    // A slow device's frames, 4 a second: still STRIP_RATE samples a second, so the strip spans ten seconds, and the
+    // samples between two frames lie on the line between them.
+    const slow = new DriveStrip();
+    for (let k = 0; k <= 12 * 4; k++) slow.step({ ...f, speed: k / 4 / 3.6 }, 1000, 1 / 4);
+    expect(slow.count).toBe(STRIP_SECONDS * STRIP_RATE);
+    // The newest sample is the last one due by the newest frame (12 s), at most a sample's period before it.
+    const newest = slow.at('kmh', slow.count - 1);
+    expect(newest).toBeLessThanOrEqual(12 + 1e-4);
+    expect(newest).toBeGreaterThan(12 - 1 / STRIP_RATE - 1e-4);
+    expect(newest - slow.at('kmh', 0)).toBeCloseTo(STRIP_SECONDS - 1 / STRIP_RATE, 4);
   });
 });
