@@ -5,7 +5,7 @@
 // boost held back by the turbo's spool. Idle control, the rev limiter and the overrun fuel cut work as on the free
 // path. A load can also cut fuel, cap the torque, stall the engine or drag it while it is stopping.
 
-import type { CrankLoad, EngineRequest } from './load.ts';
+import type { AnyLoadReadings, CrankLoad, EngineRequest } from './load.ts';
 import type { EngineSim } from './sim.ts';
 import {
   brakeTorque,
@@ -22,7 +22,7 @@ import {
 } from './torque-map.ts';
 import type { LoadReadings } from './load.ts';
 
-export interface CrankReadings {
+export interface CrankReadings<R extends AnyLoadReadings = LoadReadings> {
   /** Steps averaged. */
   samples: number;
   /** True while the load set its own torque; false while the engine ran free with the load's inertia added. */
@@ -35,7 +35,7 @@ export interface CrankReadings {
   spool: number;
   /** The turbo's time constant at the current speed, s. */
   spoolS: number;
-  load: LoadReadings;
+  load: R;
 }
 
 const RAD = Math.PI / 30;
@@ -56,9 +56,9 @@ const STALL_S = 0.3;
  */
 const CAUGHT_SHARE = 0.9;
 
-export class LoadedCrank {
+export class LoadedCrank<R extends AnyLoadReadings = LoadReadings> {
   map: EngineTorqueMap;
-  readonly load: CrankLoad;
+  readonly load: CrankLoad<R>;
   /** Manifold pressure ratio the turbo gives right now. */
   private pressure = 1;
   private idleCharge = 0;
@@ -73,7 +73,7 @@ export class LoadedCrank {
   private charge = 0;
   private sum = { samples: 0, coupled: 0, engineNm: 0, manifold: 0, spool: 0, spoolS: 0 };
 
-  constructor(map: EngineTorqueMap, load: CrankLoad) {
+  constructor(map: EngineTorqueMap, load: CrankLoad<R>) {
     this.map = map;
     this.load = load;
   }
@@ -130,7 +130,10 @@ export class LoadedCrank {
     let idleTarget = 0;
     if (running) {
       const error = idleOmega - omega;
-      this.idleIntegral = clamp(this.idleIntegral + ki * error * dt, -0.2, 0.3);
+      // No wind-up into a saturated output: far above idle the governor asks for nothing, and a car that ran for a
+      // minute above idle would otherwise come back with the integral at its floor and sag far below idle.
+      const raw = holdCharge(map, map.idleRpm) + kp * error + this.idleIntegral;
+      if (!(raw <= 0 && error < 0) && !(raw >= IDLE_MAX && error > 0)) this.idleIntegral = clamp(this.idleIntegral + ki * error * dt, -0.2, 0.3);
       idleTarget = clamp(holdCharge(map, map.idleRpm) + kp * error + this.idleIntegral, 0, IDLE_MAX);
     } else {
       this.idleIntegral = 0;
@@ -217,10 +220,10 @@ export class LoadedCrank {
     return this.charge;
   }
 
-  readings(): CrankReadings {
+  readings(): CrankReadings<R> {
     const s = this.sum;
     const n = Math.max(1, s.samples);
-    const reading: CrankReadings = {
+    const reading: CrankReadings<R> = {
       samples: s.samples,
       coupled: s.coupled * 2 > s.samples,
       engineNm: s.engineNm / Math.max(1, s.coupled),

@@ -319,20 +319,28 @@ function runtimeGraph(entry: string): Set<string> {
 }
 
 describe('10. the audio thread never derives', () => {
-  // What the worklet runs: the solver and the core it steps, and the load that will drive them (stage K2c), once it
-  // exists. None of it may pull in the derivation or the gear geometry: a few milliseconds there is an audible gap.
+  // What the worklet runs: the solver and the core it steps, the car as a load on the crank (stage K2c) with its
+  // controls, the load factory and the worklet itself. None of it may pull in the derivation or the gear geometry: a
+  // few milliseconds there is an audible gap.
   const entries = [
     'src/drivetrain/solver.ts', 'src/drivetrain/core.ts', 'src/drivetrain/driveline-load.ts', 'src/vehicle/vehicle-load.ts', 'src/vehicle/vehicle-step.ts', 'src/vehicle/longitudinal.ts',
+    'src/drivetrain/control/manual.ts', 'src/engine/loads.ts', 'src/audio/worklet.ts',
   ].filter((f) => existsSync(f));
 
-  it('checks at least the solver and the core it steps (paths from the repository root)', () => {
-    expect(entries).toEqual(expect.arrayContaining(['src/drivetrain/solver.ts', 'src/drivetrain/core.ts']));
+  it('checks at least the solver, the core it steps and the car\'s load (paths from the repository root)', () => {
+    expect(entries).toEqual(expect.arrayContaining(['src/drivetrain/solver.ts', 'src/drivetrain/core.ts', 'src/vehicle/vehicle-load.ts', 'src/audio/worklet.ts']));
   });
 
   it.each(entries)('%s does not load topology.ts or gear-geometry.ts', (entry) => {
     const files = [...runtimeGraph(entry)].map((f) => f.replace(/\\/g, '/'));
     expect(files.some((f) => f.endsWith('/drivetrain/topology.ts'))).toBe(false);
     expect(files.some((f) => f.endsWith('/drivetrain/gear-geometry.ts'))).toBe(false);
+  });
+
+  it('nothing the worklet loads carries text: no t(), no dictionary and no data records on the audio thread', () => {
+    // The whole-car plan's rule: the load arrives as plain data, so the worklet never needs src/data (names, records).
+    const files = [...runtimeGraph('src/audio/worklet.ts')].map((f) => f.replace(/\\/g, '/'));
+    expect(files.filter((f) => f.includes('/src/i18n/') || f.includes('/src/data/'))).toEqual([]);
   });
 
   it('the graph walker does see them where they are loaded', () => {

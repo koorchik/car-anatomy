@@ -255,6 +255,26 @@ export function launchDraft(input: string, parts: LaunchParts): CoreDraft {
   return d;
 }
 
+/**
+ * The draft with the crank taken out of it (stage K2c): the damper spring runs from the disc to outside angle `slot`
+ * instead of from the crank member, so the engine (LoadedCrank) owns the crank and the drivetrain sees only its
+ * angle and speed, as it sees the wheels. springApplied of the damper is then the torque on the crank.
+ */
+export function anchorCrank(draft: CoreDraft, slot: number): CoreDraft {
+  const damper = draft.springs.find((s) => s.id === DAMPER);
+  if (!damper || damper.a !== CRANK || damper.b !== DISC) throw new Error(`drivetrain: no damper from ${CRANK} to ${DISC} to anchor`);
+  const touches = (id: string | null) => id === CRANK;
+  if (draft.links.some((l) => l.some(([id]) => touches(id))) || draft.elements.some((e) => touches(e.a) || touches(e.b))) {
+    throw new Error(`drivetrain: the ${CRANK} is linked to more than its damper`);
+  }
+  return {
+    ...draft,
+    members: draft.members.filter((m) => m.id !== CRANK),
+    springs: draft.springs.map((s) => (s === damper ? { id: DAMPER, a: DISC, b: null, anchor: slot, stiffness: s.stiffness, damping: s.damping } : s)),
+    prefer: draft.prefer.filter((id) => id !== CRANK),
+  };
+}
+
 export const BRAKE = 'brake';
 
 /**

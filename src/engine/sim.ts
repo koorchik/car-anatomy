@@ -1,6 +1,7 @@
 // Crankshaft speed as a small dynamic system. Runs on the audio thread when sound is on,
 // and on the main thread otherwise, so the code must stay free of DOM and Web Audio.
 
+import type { AnyLoadReadings } from './load.ts';
 import type { LoadedCrank } from './loaded-crank.ts';
 import { ValveControl, type VariableValves } from './valve-control.ts';
 
@@ -59,7 +60,7 @@ export class EngineSim {
   /** Hold the crank at this speed, ignoring the pedal. Used for slow motion. */
   lockedRpm: number | null = null;
   /** A load on the crank, such as a dyno. While it sets its own torque it moves the crank in newton-metres. */
-  crank: LoadedCrank | null = null;
+  crank: LoadedCrank<AnyLoadReadings> | null = null;
   /** Engine's share of what the free path turns: below 1 while a load only adds its inertia. */
   inertiaShare = 1;
   /** Cam phasers, cam profiles and resting cylinders, as the engine computer sets them. */
@@ -104,8 +105,23 @@ export class EngineSim {
     this.rpm = Math.max(this.rpm, this.params.idleRpm);
   }
 
+  /**
+   * Takes the state and speed of the other copy of this engine, at the hand-over between the audio thread and the
+   * main thread (a car's loadRestore). The copy that was not stepped meanwhile may still be cranking from a start the
+   * other one finished long ago; a car restored onto it would be dragged by a starter.
+   */
+  adopt(state: EngineState, rpm: number): void {
+    // As start(), stop() and startImmediately() enter their states, from any state (stop() leaves 'off' alone).
+    if (state !== this.state) {
+      this.state = state;
+      this.stateTime = 0;
+      if (state === 'cranking') this.idleIntegral = 0;
+    }
+    this.rpm = rpm;
+  }
+
   /** Couples a load to the crank, or takes it off with null. */
-  attach(crank: LoadedCrank | null): void {
+  attach(crank: LoadedCrank<AnyLoadReadings> | null): void {
     this.crank = crank;
     if (!crank) this.inertiaShare = 1;
   }

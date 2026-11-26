@@ -3,15 +3,11 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { CATALOGUE } from '../src/data/engines.ts';
 import { ENGINE_VARIANTS } from '../src/data/engine-variants.ts';
-import { DESIGNER_EN } from '../src/i18n/en/designer.ts';
-import { DYNO_EN } from '../src/i18n/en/dyno.ts';
-import { GEARBOX_PARTS_EN } from '../src/i18n/en/gearbox-parts.ts';
-import { LUBRICATION_EN } from '../src/i18n/en/lubrication.ts';
-import { SUSPENSION_EN } from '../src/i18n/en/suspension.ts';
-import { SYSTEMS_EN } from '../src/i18n/en/systems.ts';
+import { DICTIONARIES, type DictionaryName } from '../src/i18n/dictionaries.ts';
 import { ENGINE_TEXT_EN } from '../src/i18n/en/engines.ts';
 import { UI_EN } from '../src/i18n/en/ui.ts';
 import { VARIANT_TEXT_EN } from '../src/i18n/en/variants.ts';
+import { dictionariesBefore } from './import-graph.ts';
 
 const CYRILLIC = /[\u0400-\u04FF]/;
 const walk = (dir: string): string[] =>
@@ -26,8 +22,36 @@ const SOURCE_DATA_DIRS = ['src/data/gearboxes/'];
 const files = walk('src').filter((f) => !f.startsWith('src/i18n/') && !SOURCE_DATA.includes(f) && !SOURCE_DATA_DIRS.some((d) => f.startsWith(d)));
 const CALL = /\bt\(\s*(['"])((?:\\.|(?!\1).)*)\1/gs;
 const unescape = (text: string): string => text.replace(/\\(['"\\])/g, '$1').replace(/\\n/g, '\n');
-const ENGLISH = { ...UI_EN, ...DESIGNER_EN, ...SYSTEMS_EN, ...LUBRICATION_EN, ...DYNO_EN, ...GEARBOX_PARTS_EN, ...SUSPENSION_EN };
 const placeholders = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).sort();
+
+// Every dictionary of src/i18n/dictionaries.ts, by name. UI_EN comes with t() itself and is always there.
+const NAMES = Object.keys(DICTIONARIES) as DictionaryName[];
+const DICTS = Object.fromEntries(await Promise.all(NAMES.map(async (name) => [name, await DICTIONARIES[name].load()] as const))) as Record<DictionaryName, Readonly<Record<string, string>>>;
+const ENGLISH: Record<string, string> = Object.assign({}, UI_EN, ...NAMES.map((name) => DICTS[name]));
+const homeOf = (key: string): string => [...(key in UI_EN ? ['ui'] : []), ...NAMES.filter((name) => key in DICTS[name])].join(', ') || 'none';
+// What the site registers before each file it loads can run. A file the site does not load (the model viewer's,
+// the tests') may count on every dictionary.
+const BEFORE = dictionariesBefore('src/main.ts');
+
+describe('dictionaries', () => {
+  it.each(NAMES)('%s names the module it loads', async (name) => {
+    const module = (await import(/* @vite-ignore */ `../${DICTIONARIES[name].module}`)) as Record<string, unknown>;
+    expect(Object.values(module)).toContain(DICTS[name]);
+  });
+
+  it('give no source text two different translations', () => {
+    const seen = new Map<string, { english: string; where: string }>();
+    const clashes: string[] = [];
+    for (const [where, dict] of [['ui', UI_EN] as const, ...NAMES.map((name) => [name, DICTS[name]] as const)]) {
+      for (const [key, english] of Object.entries(dict)) {
+        const before = seen.get(key);
+        if (before && before.english !== english) clashes.push(`${key}: ${before.where} and ${where}`);
+        seen.set(key, { english, where });
+      }
+    }
+    expect(clashes).toEqual([]);
+  });
+});
 
 describe.each(files)('%s', (file) => {
   const source = readFileSync(file, 'utf8');
@@ -43,6 +67,14 @@ describe.each(files)('%s', (file) => {
       expect(ENGLISH[key], `no English for: ${key}`).toBeDefined();
       expect(placeholders(ENGLISH[key]!), key).toEqual(placeholders(key));
     }
+  });
+
+  it('finds its English among the dictionaries registered before it runs', () => {
+    const before = BEFORE.get(file);
+    if (!before) return;
+    const english = Object.assign({}, UI_EN, ...[...before].map((name) => DICTS[name as DictionaryName]));
+    const missing = keys.filter((key) => key in ENGLISH && !(key in english)).map((key) => `${key} (in ${homeOf(key)}; here: ui${[...before].map((n) => `, ${n}`).join('')})`);
+    expect(missing).toEqual([]);
   });
 });
 
@@ -79,11 +111,18 @@ describe('English', () => {
   });
 });
 
+/** In a fresh set of modules in English, every dictionary registered, as the site does before the code it is for. */
+async function registerAll(): Promise<void> {
+  const fresh = await import('../src/i18n/dictionaries.ts');
+  await fresh.withDictionaries(Object.keys(fresh.DICTIONARIES) as DictionaryName[], async () => {});
+}
+
 describe('the site running in English', () => {
   it('shows no Ukrainian in any article, diagnosis or control', async () => {
     vi.resetModules();
     vi.stubGlobal('location', { search: '?lang=en' });
     try {
+      await registerAll();
       const { ENGINES, engineById, pageChoices } = await import('../src/data/engines.ts');
       const { articleHtml } = await import('../src/ui/article.ts');
       const { tableHtml } = await import('../src/ui/table.ts');
@@ -131,6 +170,7 @@ describe('the gearbox catalogue running in English', () => {
     vi.resetModules();
     vi.stubGlobal('location', { search: '?lang=en' });
     try {
+      await registerAll();
       const { ALL_GEARBOXES } = await import('../src/data/gearboxes.ts');
       for (const record of ALL_GEARBOXES) expect(CYRILLIC.test(JSON.stringify(record)), record.id).toBe(false);
     } finally {

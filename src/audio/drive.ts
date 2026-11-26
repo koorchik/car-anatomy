@@ -2,7 +2,7 @@
 // and runs its own copy of the simulation when it is not.
 
 import type { Engine } from '../engine/kinematics.ts';
-import type { LoadCommand, LoadSpec } from '../engine/load.ts';
+import type { AnyLoadReadings, LoadCommand, LoadReadings, LoadSpec } from '../engine/load.ts';
 import { LoadedCrank, type CrankReadings } from '../engine/loaded-crank.ts';
 import { createLoad } from '../engine/loads.ts';
 import { EngineSim, type EngineState } from '../engine/sim.ts';
@@ -66,7 +66,9 @@ export class Drive {
   private loadSpec: LoadSpec | null = null;
   /** The last command that sets a lasting mode, replayed when the audio thread starts. */
   private keptCommand: LoadCommand | null = null;
-  private readingQueue: CrankReadings[] = [];
+  private readingQueue: CrankReadings<AnyLoadReadings>[] = [];
+  /** The last frame ran on the audio thread: when that stops, the local copy goes on from its last report. */
+  private wasWorklet = false;
 
   constructor(engine: Engine) {
     this.config = synthConfig(engine);
@@ -149,6 +151,7 @@ export class Drive {
       if (this.torqueMap) this.post({ type: 'torqueMap', map: this.torqueMap });
       if (this.loadSpec) this.post({ type: 'load', spec: this.loadSpec });
       if (this.keptCommand) this.post({ type: 'loadCommand', command: this.keptCommand });
+      this.handOver();
       await ctx.resume();
       return true;
     } catch (error) {
@@ -247,7 +250,8 @@ export class Drive {
   loadCommand(command: LoadCommand): void {
     this.local.crank?.load.command(command);
     this.post({ type: 'loadCommand', command });
-    if (command.action === 'hold' || command.action === 'off' || command.action === 'free') this.keptCommand = command;
+    // A car keeps its controls in its state (loadRestore); the dyno's lasting modes are replayed.
+    if (command.kind === 'dyno' && (command.action === 'hold' || command.action === 'off' || command.action === 'free')) this.keptCommand = command;
   }
 
   private coupleLocal(newLoad: boolean): void {
@@ -257,14 +261,14 @@ export class Drive {
     else this.local.attach(new LoadedCrank(this.torqueMap, createLoad(this.loadSpec)));
   }
 
-  private queueReading(reading: CrankReadings): void {
+  private queueReading(reading: CrankReadings<AnyLoadReadings>): void {
     this.readingQueue.push(reading);
     if (this.readingQueue.length > 64) this.readingQueue.shift();
   }
 
-  /** Readings from the load since the last call, oldest first. */
-  takeReadings(): CrankReadings[] {
-    const out = this.readingQueue;
+  /** Readings from the load since the last call, oldest first: of the kind the page put on the crank (the dyno's by default). */
+  takeReadings<R extends AnyLoadReadings = LoadReadings>(): CrankReadings<R>[] {
+    const out = this.readingQueue as CrankReadings<R>[];
     this.readingQueue = [];
     return out;
   }
@@ -281,13 +285,18 @@ export class Drive {
   /** Advance one frame and report the engine's state. */
   tick(dt: number): DriveSnapshot {
     if (!this.usingWorklet()) {
-      // A slow frame must not become one big step: the pedal's speed control would overshoot.
-      const steps = Math.max(1, Math.ceil(dt / 0.005));
+      if (this.wasWorklet) this.takeOver();
+      // A slow frame must not become one big step: the pedal's speed control would overshoot, and a car's drivetrain
+      // is stable only below its own step.
+      const longest = Math.min(0.005, this.local.crank?.load.maxStepS?.() ?? Number.POSITIVE_INFINITY);
+      const steps = Math.max(1, Math.ceil(dt / longest));
       for (let i = 0; i < steps; i++) this.local.step(dt / steps);
       this.shownAngle = this.local.angle;
       if (this.local.crank) this.queueReading(this.local.crank.readings());
       return this.snapshot();
     }
+    if (!this.wasWorklet) this.handOver();
+    this.wasWorklet = true;
     const r = this.report!;
     const cycle = this.config.sim.cycle;
     const age = (performance.now() - this.reportAt) / 1000;
@@ -300,6 +309,28 @@ export class Drive {
     this.shownAngle += error * 0.25;
     this.shownAngle = ((this.shownAngle % cycle) + cycle) % cycle;
     return this.snapshot();
+  }
+
+  /** A load that hands its state over (a car) goes on, on the audio thread, from where the local copy has it. */
+  private handOver(): void {
+    const kept = this.local.crank?.load.snapshot?.();
+    if (kept) this.post({ type: 'loadRestore', snapshot: kept, state: this.local.state, rpm: this.local.rpm });
+  }
+
+  /**
+   * The audio thread stopped: the local copy goes on from its last report, the load from its snapshot. The local engine
+   * was not stepped while the audio thread ran, so it takes the reported state too (it may still be cranking from the
+   * start), unless the page has stopped it since.
+   */
+  private takeOver(): void {
+    this.wasWorklet = false;
+    const r = this.report;
+    if (!r) return;
+    if (r.loadSnapshot) this.local.crank?.load.restore?.(r.loadSnapshot);
+    this.local.adopt(r.state as EngineState, r.rpm);
+    // The crank goes on from where the picture showed it, not from where the local copy stopped.
+    this.local.angle = this.shownAngle;
+    if (!this.wanted) this.local.stop();
   }
 
   snapshot(): DriveSnapshot {

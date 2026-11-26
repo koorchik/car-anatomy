@@ -98,20 +98,34 @@ export class LongitudinalChassis implements ChassisPort {
     this.v = v;
   }
 
+  /**
+   * The body's motion and the road under it: the grade, each wheel's surface and the wheels off the ground. A road set
+   * by a command is state too, since the car's commands are not replayed when the other thread takes over.
+   */
   snapshotSize(): number {
-    return 3;
+    return 4 + 2 * WHEELS;
   }
 
   snapshot(out: Float64Array, offset: number): void {
     out[offset] = this.v;
     out[offset + 1] = this.x;
     out[offset + 2] = this.ax;
+    out[offset + 3] = this.gradeRad;
+    for (let i = 0; i < WHEELS; i++) {
+      out[offset + 4 + i] = this.surfaceMu[i]!;
+      out[offset + 4 + WHEELS + i] = this.lifted[i]!;
+    }
   }
 
   restore(from: Float64Array, offset: number): void {
     this.v = from[offset]!;
     this.x = from[offset + 1]!;
     this.ax = from[offset + 2]!;
+    this.gradeRad = from[offset + 3]!;
+    for (let i = 0; i < WHEELS; i++) {
+      this.surfaceMu[i] = from[offset + 4 + i]!;
+      this.lifted[i] = from[offset + 4 + WHEELS + i]!;
+    }
   }
 }
 

@@ -21,8 +21,8 @@
 
 import { drivingMassKg, type CarRecord } from './car.ts';
 import { G } from './constants.ts';
-import { MF_185_80R14, TYRE_SETS, type MfSet } from './tyre-data.ts';
-import { TYRES, type TyreId } from './vehicle.ts';
+import { MF_185_80R14, TYRE_MU, TYRE_SETS, type MfSet } from './tyre-data.ts';
+import type { TyreId } from './vehicle.ts';
 
 export type TyreSide = 'left' | 'right';
 
@@ -239,7 +239,7 @@ const saturationKappa = (p: MfSet): number => (p.PDX1 * p.LMUX) / p.PKX1;
  * ellipse, the slick's 13 %; rescaled, every set stays within 0.93–1.04 of it, as mf_185_80R14 does with its own weights
  * (tests/suspension-tyre.test.ts).
  */
-export function tyreAt(id: TyreId, wheelLoadN: number, mu: number = TYRES[id].mu): Tyre {
+export function tyreAt(id: TyreId, wheelLoadN: number, mu: number = TYRE_MU[id]): Tyre {
   if (!(wheelLoadN > 0)) throw new Error(`Wheel load must be positive: ${wheelLoadN}`);
   const base = TYRE_SETS[id];
   const fitted: MfSet = { ...base, LFZO: wheelLoadN / base.FNOMIN, LMUX: mu / base.PDX1, LMUY: mu / base.PDY1 };

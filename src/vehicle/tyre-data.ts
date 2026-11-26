@@ -188,6 +188,12 @@ export const SEDAN_PAC02: MfSet = {
 export const BRUSH_SLIP_STIFFNESS: Record<TyreId, number> = { classic: 20, street: 22, semi: 26, slick: 30 };
 
 /**
+ * Peak friction of each choice, the same along and across (TYRES in vehicle.ts says where the numbers come from). Here
+ * as plain data so that the tyre step, which the audio worklet runs, loads no names.
+ */
+export const TYRE_MU: Record<TyreId, number> = { classic: 0.8, street: 1.0, semi: 1.25, slick: 1.6 };
+
+/**
  * The MF set of each tyre choice, before it is fitted to a car (tyre.ts sets LFZO, LMUX and LMUY from the car's load
  * and the lap's μ). Street and classic are the Chrono files. Semi-slick and slick are illustrative variants of the
  * street set (suspensions plan, the tyre section): the semi-slick 30 % more cornering stiffness, so it peaks at a smaller slip

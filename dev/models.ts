@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RESERVED_KEYS, type Control, type ModelDef, type PartCard, type Value, type Values, type ViewerModel } from './model-api.ts';
 import { Studio } from './studio.ts';
+import { DICTIONARIES, withDictionaries, type DictionaryName } from '../src/i18n/dictionaries.ts';
 import type { ViewMode } from '../src/scene/model-types.ts';
 
 // The cast and crinkle bump maps of the engine materials are noise. Seeded, they come out the same on every load,
@@ -665,7 +666,8 @@ async function load(id: string): Promise<void> {
     return;
   }
   try {
-    const def = (await importer()).default;
+    // Every dictionary, as the site's sections register theirs before their code: a model's part cards may need any.
+    const def = (await withDictionaries(Object.keys(DICTIONARIES) as DictionaryName[], importer)).default;
     document.title = `${def.title} · Стенд моделей`;
     $('title').textContent = def.title;
     const own = def.controls ?? [];

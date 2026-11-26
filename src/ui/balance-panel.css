@@ -1,4 +1,5 @@
-/* Inertia force arrows: the switch under the stage and the card with the legend and the figures. */
+/* Inertia force arrows: the card with the legend and the figures. It loads with their code; the switch under the stage
+ * and the article's button are styled in src/ui/engines/engines.css, since they are there before it. */
 
 /* The stage between the side panels. Only the card in it takes the pointer. */
 .forces-stage {
@@ -25,19 +26,6 @@
   font-size: 13px;
   line-height: 1.35;
   pointer-events: auto;
-}
-
-/* The switch shares a column with "exaggerate vibration". */
-.tool-checks {
-  display: flex;
-  flex-direction: column;
-}
-
-/* Two switches stacked fit the height of the other tools. On a phone the switch is alone and keeps its full height. */
-@media (min-width: 861px) {
-  .tool-checks .check {
-    height: 26px;
-  }
 }
 
 /* The card takes the place of the hint while it is open. */
@@ -161,10 +149,6 @@
 
 .forces-note[open] summary {
   margin-bottom: 3px;
-}
-
-.forces-show {
-  margin-top: 8px;
 }
 
 .forces-brief {

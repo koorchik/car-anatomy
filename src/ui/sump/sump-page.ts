@@ -5,6 +5,7 @@
 
 import { engineById, engineFacts } from '../../data/engines.ts';
 import { DEFAULT_SUMP_CAR, genericCar, SUMP_CARS, sumpCarFor, type SumpCar } from '../../data/sump-cars.ts';
+import { sectorName, TYRE_NAMES } from '../../data/vehicle-names.ts';
 import { decodeDesign, encodeDesign } from '../../designer/codec.ts';
 import { isRotary, type Design } from '../../designer/design.ts';
 import { SUMP_NAMES } from '../../designer/lubrication.ts';
@@ -27,7 +28,7 @@ import { SumpScene, type SumpSceneFrame } from '../../scene/lubrication/sump-sce
 import { RELIEF_BAR, RELIEF_BAR_HEAVY } from '../../systems/oil.ts';
 import { WELL_PLACES, type WellPlace } from '../../systems/sump.ts';
 import { newLapSample, sampleLap, type LapSample, type LapTrace } from '../../vehicle/lap.ts';
-import { TYRE_IDS, TYRES, type TyreId, type VehicleSpec } from '../../vehicle/vehicle.ts';
+import { TYRE_IDS, type TyreId, type VehicleSpec } from '../../vehicle/vehicle.ts';
 import { Tacho } from '../widgets/tacho.ts';
 import { nextTask } from '../next-task.ts';
 import { sumpArticleHtml } from './article.ts';
@@ -239,7 +240,7 @@ export class SumpPage {
     this.carSelect.addEventListener('change', () => this.pickCar(this.carSelect.value));
     carField.append(this.carSelect);
     this.kindField = segmented(t('Картер'), SUMP_KINDS.map((k) => [k, KIND_SHORT[k]]), (v) => this.choose({ kind: v as SumpKind }), 'sump-two');
-    this.tyreField = segmented(t('Шини'), TYRE_IDS.map((id) => [id, TYRES[id].name]), (v) => this.choose({ tyre: v as TyreId }));
+    this.tyreField = segmented(t('Шини'), TYRE_IDS.map((id) => [id, TYRE_NAMES[id]]), (v) => this.choose({ tyre: v as TyreId }));
     this.oilField = segmented(t('Олива'), OIL_LEVELS.map(([v, text]) => [String(v), text]), (v) => this.choose({ oil: Number(v) }), 'sump-oil');
     this.placeField = segmented(t('Колодязь піддона'), WELL_PLACES.map((p) => [p, PLACE_TEXT[p]]), (v) => this.choose({ place: v as WellPlace }));
     this.accRow = el('label', 'check sump-check');
@@ -548,7 +549,7 @@ export class SumpPage {
       return `<tr${kind === this.sumpKind ? ' class="current"' : ''}><th>${name}</th><td>${fmt(s.minPressure)}</td><td>${fmt(s.belowNeedS)}</td><td class="band${band}">${BAND_TEXT[s.band]}</td></tr>`;
     }).join('');
     this.table.innerHTML = `<table><thead><tr><th>${t('Картер')}</th><th>${t('Мін. тиск, бар')}</th><th>${t('Нижче потрібного, с')}</th><th>${t('Вкладиші витримають')}</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="note small">${t('Шини: {tyre}, олива: {oil}. Кіл до поломки модель дає лише за порядком величини.', { tyre: TYRES[this.tyre].name.toLowerCase(), oil: OIL_LEVELS.find(([v]) => v === this.oilDeltaL)?.[2] ?? '' })}</p>`;
+      <p class="note small">${t('Шини: {tyre}, олива: {oil}. Кіл до поломки модель дає лише за порядком величини.', { tyre: TYRE_NAMES[this.tyre].toLowerCase(), oil: OIL_LEVELS.find(([v]) => v === this.oilDeltaL)?.[2] ?? '' })}</p>`;
   }
 
   private renderMoments(): void {
@@ -559,7 +560,7 @@ export class SumpPage {
     this.momentsList.replaceChildren(
       ...this.moments.map((m) => {
         const row = el('div', 'sump-moment');
-        const text = el('span', '', t('{sector}, {phase}: {s} с нижче потрібного, до {p} бар', { sector: m.sector || t('між поворотами'), phase: PHASE_TEXT[m.phase], s: fmt(m.end - m.start + 0.01), p: fmt(m.lowest) }));
+        const text = el('span', '', t('{sector}, {phase}: {s} с нижче потрібного, до {p} бар', { sector: m.sector ? sectorName(m.sector) : t('між поворотами'), phase: PHASE_TEXT[m.phase], s: fmt(m.end - m.start + 0.01), p: fmt(m.lowest) }));
         const show = el('button', 'btn', t('Показати'));
         show.type = 'button';
         show.addEventListener('click', () => {
@@ -732,7 +733,7 @@ export class SumpPage {
     this.bearingText.textContent = `${percent}%`;
     this.bearingText.parentElement?.setAttribute('aria-valuenow', String(percent));
     const smp = this.sample;
-    const sector = smp.sector >= 0 ? this.trace!.track.sectors[smp.sector]!.name : '';
+    const sector = smp.sector >= 0 ? sectorName(this.trace!.track.sectors[smp.sector]!.id) : '';
     this.rpmText.textContent = t('{rpm} об/хв, {gear}-а', { rpm: fmt(Math.round(smp.rpm), 0), gear: smp.gear });
     this.status.textContent = run ? `${sector ? `${sector} · ` : ''}${t('{v} км/год', { v: Math.round(smp.v * 3.6) })}` : t('Рахую коло…');
     if (!run) {

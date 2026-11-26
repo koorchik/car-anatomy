@@ -109,6 +109,29 @@ export function cornerGeometryKey(r: ResolvedCorner): string {
 const X = new THREE.Vector3(1, 0, 0);
 const UP = new THREE.Vector3(0, 1, 0);
 
+/**
+ * How a corner sits in a larger model (an axle of a chassis, stage P7-geom). The defaults draw the corner on its own,
+ * as the corner's pages and the model viewer show it.
+ */
+export interface CornerModelOptions {
+  /** Draw the strip of road under the wheel; without it the tyre is still pressed onto a flat road. Default true. */
+  road?: boolean;
+  /** Draw the glass piece of the body round the corner and its subframe. An axle draws its own. Default true. */
+  bodyPieces?: boolean;
+  /** Draw the end of the rack inboard of a steered tie rod. An axle draws the whole rack. Default true. */
+  rackEnd?: boolean;
+  /** The car's wheel in place of the tyre file's: rim and section width; the free radius is the corner's tyreRadiusM. */
+  wheel?: { rimRadiusM: number; rimWidthM: number; tyreWidthM: number };
+  /**
+   * A space put into every part key: 'front' turns susp.spring into susp.front.spring. Two axles of one chassis have
+   * different cards for the same part (a strut's spring, a link's), and the keys must tell them apart.
+   */
+  partSpace?: string;
+}
+
+/** A part key in a space: susp.spring → susp.front.spring. */
+export const spacedKey = (key: string, space: string | undefined): string => (space && key.startsWith('susp.') ? `susp.${space}.${key.slice(5)}` : key);
+
 /** A mesh that swaps material with the view. */
 interface Shell {
   mesh: THREE.Mesh;
@@ -199,8 +222,10 @@ export class CornerModel {
   private readonly caliper: THREE.Mesh;
   private readonly wheel: THREE.Mesh;
   private readonly nuts: THREE.Mesh;
-  private readonly bodyShell: THREE.Mesh;
-  private readonly subframe: THREE.Mesh;
+  private readonly bodyShell: THREE.Mesh | null;
+  private readonly subframe: THREE.Mesh | null;
+  /** The part keys' space (CornerModelOptions.partSpace). */
+  private readonly space: string | undefined;
 
   // Scratch, so update() allocates nothing.
   private readonly v1 = new THREE.Vector3();
@@ -234,8 +259,9 @@ export class CornerModel {
   /** Per link (arms first, then rods): an applied force from the coilover that sits on it, scene axes, N. */
   private readonly seatForce: THREE.Vector3[];
 
-  constructor(resolved: ResolvedCorner, profile: RoadProfile | null = null) {
+  constructor(resolved: ResolvedCorner, profile: RoadProfile | null = null, options: CornerModelOptions = {}) {
     this.resolved = resolved;
+    this.space = options.partSpace;
     this.axle = resolved.axle;
     this.statics = new KnuckleStatics(this.axle);
     this.view.profile = profile;
@@ -244,7 +270,6 @@ export class CornerModel {
     const strut = link.strut ?? null;
     const split = link.knuckle ?? null;
     if (strut ? spec.damper.wheel !== 'strut' : spec.damper.wheel === 'strut') throw new Error('A strut corner has its damper in the strut, and only a strut corner does');
-    this.parts = cornerParts(spec);
     const m = (this.materials = createCornerMaterials(this.press));
 
     // ---- Points of the drawing (scene, design) ----
@@ -339,13 +364,18 @@ export class CornerModel {
     }
 
     // ---- Body: glass piece of the shell and the subframe ----
-    const pieces = strut ? strutBody(this.top0) : linkBody(spec);
-    this.bodyShell = tag(new THREE.Mesh(pieces.shell, m.body), 'susp.body');
-    this.bodyShell.renderOrder = 2;
-    this.subframe = tag(new THREE.Mesh(pieces.subframe, m.body), 'susp.subframe');
-    this.subframe.renderOrder = 2;
-    this.body.add(this.bodyShell, this.subframe);
-    this.shells.push({ mesh: this.bodyShell, solid: m.body, glass: m.bodyXray }, { mesh: this.subframe, solid: m.body, glass: m.bodyXray });
+    if (options.bodyPieces !== false) {
+      const pieces = strut ? strutBody(this.top0) : linkBody(spec);
+      this.bodyShell = tag(new THREE.Mesh(pieces.shell, m.body), 'susp.body');
+      this.bodyShell.renderOrder = 2;
+      this.subframe = tag(new THREE.Mesh(pieces.subframe, m.body), 'susp.subframe');
+      this.subframe.renderOrder = 2;
+      this.body.add(this.bodyShell, this.subframe);
+      this.shells.push({ mesh: this.bodyShell, solid: m.body, glass: m.bodyXray }, { mesh: this.subframe, solid: m.body, glass: m.bodyXray });
+    } else {
+      this.bodyShell = null;
+      this.subframe = null;
+    }
 
     // ---- Knuckle (and a split knuckle's carrier) and everything rigid with it ----
     this.body.add(this.knuckle);
@@ -465,8 +495,8 @@ export class CornerModel {
     ]).rotateZ(-Math.PI / 2);
     this.hub = tag(new THREE.Mesh(hubGeo, m.steel), 'susp.hub');
     this.disc = tag(new THREE.Mesh(discGeometry(face, ringIn, ringOut), m.disc), 'susp.brake-disc');
-    const rimR = tyreVertical(resolved.corner.tyre).rimRadiusM * 10;
-    const rimW = DRAWING.rimWidthM * 10;
+    const rimR = (options.wheel?.rimRadiusM ?? tyreVertical(resolved.corner.tyre).rimRadiusM) * 10;
+    const rimW = (options.wheel?.rimWidthM ?? DRAWING.rimWidthM) * 10;
     this.wheel = tag(new THREE.Mesh(wheelGeometry(rimR, rimW, face), m.wheel), 'susp.wheel');
     this.shells.push({ mesh: this.wheel, solid: m.wheel, glass: m.wheelGlass });
     const nutParts: THREE.BufferGeometry[] = [];
@@ -475,7 +505,8 @@ export class CornerModel {
       nutParts.push(boss(new THREE.Vector3(face + 0.27, Math.cos(a) * 0.57, Math.sin(a) * 0.57), X, 0.1, 0.18, 6));
     }
     this.nuts = tag(new THREE.Mesh(merge(nutParts), m.nut), 'susp.wheel');
-    const tyreGeo = lathe(tyreProfile(resolved.tyre.freeRadiusM * 10, rimR, resolved.tyre.widthM * 10, rimW), 120).rotateZ(-Math.PI / 2);
+    const tyreWidth = (options.wheel?.tyreWidthM ?? resolved.tyre.widthM) * 10;
+    const tyreGeo = lathe(tyreProfile(resolved.tyre.freeRadiusM * 10, rimR, tyreWidth, rimW), 120).rotateZ(-Math.PI / 2);
     this.tyre = tag(new THREE.Mesh(tyreGeo, m.tyre), 'susp.tyre');
     this.tyre.customDepthMaterial = m.tyreDepth;
     this.tyre.frustumCulled = false;
@@ -484,7 +515,7 @@ export class CornerModel {
     this.solidOnly.push(this.hub, this.disc, this.wheel, this.nuts, this.tyre);
 
     // ---- The rack's end with its boot, inboard of a steered rod ----
-    if (this.steerRod) {
+    if (this.steerRod && options.rackEnd !== false) {
       const inner = this.steerRod.body0;
       const housingEnd = inner.x - 0.75;
       const housing = tag(
@@ -535,7 +566,7 @@ export class CornerModel {
     // ---- Road, overlays and the mechanism view's drawing ----
     const tyreHalf = (resolved.tyre.widthM / 2) * 10;
     this.road = new RoadStrip(m.road, spec.wheelCentre[0], this.c0.x - tyreHalf - 2.2, this.c0.x + tyreHalf + 1.6);
-    this.group.add(this.road.mesh);
+    if (options.road !== false) this.group.add(this.road.mesh);
     this.forces = new ForceArrows(this.linkSet.arms.length + this.linkSet.rods.length);
     this.body.add(this.forces.group, this.laser.group);
     this.schematicPoints = this.schematicLayout(!!strut);
@@ -555,8 +586,25 @@ export class CornerModel {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh && o.userData.part && o !== this.road.mesh && !inside.has(o)) mesh.castShadow = true;
     });
+    this.parts = this.space ? this.spaceKeys(cornerParts(spec)) : cornerParts(spec);
     this.setView('solid');
     this.update(this.frame);
+  }
+
+  /** Puts the part space into every key the corner tagged, and gives back its cards under the spaced keys. */
+  private spaceKeys(parts: Record<string, PartInfo>): Record<string, PartInfo> {
+    const key = (k: string): string => spacedKey(k, this.space);
+    this.group.traverse((o) => {
+      const d = o.userData;
+      if (typeof d.part === 'string') d.part = key(d.part);
+      for (const name of ['partOf', 'instanceParts']) if (Array.isArray(d[name])) d[name] = (d[name] as string[]).map(key);
+    });
+    return Object.fromEntries(Object.entries(parts).map(([k, info]) => [key(k), info]));
+  }
+
+  /** The key of one of the corner's own parts, in its space. */
+  private key(part: string): string {
+    return spacedKey(part, this.space);
   }
 
   /** The mechanism view's joints, bars and lines, as references to the live points update() keeps. */
@@ -636,8 +684,8 @@ export class CornerModel {
       this.halfshaft.bell.visible = false;
       this.halfshaft.balls.visible = false;
     }
-    this.bodyShell.visible = !mech;
-    this.subframe.visible = !mech;
+    if (this.bodyShell) this.bodyShell.visible = !mech;
+    if (this.subframe) this.subframe.visible = !mech;
     this.schematic.group.visible = mech;
     if (this.damper.springMesh) this.damper.springMesh.visible = true;
     this.update(this.frame);
@@ -655,7 +703,7 @@ export class CornerModel {
     this.failed = part;
     // The per-frame red marks of the bump stop and the shaft's joints are written afresh, except on the failed part.
     this.stopRed = null;
-    this.halfshaft?.refreshMarks({ inner: part === 'susp.cv-inner', outer: part === 'susp.cv-outer' });
+    this.halfshaft?.refreshMarks({ inner: part === this.key('susp.cv-inner'), outer: part === this.key('susp.cv-outer') });
     if (!part) return;
     const seen = new Set<THREE.Material>();
     this.group.traverse((o) => {
@@ -674,8 +722,8 @@ export class CornerModel {
     for (const undo of this.highlightUndo) undo();
     if (this.highlightUndo.length > 0) {
       // The undo put back the tints of the moment the highlight came on; a stop or a joint may have changed since.
-      if (this.failed !== 'susp.bump-stop') this.stopRed = null;
-      this.halfshaft?.refreshMarks({ inner: this.failed === 'susp.cv-inner', outer: this.failed === 'susp.cv-outer' });
+      if (this.failed !== this.key('susp.bump-stop')) this.stopRed = null;
+      this.halfshaft?.refreshMarks({ inner: this.failed === this.key('susp.cv-inner'), outer: this.failed === this.key('susp.cv-outer') });
     }
     this.highlightUndo = [];
     if (!on) return;
@@ -837,7 +885,7 @@ export class CornerModel {
     // Bump stop red past 20 % of its squeeze (suspensions plan, 3D parts). Written only when it changes, and never
     // over a failure's own mark.
     const red = this.damper.squeeze > 0.2;
-    if (red !== this.stopRed && this.failed !== 'susp.bump-stop') {
+    if (red !== this.stopRed && this.failed !== this.key('susp.bump-stop')) {
       this.stopRed = red;
       for (const mat of [this.materials.bumpStop, this.materials.bumpStopGlass]) {
         mat.emissive.set(red ? '#ff2a10' : '#000000');
@@ -854,8 +902,8 @@ export class CornerModel {
     this.tyre.position.x = e * 5.2;
     this.caliper.position.copy(this.c0).addScaledVector(this.spinAxis0, e * 1.4);
     this.caliper.position.z -= e * 1.6;
-    this.bodyShell.position.y = e * 6;
-    this.subframe.position.y = -e * 1.5;
+    if (this.bodyShell) this.bodyShell.position.y = e * 6;
+    if (this.subframe) this.subframe.position.y = -e * 1.5;
 
     // Halfshaft: from the differential to the outer joint on the hub.
     if (this.halfshaft) {

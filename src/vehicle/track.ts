@@ -32,13 +32,8 @@ export interface TrackDef {
 }
 
 export interface Sector {
-  /** The pieces' sector id. */
+  /** The pieces' sector id. Pages show it through SECTOR_NAMES (src/data/vehicle-names.ts). */
   id: string;
-  /**
-   * @deprecated Until stage O2a: the display name when buildTrack got names, else the id. Pages translate `id` with
-   * SECTOR_NAMES themselves.
-   */
-  name: string;
   s0: number;
   s1: number;
 }
@@ -105,8 +100,7 @@ function solveClosers(def: TrackDef): { a: number; b: number } {
   return { a, b };
 }
 
-/** `names` maps sector ids to display names, for the oil page until stage O2a translates ids itself. */
-export function buildTrack(def: TrackDef, ds = 1, names?: Readonly<Record<string, string>>): Track {
+export function buildTrack(def: TrackDef, ds = 1): Track {
   const turn = def.pieces.reduce((sum, p) => sum + (p.kind === 'arc' ? p.angle : 0), 0);
   if (Math.abs(turn - 360) > 1e-9) throw new Error(`Track ${def.id} turns ${turn}°, not 360°`);
   const closers = solveClosers(def);
@@ -137,7 +131,7 @@ export function buildTrack(def: TrackDef, ds = 1, names?: Readonly<Record<string
       // Pieces of one named corner (a chicane, a slalom) make one sector.
       const last = sectors[sectors.length - 1];
       if (last && last.id === p.name && Math.abs(last.s1 - ss) < 1e-9) last.s1 = ss + lengths[i]!;
-      else sectors.push({ id: p.name, name: names?.[p.name] ?? p.name, s0: ss, s1: ss + lengths[i]! });
+      else sectors.push({ id: p.name, s0: ss, s1: ss + lengths[i]! });
     }
     ss += lengths[i]!;
   });

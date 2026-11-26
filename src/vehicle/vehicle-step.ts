@@ -6,7 +6,8 @@
 //   4. wheel.ts integrates every wheel, linear-implicit in the tyre force;
 //   5. the chassis moves the body.
 // The drivetrain and the wheels see each other only through the WheelBus, so a ChassisSim can replace the
-// longitudinal chassis without a change here. No DOM: the worklet will run it (stage K2c adds VehicleLoad around it).
+// longitudinal chassis without a change here. Anchor slots past the wheels (the crank of VehicleLoad) are the caller's
+// to write. No DOM: the worklet runs it inside VehicleLoad (vehicle-load.ts).
 
 import type { DrivetrainCore } from '../drivetrain/core.ts';
 import { DrivetrainSolver } from '../drivetrain/solver.ts';
@@ -50,7 +51,7 @@ export class VehicleStep {
     this.bus = newWheelBus();
     const S = spec.core.springs;
     this.hubs = [];
-    for (let j = 0; j < S.ids.length; j++) if (S.anchor[j]! >= 0) this.hubs.push([j, S.anchor[j]!]);
+    for (let j = 0; j < S.ids.length; j++) if (S.anchor[j]! >= 0 && S.anchor[j]! < WHEELS) this.hubs.push([j, S.anchor[j]!]);
   }
 
   step(dt: number): void {
@@ -61,7 +62,7 @@ export class VehicleStep {
       bus.fx[i] = this.force.fx;
       bus.dFxdOmega[i] = this.force.dFxdOmega;
     }
-    for (let k = 0; k < solver.anchorAngle.length; k++) {
+    for (let k = 0; k < Math.min(WHEELS, solver.anchorAngle.length); k++) {
       solver.anchorAngle[k] = bus.angle[k]!;
       solver.anchorSpeed[k] = bus.omega[k]!;
     }
@@ -72,5 +73,39 @@ export class VehicleStep {
     stepWheels(bus, this.wheelInertia, dt);
     this.chassis.postStep(bus, dt);
     this.time += dt;
+  }
+
+  /** Numbers in a snapshot: the drivetrain, the wheels' spin and angle, the tyres' deflection, the chassis, the time. */
+  snapshotSize(): number {
+    return this.solver.snapshotSize() + 3 * WHEELS + this.chassis.snapshotSize() + 1;
+  }
+
+  /** Flat state for the hand-over between threads; everything else on the bus is rebuilt on every step. */
+  snapshot(out: Float64Array, offset: number): void {
+    let o = offset;
+    this.solver.snapshot(out, o);
+    o += this.solver.snapshotSize();
+    for (let i = 0; i < WHEELS; i++) {
+      out[o++] = this.bus.omega[i]!;
+      out[o++] = this.bus.angle[i]!;
+      out[o++] = this.tyreStates[i]!.u;
+    }
+    this.chassis.snapshot(out, o);
+    o += this.chassis.snapshotSize();
+    out[o] = this.time;
+  }
+
+  restore(from: Float64Array, offset: number): void {
+    let o = offset;
+    this.solver.restore(from, o);
+    o += this.solver.snapshotSize();
+    for (let i = 0; i < WHEELS; i++) {
+      this.bus.omega[i] = from[o++]!;
+      this.bus.angle[i] = from[o++]!;
+      this.tyreStates[i]!.u = from[o++]!;
+    }
+    this.chassis.restore(from, o);
+    o += this.chassis.snapshotSize();
+    this.time = from[o]!;
   }
 }
