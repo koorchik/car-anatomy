@@ -15,6 +15,8 @@ import type { ResolvedCorner } from './setup.ts';
 import { QuarterSim, type RoadInput } from './quarter.ts';
 import { lineariseQuarter, quarterModes } from './evaluate.ts';
 import { G } from './forces.ts';
+import { controllerFor } from './damper-control.ts';
+import type { DamperKind } from './spec.ts';
 
 /** Speed the quarter car is driven at on the post, m/s: position along the "road" is time. */
 export const SHAKER_SPEED_MS = 1;
@@ -68,6 +70,8 @@ export interface SteppedSineOptions {
   velocityMs: number;
   /** Physics step, s (SHAKER_STEP_S unless given). */
   stepS?: number;
+  /** A controlled damper (damper-control.ts); passive unless given. */
+  damperKind?: DamperKind;
 }
 
 /** Least-squares fit of a + b·sin + c·cos, accumulated sample by sample. */
@@ -133,6 +137,7 @@ export class SteppedSine {
     this.options = options;
     this.step = options.stepS ?? SHAKER_STEP_S;
     this.sim = new QuarterSim(rc, this.input, SHAKER_SPEED_MS);
+    if (options.damperKind && options.damperKind !== 'passive') this.sim.control = controllerFor(options.damperKind, rc);
     const { body, hop } = quarterModes(lineariseQuarter(rc));
     const rate = (m: { hz: number; zeta: number }): number => {
       const wn = 2 * Math.PI * m.hz;

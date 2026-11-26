@@ -13,7 +13,8 @@
 import { CARS } from '../data/cars.ts';
 import { tyreVertical } from '../vehicle/tyre-data.ts';
 import {
-  AXLE_KEYS, CAR_KEYS, DAMPER_CHOICES, DRIVES, FRONT_LAYOUTS, KNUCKLES, REAR_LAYOUTS, SOLID_LATERALS, SOLID_LINKS, TYRES,
+  AXLE_KEYS, CAR_KEYS, DAMPER_CHOICES, DAMPER_KINDS, DRIVES, FRONT_LAYOUTS, KNUCKLES, REAR_LAYOUTS, SOLID_LATERALS,
+  SOLID_LINKS, SPRING_KINDS, TYRES,
   axleOf, isDriven, withAxle, type AxleEnd, type AxleKey, type AxleParams, type ChassisDesign,
   type DesignLayout,
 } from './design.ts';
@@ -186,6 +187,12 @@ export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey, a
       return fixed(-80, 80);
     case 'beamTorsionNmRad':
       return fixed(0, 20000);
+    case 'rockerRatio':
+      return fixed(0.6, 1.6);
+    case 'rockerProgressionDeg':
+      return fixed(-20, 25);
+    case 'thirdSpringNmm':
+      return fixed(0, 150);
     case 'lowerLinkMm':
       return fixed(300, 900);
     case 'upperLinkMm':
@@ -243,7 +250,8 @@ const CLAMP_ORDER = [
   'trackMm', 'tyreWidthMm', 'rimIn', 'tyreAspect', 'kingpinOffsetMm', 'kpiDeg', 'casterDeg', 'scrubMm', 'lowerArmMm',
   'upperArmMm', 'upperAngleDeg', 'lowerBallZMm', 'upperBallZMm', 'lowerPivotZMm', 'svAngleDeg', 'tieRodDzMm',
   'sweepDeg', 'pivotArmMm', 'pivotYMm', 'pivotDzMm', 'pivotSvDeg', 'beamPos', 'shearDzMm', 'beamArmMm', 'beamBushInMm',
-  'beamBushDzMm', 'beamTorsionNmRad', 'lowerLinkMm', 'upperLinkMm', 'linkAngleDeg', 'upperLinkAngleDeg', 'lateralZMm',
+  'beamBushDzMm', 'beamTorsionNmRad', 'rockerRatio', 'rockerProgressionDeg', 'thirdSpringNmm', 'lowerLinkMm',
+  'upperLinkMm', 'linkAngleDeg', 'upperLinkAngleDeg', 'lateralZMm',
   'diffOutputYMm', 'diffOutputDzMm', 'camberDeg', 'toeDeg', 'damperCompression', 'damperRebound', 'damperKneeMs',
   'damperHighRatio', 'barMm', 'barWallMm', 'barArmMm', 'unsprungKg',
 ] as const satisfies readonly AxleNumericKey[];
@@ -269,6 +277,7 @@ function typed(input: unknown): ChassisDesign {
   out.car = typeof own(src, 'car') === 'string' && Object.hasOwn(CARS, own(src, 'car') as string) ? own(src, 'car') : null;
   out.drive = oneOf(DRIVES, own(src, 'drive'), DEFAULT_CHASSIS.drive);
   out.tyre = oneOf(TYRES, own(src, 'tyre'), DEFAULT_CHASSIS.tyre);
+  out.dampers = oneOf(DAMPER_KINDS, own(src, 'dampers'), DEFAULT_CHASSIS.dampers);
   for (const end of ['F', 'R'] as const) {
     const k = (key: AxleKey): string => `${key}${end}`;
     const layouts: readonly DesignLayout[] = end === 'F' ? FRONT_LAYOUTS : REAR_LAYOUTS;
@@ -277,6 +286,7 @@ function typed(input: unknown): ChassisDesign {
     out[k('solidLateral')] = oneOf(SOLID_LATERALS, own(src, k('solidLateral')), 'panhard');
     out[k('solidLinks')] = oneOf(SOLID_LINKS, own(src, k('solidLinks')), 'four');
     out[k('damper')] = oneOf(DAMPER_CHOICES, own(src, k('damper')), 'comfort');
+    out[k('springKind')] = oneOf(SPRING_KINDS, own(src, k('springKind')), 'coil');
     const spring = own(src, k('springNmm'));
     out[k('springNmm')] = isNumber(spring) ? spring : null;
   }

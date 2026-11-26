@@ -557,6 +557,14 @@ describe('no control is dead', () => {
     ['live axle on a Watt linkage', editChassis(editChassis(base, { drive: 'rwd', layoutR: 'live-axle' }), { solidLateralR: 'watt' })],
     ['triangulated live axle, all-wheel drive', editChassis(editChassis(base, { drive: 'awd', layoutR: 'live-axle' }), { solidLateralR: 'triangulated' })],
     ['multilink front, rear drive', editChassis(base, { layoutF: 'multilink', drive: 'rwd' })],
+    // Stage P14-core: rockers with third springs, gas springs and controlled dampers.
+    [
+      'pushrods with third springs, air springs, active dampers',
+      editChassis(editChassis(base, { drive: 'rwd', layoutF: 'pushrod', layoutR: 'pushrod' }), {
+        thirdSpringNmmF: 40, thirdSpringNmmR: 50, springKindF: 'air', springKindR: 'air', dampers: 'active',
+      }),
+    ],
+    ['hydropneumatic struts, MagneRide', editChassis(base, { springKindF: 'hydro', springKindR: 'hydro', dampers: 'magneride' })],
   ];
   const figures = (d: ChassisDesign): string => JSON.stringify(chassisSnapshot(d).map((m) => [m.id, Math.round(m.value * 1e4)]));
 

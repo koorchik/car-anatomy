@@ -8,8 +8,8 @@
 // real car the design started from (to-spec.ts).
 
 import {
-  axleOf, DAMPER_CHOICES, DRIVES, FRONT_LAYOUTS, isDriven, isPivot, isSolid, isWishbone, KNUCKLES, REAR_LAYOUTS,
-  SOLID_LATERALS, SOLID_LINKS, TYRES, type AxleEnd, type AxleKey, type AxleParams, type ChassisDesign, type DesignKey,
+  axleOf, DAMPER_CHOICES, DAMPER_KINDS, DRIVES, FRONT_LAYOUTS, isDriven, isPivot, isSolid, isWishbone, KNUCKLES,
+  REAR_LAYOUTS, SOLID_LATERALS, SOLID_LINKS, SPRING_KINDS, TYRES, type AxleEnd, type AxleKey, type AxleParams, type ChassisDesign, type DesignKey,
 } from './design.ts';
 
 export interface ChassisControl {
@@ -36,6 +36,7 @@ const CAR_CONTROLS: readonly ChassisControl[] = [
   { key: 'driveFront', kind: 'number', applies: (d) => d.drive === 'awd' },
   { key: 'finalDrive', kind: 'number', applies: (d) => diffOnAxle(d, 'F') || diffOnAxle(d, 'R') },
   { key: 'tyre', kind: 'choice', options: () => TYRES },
+  { key: 'dampers', kind: 'choice', options: () => DAMPER_KINDS },
 ];
 
 type AxleRule = (a: AxleParams, end: AxleEnd, d: ChassisDesign) => boolean;
@@ -59,6 +60,9 @@ const adjustable: AxleRule = (a) => a.layout !== 'swing-axle';
  *  joint is its pivot). */
 const shafts: AxleRule = (a, end, d) => isDriven(d.drive, end) && a.layout !== 'swing-axle' && a.layout !== 'live-axle';
 const ownDamper: AxleRule = (a) => a.damper === 'custom';
+const rocker: AxleRule = (a) => a.layout === 'pushrod';
+/** Leaves are the spring of a leaf-sprung axle. */
+const springChoice: AxleRule = (a) => !(isSolid(a.layout) && a.solidLateral === 'leaf');
 const withBar: AxleRule = (a) => a.barMm > 0;
 /** Inboard brakes change where the brake torque reacts only where the hub and the differential are on different
  *  parts: not on a live axle (the differential turns with it) nor on a swing axle (the shaft is the arm). On a de Dion
@@ -118,6 +122,10 @@ const AXLE_CONTROLS: readonly AxleControl[] = [
   { key: 'camberDeg', kind: 'number', applies: adjustable },
   { key: 'toeDeg', kind: 'number', applies: adjustable },
   { key: 'springNmm', kind: 'spring' },
+  { key: 'springKind', kind: 'choice', options: () => SPRING_KINDS, applies: springChoice },
+  { key: 'rockerRatio', kind: 'number', applies: rocker },
+  { key: 'rockerProgressionDeg', kind: 'number', applies: rocker },
+  { key: 'thirdSpringNmm', kind: 'number', applies: rocker },
   { key: 'damper', kind: 'choice', options: () => DAMPER_CHOICES },
   { key: 'damperCompression', kind: 'number', applies: ownDamper },
   { key: 'damperRebound', kind: 'number', applies: ownDamper },

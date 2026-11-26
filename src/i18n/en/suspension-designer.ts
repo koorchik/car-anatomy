@@ -19,6 +19,12 @@ export const SUSPENSION_DESIGNER_EN: Record<string, string> = {
   'Позашляховик на ресорах': 'Off-roader on leaf springs',
   'Високий і важкий: подвійні важелі спереду, нерозрізний міст на ресорах ззаду.':
     'Tall and heavy: double wishbones in front, a live axle on leaf springs at the rear.',
+  'Лімузин на пневмі': 'Air-sprung limousine',
+  'Важкий седан на пневмоподушках з вирівнюванням і адаптивних амортизаторах: з вантажем не просідає.':
+    'A heavy sedan on self-leveling air springs and adaptive shock absorbers: it does not sag when laden.',
+  'Гоночний на коромислах': 'Pushrod racer',
+  'Штовхачі й коромисла на обох осях, треті пружини тримають кузов на підйомі, сліки.':
+    'Pushrods and rockers on both axles, third springs hold the body in heave, slicks.',
   "Надто м'яка": 'Far too soft',
   'Пружини на межі й зношені амортизатори: кузов розгойдується й пробиває відбійники.':
     'Springs at the limit and worn-out shock absorbers: the body wallows and hits the bump stops.',
@@ -166,4 +172,8 @@ export const SUSPENSION_DESIGNER_EN: Record<string, string> = {
   'Запас ходу до відбійника ззаду': 'Rear travel left to the bump stop',
   'Непідресорена маса': 'Unsprung mass',
   'Розвантаження заднього колеса під газом': 'Rear wheel unloading under power',
+  'Частота кузова з вантажем спереду': 'Front body frequency, laden',
+  'Частота кузова з вантажем ззаду': 'Rear body frequency, laden',
+  'Просідання з вантажем спереду': 'Front sag when laden',
+  'Просідання з вантажем ззаду': 'Rear sag when laden',
 };

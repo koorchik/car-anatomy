@@ -1,6 +1,7 @@
 // Starting points of the suspension designer (suspensions plan, the designer's presets and links): the real cars of the catalogue,
 // typical cars of five kinds, deliberately odd ones that P8b's diagnoses should catch, and a random one from a seed.
-// Presets that need steering (P13-core) or other spring and damper kinds (P14-core) come with those stages.
+// Presets that need steering come with P13-core; the air-sprung limousine and the pushrod racer use P14-core's springs,
+// dampers and rockers.
 //
 // The typical and odd presets are not real cars: masses, sizes and centres of mass are estimates of their class, the
 // geometry the templates' typical geometry, every number illustrative. The Corvair swing axle preset is a rear-engined car on
@@ -12,7 +13,8 @@ import { CARS } from '../data/cars.ts';
 import { resolveChassis } from './constraints.ts';
 import { DEFAULT_CAR, typicalAxle } from './defaults.ts';
 import {
-  DAMPER_CHOICES, designOf, FRONT_LAYOUTS, isDriven, KNUCKLES, REAR_LAYOUTS, SOLID_LATERALS, TYRES, type AxleEnd,
+  DAMPER_CHOICES, DAMPER_KINDS, designOf, FRONT_LAYOUTS, isDriven, KNUCKLES, REAR_LAYOUTS, SOLID_LATERALS, SPRING_KINDS,
+  TYRES, type AxleEnd,
   type AxleParams, type CarParams, type ChassisDesign, type DesignLayout, type Drive,
 } from './design.ts';
 import { CHASSIS_CATALOGUE } from './catalogue.ts';
@@ -119,6 +121,36 @@ export const TYPICAL_PRESETS: readonly ChassisPreset[] = [
         'live-axle',
         { trackMm: 1540, tyreWidthMm: 265, tyreAspect: 70, rimIn: 16, barMm: 28, unsprungKg: 55 },
         { trackMm: 1550, tyreWidthMm: 265, tyreAspect: 70, rimIn: 16, barMm: 0, solidLateral: 'leaf', unsprungKg: 80 },
+      ),
+    ),
+  },
+  {
+    id: 'air-limousine',
+    name: t('Лімузин на пневмі'),
+    note: t('Важкий седан на пневмоподушках з вирівнюванням і адаптивних амортизаторах: з вантажем не просідає.'),
+    kind: 'typical',
+    design: once(() =>
+      build(
+        { massKg: 2200, frontShare: 0.52, cgHeightMm: 560, wheelbaseMm: 3100, drive: 'awd', dampers: 'adaptive' },
+        'multilink',
+        'multilink',
+        { trackMm: 1640, tyreWidthMm: 245, tyreAspect: 45, rimIn: 19, barMm: 26, springKind: 'air', unsprungKg: 50 },
+        { trackMm: 1650, tyreWidthMm: 245, tyreAspect: 45, rimIn: 19, barMm: 20, springKind: 'air', unsprungKg: 50, toeDeg: 0.1 },
+      ),
+    ),
+  },
+  {
+    id: 'pushrod-racer',
+    name: t('Гоночний на коромислах'),
+    note: t('Штовхачі й коромисла на обох осях, треті пружини тримають кузов на підйомі, сліки.'),
+    kind: 'typical',
+    design: once(() =>
+      build(
+        { massKg: 900, frontShare: 0.44, cgHeightMm: 330, wheelbaseMm: 2700, drive: 'rwd', tyre: 'slick' },
+        'pushrod',
+        'pushrod',
+        { trackMm: 1600, tyreWidthMm: 265, tyreAspect: 35, rimIn: 18, springNmm: 90, thirdSpringNmm: 40, damper: 'track', barMm: 26, camberDeg: -3, unsprungKg: 25 },
+        { trackMm: 1560, tyreWidthMm: 305, tyreAspect: 30, rimIn: 18, springNmm: 100, thirdSpringNmm: 50, damper: 'track', barMm: 20, camberDeg: -2, unsprungKg: 28 },
       ),
     ),
   },
@@ -245,23 +277,30 @@ export function randomChassis(random: () => number = Math.random): ChassisDesign
       brakeInboard: random() < 0.1,
     };
   };
-  return resolveChassis(
-    designOf(
-      {
-        car: null,
-        massKg: between(700, 2800),
-        frontShare: between(0.35, 0.65),
-        cgHeightMm: between(380, 850),
-        wheelbaseMm: between(2100, 3300),
-        drive,
-        brakeFront: between(0.55, 0.8),
-        driveFront: between(0.3, 0.7),
-        finalDrive: between(2.5, 4.8),
-        tyre: pick(TYRES),
-      },
-      axle(front, 'F'),
-      axle(rear, 'R'),
-    ),
+  const design = designOf(
+    {
+      car: null,
+      massKg: between(700, 2800),
+      frontShare: between(0.35, 0.65),
+      cgHeightMm: between(380, 850),
+      wheelbaseMm: between(2100, 3300),
+      drive,
+      brakeFront: between(0.55, 0.8),
+      driveFront: between(0.3, 0.7),
+      finalDrive: between(2.5, 4.8),
+      tyre: pick(TYRES),
+      dampers: 'passive',
+    },
+    axle(front, 'F'),
+    axle(rear, 'R'),
   );
+  // The springs' kinds, the rockers and the dampers (P14-core) are drawn after the axles.
+  const springs = (end: AxleEnd): Partial<ChassisDesign> => ({
+    [`springKind${end}`]: pick(SPRING_KINDS),
+    [`rockerRatio${end}`]: between(0.7, 1.5),
+    [`rockerProgressionDeg${end}`]: between(-15, 20),
+    [`thirdSpringNmm${end}`]: random() < 0.5 ? 0 : between(10, 120),
+  });
+  return resolveChassis({ ...design, dampers: pick(DAMPER_KINDS), ...springs('F'), ...springs('R') });
 }
 
