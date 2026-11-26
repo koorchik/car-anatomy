@@ -180,6 +180,12 @@ describe('links', () => {
   it('say what they had to change', () => {
     expect(resolveBuildWithNotes({ donor: 'bmw-m3-e30', gearbox: { catalogue: 'manual-transaxle' } }).notes).toEqual([{ id: 'gearbox-type', asked: 'transaxle', donor: 'layshaft' }]);
     expect(resolveBuildWithNotes({ donor: 'nope' }).notes[0]!.id).toBe('donor');
+    // Both are transaxles, but the 911's sits along the car and the Civic's across it: neither takes the other's engine.
+    for (const [donor, box, axis] of [['civic-type-r-fk8', 'manual-transaxle/porsche-911-carrera-t-992', 'transverse'], ['porsche-911-carrera-t-992', 'manual-transaxle', 'longitudinal']] as const) {
+      const swapped = resolveBuildWithNotes({ donor, gearbox: { catalogue: box } });
+      expect(swapped.build.gearbox, donor).toBeNull();
+      expect(swapped.notes, donor).toEqual([{ id: 'gearbox-axis', donor: axis }]);
+    }
     const rotary = resolveBuildWithNotes({ donor: 'bmw-m3-e30', engine: { catalogue: 'r2' }, lubrication: { sump: 'dry', oilL: 6 } });
     expect(rotary.build.lubrication).toBeNull();
     expect(rotary.notes.map((n) => n.id)).toEqual(['lubrication-rotary']);

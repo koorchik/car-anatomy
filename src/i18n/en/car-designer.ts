@@ -28,6 +28,10 @@ export const CAR_DESIGNER_EN: Record<string, string> = {
   'Коробку замінено': 'Transmission replaced',
   'Поздовжня коробка не стане біля поперечного двигуна чи на задній осі: стоїть власна коробка авто.':
     "An in-line transmission does not fit beside a transverse engine or on the rear axle: the car keeps its own.",
+  'Коробка для поздовжнього двигуна не стане біля поперечного: стоїть власна коробка авто.':
+    'A transmission made for a longitudinal engine does not fit a transverse one: the car keeps its own.',
+  'Коробка для поперечного двигуна не стане за поздовжнім: стоїть власна коробка авто.':
+    'A transmission made for a transverse engine does not fit behind a longitudinal one: the car keeps its own.',
   'Двовальна коробка з головною передачею в картері не стане за поздовжнім двигуном спереду: стоїть власна коробка авто.':
     "A two-shaft transmission with the final drive in its case does not fit behind a front longitudinal engine: the car keeps its own.",
   'Такої підвіски немає': 'No such suspension',

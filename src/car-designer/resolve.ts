@@ -2,7 +2,8 @@
 // be, and explains it. The engineering level (diagnostics.ts) forbids nothing.
 //
 // - A transverse engine takes only a transverse gearbox and a longitudinal one only a longitudinal gearbox, so a gearbox
-//   of the other kind than the donor's is replaced by the donor's own.
+//   of the other kind than the donor's (a layshaft box against a transaxle), or a catalogue box that sat across its car
+//   when the donor's engine sits along it (or the other way), is replaced by the donor's own.
 // - The donor sets the drive.
 // - A unit that names nothing (an unknown engine, gearbox, chassis or tyre) falls back to the donor's.
 // - Nested designs go through their sections' resolvers (resolveDesign, resolveGearboxDesign, resolveChassis).
@@ -24,7 +25,9 @@ import { resolveGearboxDesign } from '../gearbox-designer/constraints.ts';
 import { DIFF_CHOICES, type DiffChoice, type GearboxDesign, type GearboxType } from '../gearbox-designer/design.ts';
 import { catalogueEntry } from '../suspension-designer/catalogue.ts';
 import { resolveChassis } from '../suspension-designer/constraints.ts';
+import { CARS } from '../data/cars.ts';
 import type { CarRecord } from '../vehicle/car.ts';
+import type { EngineMount } from '../vehicle/vehicle.ts';
 import { parseTyreSize } from '../vehicle/tyre-size.ts';
 import { TYRES, type TyreId } from '../vehicle/vehicle.ts';
 import {
@@ -37,9 +40,12 @@ export type ResolveNote =
   | { id: 'engine'; asked: string }
   | { id: 'gearbox'; asked: string }
   | { id: 'gearbox-type'; asked: GearboxType; donor: GearboxType }
+  | { id: 'gearbox-axis'; donor: EngineAxis }
   | { id: 'suspension'; asked: string }
   | { id: 'tyre' }
   | { id: 'lubrication-rotary' };
+
+type EngineAxis = EngineMount['axis'];
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const own = (o: Record<string, unknown>, key: string): unknown => (Object.hasOwn(o, key) ? o[key] : undefined);
@@ -54,13 +60,22 @@ export function donorGearboxType(car: CarRecord): GearboxType {
   return car.mount.axis === 'longitudinal' && car.mount.position === 'front' && car.drive === 'rwd' ? 'layshaft' : 'transaxle';
 }
 
-/** Catalogue gearboxes that fit a donor: copyable (in a car the gearbox section drives) and of the donor's kind. */
+/** How a catalogue gearbox's engine sat in its car: a transverse transaxle and a longitudinal one are different units. */
+const gearboxAxis = (id: string): EngineAxis | undefined => {
+  const g = gearboxById(id);
+  return g?.car ? CARS[g.car]?.mount.axis : undefined;
+};
+
+/**
+ * Catalogue gearboxes that fit a donor: copyable (in a car the gearbox section drives), of the donor's kind, and from a
+ * car whose engine sat the same way (a 911's longitudinal transaxle cannot take a Civic's transverse engine).
+ */
 export function gearboxChoices(car: CarRecord): string[] {
   const type = donorGearboxType(car);
   return [car.gearbox, ...ALL_GEARBOXES.map((g) => g.id)].filter((id, i, all): id is string => {
     if (!id || all.indexOf(id) !== i) return false;
     const g = gearboxById(id);
-    return !!g && !!g.car && !!driveCarById(g.car) && g.layout.kind === type;
+    return !!g && !!g.car && !!driveCarById(g.car) && g.layout.kind === type && gearboxAxis(id) === car.mount.axis;
   });
 }
 
@@ -91,6 +106,7 @@ function resolveGearbox(raw: unknown, car: CarRecord, notes: ResolveNote[]): Bui
     if (gearboxChoices(car).includes(id)) return { catalogue: id };
     const g = gearboxById(id);
     if (g && g.layout.kind !== type) notes.push({ id: 'gearbox-type', asked: g.layout.kind as GearboxType, donor: type });
+    else if (g && gearboxAxis(id) && gearboxAxis(id) !== car.mount.axis) notes.push({ id: 'gearbox-axis', donor: car.mount.axis });
     else notes.push({ id: 'gearbox', asked: id.slice(0, 60) });
     return null;
   }
