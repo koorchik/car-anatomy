@@ -74,6 +74,19 @@ describe('gas springs', () => {
     expect(sunk.sagM).toBeLessThan(1500 / 50000);
     expect(springUnderLoad({ ...s, levelled: true }, 4500).sagM).toBe(0);
   });
+
+  it('without levelling a light load lets the gas push the piston out as far as the law says', () => {
+    // A soft spring (0.2 m of static deflection) under a sixth of its design load: the gas expands until (p − p_atm)·A
+    // carries it, more than twice the design length out.
+    for (const type of ['air', 'hydro'] as const) {
+      const s = { type, staticN: 3000, rateNm: 15000, lenM: 0.3, levelled: false };
+      const g = gasSpringFor(type, s.staticN, s.rateNm, s.lenM);
+      for (const load of [500, 1000, 6000]) {
+        const { sagM } = springUnderLoad(s, load);
+        expect(gasSpringForce(g, s.lenM - sagM) / load).toBeCloseTo(1, 6);
+      }
+    }
+  });
 });
 
 describe('controlled dampers on the shaker', () => {

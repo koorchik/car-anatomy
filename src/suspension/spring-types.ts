@@ -32,9 +32,12 @@ export function springUnderLoad(s: SpringAtDesign, staticN: number): SpringUnder
   if (s.type === 'coil') return { rateNm: s.rateNm, sagM: (staticN - s.staticN) / s.rateNm };
   const g = gasSpringFor(s.type, s.staticN, s.rateNm, s.lenM);
   if (s.levelled) return { rateNm: gasSpringRate(levelGasSpring(g, staticN), s.lenM), sagM: 0 };
-  // Sinks (or rises) until the gas carries the load: bisection on the length.
-  let lo = s.lenM - 2 * s.lenM;
+  // Sinks (or rises) until the gas carries the load: bisection on the length. The force falls with the length, so the
+  // bracket widens until it holds the load: a light load lets the gas push the piston out far past the design length.
+  let lo = s.lenM - s.lenM;
   let hi = s.lenM + s.lenM;
+  for (let i = 0; i < 60 && gasSpringForce(g, lo) <= staticN; i++) lo -= hi - lo;
+  for (let i = 0; i < 60 && gasSpringForce(g, hi) > staticN; i++) hi += hi - lo;
   for (let i = 0; i < 100; i++) {
     const mid = (lo + hi) / 2;
     if (gasSpringForce(g, mid) > staticN) lo = mid;
