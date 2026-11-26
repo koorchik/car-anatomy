@@ -9,7 +9,7 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   '{mm} мм': '{mm} mm',
   'Розрахунковий момент': 'Torque rating',
   '{nm} Н·м': '{nm} N·m',
-  'Авто': 'Car',
+  'Автомобіль': 'Car',
   ', {hp} к.с.': ', {hp} hp',
   'Шини': 'Tires',
   '{size}, радіус кочення {mm} мм': '{size}, rolling radius {mm} mm',

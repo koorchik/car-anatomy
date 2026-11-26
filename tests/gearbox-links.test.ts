@@ -13,13 +13,15 @@ import { articleHtml } from '../src/ui/article.ts';
 describe('the gearbox section', () => {
   it('registers manual-rwd as its first page, so the menu has somewhere to go', () => {
     const entry = SECTIONS.find((s) => s.id === 'gearboxes')!;
-    expect(entry.pages?.[0]).toBe('manual-rwd');
+    expect(entry.openPages?.[0]).toBe('manual-rwd');
+    // The menu's item leads there (O3 builds the menu from the registry).
+    expect(entry.pages?.[0]?.href).toBe('#/gearboxes/manual-rwd');
     expect(pageShown('gearboxes', 'manual-rwd')).toBe(true);
     // Data without its page yet is not a page a link may go to.
     expect(pageShown('gearboxes', 'manual-transaxle')).toBe(false);
     expect(pageShown('suspensions', 'macpherson')).toBe(false);
     expect(pageShown('engines', 'i4')).toBe(true);
-    for (const page of entry.pages ?? []) {
+    for (const page of entry.openPages ?? []) {
       const data = GEARBOX_PAGES.find((p) => p.id === page);
       expect(data?.article, page).toBeDefined();
       // Links name the gearbox without its data: the name they use is the record's.

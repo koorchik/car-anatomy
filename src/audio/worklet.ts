@@ -20,6 +20,8 @@ export type WorkletCommand =
   | { type: 'pedal'; value: number }
   | { type: 'start' }
   | { type: 'stop' }
+  /** Off at once, without the run-down (Drive.halt). */
+  | { type: 'halt' }
   | { type: 'lock'; rpm: number | null; running: boolean }
   | { type: 'listen'; position: ListenPosition }
   | { type: 'trim'; value: number }
@@ -78,6 +80,9 @@ class EngineProcessor extends AudioWorkletProcessor {
         break;
       case 'stop':
         this.synth?.sim.stop();
+        break;
+      case 'halt':
+        this.synth?.sim.adopt('off', 0);
         break;
       case 'lock':
         if (!this.synth) break;

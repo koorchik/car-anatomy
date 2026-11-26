@@ -27,7 +27,6 @@ import { GearboxModel } from '../../scene/gearbox/gearbox-model.ts';
 import { GEARBOX_PARTS } from '../../scene/gearbox/parts.ts';
 import { registerParts } from '../../scene/parts-registry.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
-import { ownSlots, type OwnedSlots } from '../../shell/owned-slots.ts';
 import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
 import { readableDegreesPerSecond } from '../../shell/time.ts';
 import { parseTyreSize, rollingRadiusM } from '../../vehicle/tyre-size.ts';
@@ -72,7 +71,6 @@ export class GearboxSection implements Section {
   readonly id = 'gearboxes' as const;
   readonly solidLabel = t('Коробка');
   private ctx!: SectionContext;
-  private owned!: OwnedSlots;
   private root!: HTMLElement;
   private data!: PageData;
   private box!: Gearbox;
@@ -120,8 +118,7 @@ export class GearboxSection implements Section {
   }
 
   mount(ctx: SectionContext): void {
-    this.owned = ownSlots(ctx.slots);
-    this.ctx = ctx = { ...ctx, slots: this.owned.slots };
+    this.ctx = ctx;
     this.root = ctx.slots.root;
     registerParts(GEARBOX_PARTS);
     const { slots } = ctx;
@@ -175,7 +172,11 @@ export class GearboxSection implements Section {
     this.ctx.keys.use([]);
     this.ctx.slots.partCard.hidden = true;
     this.ctx.stage.fitScale = this.fitScaleBefore;
-    // The next section puts its own model on the stage, which disposes this one.
+    // Off the stage before the next section's model comes; the box is rebuilt on return (present).
+    if (this.model) {
+      this.ctx.stage.release(this.model);
+      this.model.dispose();
+    }
     this.model = null;
     for (const [el, was] of this.lent) {
       if (was.text !== undefined) el.textContent = was.text;
@@ -186,12 +187,10 @@ export class GearboxSection implements Section {
     const root = document.documentElement.style;
     if (this.toolsHBefore) root.setProperty('--tools-h', this.toolsHBefore);
     else root.removeProperty('--tools-h');
-    this.owned.setAway(true);
   }
 
   private resume(): void {
     this.away = false;
-    this.owned.setAway(false);
     this.drive.setEngine(this.data.engine);
     this.present();
   }

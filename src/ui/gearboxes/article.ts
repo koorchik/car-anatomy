@@ -34,7 +34,7 @@ export function gearboxArticleHtml(f: ArticleFacts): string {
   if (f.finalDrive !== null) rows.push([t('Головна передача'), num(f.finalDrive, 2)]);
   if (p.centreMm !== null) rows.push([t('Міжосьова відстань'), t('{mm} мм', { mm: num(p.centreMm) })]);
   if (p.ratedTorqueNm !== null) rows.push([t('Розрахунковий момент'), t('{nm} Н·м', { nm: num(p.ratedTorqueNm) })]);
-  if (f.car) rows.push([t('Авто'), `${escapeHtml(f.car.name)}, ${escapeHtml(f.car.years)}`]);
+  if (f.car) rows.push([t('Автомобіль'), `${escapeHtml(f.car.name)}, ${escapeHtml(f.car.years)}`]);
   if (f.engine) {
     const power = f.engine.powerHp === null ? '' : t(', {hp} к.с.', { hp: num(f.engine.powerHp) });
     rows.push([t('Двигун'), `<a class="sibling" href="${f.engine.href}">${escapeHtml(f.engine.name)}</a>${power}`]);

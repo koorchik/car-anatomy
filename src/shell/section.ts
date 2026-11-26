@@ -171,8 +171,8 @@ export interface KeyBinding {
   codes: readonly string[];
   /**
    * What the key does, through t(), for the help «?». Null leaves the binding out of the help: a key a page only holds
-   * back, so that a context under it does not get it (the layer keys on the oil page), or one that adds to what a later
-   * context's binding of the code already says (Esc closing the dyno's help before the shell closes the table).
+   * back, so that a context under it does not get it (the layer keys on the oil page). The help then lists nothing a
+   * context under it binds to that key either.
    */
   label: string | null;
   /** Pressed. Return false when the key did nothing after all, and the next context gets it. */
@@ -208,6 +208,11 @@ export interface AudioHost {
   readonly current: Drive | null;
   /** This frame's state of the engine: the shell ticks the Drive once a frame, before the section's frame. */
   readonly snapshot: DriveSnapshot | null;
+  /**
+   * For a section without an engine (the suspensions): the engine goes quiet at once and its local copy stands still.
+   * The next change of section gives the sound back, with the engine off: it never starts by itself.
+   */
+  suspend(): void;
 }
 
 /** Work done in pieces inside the frame's budget: laps, oil runs, road segments, sensitivity passes. */
@@ -246,7 +251,10 @@ export interface Section {
   mount(ctx: SectionContext): void;
   /** Every route of this section, the first one included (from is null then). The same route twice changes nothing. */
   enter(route: Route, from: Route | null): void;
-  /** Stops timers and sound requests, hides its slots, gives the stage back. Keeps state for coming back. */
+  /**
+   * Stops timers and sound requests and gives the stage back (Stage.release). Keeps state for coming back. What it put
+   * into the shared places the shell hides itself until the section is shown again (section-dom.ts).
+   */
   leave(to: Route): void;
   /** Each animation frame while the section is shown, before the stage is drawn. */
   frame(dt: number, now: number): void;

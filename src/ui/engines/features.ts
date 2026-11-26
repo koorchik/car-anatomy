@@ -8,6 +8,7 @@
 
 import type { Engine } from '../../engine/kinematics.ts';
 import type { EngineModel } from '../../scene/model-types.ts';
+import type { Route } from '../../shell/routes.ts';
 import type { BalancePanel } from '../balance-panel.ts';
 import type { DynoPanel, EngineSource } from '../dyno/dyno-panel.ts';
 import { dynoColumn, dynoToggle } from '../dyno/toggle.ts';
@@ -16,6 +17,7 @@ import { SystemsView } from '../systems-view.ts';
 import type { ValveReadout } from '../valve-readout.ts';
 import { DYNO, FORCES, VALVES } from './chunks.ts';
 import { $ } from './dom.ts';
+import { enginesPage, featureQuery, LAYER_IDS, routeLayers } from './routes.ts';
 import type { EnginesSection } from './section.ts';
 
 /** Room the switches and a card of a few lines need under the force card, when the systems sit at the top right. */
@@ -35,6 +37,10 @@ export class EngineFeatures {
   private dynoFor: { engine: Engine; source: EngineSource } | null = null;
   /** The designer's latest engine of the model's shape (sameShape), for force arrows that load later. */
   private reshaped: { model: EngineModel; engine: Engine } | null = null;
+  /** The route that asked for the dyno while its code is on the way: the address keeps m=dyno meanwhile. */
+  private dynoAsked: Route | null = null;
+  /** True while a route's layers are being switched: the address is written once, after them. */
+  private applying = false;
 
   constructor(section: EnginesSection) {
     this.section = section;
@@ -53,6 +59,7 @@ export class EngineFeatures {
         this.systems.setExplode(0);
       },
       markers: (markers) => section.dash.firing.setMarkers(markers),
+      switched: () => this.toRoute(),
     });
     this.dynoButton = dynoToggle();
     this.dynoButton.addEventListener('click', () => {
@@ -61,6 +68,42 @@ export class EngineFeatures {
     $('to-designer').before(this.dynoButton);
     this.dynoPlace = dynoColumn();
     slots.dash.add(this.dynoPlace);
+  }
+
+  /**
+   * What an address of the catalogue or the designer asks of the features: the dyno (`m=dyno`) and the layers
+   * (`l=oil,coolant`). An address that does not mention them changes nothing, so the dyno and the layers stay on from
+   * one engine to the next as they always did; then the address is rewritten in place to say what is on.
+   */
+  fromRoute(route: Route): void {
+    if (enginesPage(route) === 'sump') return;
+    const layers = routeLayers(route);
+    this.applying = true;
+    try {
+      if (layers) for (const id of LAYER_IDS) if (layers.includes(id) !== this.systems.isOn(id)) this.systems.toggle(id, false);
+    } finally {
+      this.applying = false;
+    }
+    if (route.query.m === 'dyno' && !this.dyno?.isActive) {
+      this.dynoAsked = route;
+      void this.loadDyno().then((dyno) => {
+        const asked = this.dynoAsked === route;
+        this.dynoAsked = null;
+        // A later address, another section or the oil page came first: theirs is the say.
+        if (asked && !this.section.away && enginesPage(this.section.ctx.router.current) !== 'sump') dyno.setActive(true);
+        this.toRoute();
+      });
+    }
+    this.toRoute();
+  }
+
+  /** Writes what is on into the address, in place: no new history entry, the visitor's context kept. */
+  private toRoute(): void {
+    const s = this.section;
+    const { router } = s.ctx;
+    const route = router.current;
+    if (this.applying || s.away || route.section !== 'engines' || enginesPage(route) === 'sump') return;
+    router.replace({ query: { ...route.query, ...featureQuery((this.dyno?.isActive ?? false) || this.dynoAsked !== null, this.systems.shown) } });
   }
 
   /** The engine the dyno measures changed. Kept for a dyno that is not here yet. */
@@ -86,7 +129,7 @@ export class EngineFeatures {
     const s = this.section;
     const { slots } = s.ctx;
     const app = slots.root;
-    const balance = new BalancePanel(slots.tools.parent, app, this.forcesSwitch);
+    const balance = new BalancePanel(slots.tools.parent, app, this.forcesSwitch, s.ctx.view);
     this.balance = balance;
     // The valve gear's labels stay after the card, as they were when both were made at the start.
     if (this.valves) app.append(this.valves.element);
@@ -122,8 +165,9 @@ export class EngineFeatures {
         if (time.mode === 'slow') time.set('readable');
       },
       // Slow motion locks the crank at walking pace, where no absorber can work (EnginesSection.time).
-      changed() {
+      changed: () => {
         time.refresh();
+        this.toRoute();
       },
       toggle: this.dynoButton,
       column: this.dynoPlace,
