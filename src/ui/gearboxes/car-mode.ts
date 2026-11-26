@@ -101,7 +101,11 @@ export class CarMode {
   private stalledFor = 0;
   private note: { text: string; left: number } | null = null;
   /** A demonstration driving the car: the step running, and whether it has done its part. */
-  private demo: { step: CarDemoStep; done: boolean; controls: DemoControls; view: DemoView } | null = null;
+  /**
+   * A demonstration driving the car: the step running, whether it has done its part, and whether it still holds the
+   * pedals (a finished step leaves the car held where it stopped until the visitor touches a pedal).
+   */
+  private demo: { step: CarDemoStep; done: boolean; held: boolean; controls: DemoControls; view: DemoView } | null = null;
 
   constructor(root: HTMLElement, drive: () => Drive, runs: RunStore, engineHref: () => string) {
     this.root = root;
@@ -121,6 +125,7 @@ export class CarMode {
     };
     pedal.addEventListener('pointerdown', (event) => {
       pedal.setPointerCapture(event.pointerId);
+      this.handBack();
       fromPointer(event);
     });
     pedal.addEventListener('pointermove', (event) => {
@@ -146,6 +151,7 @@ export class CarMode {
     };
     pedal.addEventListener('pointerdown', (event) => {
       pedal.setPointerCapture(event.pointerId);
+      this.handBack();
       this.takeClutch(false);
       fromPointer(event);
     });
@@ -179,8 +185,24 @@ export class CarMode {
   }
 
   holdClutchKey(on: boolean): void {
-    if (on) this.takeClutch(true);
+    if (on) {
+      this.handBack();
+      this.takeClutch(true);
+    }
     this.clutchKey = on;
+  }
+
+  /**
+   * The visitor reaches for a pedal after a demonstration's step has done its part: the step lets go of the pedals it
+   * held. The clutch stays where the step left it, on the key's pedal, so it comes up from there and does not snap shut.
+   */
+  handBack(): void {
+    const demo = this.demo;
+    if (!demo?.done || !demo.held) return;
+    demo.held = false;
+    if (this.clutchPointer !== null) this.clutchKeyValue = Math.max(this.clutchKeyValue, this.clutchPointer);
+    this.clutchPointer = null;
+    this.brakePointer = 0;
   }
 
   /** The clutch pedal now, 0 up … 1 floored. */
@@ -222,7 +244,7 @@ export class CarMode {
       start: () => host.start(),
     };
     const view: DemoView = { rpm: 0, speed: 0, gear: 'N', shift: 'engaged', accel: 0, running: false, launchJ: 0, clutchJ: 0, clutchC: 0, slip: 0 };
-    this.demo = { step, done: false, controls, view };
+    this.demo = { step, done: false, held: true, controls, view };
     return step;
   }
 
@@ -315,6 +337,7 @@ export class CarMode {
   }
 
   holdBrakeKey(on: boolean): void {
+    if (on) this.handBack();
     this.brakeKey = on;
   }
 

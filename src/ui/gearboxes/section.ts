@@ -184,11 +184,21 @@ export class GearboxSection implements Section {
     this.tacho = new Tacho();
     this.el('gbx-tacho').append(this.tacho.element);
     this.tacho.configure(this.data.engine.spec.redlineRpm);
-    this.pedal = new Pedal(this.el('gbx-pedal-col'), { setThrottle: (value) => this.drive.setPedal(value), press: () => void this.pressThrottle() });
+    this.pedal = new Pedal(this.el('gbx-pedal-col'), {
+      setThrottle: (value) => this.drive.setPedal(value),
+      press: () => {
+        this.car?.handBack();
+        void this.pressThrottle();
+      },
+    });
     this.ignition = new Ignition(this.el('gbx-control'), () => void this.toggleIgnition());
     this.listen();
     const keys = gearboxKeys({
-      gas: (on) => this.pedal.holdKey(on),
+      gas: (on) => {
+        // A finished demonstration's step lets go of the brake and the clutch it held when the visitor drives on.
+        if (on) this.car?.handBack();
+        this.pedal.holdKey(on);
+      },
       ignition: () => void this.toggleIgnition(),
       mute: () => {
         this.muted = !this.muted;
