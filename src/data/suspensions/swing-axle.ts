@@ -4,7 +4,7 @@
 // What is sourced (docs/suspension-model.md, the pivot pages' section):
 // - Chevrolet Corvair (1960–1963): rear engine and a rear swing axle; a front anti-roll bar as an option for 1962 and
 //   standard for 1964, when a transverse leaf between the rear wheels began to limit their camber; a new independent
-//   rear in 1965 with the roll centre at half its height; 108 in (2743 mm) wheelbase and 2270–2305 lb (Wikipedia,
+//   rear in 1965, like the Corvette's, its half-axles jointed at both ends and the roll centre at half its height; 108 in (2743 mm) wheelbase and 2270–2305 lb (Wikipedia,
 //   «Chevrolet Corvair»). NHTSA's 1972 report (DOT HS-820 198, as the research read it): understeer to about 0.4 g,
 //   the turn through neutral to oversteer between 0.4 and 0.5 g, a limit of control near 0.6 g, and no abnormal
 //   potential for loss of control, stable oversteer from 0.5 to 0.6 g; the tests ran from 1970 to the summer of 1972
@@ -12,8 +12,8 @@
 //   limit being GM's data and an expert witness's testimony as the report cites them (Ate Up With Motor, quoting the
 //   report with its page numbers). The front
 //   double wishbone, the weight split, the centre of mass, the tracks and the tyres are not checked.
-// - Volkswagen Beetle: a swing axle at the rear and two trailing arms a side in front, all on torsion bars, and a front
-//   anti-roll bar (Wikipedia, «Volkswagen Beetle»); the tyre-pressure split it shared with the Corvair and the Dauphine
+// - Volkswagen Beetle: a swing axle at the rear on torsion bars (Wikipedia, «Swing axle») and trailing arms in front
+//   (Wikipedia, «Volkswagen Beetle»); whether the early car had a front anti-roll bar is not checked (barMmF); the tyre-pressure split it shared with the Corvair and the Dauphine
 //   (Wikipedia, «Swing axle»). Which later versions changed the rear and when is not checked, so the page stops at
 //   1967. The weight split, the centre of mass and the tracks are NHTSA's 1971 Beetle (research), which the research
 //   warns is not a confirmed swing axle: they stand as estimates. The designer has no front trailing arms.
@@ -44,7 +44,7 @@ const CORVAIR: PageCar = {
   facts: [
     t('Двигун ззаду, ззаду хитний міст. NHTSA у 1970–1972 роках випробувала ранній Corvair разом із Ford Falcon 1962 року, Plymouth Valiant 1960 року, VW Beetle 1962 року, Renault 1963 року й Corvair другого покоління 1967 року. До 0,4 g бічного прискорення він має недостатню поворотність, як звичайні авто, між 0,4 і 0,5 g переходить через нейтральну до надмірної, від 0,5 до 0,6 g надмірна поворотність стала, а межа керованості близько 0,6 g.'),
     t('Висновок звіту 1972 року: керованість і стійкість Corvair 1960–1963 не дають ненормальної схильності до втрати керування чи перекидання, і він не гірший за деякі тогочасні авто.'),
-    t('У 1962 році з’явився передній стабілізатор опцією, у 1964 він став серійним, а між задніми колесами поставили поперечну ресору, яка обмежує їхній розвал. З 1965 року задня підвіска зовсім нова, незалежна, із центром крену вдвічі нижчим.'),
+    t('У 1962 році з’явився передній стабілізатор опцією, у 1964 він став серійним, а між задніми колесами поставили поперечну ресору, яка обмежує їхній розвал. З 1965 року задня підвіска зовсім нова, як у Corvette: піввісі мають шарніри з обох кінців, а центр крену вдвічі нижчий.'),
   ],
   sources: [
     'https://en.wikipedia.org/wiki/Chevrolet_Corvair',
@@ -69,12 +69,12 @@ const BEETLE: PageCar = {
     bars: [true, false],
   }),
   facts: [
-    t('Двигун ззаду, ззаду хитний міст на торсіонах. Спереду з кожного боку два поздовжні важелі, теж на торсіонах, і стабілізатор.'),
-    t('Як і Corvair, ранній Beetle покладався на різний тиск у шинах: менший спереду й більший ззаду, щоб авто не мало надмірної повертаності. Накачані однаково шини повертали її назад.'),
+    t('Двигун ззаду, ззаду хитний міст на торсіонах. Спереду з кожного боку два поздовжні важелі, теж на торсіонах.'),
+    t('Як і Corvair, ранній Beetle покладався на різний тиск у шинах: менший спереду й більший ззаду, щоб авто не мало надмірної поворотності. Накачані однаково шини повертали її назад.'),
     t('Пізніші версії отримали іншу задню підвіску; з якого року яку, сторінка не звіряла й тому показує авто до 1967 року. Розподіл ваги й центр мас NHTSA виміряла на Beetle 1971 року, тож для раннього авто вони лише орієнтир. Конструктор не має передніх поздовжніх важелів, тому спереду в дизайні типова стійка.'),
   ],
   sources: ['https://en.wikipedia.org/wiki/Volkswagen_Beetle', 'https://en.wikipedia.org/wiki/Swing_axle', 'https://www.lfs.net/attachment/44487'],
-  unverified: ['massKg', 'frontShare', 'cgHeightMm', 'trackMmF', 'trackMmR', 'tyre size'],
+  unverified: ['massKg', 'frontShare', 'cgHeightMm', 'trackMmF', 'trackMmR', 'tyre size', 'barMmF'],
 };
 
 const TATRA_11: PageCar = {
@@ -94,7 +94,7 @@ const TATRA_11: PageCar = {
   facts: [
     t('Перша Tatra з хребтовою рамою-трубою, хитними піввісями й мотором повітряного охолодження. Конструктор — Ганс Ледвінка.'),
     t('Ззаду до труби прикручено головну передачу: її шестерні дають піввісям хитатися без гнучких шарнірів у приводі. Спереду нерозрізна балка на поперечній ресорі.'),
-    t('Tatra досі ставить хитні піввісі на хребтову трубу своїх вантажівок: на бездоріжжі така рама менше скручується.'),
+    t('Tatra досі ставить хитні піввісі на хребтову трубу своїх вантажівок. Виробник каже, що така рама жорсткіша й краще йде поганими дорогами та бездоріжжям, особливо в довгих вантажівок із трьома й більше осями.'),
   ],
   sources: ['https://en.wikipedia.org/wiki/Tatra_11', 'https://en.wikipedia.org/wiki/Swing_axle'],
   unverified: ['massKg', 'frontShare', 'cgHeightMm', 'trackMmF', 'trackMmR', 'tyre size'],
