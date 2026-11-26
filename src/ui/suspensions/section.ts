@@ -279,9 +279,7 @@ export class SuspensionSection implements Section {
   private applyRide(scene: 'road' | 'shaker'): void {
     const ride = scene === 'road' ? this.road : this.shaker;
     const setup = this.setupPanel.current;
-    // Both scenes hear every setup; only the one shown resolves now, the other when it is shown.
-    (scene === 'road' ? this.shaker : this.road).invalidate();
-    ride.invalidate();
+    // Only the scene shown resolves now; each compares the setup with its own last one, so coming back costs nothing.
     const resolved = ride.apply(setup);
     if (!resolved) {
       this.setupPanel.show(this.resolved);

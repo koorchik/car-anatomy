@@ -263,7 +263,7 @@ export const SUSPENSION_EN: Record<string, string> = {
   'СКВ {value} мм': 'RMS {value} mm',
   'відбійник стиснуто на {value} мм': 'bump stop squeezed by {value} mm',
   'до відбійника {value} мм': '{value} mm left to the bump stop',
-  'Колесо втрачає дорогу {value} часу': 'The wheel loses the road {value} of the time',
+  'Колесо втрачає дорогу {value} часу.': 'The wheel loses the road {value} of the time.',
   'Один амортизатор не може бути найкращим і для спини, і для шини: на цій дорозі комфорт найкращий при ζ {comfort}, зчеплення — при ζ {grip}.':
     'One shock absorber cannot be best for both your back and the tire: on this road comfort is best at ζ {comfort}, grip at ζ {grip}.',
   'На {hz} Гц кузов рухається майже однаково з будь-яким амортизатором: три криві для ζ 0,1, 0,3 і 0,7 відходять від однієї точки щонайбільше на {spread}.':

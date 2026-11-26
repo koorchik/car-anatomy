@@ -96,7 +96,7 @@ export function rideBars(r: RoughResult): RideBar[] {
 
 /** The red line of step 3, or nothing while the wheel keeps the road. */
 export const airAlarm = (r: RoughResult): string =>
-  r.load.airShare > 0 ? t('Колесо втрачає дорогу {value} часу', { value: percent(r.load.airShare) }) : '';
+  r.load.airShare > 0 ? t('Колесо втрачає дорогу {value} часу.', { value: percent(r.load.airShare) }) : '';
 
 /** The sentence under the damping curves: the two minima of this road, from the model. */
 export const sweepCaption = (s: RoughSweep): string =>

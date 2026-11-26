@@ -16,6 +16,7 @@ import type { CornerSpec } from '../../suspension/spec.ts';
 import { frameFromQuarter, type CornerFrame } from '../../scene/suspension/corner-model.ts';
 import { FrfChart } from './frf-chart.ts';
 import { invariantCaption, percent } from './ride-text.ts';
+import { sameSetup } from './road-scene.ts';
 
 /** Velocity amplitude of the post in the 3D, m/s: 2.5 times the measuring speed, so the body's swing shows. */
 export const SHOW_VELOCITY_MS = 0.05;
@@ -131,14 +132,6 @@ export class ShakerScene {
     this.dirty = true;
   }
 
-  get stale(): boolean {
-    return this.dirty;
-  }
-
-  invalidate(): void {
-    this.dirty = true;
-  }
-
   /** The curves, the points so far and the post, for checks in the browser. */
   get state(): { curves: StandCurves | null; points: SteppedSine['points']; done: boolean; hz: number; tyreDamping: boolean } {
     return { curves: this.curves, points: this.sine?.points ?? [], done: this.sine?.done ?? false, hz: this.hz, tyreDamping: this.tyreDamping };
@@ -146,7 +139,7 @@ export class ShakerScene {
 
   /** Resolves the corner, draws its curves and starts measuring; null when the linkage cannot. */
   apply(setup: CornerSetup): ResolvedCorner | null {
-    if (!this.dirty && setup === this.setup && this.curves) return this.curves.corner;
+    if (!this.dirty && sameSetup(setup, this.setup) && this.curves) return this.curves.corner;
     let rc: ResolvedCorner;
     try {
       rc = resolveCorner({ ...this.corner, unsprungKg: this.unsprungKg }, setup);

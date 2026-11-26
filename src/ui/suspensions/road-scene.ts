@@ -78,6 +78,10 @@ export const roadDashHtml = (): string => `<footer class="susp-dash susp-ride-da
       <p class="visually-hidden" id="susp-road-live" aria-live="polite"></p>
     </footer>`;
 
+/** Whether two setups are the same values: the panel hands back a fresh object after every resolve. */
+export const sameSetup = (a: CornerSetup, b: CornerSetup | null): boolean =>
+  b !== null && (Object.keys(a) as Array<keyof CornerSetup>).every((k) => a[k] === b[k]);
+
 interface Remembered {
   result: RoughResult;
   sweep: RoughSweep;
@@ -134,7 +138,7 @@ export class RoadScene {
 
   /** Resolves the corner for the setup on the scene's wheel and starts a new run; null when the linkage cannot. */
   apply(setup: CornerSetup): ResolvedCorner | null {
-    if (!this.dirty && setup === this.setup && this.resolved) return this.resolved;
+    if (!this.dirty && sameSetup(setup, this.setup) && this.resolved) return this.resolved;
     let rc: ResolvedCorner;
     try {
       rc = resolveRoughCorner(this.corner, setup, this.scene);
@@ -150,16 +154,6 @@ export class RoadScene {
     this.writeStatus();
     this.chart.set(this.sweep, this.remembered?.sweep ?? null);
     return rc;
-  }
-
-  /** The setup or the scene changed since the last apply. */
-  get stale(): boolean {
-    return this.dirty;
-  }
-
-  /** Marks the corner for a new run (a new setup, a new wheel). */
-  invalidate(): void {
-    this.dirty = true;
   }
 
   /** Computes the pending run for at most a few milliseconds; swaps it in when done. */
