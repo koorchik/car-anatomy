@@ -692,10 +692,15 @@ describe('the sidewall code', () => {
     expect(decodeSidewall('205/60 VR15')).toMatchObject({ speedSymbol: 'V', speedKmh: 210, speedAbove: true });
     expect(decodeSidewall('235/40 ZR19')).toMatchObject({ speedSymbol: 'Z', speedKmh: 240, speedAbove: true });
     expect(decodeSidewall('245/40 R18 97Y')).toEqual(decodeSidewall(' 245 / 40 r18 97y '));
+    // What else is printed next to the size: a reinforced tyre's XL (the Focus ST's tyre in real_car_data.md is written
+    // «235/40R-18 95Y XL»), and a van tyre's C with its single and dual load index.
+    expect(decodeSidewall('235/40R-18 95Y XL')).toMatchObject({ size: { widthMm: 235, aspect: 40, rimIn: 18 }, loadKg: 690, speedKmh: 300 });
+    expect(decodeSidewall('225/45 R17 94W RF')).toMatchObject({ loadKg: 670, speedKmh: 270 });
+    expect(decodeSidewall('195/70 R15C 104/102R')).toMatchObject({ size: { widthMm: 195, rimIn: 15 }, loadIndex: 104, loadKg: 900, speedKmh: 170 });
   });
 
   it('gives null, not an exception, for anything that is not a code', () => {
-    for (const bad of ['', 'abc', '245/40', '245/40 R18 97Y extra', '24/40 R18', '245/40 R40', '245/40 R18 9']) expect(decodeSidewall(bad)).toBeNull();
+    for (const bad of ['', 'abc', '245/40', '245/40 R18 97Y extra', '24/40 R18', '245/40 R40', '245/40 R18 9', '245/40 R18 97Y SLX', '245/40 R18 CX']) expect(decodeSidewall(bad)).toBeNull();
   });
 
   it('has a load table that grows with the index and a speed table in order', () => {

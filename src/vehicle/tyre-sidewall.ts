@@ -59,11 +59,15 @@ export interface SidewallCode {
   speedAbove: boolean;
 }
 
-// Width / aspect, an optional old speed letter, the construction (R, D, B or a dash), the rim, then whatever follows.
-const CODE = /^\s*(?:P|LT)?\s*(\d{3})\s*\/\s*(\d{2})\s*([SHVZ]?)\s*(R|D|B|-)\s*(\d{2}(?:\.\d)?)(?![\d.])(.*)$/;
+// Width / aspect, an optional old speed letter, the construction (R, D, B or a dash; «R-18» as some makers print it),
+// the rim, the C of a van tyre, then whatever follows.
+const CODE = /^\s*(?:P|LT)?\s*(\d{3})\s*\/\s*(\d{2})\s*([SHVZ]?)\s*(R|D|B|-)\s*-?\s*(\d{2}(?:\.\d)?)(?![\d.])\s*C?(?![A-Z])(.*)$/;
 // The service description after the rim: a load index and a speed symbol, «97Y», or open-ended in parentheses, «(97Y)»
-// or «97(Y)».
-const SERVICE = /^(\()?(\d{2,3})(\()?([A-Z])?\)?$/;
+// or «97(Y)». A van tyre gives two indices, single and dual fitting, «104/102R»: the first is the tyre's own.
+const SERVICE = /^(\()?(\d{2,3})(?:\/\d{2,3})?(\()?([A-Z])?\)?$/;
+// Marks printed after the service description that change none of its numbers: XL or RF (reinforced: the load index
+// already says how much more it carries), SL (standard load).
+const TRAILING = /(?:XL|RF|SL|REINFORCED|EXTRALOAD)$/;
 
 /** Reads a sidewall code; null for anything that is not one, so the visitor's typing never throws. */
 export function decodeSidewall(code: string): SidewallCode | null {
@@ -73,7 +77,7 @@ export function decodeSidewall(code: string): SidewallCode | null {
   const aspect = Number(m[2]);
   const rimIn = Number(m[5]);
   if (widthMm < 100 || aspect < 20 || rimIn < 8 || rimIn > 26) return null;
-  const rest = m[6]!.replace(/\s+/g, '');
+  const rest = m[6]!.replace(/\s+/g, '').replace(TRAILING, '');
   const service = rest ? SERVICE.exec(rest) : null;
   if (rest && !service) return null;
   const oldSpeed = m[3] ?? '';
