@@ -212,6 +212,8 @@ export class GearboxSection implements Section {
 
   /** The page an address asks for, if it is one built so far. */
   private pageId(route: Route): string | null {
+    // The gearbox designer's address (#/gearboxes/designer) comes with its own stage.
+    if (route.page !== 'catalogue') return null;
     const id = route.path[0] ?? GEARBOX_PAGES_SHOWN[0]!;
     return GEARBOX_PAGES_SHOWN.includes(id) && GEARBOX_PAGES.some((p) => p.id === id) ? id : null;
   }
@@ -223,11 +225,13 @@ export class GearboxSection implements Section {
     const car = record.car ? CARS[record.car] : undefined;
     const spec = car ? engineById(car.engine) : undefined;
     if (!car || !spec) throw new Error(`${id}: the page needs its car and the car's engine`);
+    const driveCar = driveCarById(car.id);
+    if (!driveCar) throw new Error(`${id}: the page needs the drive record of ${car.id} for its final drive`);
     const size = parseTyreSize(car.tyre.size);
     return {
       page,
       factory: record.layout.desc,
-      finalDrive: driveCarById(car.id)?.finalDrive.ratio ?? 3.5,
+      finalDrive: driveCar.finalDrive.ratio,
       engine: buildEngine(spec),
       radiusM: rollingRadiusM(size),
       tyre: car.tyre.size,
