@@ -623,6 +623,10 @@ input[type='range']::-moz-range-thumb {
   transform: translateX(100%);
 }
 
+.panel.no-slide {
+  transition: none;
+}
+
 .panel-head {
   display: flex;
   align-items: center;

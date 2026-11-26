@@ -93,6 +93,9 @@ export class Shell {
     root.innerHTML = skeletonHtml();
     const { slots, elements } = skeletonOf(root);
     this.elements = elements;
+    // The first layout places the panel without sliding (start): a phone's would otherwise slide away across the whole
+    // page at every load, and take the taps meant for the page while it does.
+    elements.panel.classList.add('no-slide');
     const places = [slots.backdrop, slots.actions, slots.title, slots.tools, slots.panel, slots.results, slots.dash, slots.table.head].map((slot) => slot.parent);
     this.sectionDom = new SectionDom([root, ...places]);
     try {
@@ -196,6 +199,7 @@ export class Shell {
     this.show(section);
     new ResizeObserver(() => this.relayout()).observe(this.root);
     this.relayout();
+    requestAnimationFrame(() => requestAnimationFrame(() => this.elements.panel.classList.remove('no-slide')));
     this.route = route;
     this.mark(route);
     section.enter(route, null);

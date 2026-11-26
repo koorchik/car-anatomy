@@ -554,6 +554,9 @@ export class SuspensionSection implements Section {
     const body = document.body;
     const own = [BODY_CLASS, ...(body.classList.contains(PANEL_CLOSED) ? [PANEL_CLOSED] : [])].join(' ');
     this.borrowed.push(this.borrow(() => body.className, (v) => (body.className = v), own));
+    // The shared first-visit hint stands above the tools row by --tools-h, which the engine pages measure for theirs.
+    const rootStyle = document.documentElement.style;
+    this.borrowed.push(this.borrow(() => rootStyle.getPropertyValue('--tools-h'), (v) => (v ? rootStyle.setProperty('--tools-h', v) : rootStyle.removeProperty('--tools-h')), ''));
     slots.partCard.hidden = true;
     stage.setModel(this.model, { home: HOME });
     this.onStage = 'corner';
@@ -774,6 +777,22 @@ export class SuspensionSection implements Section {
     this.road.resize();
     this.shaker.resize();
     this.rollScene.resize();
+    this.measureTools();
+  }
+
+  /**
+   * How high the tools row reaches above the dash, as --tools-h: this page's row has two or three lines where an
+   * engine page's has one, and the shell's hint would cover them.
+   */
+  private measureTools(): void {
+    if (!this.shown) return;
+    const { root, tools } = this.ctx.slots;
+    const row = tools.parent;
+    const hint = root.querySelector<HTMLElement>('#parts-callout');
+    if (!hint || row.offsetParent === null) return;
+    const dash = parseFloat(getComputedStyle(hint).getPropertyValue('--dash-h')) || 0;
+    const above = root.getBoundingClientRect().bottom - row.getBoundingClientRect().top - dash;
+    if (above > 0) document.documentElement.style.setProperty('--tools-h', `${Math.round(above)}px`);
   }
 
   time(): TimeCapabilities {

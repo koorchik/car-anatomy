@@ -151,7 +151,15 @@ export class Drive {
     this.paused = on;
     if (!this.ctx) return;
     if (on) void this.ctx.suspend();
-    else if (!document.hidden) void this.ctx.resume();
+    else if (!document.hidden) {
+      // The thread wakes with the state it was paused in and would play that until the first frame hands the local
+      // copy over (tick): a car muted at 7000 rpm and unmuted at 2000 would roar for a frame or more. The hand-over
+      // goes ahead of the first block instead; the first running frame sends a fresher one. Only once the local copy
+      // has taken over: a mute and unmute within a frame or two (a double tap) leaves the thread's own state the newest
+      // one, and the local copy's would set the car back to wherever it last took over.
+      if (this.node && !this.wasWorklet) this.handOver();
+      void this.ctx.resume();
+    }
   }
 
   /** Has to be called from a user gesture the first time, because browsers require it. */
