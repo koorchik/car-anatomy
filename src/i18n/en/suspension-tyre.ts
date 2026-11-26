@@ -107,8 +107,10 @@ export const SUSPENSION_TYRE_EN: Record<string, string> = {
   'За вимірами шин розвальна сила становить 5–10 % від жорсткості на відведення': 'Tire measurements put camber stiffness at 5–10% of cornering stiffness',
   'На межі зчеплення розвал зсуває пік. На {load} кН дорожня шина дає найбільше {peak} кН бічної сили при {angle}° кута відведення. Нахил на 2° у бік сили, як у зовнішнього колеса з негативним розвалом, піднімає цей пік на {gain} %, а такий самий нахил від сили, як у внутрішнього, знижує на {loss} %':
     'At the limit of grip, camber moves the peak. At {load} kN the street tire makes at most {peak} kN of lateral force, at {angle}° of slip angle. A 2° lean toward the force, as on an outer wheel with negative camber, raises that peak by {gain}%, and the same lean away from the force, as on the inner wheel, lowers it by {loss}%',
-  'Знак ефекту збігається з вимірами шин KIT 2006, а сам відсоток залежить від шини: більшість відкритих підгонок для дорожніх шин цього члена не має зовсім':
-    'The sign of the effect matches the KIT 2006 tire measurements; the percentage itself depends on the tire, and most public fits for street tires lack this term altogether',
+  'Знак ефекту збігається з вимірами шин KIT 2006: нахил у бік сили піднімає пік, а від сили знижує':
+    'The sign of the effect matches the KIT 2006 tire measurements: a lean towards the force raises the peak and a lean away from it lowers it',
+  'Сам відсоток залежить від шини: більшість відкритих підгонок для дорожніх шин цього члена не має зовсім':
+    'The percentage itself depends on the tire: most public fits for street tires lack this term altogether',
   'Колесо, жорстко прикручене до кузова, губило б градус розвалу на кожен градус крену. Стійка Макферсон повертає з цього мало, тому статичний негативний розвал найбільше потрібен саме їй, а нерозрізний міст у чистому крені зовсім не нахиляє колеса відносно дороги':
     'A wheel bolted rigidly to the body would lose a degree of camber for every degree of roll. A MacPherson strut wins little of that back, so it needs static negative camber the most, while a live axle in pure roll does not tilt its wheels relative to the road at all',
   'Єдиний вимір на дорожньому авто, який вдалося знайти: MINI зі стійками на −2° розвалу проходив коло в середньому майже на секунду швидше':
