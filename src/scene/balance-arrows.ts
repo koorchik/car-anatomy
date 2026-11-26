@@ -1,9 +1,13 @@
-// Arrows of the inertia forces drawn over the engine. They live in the model's engine frame, so they shake and
-// turn with it, but they are drawn on top of everything and are invisible to framing and part picking. The arrow
-// and arc primitives are in arrows.ts.
+// Arrows of the inertia forces drawn over the engine, one view of them at a time (balance-phasors.ts): a thin arrow for
+// each element of the view, one big arrow of their sum at the middle of the crank and the arc of their rocking couple.
+// They live in the model's engine frame, so they shake and turn with it, but they are drawn on top of everything and
+// are invisible to framing and part picking. The arrow and arc primitives are in arrows.ts, what each arrow is in
+// balance-shown.ts.
 
 import * as THREE from 'three';
-import { isShown, type BalanceForces, type ForceArrow, type ForceLayers, type ForceSum } from '../engine/balance-forces.ts';
+import type { ForceArrow, ForceSum } from '../engine/balance-forces.ts';
+import { sumAt, type BalancePhasors, type PhasorView } from '../engine/balance-phasors.ts';
+import { ShownForces } from '../engine/balance-shown.ts';
 import { Arrows, CoupleArcs, ON_TOP, arrowHeadGeometry, arrowShaftGeometry, inert, outOfFrame, overlayMaterial } from './arrows.ts';
 import { MM } from './geometry.ts';
 import { BALANCE_FORCE, OVERLAY_WHITE } from './palette.ts';
@@ -11,7 +15,8 @@ import { BALANCE_FORCE, OVERLAY_WHITE } from './palette.ts';
 /** Colours shared with the legend (palette.ts). */
 export const FORCE_COLORS = BALANCE_FORCE;
 
-const colorOf = (a: ForceArrow): string => {
+/** Colour of an arrow of BalanceForces: a piston's by its order, a rotor's as a piston's first order. */
+export const colorOf = (a: Pick<ForceArrow, 'kind' | 'order'>): string => {
   switch (a.kind) {
     case 'piston':
       return a.order === 1 ? FORCE_COLORS.order1 : FORCE_COLORS.order2;
@@ -30,7 +35,8 @@ interface ShaftParts {
 
 export class BalanceOverlay {
   readonly group = new THREE.Group();
-  private readonly forces: BalanceForces;
+  private readonly phasors: BalancePhasors;
+  private readonly shown: ShownForces;
   /** Scene units per kg m of force per unit omega^2. */
   private readonly scale: number;
   private readonly arrows: Arrows;
@@ -38,21 +44,18 @@ export class BalanceOverlay {
   private readonly total: ForceSum = { fx: 0, fy: 0, mx: 0, my: 0 };
   private readonly arcs: CoupleArcs;
   private readonly shafts: ShaftParts[] = [];
-  private readonly arcRadius: number;
-  /** Sideways distance of each piston arrow from the cylinder axis, mm. */
-  private readonly pistonGap: number;
   private readonly materials: THREE.Material[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
-  private layers: ForceLayers;
+  private view: PhasorView | null = null;
 
   /** @param mmPerUnit Arrow length in mm per kg m of force per unit omega^2, shared by a page. */
-  constructor(forces: BalanceForces, mmPerUnit: number, layers: ForceLayers) {
-    this.forces = forces;
-    this.layers = layers;
+  constructor(phasors: BalancePhasors, mmPerUnit: number) {
+    this.phasors = phasors;
+    this.shown = new ShownForces(phasors);
+    const forces = phasors.forces;
     this.scale = mmPerUnit * MM;
     const e = forces.engine;
     const b = e.spec.bore * MM;
-    this.pistonGap = e.spec.bore * 0.13;
     const shaftGeo = this.keep(arrowShaftGeometry());
     const headGeo = this.keep(arrowHeadGeometry());
     const material = (color: string): THREE.MeshBasicMaterial => {
@@ -60,11 +63,11 @@ export class BalanceOverlay {
       this.materials.push(m);
       return m;
     };
-    // White, so that each instance's own colour shows as it is.
+    // White, so that each instance's own colour shows as it is. One slot for each arrow of BalanceForces: a view
+    // draws each at most once, and its colour stays with it.
     const white = material(OVERLAY_WHITE);
-    const thin = (def: ForceArrow): boolean => def.kind === 'rotating' || def.kind === 'counterweight' || def.kind === 'shaft';
     const defs = forces.arrows;
-    this.arrows = new Arrows(shaftGeo, headGeo, white, defs.map(colorOf), defs.map((def) => b * (thin(def) ? 0.028 : 0.036)));
+    this.arrows = new Arrows(shaftGeo, headGeo, white, defs.map(colorOf), defs.map(() => b * 0.026));
     this.group.add(this.arrows.shafts, this.arrows.heads);
 
     const rodMaterial = material(BALANCE_FORCE.rod);
@@ -83,10 +86,10 @@ export class BalanceOverlay {
       this.shafts.push({ index, rod, weights });
     });
 
-    this.net = new Arrows(shaftGeo, headGeo, white, [FORCE_COLORS.net], [b * 0.05], ON_TOP + 2);
+    this.net = new Arrows(shaftGeo, headGeo, white, [FORCE_COLORS.net], [b * 0.055], ON_TOP + 2);
     this.group.add(this.net.shafts, this.net.heads);
-    this.arcRadius = Math.max(((e.zMax - e.zMin) / 2) * MM, b * 0.9);
-    this.arcs = new CoupleArcs(this.arcRadius, b * 0.04, headGeo, material(FORCE_COLORS.couple));
+    const arcRadius = Math.max(((e.zMax - e.zMin) / 2) * MM, b * 0.9);
+    this.arcs = new CoupleArcs(arcRadius, b * 0.04, headGeo, material(FORCE_COLORS.couple));
     this.group.add(this.arcs.group);
   }
 
@@ -95,60 +98,48 @@ export class BalanceOverlay {
     return geometry;
   }
 
-  setLayers(layers: ForceLayers): void {
-    this.layers = layers;
+  /** The view to draw, or null for none. */
+  setView(view: PhasorView | null): void {
+    this.view = view;
+    this.group.visible = view !== null;
   }
 
   update(theta: number): void {
-    const forces = this.forces.at(theta);
+    const view = this.view;
+    if (!view) return;
     const k = this.scale;
-    const defs = forces.arrows;
-    for (let i = 0; i < defs.length; i++) {
-      const def = defs[i]!;
-      if (!isShown(def, this.layers)) {
-        this.arrows.hide(i);
-        continue;
-      }
-      // Both orders of a piston act along the same line. Drawn side by side across the bore, they can both be read.
-      let x = def.x;
-      let y = def.y;
-      if (def.kind === 'piston') {
-        const side = ((def.order === 1 ? -1 : 1) * this.pistonGap) / (Math.hypot(x, y) || 1);
-        const across = x + y * side;
-        y -= x * side;
-        x = across;
-      }
-      this.arrows.set(i, x * MM, y * MM, def.z * MM, def.fx * k, def.fy * k, 0);
-    }
+    const count = this.phasors.forces.arrows.length;
+    for (let i = 0; i < count; i++) this.arrows.hide(i);
+    for (const a of this.shown.at(view, theta)) this.arrows.set(a.slot, a.x * MM, a.y * MM, a.z * MM, a.fx * k, a.fy * k, 0);
     this.arrows.commit();
+    // A shaft shows in the view of its order, with its weights where shown.at() has just put them.
+    const forces = this.phasors.forces;
+    const order = view.view === 'rotating' ? 0 : view.order;
     for (const parts of this.shafts) {
       const shaft = forces.shafts[parts.index]!;
-      const shown = this.layers.balancing && (shaft.order === 1 ? this.layers.order1 : this.layers.order2);
-      parts.rod.visible = shown;
+      const on = view.options.shafts && shaft.order === order;
+      parts.rod.visible = on;
       for (let i = 0; i < parts.weights.length; i++) {
         const w = shaft.weights[i]!;
-        parts.weights[i]!.visible = shown;
+        parts.weights[i]!.visible = on;
         parts.weights[i]!.position.set(w.x * MM, w.y * MM, w.z * MM);
       }
     }
-    const sum = forces.sum(this.layers, this.total);
+    const sum = sumAt(view, theta, this.total);
     this.net.set(0, 0, 0, 0, sum.fx * k, sum.fy * k, 0);
     this.net.commit();
     // Each arc is as long as the arrow of a force that makes this couple on the lever of one cylinder spacing,
     // the unit the article's chart uses for couples.
     const couple = Math.hypot(sum.mx, sum.my);
-    this.arcs.set(sum.mx, sum.my, (couple / this.forces.lever) * k);
+    this.arcs.set(sum.mx, sum.my, (couple / forces.lever) * k);
   }
 
   dispose(): void {
     this.group.removeFromParent();
     this.arrows.dispose();
     this.net.dispose();
+    this.arcs.dispose();
     for (const g of this.geometries) g.dispose();
-    this.group.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (mesh.geometry && !this.geometries.includes(mesh.geometry)) mesh.geometry.dispose();
-    });
     for (const m of this.materials) m.dispose();
   }
 }
