@@ -2,6 +2,7 @@
 // same load can be built on the audio thread and in the main-thread copy of the simulation.
 
 import type { VehicleFrame } from '../vehicle/vehicle-frame.ts';
+import type { HybridCommand, HybridLoadSpec, HybridReadings, HybridSnapshot } from '../vehicle/hybrid-load.ts';
 import type { VehicleCommand, VehicleLoadSpec, VehicleReadings, VehicleSnapshot } from '../vehicle/vehicle-load.ts';
 import type { DynoCommand, DynoReadings, DynoSpec } from './dyno-load.ts';
 import type { EngineState } from './sim.ts';
@@ -80,15 +81,15 @@ export interface CrankLoad<R extends AnyLoadReadings = AnyLoadReadings> {
   frame?(into?: LoadFrame): LoadFrame;
 }
 
-/** The car on its drivetrain (stage K2c) adds its kinds to these unions. */
-export type LoadSpec = DynoSpec | VehicleLoadSpec;
-export type LoadCommand = DynoCommand | VehicleCommand;
+/** The car on its drivetrain (stage K2c) and the power-split hybrid (stage K15a) add their kinds to these unions. */
+export type LoadSpec = DynoSpec | VehicleLoadSpec | HybridLoadSpec;
+export type LoadCommand = DynoCommand | VehicleCommand | HybridCommand;
 /**
  * The dyno's readings: what a reader gets unless it names another kind (CrankReadings, LoadedCrank and
  * Drive.takeReadings default to it, so the dyno's code reads its fields directly).
  */
 export type LoadReadings = DynoReadings;
 /** Readings of any load; a page reads the kind it put on the crank. */
-export type AnyLoadReadings = DynoReadings | VehicleReadings;
-export type LoadSnapshot = VehicleSnapshot;
+export type AnyLoadReadings = DynoReadings | VehicleReadings | HybridReadings;
+export type LoadSnapshot = VehicleSnapshot | HybridSnapshot;
 export type LoadFrame = VehicleFrame;

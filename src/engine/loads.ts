@@ -1,5 +1,6 @@
 // Builds a load from its description, the same way on the audio thread and the main thread.
 
+import { HybridLoad } from '../vehicle/hybrid-load.ts';
 import { VehicleLoad } from '../vehicle/vehicle-load.ts';
 import { DynoLoad } from './dyno-load.ts';
 import type { CrankLoad, LoadSpec } from './load.ts';
@@ -10,5 +11,7 @@ export function createLoad(spec: LoadSpec): CrankLoad {
       return new DynoLoad(spec);
     case 'vehicle':
       return new VehicleLoad(spec);
+    case 'hybrid':
+      return new HybridLoad(spec);
   }
 }
