@@ -13,7 +13,7 @@ export const toolsHtml = (minMm: number, maxMm: number): string => `<label class
       <span class="tool-label">${t('Хід колеса')}: <output id="susp-travel-value" for="susp-travel">0</output></span>
       <input type="range" id="susp-travel" min="${minMm}" max="${maxMm}" step="1" value="0" />
     </label>
-    <label class="tool">
+    <label class="tool susp-explode-tool">
       <span class="tool-label">${t('Розібрати')}</span>
       <input type="range" id="susp-explode" min="0" max="1" step="0.01" value="0" />
     </label>
