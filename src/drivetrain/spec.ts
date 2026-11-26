@@ -131,6 +131,8 @@ export interface GearboxSpec {
   meshes: MeshDef[];
   /** Permanent rigid joins, ω_a = ω_b (8HP: S1 = S2, C1 = R4…). */
   couplings: Array<[string, string]>;
+  /** Members bolted to the case, ω = 0: the carrier of the Prius's MG2 reduction set. Absent: none. */
+  grounded?: string[];
   elements: ElementDef[];
   /** In driver order: R, N, 1…n (or P, R, N, D for the selector). */
   states: GearState[];

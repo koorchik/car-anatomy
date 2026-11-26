@@ -7,6 +7,7 @@ import { MANUAL_TRANSAXLE } from './gearboxes/manual-transaxle.ts';
 import { TR6060_MZ6 } from './gearboxes/tr6060-mz6.ts';
 import { AUTOMATIC } from './gearboxes/automatic.ts';
 import { ZF_8HP45, ZF_8HP50, ZF_8HP70 } from './gearboxes/zf-8hp.ts';
+import { TOYOTA_P410 } from './gearboxes/power-split.ts';
 
 export const GEARBOX_PAGES: GearboxPage[] = [
   MANUAL_RWD,
@@ -14,8 +15,11 @@ export const GEARBOX_PAGES: GearboxPage[] = [
   AUTOMATIC,
 ];
 
-/** Records without a page: real tooth counts the derivation and the designer are calibrated on. */
-export const CALIBRATION_GEARBOXES: GearboxRecord[] = [TR6060_MZ6, ZF_8HP45, ZF_8HP70, ZF_8HP50];
+/**
+ * Records without a page: real tooth counts the derivation and the designer are calibrated on, and the Prius's
+ * power-split box until its page comes (stage K15b).
+ */
+export const CALIBRATION_GEARBOXES: GearboxRecord[] = [TR6060_MZ6, ZF_8HP45, ZF_8HP70, ZF_8HP50, TOYOTA_P410];
 
 export const ALL_GEARBOXES: GearboxRecord[] = [...GEARBOX_PAGES.flatMap((p) => [p.base, ...p.variants]), ...CALIBRATION_GEARBOXES];
 
