@@ -120,7 +120,7 @@ export const CAR_EN: Record<string, string> = {
   '{value} (оцінка)': '{value} (estimate)',
   'Зчеплення й коробка': 'Clutch and transmission',
   'вільний': 'open',
-  'дисковий самоблок': 'clutch-type limited-slip',
+  'дисковий самоблок': 'plate limited-slip',
   'самоблок Torsen': 'Torsen limited-slip',
   'гвинтовий самоблок': 'helical limited-slip',
   'в’язкісна муфта': 'viscous coupling',
