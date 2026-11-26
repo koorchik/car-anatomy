@@ -6,6 +6,11 @@ body.susp-designer {
   --dash-h: 0px;
 }
 
+/* The title and its headline stay between the two panels: on a laptop the shell's own limit runs under the right one. */
+body.susp-designer .engine-name {
+  max-width: min(520px, calc(100vw - var(--panel-w) - var(--left-w) - 36px));
+}
+
 /* The chassis stands still: real time is all there is, so the speed tool says nothing. */
 body.susp-designer .view-tools .tool:has(#speed) {
   display: none;

@@ -60,14 +60,16 @@ class WheelsOnly {
     }
   }
 
-  /** In the x-ray the tyres turn to glass, as the whole axles' tyres do. */
+  /** In the x-ray the wheels turn to glass, as the whole axles' tyres do. */
   setView(view: ViewMode): void {
-    const tyre = this.materials[0]!;
     const glass = view === 'xray';
-    tyre.transparent = glass;
-    tyre.opacity = glass ? 0.22 : 1;
-    tyre.depthWrite = !glass;
-    tyre.needsUpdate = true;
+    // The tyre nearly clear, the rim (a plain drum here, no spokes) half so.
+    for (const [m, opacity] of [[this.materials[0]!, 0.22], [this.materials[1]!, 0.5]] as const) {
+      m.transparent = glass;
+      m.opacity = glass ? opacity : 1;
+      m.depthWrite = !glass;
+      m.needsUpdate = true;
+    }
   }
 
   dispose(): void {
