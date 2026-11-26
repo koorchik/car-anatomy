@@ -1,5 +1,6 @@
 /* The suspension pages, under body.section-suspensions (suspensions plan, what the section needs of the shell). The
- * section's chunk loads it after the shell's styles. Each scene adds its class (susp-scene-bump, susp-scene-travel). */
+ * section's chunk loads it after the shell's styles. Each scene adds its class (susp-scene-bump, susp-scene-travel,
+ * susp-scene-road, susp-scene-shaker). */
 
 body.section-suspensions {
   --dash-h: 0px;
@@ -10,6 +11,18 @@ body.section-suspensions.susp-scene-bump {
   --dash-h: 156px;
 }
 
+/* The travel scene's dash: curves, front view, numbers (travel-scene.ts). */
+body.section-suspensions.susp-scene-travel {
+  --dash-h: 188px;
+}
+
+/* A control or block the page hides keeps hidden whatever its display. */
+.susp-panel [hidden],
+.susp-title [hidden],
+.susp-dash [hidden] {
+  display: none !important;
+}
+
 /* No shared dash and no engine hints; the rig holds the wheel still, so it offers no choice of time. */
 body.section-suspensions .dash,
 body.section-suspensions #hint,
@@ -17,10 +30,22 @@ body.section-suspensions.susp-scene-travel .view-tools .tool:has(#speed) {
   display: none;
 }
 
-/* What belongs to one scene only. */
-body.susp-scene-bump .susp-only-travel,
-body.susp-scene-travel .susp-only-bump {
+/* What belongs to one scene only; the ride (susp-only-ride) is the rough road and the shaker together. */
+body.section-suspensions:not(.susp-scene-travel) .susp-only-travel,
+body.section-suspensions:not(.susp-scene-bump) .susp-only-bump,
+body.section-suspensions:not(.susp-scene-road) .susp-only-road,
+body.section-suspensions:not(.susp-scene-shaker) .susp-only-shaker,
+body.section-suspensions:not(.susp-scene-road):not(.susp-scene-shaker) .susp-only-ride {
   display: none;
+}
+
+/* The ride scenes' dashes; SuspensionSection.layout gives the stage the same heights. */
+body.section-suspensions.susp-scene-road {
+  --dash-h: 176px;
+}
+
+body.section-suspensions.susp-scene-shaker {
+  --dash-h: 200px;
 }
 
 .susp-travel-tool input[type='range'] {
@@ -217,6 +242,15 @@ body.susp-scene-travel .susp-only-bump {
     --dash-h: 188px;
   }
 
+  body.section-suspensions.susp-scene-road {
+    --dash-h: 300px;
+  }
+
+  body.section-suspensions.susp-scene-shaker {
+    --dash-h: 230px;
+  }
+
+
   /* Two sliders side by side would read as one with two thumbs: on a phone each keeps its name. */
   .susp-travel-tool .tool-label,
   .susp-explode-tool .tool-label {
@@ -292,5 +326,519 @@ body.susp-scene-travel .susp-only-bump {
 
   .susp-number dd {
     text-align: left;
+  }
+}
+
+/* Title: the page's name, its line, the way to the other pages and its cars. */
+.susp-title h1 {
+  margin-bottom: 2px;
+}
+
+.susp-title p {
+  margin: 0 0 8px;
+}
+
+.susp-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  pointer-events: auto;
+}
+
+.susp-cars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  max-width: 560px;
+  pointer-events: auto;
+}
+
+.susp-car {
+  font-size: 13px;
+  padding: 2px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--bone-dim);
+  text-decoration: none;
+  background: rgba(11, 34, 42, 0.55);
+}
+
+.susp-car:hover {
+  color: var(--bone);
+}
+
+.susp-car.current {
+  color: #0b222a;
+  background: var(--bone);
+  border-color: var(--bone);
+}
+
+/* The travel scene's controls in the panel. */
+.susp-travel-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.susp-travel-controls > .btn {
+  align-self: flex-start;
+}
+
+.susp-travel-controls .btn[aria-pressed='true'] {
+  background: var(--bone);
+  color: #0b222a;
+}
+
+.susp-overlays {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.susp-overlays i {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top: 2px dashed var(--c);
+  margin: 0 6px 0 2px;
+  vertical-align: middle;
+}
+
+.susp-links h3 {
+  margin-bottom: 4px;
+}
+
+.susp-links p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.susp-links-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.susp-links-row output {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The travel scene's dash: the curves, the front view, the numbers. */
+.susp-travel-dash {
+  grid-template-columns: minmax(300px, 1fr) 170px minmax(260px, 330px);
+}
+
+.susp-strip-legend span.faint::before {
+  height: 0;
+  border-top: 2px dashed var(--c);
+  background: none;
+}
+
+.susp-strip-legend .susp-legend-dot::before {
+  display: none;
+}
+
+.susp-fv-box h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--bone-dim);
+}
+
+.susp-fv-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.susp-fv-host svg {
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
+}
+
+/* Front views and glyphs (front-view.ts). */
+.susp-fv .susp-fv-road {
+  stroke: rgba(236, 230, 214, 0.45);
+  stroke-width: 1.5;
+}
+
+.susp-fv .susp-fv-centre {
+  stroke: rgba(236, 230, 214, 0.35);
+  stroke-dasharray: 4 3;
+}
+
+.susp-fv .susp-fv-wheel {
+  fill: rgba(236, 230, 214, 0.08);
+  stroke: rgba(236, 230, 214, 0.55);
+  stroke-width: 1.2;
+}
+
+.susp-fv .susp-fv-link {
+  stroke: #ece6d6;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.susp-fv .susp-fv-tie {
+  stroke: #7fd3ff;
+}
+
+.susp-fv .susp-fv-strut {
+  stroke: #ffb36b;
+  stroke-width: 3;
+}
+
+.susp-fv .susp-fv-joint {
+  fill: #0b222a;
+  stroke: #ece6d6;
+  stroke-width: 1;
+}
+
+.susp-fv .susp-fv-ic-line {
+  stroke: rgba(181, 228, 140, 0.7);
+  stroke-dasharray: 3 3;
+}
+
+.susp-fv .susp-fv-ic {
+  fill: #b5e48c;
+}
+
+.susp-fv .susp-fv-rc-line {
+  stroke: rgba(255, 210, 90, 0.75);
+  stroke-dasharray: 5 3;
+}
+
+.susp-fv .susp-fv-rc {
+  fill: #ffd25a;
+  stroke: #0b222a;
+}
+
+.susp-fv .susp-fv-trail {
+  fill: rgba(255, 210, 90, 0.45);
+}
+
+/* The article's block about the car. */
+.susp-car-block h3 {
+  margin-bottom: 6px;
+}
+
+.susp-facts {
+  margin: 0 0 10px;
+  padding-left: 18px;
+}
+
+.susp-facts li {
+  margin-bottom: 6px;
+}
+
+.susp-general {
+  font-size: 18px;
+  margin: 22px 0 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+/* «Усі підвіски» (all-table.ts), in the shell's table overlay. */
+.susp-layout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.susp-layout-card {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(11, 34, 42, 0.5);
+}
+
+.susp-layout-card.current {
+  border-color: var(--bone);
+}
+
+.susp-layout-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  color: var(--bone);
+}
+
+.susp-layout-name {
+  font-weight: 600;
+}
+
+/* One box for every glyph, the drawing centred in it: the names under them line up (all-table.ts, GLYPH_H). */
+.susp-layout-head .susp-glyph {
+  width: 150px;
+  height: 130px;
+}
+
+.susp-layout-numbers {
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.susp-layout-numbers div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.susp-layout-numbers dt {
+  color: var(--bone-dim);
+}
+
+.susp-layout-numbers dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.susp-layout-cars {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+}
+
+.susp-travel-dash .susp-numbers {
+  overflow-x: hidden;
+}
+
+/* The dash's numbers again in the panel, for a phone whose dash has no room for them. */
+.susp-travel-numbers-phone {
+  display: none;
+}
+
+.susp-travel-dash .susp-number dt {
+  white-space: normal;
+}
+
+.susp-travel-dash .susp-number dd {
+  white-space: nowrap;
+}
+
+/* The pages' phone layout, after the rules it overrides. */
+@media (max-width: 860px) {
+  body.section-suspensions.susp-scene-travel {
+    --dash-h: 210px;
+  }
+
+  /* The curves two by two beside the front view; the numbers go to the panel. */
+  .susp-travel-dash {
+    grid-template-columns: minmax(0, 1fr) 116px;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .susp-travel-dash > .susp-dash-chart {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .susp-travel-dash > .susp-fv-box {
+    grid-column: 2;
+    grid-row: 1;
+    border-left: 1px solid var(--rule);
+  }
+
+  .susp-travel-dash > .susp-dash-numbers {
+    display: none;
+  }
+
+  .susp-travel-numbers-phone {
+    display: flex;
+    margin: 0 0 12px;
+    font-size: 13px;
+    gap: 3px;
+  }
+
+  .susp-travel-numbers-phone .susp-number {
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .susp-travel-numbers-phone .susp-number dt {
+    white-space: normal;
+  }
+
+  .susp-travel-numbers-phone .susp-number dd {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .susp-cars {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: calc(100vw - 32px);
+  }
+
+  .susp-car {
+    white-space: nowrap;
+  }
+
+  .susp-nav .btn {
+    padding: 3px 10px;
+  }
+}
+
+/* The rough road's dash: the three bars of the ride triangle (longer is worse) and the damping chart beside them. */
+.susp-ride-dash {
+  grid-template-columns: minmax(300px, 1fr) minmax(300px, 1.1fr);
+}
+
+.susp-shaker-dash {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.susp-bars-box {
+  justify-content: space-between;
+}
+
+.susp-bars {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  transition: opacity 0.2s;
+}
+
+.susp-bars.stale {
+  opacity: 0.55;
+}
+
+.susp-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.susp-bar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.susp-bar-label {
+  color: var(--c);
+  font-weight: 600;
+}
+
+.susp-bar-value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.susp-bar-track {
+  position: relative;
+  height: 14px;
+  border-radius: 3px;
+  background: rgba(236, 230, 214, 0.08);
+  overflow: hidden;
+}
+
+.susp-bar-track i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+}
+
+.susp-bar-fill {
+  background: var(--c);
+  transition: width 0.25s;
+}
+
+/* The remembered setup: a pale bar behind the current one, with its end marked. */
+.susp-bar-a {
+  background: color-mix(in srgb, var(--c) 30%, transparent);
+  border-right: 2px solid rgba(236, 230, 214, 0.85);
+  z-index: 1;
+}
+
+.susp-bar-a[hidden] {
+  display: none;
+}
+
+.susp-bar-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bone-dim);
+  line-height: 1.25;
+}
+
+.susp-bar.alarm .susp-bar-value {
+  color: #ffb36b;
+}
+
+.susp-bars-foot {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--bone-dim);
+}
+
+.susp-alarm {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+.susp-panel h4 {
+  margin: 14px 0 4px;
+  font-size: 15px;
+}
+
+@media (max-width: 860px) {
+  /* The rough road: the bars over the chart. The shaker: one chart over the other. */
+  .susp-ride-dash,
+  .susp-shaker-dash {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .susp-shaker-dash {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  /* The bump dash puts its chart in the first cell; these dashes flow in order. */
+  .susp-ride-dash > .susp-dash-chart,
+  .susp-shaker-dash > .susp-dash-chart {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .susp-ride-dash > section,
+  .susp-shaker-dash > section {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .susp-bars {
+    gap: 8px;
+  }
+
+  .susp-bar-head {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .susp-bar-note {
+    font-size: 10.5px;
+  }
+
+  .susp-bars-foot {
+    font-size: 11px;
   }
 }

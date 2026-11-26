@@ -9,6 +9,9 @@ import { layshaftSpec, type LayshaftDesc } from '../src/drivetrain/layouts/laysh
 import { finalRatio, speedRatio, transaxleSpec, type TransaxleDesc } from '../src/drivetrain/layouts/transaxle.ts';
 import { analyseState, buildGearbox, stateByName } from '../src/drivetrain/topology.ts';
 import type { GearboxSpec } from '../src/drivetrain/spec.ts';
+import { assemblableCounts, chosenPlanetCount, planetarySpec, type PlanetaryDesc } from '../src/drivetrain/layouts/planetary.ts';
+import { exactEfficiency } from '../src/drivetrain/mesh-losses.ts';
+import { ZF8HP_GEARS } from '../src/data/gearboxes/zf-8hp.ts';
 
 const e30Record = gearboxById('manual-rwd')!;
 const e30 = buildGearbox(gearboxSpec(e30Record));
@@ -347,5 +350,137 @@ describe('10. the audio thread never derives', () => {
     const files = [...runtimeGraph('src/drivetrain/catalogue.ts')];
     expect(files.some((f) => f.endsWith('/drivetrain/gear-geometry.ts'))).toBe(true);
     expect(files.some((f) => f.endsWith('/drivetrain/topology.ts'))).toBe(false);
+  });
+});
+
+describe('ZF 8HP: four planetary sets, five elements', () => {
+  const zf = (id: string) => {
+    const record = gearboxById(id)!;
+    return { record, box: buildGearbox(gearboxSpec(record)), desc: record.layout.desc as PlanetaryDesc };
+  };
+  const all = ['automatic', 'zf-8hp45', 'zf-8hp70', 'zf-8hp50'].map(zf);
+  const hp51 = all[0]!.box;
+  const elements = ['A', 'B', 'C', 'D', 'E'];
+  const combos = (k: number, from = 0): string[][] =>
+    k === 0 ? [[]] : elements.slice(from).flatMap((e, i) => combos(k - 1, from + i + 1).map((rest) => [e, ...rest]));
+
+  it.each(all.map((z) => [z.record.id, z] as const))('1. %s: every ratio from the teeth matches the published one to 0.001', (_id, { record, box }) => {
+    const p = record.published;
+    p.ratios.forEach((r, i) => expect(Math.abs(stateByName(box, String(i + 1)).ratio! - r), `${record.id} ${i + 1}`).toBeLessThan(0.001));
+    expect(Math.abs(stateByName(box, 'R').ratio! + p.reverse!)).toBeLessThan(0.001);
+  });
+
+  it('1. the 8HP51 gives the Supra\'s figures as exact fractions of its teeth', () => {
+    const exact: Array<[string, number]> = [['R', -464 / 125], ['1', 21 / 4], ['2', 84 / 25], ['3', 63 / 29], ['4', 43 / 25], ['5', 6371 / 4841], ['6', 1], ['7', 208 / 253], ['8', 16 / 25]];
+    for (const [name, value] of exact) expect(stateByName(hp51, name).ratio!, name).toBeCloseTo(value, 10);
+  });
+
+  it('2. exactly the nine triples of the matrix give gears, A+C+E holds the input while the output turns', () => {
+    const gears = combos(3).filter((c) => analyseState(hp51, c).kind === 'gear').map((c) => c.join(''));
+    expect(gears.sort()).toEqual(ZF8HP_GEARS.map((g) => g.closed.join('')).sort());
+    const ace = analyseState(hp51, ['A', 'C', 'E']);
+    expect(ace.kind).toBe('input-locked');
+    expect(ace.dof).toBe(1);
+  });
+
+  it('2. every pair of elements is a neutral with two degrees of freedom, every four jam the box', () => {
+    const pairs = combos(2);
+    expect(pairs).toHaveLength(10);
+    for (const c of pairs) expect(analyseState(hp51, c), c.join('')).toMatchObject({ kind: 'neutral', dof: 2 });
+    const fours = combos(4);
+    expect(fours).toHaveLength(5);
+    for (const c of fours) expect(analyseState(hp51, c), c.join('')).toMatchObject({ kind: 'locked', dof: 0 });
+    expect(analyseState(hp51, []).dof).toBe(4);
+  });
+
+  it('5. every shift to the next gear changes exactly one element, and so does 8 → 2 (D off, B on)', () => {
+    const closed = (name: string) => new Set(stateByName(hp51, name).closed);
+    const changed = (a: string, b: string) => {
+      const x = closed(a);
+      const y = closed(b);
+      return [...x].filter((e) => !y.has(e)).length + [...y].filter((e) => !x.has(e)).length;
+    };
+    for (let g = 1; g < 8; g++) expect(changed(String(g), String(g + 1)), `${g} → ${g + 1}`).toBe(2);
+    expect(changed('8', '2')).toBe(2);
+    expect([...closed('8')].filter((e) => !closed('2').has(e))).toEqual(['D']);
+    expect([...closed('2')].filter((e) => !closed('8').has(e))).toEqual(['B']);
+  });
+
+  it('6. the planet counts are the ones the assembly condition allows and we choose; a wrong count is refused', () => {
+    for (const { record, desc } of all) {
+      for (const set of desc.sets) {
+        expect(assemblableCounts(set.sun, set.ring), `${record.id} ${set.sun}/${set.ring}`).toContain(set.planets);
+        expect(chosenPlanetCount(set.sun, set.ring, set.module), `${record.id} ${set.sun}/${set.ring}`).toBe(set.planets);
+      }
+    }
+    // Research §10.2: 24/102 allows 3 and 6 only; 48/96 allows 4.
+    expect(assemblableCounts(24, 102).filter((n) => n >= 3 && n <= 6)).toEqual([3, 6]);
+    const desc = all[0]!.desc;
+    const wrong = { ...desc, sets: desc.sets.map((s, i) => (i === 3 ? { ...s, planets: 4 } : s)) };
+    expect(() => buildGearbox(planetarySpec(wrong))).toThrow(/assembly condition/);
+    const crowded = { ...desc, sets: desc.sets.map((s, i) => (i === 3 ? { ...s, planets: 6 } : s)) };
+    expect(() => buildGearbox(planetarySpec(crowded))).toThrow(/tip to tip/);
+  });
+
+  it('7. with the stationary efficiency the Wikipedia table assumes, the 8HP51 repeats its efficiency table', () => {
+    // η₀ = 0.98 and 0.97 for a set's stationary ratio (two meshes): the article's upper and lower rows for the 8HP51.
+    const table: Record<string, [number, number]> = {
+      R: [0.9466, 0.9205], 1: [0.9838, 0.9757], 2: [0.9766, 0.965], 3: [0.9897, 0.9846], 4: [0.9863, 0.9796],
+      5: [0.9902, 0.9852], 6: [1, 1], 7: [0.9941, 0.9911], 8: [0.9927, 0.989],
+    };
+    for (const [name, [upper, lower]] of Object.entries(table)) {
+      const state = stateByName(hp51, name);
+      const exact98 = exactEfficiency(hp51, state, Math.sqrt(0.98))!;
+      const exact97 = exactEfficiency(hp51, state, Math.sqrt(0.97))!;
+      // Third and fifth come out lower than the article's, by up to 0.003 and 0.001: in third, set 1 rolls 0.39 and
+      // set 4 0.22 of the input power (checked by hand below), so a loss of 2 % on each leaves 0.9877; the article's
+      // 0.9897 leaves out part of it.
+      const tolerance = name === '3' ? 0.0031 : name === '5' ? 0.0011 : 6e-5;
+      expect(Math.abs(exact98 - upper), `${name} at 0.98`).toBeLessThan(tolerance);
+      expect(Math.abs(exact97 - lower), `${name} at 0.97`).toBeLessThan(tolerance);
+      // The first-order sum of topology.ts agrees with the exact one to the square of the loss.
+      expect(Math.abs(state.efficiency! - exact98), name).toBeLessThan(0.0015);
+    }
+    // Third by hand: sets 2 and 3 turn as blocks with the input, set 1 drives ring 4 from its sun at a third of the
+    // input speed, set 4 adds its sun at the input speed. Rolling power = the sun's torque times its speed relative
+    // to the carrier, the same through both meshes of a set: 48/144 · (63/29 · 102/126) · 2/3 and 24/126 · 63/29 · (1 − 29/63).
+    const rolling = (48 / 144) * ((63 / 29) * (102 / 126)) * (2 / 3) + (24 / 126) * (63 / 29) * (1 - 29 / 63);
+    expect(stateByName(hp51, '3').efficiency!).toBeCloseTo(1 - 2 * (1 - Math.sqrt(0.98)) * rolling, 9);
+    // A layshaft gear through two meshes keeps η_m² exactly.
+    expect(exactEfficiency(e30, stateByName(e30, '1'), 0.99)!).toBeCloseTo(0.99 ** 2, 12);
+  });
+
+  it('8. every set carries torques in the Willis proportion T_s : T_r : T_c = z_s : z_r : −(z_s + z_r)', () => {
+    const { desc } = all[0]!;
+    for (const state of hp51.states.filter((s) => s.kind === 'gear')) {
+      desc.sets.forEach((set, i) => {
+        const k = i + 1;
+        const sunMesh = hp51.meshes.findIndex((m) => m.a === `s${k}`);
+        const ringMesh = hp51.meshes.findIndex((m) => m.b === `r${k}`);
+        const zp = (set.ring - set.sun) / 2;
+        // Torque on each member from the set's meshes: sun z_s·λ₁, ring −z_r·λ₂, carrier −(z_s + z_p)λ₁ − (z_p − z_r)λ₂.
+        const l1 = state.meshLoads![sunMesh]!.lambda;
+        const l2 = state.meshLoads![ringMesh]!.lambda;
+        const ts = set.sun * l1;
+        const tr = -set.ring * l2;
+        const tc = -(set.sun + zp) * l1 - (zp - set.ring) * l2;
+        // The planet is free on its pin: its two meshes balance, z_p·λ₁ + z_p·λ₂ = 0.
+        expect(l1, `${state.name} set ${k}`).toBeCloseTo(-l2, 9);
+        expect(ts * set.ring, `${state.name} set ${k}`).toBeCloseTo(tr * set.sun, 9);
+        expect(tc, `${state.name} set ${k}`).toBeCloseTo(-(ts + tr), 9);
+        expect(ts + tr + tc).toBeCloseTo(0, 9);
+      });
+      expect(state.outputTorque!).toBeCloseTo(state.ratio!, 9);
+    }
+  });
+
+  it('3. a set with its carrier held turns the ring against the sun', () => {
+    const set = all[0]!.desc.sets[0]!;
+    const box = buildGearbox(planetarySpec({
+      ...all[0]!.desc, sets: [set], couplings: [], input: 'S1', output: 'R1',
+      elements: [{ id: 'X', kind: 'brake', a: 'C1', b: null, pack: { z: 0, rIn: 1, rOut: 2, plates: 1 } }],
+      gears: [{ name: 'R', closed: ['X'] }],
+    }));
+    expect(stateByName(box, 'R').ratio!).toBeCloseTo(-set.ring / set.sun, 12);
   });
 });

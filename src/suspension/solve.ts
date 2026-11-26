@@ -157,6 +157,30 @@ export class CornerSolver {
     return this.len[i];
   }
 
+  /**
+   * Steered rods' inner ends on an arc instead of a line: 0 for a rack (they move along +y by `rack`), or the length of
+   * the equal pitman and idler arms of a centre link (steering.ts), signed + when the arms' pivots are ahead of the
+   * link. The link then moves across by `rack` = r·sin φ and toward the pivots by r·(1 − cos φ), a parallelogram's
+   * coupler; past the arms' reach (|rack| ≥ r) it stays at r.
+   */
+  linkArcM = 0;
+
+  /** How far the steered rods' inner ends move along x at `rack`, m (linkArcM). */
+  rackX(rack: number): number {
+    const r = this.linkArcM;
+    if (r === 0) return 0;
+    const a = Math.abs(r);
+    return Math.sign(r) * (a - Math.sqrt(Math.max(0, a * a - rack * rack)));
+  }
+
+  /** d(rackX)/d(rack). */
+  private rackXRate(rack: number): number {
+    const r = this.linkArcM;
+    if (r === 0) return 0;
+    const c = r * r - rack * rack;
+    return c > 0 ? (Math.sign(r) * rack) / Math.sqrt(c) : 0;
+  }
+
   /** Moves the strut top mount on the body to `top + shift`. */
   setTopShift(top: Vec3, shift: Vec3): void {
     for (let a = 0; a < 3; a++) this.top[a] = top[a] + shift[a];
@@ -332,6 +356,7 @@ export class CornerSolver {
     const Wz = this.c0[2] + pose[2];
     const [Ax, Ay, Az] = this.A;
     const [ux, uy, uz] = this.aw;
+    const rackX = this.rackX(rack);
     let row = 0;
     for (let i = 0; i < this.nDist; i++, row++) {
       const kx = this.knuckle[3 * i];
@@ -349,7 +374,7 @@ export class CornerSolver {
       const ax = px - Wx;
       const ay = py - Wy;
       const az = pz - Wz;
-      const dx = px - this.body[3 * i];
+      const dx = px - this.body[3 * i] - (this.steer[i] ? rackX : 0);
       const dy = py - this.body[3 * i + 1] - (this.steer[i] ? rack : 0);
       const dz = pz - this.body[3 * i + 2];
       const L = this.len[i];
@@ -511,10 +536,11 @@ export class CornerSolver {
       sign = solveLinear(this.M, dTravel, n);
     }
     if (dRack) {
-      // ∂r/∂rack = −(p − b)_y / L for steered rods; the right-hand side is its negative.
+      // ∂r/∂rack = −((p − b)_x·dx/drack + (p − b)_y) / L for steered rods; the right-hand side is its negative.
       this.M.set(this.J);
       dRack.fill(0);
-      for (let i = 0; i < this.nDist; i++) if (this.steer[i]) dRack[i] = this.J[n * i + 1];
+      const xRate = this.rackXRate(rack);
+      for (let i = 0; i < this.nDist; i++) if (this.steer[i]) dRack[i] = this.J[n * i] * xRate + this.J[n * i + 1];
       sign = solveLinear(this.M, dRack, n);
     }
     return sign;

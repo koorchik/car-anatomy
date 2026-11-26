@@ -1,0 +1,259 @@
+{
+ "page": {
+  "layout": "double-wishbone",
+  "track": 1.55,
+  "travel": {
+   "bumpM": 0.11,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "lower-arm",
+    "front": [0.1566, 0.3735, 0.1308],
+    "rear": [-0.1224, 0.3735, 0.1552],
+    "ball": [0.0171, 0.7532, 0.13]
+   },
+   {
+    "id": "upper-arm",
+    "front": [0.1238, 0.4274, 0.4343],
+    "rear": [-0.1551, 0.4274, 0.4587],
+    "ball": [-0.0156, 0.6963, 0.47]
+   }
+  ],
+  "rods": [
+   {
+    "id": "tie-rod",
+    "body": [-0.1283, 0.3849, 0.2829],
+    "knuckle": [-0.1283, 0.6965, 0.29],
+    "steer": true
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.775, 0.3076],
+  "spring": {
+   "rate": 59683,
+   "body": [0.0171, 0.5413, 0.5062]
+  },
+  "halfshaft": null,
+  "sprungKg": 324,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": 0.3172,
+  "curves": {
+   "camber": [1.109, 0.679, 0, -0.934, -2.164],
+   "toe": [-0.042, -0.005, 0, 0.006, 0.048],
+   "halfTrack": [-13.819, -5.013, 0, 1.387, -0.765],
+   "rcHeight": [205.152, 132.322, 61.605, -7.587, -75.724]
+  },
+  "camberReversal": null,
+  "joints": null
+ },
+ "mazda-mx5-nd": {
+  "layout": "double-wishbone",
+  "track": 1.495,
+  "travel": {
+   "bumpM": 0.11,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "lower-arm",
+    "front": [0.155, 0.346, 0.1308],
+    "rear": [-0.1239, 0.346, 0.1552],
+    "ball": [0.0156, 0.7257, 0.13]
+   },
+   {
+    "id": "upper-arm",
+    "front": [0.1223, 0.3999, 0.4341],
+    "rear": [-0.1566, 0.3999, 0.4585],
+    "ball": [-0.0172, 0.6689, 0.4699]
+   }
+  ],
+  "rods": [
+   {
+    "id": "tie-rod",
+    "body": [-0.1298, 0.3574, 0.2829],
+    "knuckle": [-0.1298, 0.669, 0.29],
+    "steer": true
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.7475, 0.2917],
+  "spring": {
+   "rate": 40655,
+   "body": [0.0156, 0.5138, 0.5062]
+  },
+  "halfshaft": null,
+  "sprungKg": 226.25,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": 0.3007,
+  "curves": {
+   "camber": [1.11, 0.679, 0, -0.934, -2.164],
+   "toe": [-0.042, -0.005, 0, 0.006, 0.048],
+   "halfTrack": [-13.819, -5.014, 0, 1.388, -0.764],
+   "rcHeight": [197.726, 127.603, 59.43, -7.306, -73.006]
+  },
+  "camberReversal": null,
+  "joints": null
+ },
+ "porsche-911-gt3-992": {
+  "layout": "double-wishbone",
+  "track": 1.591,
+  "travel": {
+   "bumpM": 0.11,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "lower-arm",
+    "front": [0.159, 0.394, 0.1308],
+    "rear": [-0.1199, 0.394, 0.1552],
+    "ball": [0.0195, 0.7737, 0.13]
+   },
+   {
+    "id": "upper-arm",
+    "front": [0.1263, 0.4479, 0.4343],
+    "rear": [-0.1527, 0.4479, 0.4587],
+    "ball": [-0.0132, 0.7168, 0.47]
+   }
+  ],
+  "rods": [
+   {
+    "id": "tie-rod",
+    "body": [-0.1259, 0.4054, 0.2829],
+    "knuckle": [-0.1259, 0.717, 0.29],
+    "steer": true
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.7955, 0.333],
+  "spring": {
+   "rate": 46046,
+   "body": [0.0195, 0.5618, 0.5062]
+  },
+  "halfshaft": null,
+  "sprungKg": 254.45,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": 0.3433,
+  "curves": {
+   "camber": [1.109, 0.679, 0, -0.934, -2.164],
+   "toe": [-0.042, -0.005, 0, 0.006, 0.048],
+   "halfTrack": [-13.819, -5.013, 0, 1.388, -0.765],
+   "rcHeight": [210.707, 135.846, 63.235, -7.781, -77.742]
+  },
+  "camberReversal": null,
+  "joints": null
+ },
+ "chevrolet-corvette-z06-c8": {
+  "layout": "double-wishbone",
+  "track": 1.684,
+  "travel": {
+   "bumpM": 0.11,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "lower-arm",
+    "front": [0.1584, 0.4405, 0.1308],
+    "rear": [-0.1206, 0.4405, 0.1552],
+    "ball": [0.0189, 0.8202, 0.13]
+   },
+   {
+    "id": "upper-arm",
+    "front": [0.1256, 0.4944, 0.4343],
+    "rear": [-0.1533, 0.4944, 0.4587],
+    "ball": [-0.0138, 0.7633, 0.47]
+   }
+  ],
+  "rods": [
+   {
+    "id": "tie-rod",
+    "body": [-0.1265, 0.4519, 0.2829],
+    "knuckle": [-0.1265, 0.7635, 0.29],
+    "steer": true
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.842, 0.3264],
+  "spring": {
+   "rate": 52367,
+   "body": [0.0189, 0.6083, 0.5062]
+  },
+  "halfshaft": null,
+  "sprungKg": 287,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": 0.3365,
+  "curves": {
+   "camber": [1.109, 0.679, 0, -0.934, -2.164],
+   "toe": [-0.042, -0.005, 0, 0.006, 0.048],
+   "halfTrack": [-13.819, -5.013, 0, 1.387, -0.765],
+   "rcHeight": [223.233, 143.837, 66.931, -8.237, -82.287]
+  },
+  "camberReversal": null,
+  "joints": null
+ },
+ "subaru-brz-zd8": {
+  "layout": "double-wishbone",
+  "track": 1.55,
+  "travel": {
+   "bumpM": 0.11,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "lower-arm",
+    "front": [0.1392, 0.363, 0.1796],
+    "rear": [-0.1392, 0.363, 0.1504],
+    "ball": [0, 0.7413, 0.13]
+   },
+   {
+    "id": "upper-arm",
+    "front": [0.1392, 0.4357, 0.4769],
+    "rear": [-0.1392, 0.4357, 0.4476],
+    "ball": [0, 0.7056, 0.47]
+   }
+  ],
+  "rods": [
+   {
+    "id": "toe-link",
+    "body": [-0.15, 0.3655, 0.2406],
+    "knuckle": [-0.15, 0.7019, 0.22],
+    "steer": false
+   }
+  ],
+  "strut": null,
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.775, 0.3052],
+  "spring": {
+   "rate": 65770,
+   "body": [0, 0.5299, 0.5139]
+  },
+  "halfshaft": {
+   "diffOutput": [0, 0.17, 0.3052],
+   "outerJoint": [0, 0.7229, 0.3052]
+  },
+  "sprungKg": 276.08,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": 0.3146,
+  "curves": {
+   "camber": [1.106, 0.68, 0, -0.933, -2.151],
+   "toe": [-0.031, -0.004, 0, 0.004, 0.032],
+   "halfTrack": [-18.6, -7.346, 0, 3.68, 3.839],
+   "rcHeight": [251.817, 177.531, 106.202, 37.028, -30.607]
+  },
+  "camberReversal": null,
+  "joints": {
+   "plungeMm": [-0.3, 10.1],
+   "innerDeg": 11.3,
+   "outerDeg": 9.4
+  }
+ }
+}

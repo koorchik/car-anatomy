@@ -309,7 +309,10 @@ export interface BumpSample {
 
 export const newBumpSample = (): BumpSample => ({ x: 0, roadZ: 0, bodyZ: 0, wheelZ: 0, travel: 0, bodyAcc: 0, tyreN: 0, springN: 0, damperN: 0, stopN: 0 });
 
-export function sampleTrace(trace: BumpTrace, t: number, out: BumpSample): BumpSample {
+/** The arrays of a trace that sampleTrace reads: a bump run's, or the rough road's (rough-run.ts). */
+export type TraceSamples = Pick<BumpTrace, 'n' | 'dt' | keyof BumpSample>;
+
+export function sampleTrace(trace: TraceSamples, t: number, out: BumpSample): BumpSample {
   const u = Math.min(trace.n - 1, Math.max(0, t / trace.dt));
   const i = Math.min(trace.n - 2, Math.floor(u));
   const f = u - i;
@@ -330,4 +333,4 @@ export function sampleTrace(trace: BumpTrace, t: number, out: BumpSample): BumpS
 const lerp = (a: Float32Array, i: number, f: number): number => a[i]! + (a[i + 1]! - a[i]!) * f;
 
 /** Duration of a run, s. */
-export const traceSeconds = (trace: BumpTrace): number => (trace.n - 1) * trace.dt;
+export const traceSeconds = (trace: TraceSamples): number => (trace.n - 1) * trace.dt;

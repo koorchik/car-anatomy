@@ -33,19 +33,30 @@ export function decodeDesign(text: string): Design | null {
   } catch {
     return null;
   }
-  if (typeof raw !== 'object' || raw === null) return null;
+  return designFromObject(raw);
+}
+
+/**
+ * A design from any object, as a link's JSON or a design nested in another section's link (the car builder) carries
+ * it: unknown keys are dropped, wrong types fall back to the default's, the crank table is read in either form
+ * ([pin, turn] pairs of a link or a Design's {pin, turn}), and the result is resolved. Null when it is not an object.
+ */
+export function designFromObject(raw: unknown): Design | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
   const input = raw as Record<string, unknown>;
   const out: Design = { ...DEFAULT_DESIGN, throws: [] };
   const target = out as unknown as Record<string, unknown>;
   for (const [key, value] of Object.entries(input)) {
-    if (key === 'throws' || !(key in DEFAULT_DESIGN)) continue;
+    if (key === 'throws' || !Object.hasOwn(DEFAULT_DESIGN, key)) continue;
     // Optional fields start as null, so their type can't be compared. resolveDesign checks them instead.
     if (typeof value === typeof target[key] || target[key] === null) target[key] = value;
   }
   if (Array.isArray(input.throws)) {
-    out.throws = input.throws
-      .filter((t): t is [number, number] => Array.isArray(t) && typeof t[0] === 'number')
-      .map(([pin, turn]) => ({ pin, turn: turn ? 1 : 0 }));
+    out.throws = input.throws.flatMap((t): Design['throws'] => {
+      if (Array.isArray(t) && typeof t[0] === 'number') return [{ pin: t[0], turn: t[1] ? 1 : 0 }];
+      if (typeof t === 'object' && t !== null && typeof (t as { pin?: unknown }).pin === 'number') return [{ pin: (t as { pin: number }).pin, turn: (t as { turn?: unknown }).turn ? 1 : 0 }];
+      return [];
+    });
   }
   return resolveDesign(out);
 }

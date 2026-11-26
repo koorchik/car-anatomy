@@ -311,7 +311,10 @@ export class GearboxSection implements Section {
     // The gearbox designer's address (#/gearboxes/designer) comes with its own stage.
     if (route.page !== 'catalogue') return null;
     const id = route.path[0] ?? GEARBOX_PAGES_SHOWN[0]!;
-    const page = GEARBOX_PAGES_SHOWN.includes(id) ? GEARBOX_PAGES.find((p) => p.id === id) : undefined;
+    // The planetary automatic has a page of its own (pages.ts).
+    const page = GEARBOX_PAGES_SHOWN.includes(id)
+      ? GEARBOX_PAGES.find((p) => p.id === id && p.base.layout.kind !== 'planetary')
+      : undefined;
     if (!page) return null;
     const variant = route.path[1];
     if (variant === undefined) return page.id;
@@ -359,7 +362,7 @@ export class GearboxSection implements Section {
       : record.name;
     // The car mode drives the page's car: a box without one stays on the table, and so does a transaxle, whose final
     // drive is in its own case and not yet on the car's drivetrain.
-    this.el('gbx-modes').querySelector<HTMLElement>('[data-mode="drive"]')!.hidden = !car || layout.kind !== 'layshaft';
+    this.el('gbx-modes').querySelector<HTMLElement>('[data-mode="drive"]')!.hidden = !this.carModeOffered();
     // A new panel in a fresh element: the last page's panel leaves with its listeners.
     const host = this.el('gbx-setup');
     const fresh = host.cloneNode(false) as HTMLElement;
@@ -512,14 +515,16 @@ export class GearboxSection implements Section {
 
   /** On the table or in the car. The address says which (m=drive); a click writes it, and enter() comes here. */
   private async setMode(mode: GearboxMode): Promise<void> {
+    // A page whose box the car cannot drive keeps to the table, whatever the address says.
+    if (mode === 'drive' && !this.carModeOffered()) mode = 'table';
     const ticket = ++this.modeTicket;
     const { time, panels, keys } = this.ctx;
     if (mode === 'drive') {
       this.closeDemo();
       const module = await loadCarMode();
-      const record = this.data.page.base;
-      if (ticket !== this.modeTicket || this.away || !record.car || this.data.layout.kind !== 'layshaft') return;
-      this.car ??= new module.CarMode(this.root, () => this.drive, this.ctx.runs, () => `#/engines/${CARS[this.data.record.car!]!.engine}?m=dyno`);
+      const { record } = this.data;
+      if (ticket !== this.modeTicket || this.away || !record.car || !this.carModeOffered()) return;
+      this.car ??= new module.CarMode(this.root, () => this.drive, this.ctx.runs, () => `#/engines/${CARS[record.car!]!.engine}?m=dyno`);
       if (this.mode !== 'drive') this.timeBefore = time.mode;
       this.mode = 'drive';
       this.car.enter(module.pageCarRecords(record.car, record, this.desc as LayshaftDesc, this.setup.finalDrive));
@@ -562,6 +567,14 @@ export class GearboxSection implements Section {
     // The engine stands in front of the box only in the car.
     if ((this.composite !== null) !== (this.withEngine && mode === 'drive' && this.engineView !== null)) this.buildModel(false);
     this.syncSound();
+  }
+
+  /**
+   * The car mode drives the page's car through its box. The car model applies the car's final drive on the axle, so a
+   * transaxle (its final drive in the box) stays on the table until the car model learns it.
+   */
+  private carModeOffered(): boolean {
+    return !!this.data.record.car && this.data.layout.kind === 'layshaft';
   }
 
   /** A click on the mode buttons: the address changes, and enter() switches. */

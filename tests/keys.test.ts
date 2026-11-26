@@ -6,8 +6,8 @@ import { keyCap, keyHelp, knownKey } from '../src/shell/key-help.ts';
 import { SHELL_KEYS, shellBindings, ShellKeys } from '../src/shell/keys.ts';
 import type { KeyBinding } from '../src/shell/section.ts';
 import { ENGINE_KEY_CONTEXTS, engineKeys } from '../src/ui/engines/keys.ts';
-import { GEAR_KEY_CONTEXTS, GEARBOX_KEY_CONTEXTS, gearboxKeys } from '../src/ui/gearboxes/keys.ts';
 import { SUSPENSION_KEY_CONTEXTS, suspensionKeys } from '../src/ui/suspensions/keys.ts';
+import { GEAR_KEY_CONTEXTS, GEARBOX_KEY_CONTEXTS, gearboxKeys } from '../src/ui/gearboxes/keys.ts';
 
 const noop = (): void => undefined;
 
@@ -19,10 +19,10 @@ function siteKeys(): ShellKeys {
   const engines = engineKeys({ gas: noop, ignition: noop, step: noop, table: noop, mute: noop, layer: noop, closeHelp: noop, lap: () => false });
   keys.bind('engines', engines.engines);
   keys.bind('engines/sump', engines.sump);
+  keys.bind(SUSPENSION_KEY_CONTEXTS[0], suspensionKeys({ event: () => true, scene: noop, page: noop }));
   const gearboxes = gearboxKeys({ gas: noop, ignition: noop, mute: noop, gear: noop, brake: noop, clutch: noop });
   keys.bind('gearboxes', gearboxes.gearboxes);
   keys.bind('gearboxes/drive', gearboxes.drive);
-  keys.bind(SUSPENSION_KEY_CONTEXTS[0], suspensionKeys({ event: () => true, scene: noop }));
   return keys;
 }
 
@@ -105,6 +105,48 @@ describe('keys of the site', () => {
     expect(catalogue[0]!.rows.find((row) => row.caps.includes('↑'))?.caps).toEqual(['Пробіл', '↑']);
   });
 
+  it('leaves the arrows to the panel when it is focused, so its article scrolls', () => {
+    const steps: number[] = [];
+    const arrows = suspensionKeys({ event: () => true, scene: (d) => steps.push(d), page: noop }).find((b) => b.codes.includes('ArrowDown'))!;
+    const press = (target: unknown) => {
+      let prevented = false;
+      const event = { code: 'ArrowDown', target, preventDefault: () => (prevented = true) } as unknown as KeyboardEvent;
+      return { handled: arrows.down(event) !== false, prevented };
+    };
+    expect(press({ closest: () => ({}) })).toEqual({ handled: false, prevented: false });
+    expect(press({ closest: () => null })).toEqual({ handled: true, prevented: true });
+    expect(press(null)).toEqual({ handled: true, prevented: true });
+    expect(steps).toEqual([1, 1]);
+  });
+
+  it('goes to another type of suspension on the arrows left and right, but not from a slider', () => {
+    const pages: number[] = [];
+    const arrows = suspensionKeys({ event: () => true, scene: noop, page: (d) => pages.push(d) }).find((b) => b.codes.includes('ArrowLeft'))!;
+    const press = (code: string, target: unknown) => arrows.down({ code, target, preventDefault: noop } as unknown as KeyboardEvent) !== false;
+    expect(press('ArrowLeft', { closest: () => null })).toBe(true);
+    expect(press('ArrowRight', null)).toBe(true);
+    expect(press('ArrowRight', { closest: (selector: string) => (selector.includes('input') ? {} : null) })).toBe(false);
+    expect(pages).toEqual([-1, 1]);
+  });
+
+  it('leaves Space to a focused button, so the keyboard can press it', () => {
+    let events = 0;
+    const space = suspensionKeys({ event: () => (events++, true), scene: noop, page: noop }).find((b) => b.codes.includes('Space'))!;
+    const press = (target: unknown) => space.down({ code: 'Space', target, preventDefault: noop } as unknown as KeyboardEvent) !== false;
+    expect(press({ closest: (selector: string) => (selector.includes('button') ? {} : null) })).toBe(false);
+    expect(press({ closest: () => null })).toBe(true);
+    expect(events).toBe(1);
+  });
+
+  it('gives the suspension pages the scene on the arrows up and down and V for the views', () => {
+    const keys = siteKeys();
+    const help = keyHelp([...SUSPENSION_KEY_CONTEXTS, SHELL_KEYS], (context) => keys.of(context));
+    const rows = help.flatMap((group) => group.rows);
+    expect(rows.find((row) => row.caps.includes('↑'))?.caps).toEqual(['↑', '↓']);
+    expect(rows.find((row) => row.caps.includes('V'))).toBeDefined();
+    expect(rows.find((row) => row.caps.includes('Пробіл'))).toBeDefined();
+  });
+
   it('in the car the digits are the gears and V the views; the gas, the start and the mute are the engine pages\' keys', () => {
     const keys = siteKeys();
     const drive = keyHelp([...GEARBOX_KEY_CONTEXTS.drive, SHELL_KEYS], (context) => keys.of(context));
@@ -119,38 +161,6 @@ describe('keys of the site', () => {
     expect(shellCaps(drive)).toContain('V');
     const engines = new Map(keys.of('engines').flatMap((b) => b.codes.map((code) => [code, b.label] as const)));
     for (const binding of keys.of('gearboxes')) for (const code of binding.codes) expect(binding.label, code).toBe(engines.get(code));
-  });
-
-  it('leaves the arrows to the panel when it is focused, so its article scrolls', () => {
-    const steps: number[] = [];
-    const arrows = suspensionKeys({ event: () => true, scene: (d) => steps.push(d) }).find((b) => b.codes.includes('ArrowDown'))!;
-    const press = (target: unknown) => {
-      let prevented = false;
-      const event = { code: 'ArrowDown', target, preventDefault: () => (prevented = true) } as unknown as KeyboardEvent;
-      return { handled: arrows.down(event) !== false, prevented };
-    };
-    expect(press({ closest: () => ({}) })).toEqual({ handled: false, prevented: false });
-    expect(press({ closest: () => null })).toEqual({ handled: true, prevented: true });
-    expect(press(null)).toEqual({ handled: true, prevented: true });
-    expect(steps).toEqual([1, 1]);
-  });
-
-  it('leaves Space to a focused button, so the keyboard can press it', () => {
-    let events = 0;
-    const space = suspensionKeys({ event: () => (events++, true), scene: noop }).find((b) => b.codes.includes('Space'))!;
-    const press = (target: unknown) => space.down({ code: 'Space', target, preventDefault: noop } as unknown as KeyboardEvent) !== false;
-    expect(press({ closest: (selector: string) => (selector.includes('button') ? {} : null) })).toBe(false);
-    expect(press({ closest: () => null })).toBe(true);
-    expect(events).toBe(1);
-  });
-
-  it('gives the suspension pages the scene on the arrows up and down and V for the views', () => {
-    const keys = siteKeys();
-    const help = keyHelp([...SUSPENSION_KEY_CONTEXTS, SHELL_KEYS], (context) => keys.of(context));
-    const rows = help.flatMap((group) => group.rows);
-    expect(rows.find((row) => row.caps.includes('↑'))?.caps).toEqual(['↑', '↓']);
-    expect(rows.find((row) => row.caps.includes('V'))).toBeDefined();
-    expect(rows.find((row) => row.caps.includes('Пробіл'))).toBeDefined();
   });
 });
 

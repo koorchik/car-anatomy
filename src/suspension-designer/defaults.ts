@@ -15,6 +15,10 @@ import { designOf, type AxleEnd, type AxleParams, type CarParams, type ChassisDe
 
 const mm = (m: number): number => Math.round(m * 1e6) / 1e3;
 
+/** The steering gear a front layout brings; nothing at the rear, which is not steered. Leaving a live axle keeps its
+ *  box: a box with a centre link and an idler arm steers an independent axle too. */
+const steeredBy = (gear: AxleParams['steeringGear'], end: AxleEnd): Partial<AxleParams> => (end === 'F' ? { steeringGear: gear } : {});
+
 /** The typical values of a layout's own parameters on one end of the car. */
 export function layoutDefaults(layout: DesignLayout, end: AxleEnd): Partial<AxleParams> {
   const axle = end === 'F' ? 'front' : 'rear';
@@ -89,6 +93,8 @@ export function layoutDefaults(layout: DesignLayout, end: AxleEnd): Partial<Axle
         // Half an axle housing with its differential (or half a de Dion tube) on top of the wheel: the typical chassis'
         // 60 kg, an estimate.
         unsprungKg: layout === 'live-axle' ? 60 : 50,
+        // A steered live axle has a box and a pitman arm (decision 20).
+        ...steeredBy('recirculating-ball', end),
       };
     }
   }
@@ -156,6 +162,16 @@ function baseAxle(end: AxleEnd): AxleParams {
     tyreAspect: 45,
     rimIn: 17,
     brakeInboard: false,
+    // Steering: a rack, 50 mm a turn, which gives the typical strut about 14:1 overall; a box of 16:1 when the
+    // design takes one; a constant ratio; an electric motor on the column, as compact cars have it; the template's
+    // steering arms; a level drag link on a steered axle. Estimates.
+    steeringGear: 'rack',
+    rackMmPerRev: 50,
+    boxRatio: 16,
+    variableRatio: 1,
+    assist: 'electric-column',
+    ackermann: null,
+    dragLinkDeg: 0,
   };
 }
 
