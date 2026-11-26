@@ -2,7 +2,8 @@
 //
 // Interface the oil sump relies on, so the whole-car section can grow the model behind it:
 // - buildTrack(def) and TEST_CIRCUIT: new circuits are new TrackDefs.
-// - simulateLap(track, car, tyre, powertrain): weight transfer and load-sensitive tyres belong inside it.
+// - simulateLap(track, car, tyre, powertrain, { grip }): weight transfer and load-sensitive tyres come in as a GripModel
+//   (src/suspension/lap.ts builds one from a chassis); without it the point lap is unchanged.
 // - Powertrain: idealGearbox is a stand-in; a real gearbox implements the same interface.
 // - The sump reads only LapTrace.t, lapTime, axF, ayF, avF, rpm and throttle, and carToEngine for the mount.
 

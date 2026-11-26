@@ -3,6 +3,8 @@
 // and a backward pass that brakes into it, then the lower of the two. Tyres share their grip between braking or
 // driving and cornering on a friction ellipse whose size grows with the normal load (crests take it away).
 // The result is deterministic and periodic: the lap ends at the speed it started with.
+// With a GripModel (LapOptions.grip, level L2) the same passes take their limits from it instead of the flat ellipse,
+// each at the wheel loads of the state it allows (src/suspension/lap.ts, docs/vehicle-model.md).
 
 import type { Powertrain, DriveSample } from './powertrain.ts';
 import type { Track } from './track.ts';
@@ -70,9 +72,37 @@ export const CHASSIS_LAG_S = 0.15;
 /** Speed limit where nothing else limits, m/s. */
 const V_CAP = 150;
 
-export interface LapOptions {
-  chassisLagS?: number;
+/** What the tyres allow at one state of the lap, per kilogram of the car, m/s². Drag is not in it: the lap adds it. */
+export interface GripLimit {
+  /** Largest lateral acceleration with no force along the road: where the first axle reaches its peak. */
+  ayMax: number;
+  /** Braking force the tyres can still make on top of the lateral acceleration asked, ≥ 0. */
+  brakeMax: number;
+  /** Driving force the driven wheels can still make on top of it, ≥ 0. */
+  driveMax: number;
 }
+
+export const newGripLimit = (): GripLimit => ({ ayMax: 0, brakeMax: 0, driveMax: 0 });
+
+/**
+ * A grip limit with weight transfer for the lap (level L2; src/suspension/lap.ts builds it from a chassis). At speed
+ * `v`, accelerations `ax` (forward) and `ay` (left) and normal acceleration `n` (g, the road's vertical curvature and
+ * downforce per kilogram), m/s², writes what the tyres allow at the wheel loads of that state. The lap solves for the
+ * state whose own loads allow it, because the loads depend on the accelerations they allow.
+ */
+export interface GripModel {
+  limit(v: number, ax: number, ay: number, n: number, out: GripLimit): void;
+}
+
+export interface LapOptions {
+  /** Chassis lag of the filtered accelerations, s; CHASSIS_LAG_S by default. */
+  chassisLagS?: number;
+  /** Grip limit with weight transfer (L2). Without it the lap is a point mass with a flat μ, unchanged bit for bit. */
+  grip?: GripModel;
+}
+
+/** Bisection steps for the corner speed, the acceleration and the braking speed of the lap with a grip model. */
+const GRIP_BISECTION = 32;
 
 /** Share of the car's weight the driven wheels can push with: the static share, all four on four-wheel drive. */
 const driveShare = (car: VehicleSpec): number => (car.drive === 'awd' ? 1 : car.drivenShare);
@@ -108,8 +138,17 @@ export function simulateLap(track: Track, car: VehicleSpec, tyre: TyreSpec, pt: 
   const kappaV = track.kappaV;
 
   const normal = (v: number, i: number): number => G + v * v * kappaV[i]! + aero * v * v;
+  const grip = o.grip;
+  const lim = newGripLimit();
   const vLim = new Float64Array(n);
   for (let i = 0; i < n; i++) {
+    if (grip) {
+      vLim[i] = gripCornerSpeed(grip, lim, kappa[i]!, (v) => normal(v, i), (v) => {
+        pt.maxDrive(v, drive);
+        return Math.min(dragForce(car, v), Math.max(0, drive.forceN)) / m;
+      });
+      continue;
+    }
     const den = Math.abs(kappa[i]!) - mu * kappaV[i]! - mu * aero;
     vLim[i] = den > 1e-9 ? Math.min(V_CAP, Math.sqrt((mu * G) / den)) : V_CAP;
   }
@@ -125,6 +164,56 @@ export function simulateLap(track: Track, car: VehicleSpec, tyre: TyreSpec, pt: 
     return Math.min(drive.forceN / m, share * leftOver(v, i)) - dragForce(car, v) / m;
   };
   const decel = (v: number, i: number): number => leftOver(v, i) + dragForce(car, v) / m;
+  /**
+   * With a grip model: the acceleration at sample i, its wheel loads those of that very acceleration. The root of
+   * min(drive, driveMax(a)) − drag − a, which falls as `a` grows (a rear-driven car gains grip with `a` by about h/L,
+   * less than one; a front-driven one loses it), between −drag and drive − drag. Bisection, because near the corner
+   * limit a fixed point would swing between a loaded and an unloaded driven axle.
+   */
+  const gripAccel = (v: number, i: number): number => {
+    pt.maxDrive(v, drive);
+    const ay = v * v * kappa[i]!;
+    const nv = normal(v, i);
+    const drag = dragForce(car, v) / m;
+    const force = Math.max(0, drive.forceN / m);
+    const excess = (ax: number): number => {
+      grip!.limit(v, ax, ay, nv, lim);
+      return Math.min(force, lim.driveMax) - drag - ax;
+    };
+    let hi = force - drag;
+    if (excess(hi) >= 0) return hi;
+    let lo = -drag;
+    for (let k = 0; k < GRIP_BISECTION; k++) {
+      const mid = (lo + hi) / 2;
+      if (excess(mid) >= 0) lo = mid;
+      else hi = mid;
+    }
+    return lo;
+  };
+  /**
+   * With a grip model: the highest speed at sample i from which the car brakes to `vNext` at sample i + 1, its loads
+   * those of that very deceleration at sample i (implicit, so every braking sample of the trace is inside the limit
+   * of its own state). Bisection on u² = vNext² + 2·ds·decel(u); `vCap` bounds it from the forward profile.
+   */
+  const gripBrakeInto = (vNext: number, i: number, vCap: number): number => {
+    const room = (u: number): number => {
+      const ax = -(u * u - vNext * vNext) / (2 * ds);
+      const ay = u * u * kappa[i]!;
+      grip!.limit(u, ax, ay, normal(u, i), lim);
+      // Past an axle's peak across, the car cannot be in this state at all, however it brakes.
+      if (Math.abs(ay) > lim.ayMax) return -1;
+      return vNext * vNext + 2 * ds * (lim.brakeMax + dragForce(car, u) / m) - u * u;
+    };
+    if (vCap <= vNext || room(vCap) >= 0) return vCap;
+    let lo = vNext;
+    let hi = vCap;
+    for (let k = 0; k < GRIP_BISECTION; k++) {
+      const mid = (lo + hi) / 2;
+      if (room(mid) >= 0) lo = mid;
+      else hi = mid;
+    }
+    return lo;
+  };
 
   // Forward: accelerate out of every limit. Three laps, so the start carries the end's speed.
   const vf = new Float64Array(n);
@@ -132,7 +221,7 @@ export function simulateLap(track: Track, car: VehicleSpec, tyre: TyreSpec, pt: 
   for (let pass = 0; pass < 3; pass++) {
     for (let i = 0; i < n; i++) {
       vf[i] = Math.min(carry, vLim[i]!);
-      carry = Math.sqrt(Math.max(0, vf[i]! * vf[i]! + 2 * accel(vf[i]!, i) * ds));
+      carry = Math.sqrt(Math.max(0, vf[i]! * vf[i]! + 2 * (grip ? gripAccel(vf[i]!, i) : accel(vf[i]!, i)) * ds));
     }
   }
   // Backward: brake into every limit, on the forward profile.
@@ -140,7 +229,8 @@ export function simulateLap(track: Track, car: VehicleSpec, tyre: TyreSpec, pt: 
   for (let pass = 0; pass < 3; pass++) {
     for (let i = n - 1; i >= 0; i--) {
       const j = (i + 1) % n;
-      v[i] = Math.min(vf[i]!, Math.sqrt(v[j]! * v[j]! + 2 * decel(v[j]!, j) * ds));
+      if (grip) v[i] = gripBrakeInto(v[j]!, i, vf[i]!);
+      else v[i] = Math.min(vf[i]!, Math.sqrt(v[j]! * v[j]! + 2 * decel(v[j]!, j) * ds));
     }
   }
 
@@ -184,7 +274,12 @@ export function simulateLap(track: Track, car: VehicleSpec, tyre: TyreSpec, pt: 
       trace.brake[i] = 0;
     } else {
       trace.throttle[i] = 0;
-      trace.brake[i] = Math.min(1, -needed / Math.max(1, m * mu * normal(vi, i)));
+      let most = m * mu * normal(vi, i);
+      if (grip) {
+        grip.limit(vi, ax, trace.ay[i]!, normal(vi, i), lim);
+        most = m * lim.brakeMax;
+      }
+      trace.brake[i] = Math.min(1, -needed / Math.max(1, most));
     }
   }
   trace.lapTime = time;
@@ -193,6 +288,44 @@ export function simulateLap(track: Track, car: VehicleSpec, tyre: TyreSpec, pt: 
   lagFilter(trace.ay, dt, tau, trace.ayF);
   lagFilter(trace.av, dt, tau, trace.avF);
   return trace;
+}
+
+/**
+ * The highest speed at which a grip model holds a corner of curvature `kappa` at a steady speed: a_y = v²·κ within
+ * ayMax and the driven wheels still able to push against the drag (`holdAt`, per kilogram, what the engine can give of
+ * it), both at the loads of that very state. Bisection; `normalAt` gives the normal acceleration at a speed.
+ */
+function gripCornerSpeed(grip: GripModel, lim: GripLimit, kappa: number, normalAt: (v: number) => number, holdAt: (v: number) => number): number {
+  const fits = (v: number): boolean => {
+    const ay = v * v * kappa;
+    grip.limit(v, 0, ay, normalAt(v), lim);
+    return Math.abs(ay) <= lim.ayMax && lim.driveMax >= holdAt(v);
+  };
+  if (fits(V_CAP)) return V_CAP;
+  let lo = 0;
+  let hi = V_CAP;
+  for (let k = 0; k < GRIP_BISECTION; k++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/**
+ * Time at which this trace passes distance `s` from the start, s: linear between samples, the distance wrapped into
+ * the lap. The one moment every page shares through ls= (a lap at another level or on other tyres reaches the same
+ * point of the track at another time).
+ */
+export function timeAtDistance(trace: LapTrace, s: number): number {
+  const track = trace.track;
+  const n = trace.t.length;
+  const length = n * track.ds;
+  const ss = ((s % length) + length) % length;
+  const x = ss / track.ds;
+  const i = Math.min(n - 1, Math.floor(x));
+  const f = x - i;
+  return trace.t[i]! + sampleDt(trace, i) * f;
 }
 
 /** Time from sample i to the next. */
