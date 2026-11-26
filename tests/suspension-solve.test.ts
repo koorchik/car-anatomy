@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { macphersonJtekt } from '../src/suspension/templates/macpherson.ts';
-import { buildAxle, mirrorPose, newCornerSample, type CornerSample } from '../src/suspension/kinematics.ts';
+import { Axle, buildAxle, mirrorPose, newCornerSample, type CornerSample } from '../src/suspension/kinematics.ts';
 import { CornerSolver, POSE_SIZE } from '../src/suspension/solve.ts';
 import type { AxleSpec, Vec3 } from '../src/suspension/spec.ts';
 import { dist, mirrorY, nullSpace, rank, rotateInto, sub, svd, unit } from '../src/suspension/vec.ts';
@@ -10,6 +10,10 @@ import { solidAxle, SOLID_TYPICAL, type SolidAxleIntent } from '../src/suspensio
 import { SolidAxleSolver } from '../src/suspension/solve-axle.ts';
 import { newSolidSample, SolidAxle } from '../src/suspension/solid-kinematics.ts';
 import type { SolidAxleLinkage } from '../src/suspension/spec.ts';
+import {
+  ackermannShare, gearInputFor, gearOutput, gearOutputRate, linkTravel, rotateAbout, SteeredBeam, type SteeringGear,
+} from '../src/suspension/steering.ts';
+import { STEERED_BEAM_TYPICAL, steeredBeam } from '../src/suspension/templates/steered-beam.ts';
 
 const spec = macphersonJtekt({ wheelCentreZM: 0.3 });
 const axle = buildAxle(spec);
@@ -794,5 +798,178 @@ describe('solid axle solver (weighted least squares)', () => {
     expect(live.spec.diff).toBe('axle');
     live.measureAt(0.08, -0.05, 'left', out);
     expect(out.plunge).toBe(0);
+  });
+});
+
+describe('steered solid axle: knuckles, tie rod, drag link, pitman arm (P13-core)', () => {
+  const D = Math.PI / 180;
+  const frontAxle = (lateral: SolidAxleIntent['lateral']): AxleSpec<SolidAxleLinkage> =>
+    solidAxle({ ...SOLID_TYPICAL.panhard, lateral, front: true, driven: false });
+  const beamOf = (s: AxleSpec<SolidAxleLinkage>, dragLinkDeg: number, ackermann: number | null = null): SteeredBeam =>
+    new SteeredBeam(s, steeredBeam(s, { dragLinkDeg, ackermann, wheelbaseM: 2.4 }));
+  const panhard = frontAxle('panhard');
+
+  it('runs the front axle\'s links back to the body and puts the Panhard rod\'s body end on the steering box\'s side', () => {
+    for (const r of panhard.linkage.rods) expect(r.body[0], r.id).toBeLessThan(r.knuckle[0]);
+    const lat = panhard.linkage.lateral;
+    if (lat.kind !== 'panhard') throw new Error('expected a Panhard rod');
+    expect(lat.body[1]).toBeGreaterThan(0);
+    expect(lat.axle[1]).toBeLessThan(0);
+  });
+
+  it('keeps the drag link and the tie rod at their lengths across the pitman arm\'s swing and the axle\'s travel', () => {
+    const b = beamOf(panhard, 10);
+    const pt = [0, 0, 0];
+    for (const [zL, zR] of [[0, 0], [0.06, 0.06], [0.05, -0.05], [-0.08, 0.02]] as const) {
+      const state = b.axle.rest();
+      b.axle.solve(state, zL, zR);
+      for (const phi of [-0.4, -0.1, 0, 0.2, 0.45]) {
+        const right = b.knuckleTurn(state, phi);
+        const left = b.leftTurn(right);
+        // Drag link: the pitman ball (body) to the right knuckle's end, turned about its kingpin, then placed by the axle.
+        const kpR = { p: mirrorY(b.beam.kingpinLower), u: unit(mirrorY(sub(b.beam.kingpinUpper, b.beam.kingpinLower))) };
+        b.axle.solver.point(state, rotateAbout(b.beam.dragKnuckle, kpR.p, kpR.u, right), pt);
+        const P = b.pitmanBall(b.sign * phi);
+        expect(Math.abs(dist(P, [pt[0], pt[1], pt[2]]) - b.dragLinkM), `drag link at ${zL}/${zR}, φ ${phi}`).toBeLessThan(1e-9);
+        // Tie rod, in the axle.
+        const kpL = { p: b.beam.kingpinLower, u: unit(sub(b.beam.kingpinUpper, b.beam.kingpinLower)) };
+        const AL = rotateAbout(b.beam.armBall, kpL.p, kpL.u, left);
+        const AR = rotateAbout(mirrorY(b.beam.armBall), kpR.p, kpR.u, right);
+        expect(Math.abs(dist(AL, AR) - b.tieRodM)).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it('turns both wheels the same way from the pitman arm, the ratio from the mechanism: steer per pitman angle', () => {
+    const b = beamOf(panhard, 0);
+    const s = b.at(0.1);
+    expect(s.left).toBeGreaterThan(0);
+    expect(s.right).toBeGreaterThan(0);
+    // On centre the road wheels turn by about the pitman angle times the ratio of the pitman arm to the steering arm's
+    // lateral lever, the arm's run behind the kingpin (a lateral push on its end).
+    const rate = b.ratePerPitman();
+    expect(rate).toBeGreaterThan(0.8);
+    expect(rate).toBeLessThan(1.6);
+    expect((b.at(1e-4).left + b.at(1e-4).right) / 2 / 1e-4).toBeCloseTo(rate, 3);
+  });
+
+  it('steers the wheels in heave when the drag link is not parallel to the Panhard rod, and not when it is', () => {
+    // Parallel and as long as the rod: the two arcs coincide, so only second-order terms of the axle's roll are left.
+    expect(Math.abs(beamOf(panhard, 0).heaveSteer(0.05)) / D).toBeLessThan(0.05);
+    expect(Math.abs(beamOf(panhard, 0).heaveSteer(-0.05)) / D).toBeLessThan(0.05);
+    // Tilted by α: first order, the drag link's end moves across by about Δz·tan α against the steering arm's run.
+    let prev = 0;
+    for (const deg of [5, 10, 20]) {
+      const steer = Math.abs(beamOf(panhard, deg).heaveSteer(0.05));
+      const expected = (0.05 * Math.tan(deg * D)) / 0.15;
+      expect(steer / expected, `${deg}°`).toBeGreaterThan(0.75);
+      expect(steer / expected, `${deg}°`).toBeLessThan(1.25);
+      expect(steer).toBeGreaterThan(prev);
+      prev = steer;
+    }
+    // The sign follows the tilt.
+    expect(Math.sign(beamOf(panhard, 10).heaveSteer(0.05))).toBe(-Math.sign(beamOf(panhard, -10).heaveSteer(0.05)));
+  });
+
+  it('reaches the lock with the inner wheel turned more than the outer, Ackermann growing with the arms\' share', () => {
+    const shares = [0, 0.5, 1].map((share) => {
+      const b = beamOf(panhard, 0, share);
+      const lock = b.lock(38 * D);
+      expect(Math.max(lock.left, lock.right) / D).toBeCloseTo(38, 3);
+      const axis = b.axis();
+      return ackermannShare(lock.left, lock.right, 2.4, 2 * (panhard.wheelCentre[1] - axis.scrub));
+    });
+    expect(Math.abs(shares[0])).toBeLessThan(0.1);
+    expect(shares[1]).toBeGreaterThan(shares[0]);
+    expect(shares[2]).toBeGreaterThan(shares[1]);
+  });
+});
+
+describe('steering gears (P13-core)', () => {
+  const rack: SteeringGear = { kind: 'rack', rackPerRevM: 0.05, boxRatio: 16, pitmanArmM: 0.14, variable: 1 };
+  it('moves a rack by its travel per turn, and a box\'s pitman arm by the angle over its ratio', () => {
+    expect(gearOutput(rack, 2 * Math.PI)).toBeCloseTo(0.05, 12);
+    expect(gearOutput({ ...rack, kind: 'recirculating-ball' }, 16)).toBeCloseTo(1, 12);
+    // A centre link moves by the pitman arm's sine.
+    const box: SteeringGear = { ...rack, kind: 'worm-roller' };
+    expect(linkTravel(box, 0.5 * 16)).toBeCloseTo(0.14 * Math.sin(0.5), 12);
+  });
+
+  it('quickens a variable gear toward the lock and keeps its centre', () => {
+    const v: SteeringGear = { ...rack, variable: 1.4 };
+    expect(gearOutputRate(v, 0)).toBeCloseTo(gearOutputRate(rack, 0), 12);
+    expect(gearOutputRate(v, 2 * Math.PI) / gearOutputRate(rack, 2 * Math.PI)).toBeCloseTo(1.4, 12);
+    // The output is the integral of the rate.
+    const h = 1e-5;
+    for (const th of [0.3, 2, 4]) expect((gearOutput(v, th + h) - gearOutput(v, th - h)) / (2 * h)).toBeCloseTo(gearOutputRate(v, th), 6);
+    expect(gearInputFor((t) => gearOutput(v, t), gearOutput(v, 3.7))).toBeCloseTo(3.7, 5);
+  });
+});
+
+describe('a centre link between a pitman arm and an idler arm (P13-core)', () => {
+  // The pitman and idler arms are equal and parallel, so the centre link is the coupler of a parallelogram: every point
+  // of it, the tie rods' inner joints too, moves as the pitman ball does.
+  const r = 0.14;
+  const fourBar = (inner: Vec3, phi: number, ahead: number): Vec3 =>
+    [inner[0] + ahead * r * (1 - Math.cos(phi)), inner[1] + r * Math.sin(phi), inner[2]];
+  const rod = spec.linkage.rods.find((x) => x.steer)!;
+  const tieRodM = dist(rod.body, rod.knuckle);
+
+  it('moves the tie rods\' inner joints on the plane four-bar\'s path, the arms\' pivots ahead or behind', () => {
+    for (const ahead of [1, -1]) {
+      const a = new Axle(spec, { table: false });
+      a.solver.linkArcM = ahead * r;
+      const pose = CornerSolver.identity();
+      expect(a.solver.solve(pose, 0, 0, 30).ok).toBe(true);
+      const out = [0, 0, 0];
+      for (const phi of [0.1, 0.25, -0.2, 0.4, -0.45]) {
+        expect(a.solver.solve(pose, 0, r * Math.sin(phi), 30).ok, `φ ${phi}`).toBe(true);
+        a.knucklePoint(pose, rod.knuckle, out);
+        const joint = fourBar(rod.body, phi, ahead);
+        expect(Math.abs(dist([out[0], out[1], out[2]], joint) - tieRodM), `φ ${phi}`).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it('takes its rack derivatives from the implicit function, matching central differences to 1e-6', () => {
+    const a = new Axle(spec, { table: false });
+    a.solver.linkArcM = r;
+    const h = 1e-6;
+    const pose = CornerSolver.identity();
+    const up = new Float64Array(POSE_SIZE);
+    const down = new Float64Array(POSE_SIZE);
+    const dR = new Float64Array(6);
+    const k = rod.knuckle;
+    const at = (p: Float64Array): Vec3 => {
+      const out = [0, 0, 0];
+      a.knucklePoint(p, k, out);
+      return [out[0], out[1], out[2]];
+    };
+    for (const rack of [0.03, 0.07, -0.05]) {
+      expect(a.solver.solve(pose, 0, rack, 30).ok).toBe(true);
+      a.solver.derivatives(pose, 0, rack, null, dR);
+      up.set(pose);
+      down.set(pose);
+      a.solver.solve(up, 0, rack + h, 30);
+      a.solver.solve(down, 0, rack - h, 30);
+      const p = at(pose);
+      const W = [spec.wheelCentre[0] + pose[0], spec.wheelCentre[1] + pose[1], spec.wheelCentre[2] + pose[2]];
+      const q = [p[0] - W[0], p[1] - W[1], p[2] - W[2]];
+      const v = [dR[0] + dR[4] * q[2] - dR[5] * q[1], dR[1] + dR[5] * q[0] - dR[3] * q[2], dR[2] + dR[3] * q[1] - dR[4] * q[0]];
+      const u = at(up);
+      const d = at(down);
+      for (let c = 0; c < 3; c++) expect(Math.abs((u[c] - d[c]) / (2 * h) - v[c])).toBeLessThan(1e-6);
+    }
+  });
+
+  it('gives a steered axle the box\'s ratio times the steering arm over the pitman arm, to 1 %', () => {
+    // The pitman ball swings across the car by r_p·dφ, and the drag link pushes the steering arm's end, a run a behind
+    // the kingpin, across by as much: the wheels turn by (r_p / a)·dφ. Overall: box ratio × a / r_p.
+    const axleSpec = solidAxle({ ...SOLID_TYPICAL.panhard, front: true, driven: false });
+    const b = new SteeredBeam(axleSpec, steeredBeam(axleSpec, { dragLinkDeg: 0, ackermann: null, wheelbaseM: 2.4 }));
+    const boxRatio = 16;
+    const overall = boxRatio / b.ratePerPitman();
+    const expected = (boxRatio * STEERED_BEAM_TYPICAL.armM) / STEERED_BEAM_TYPICAL.pitmanArmM;
+    expect(Math.abs(overall / expected - 1)).toBeLessThan(0.01);
   });
 });

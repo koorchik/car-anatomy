@@ -12,6 +12,7 @@ import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import { G } from '../suspension/forces.ts';
 import type { ChassisPerformance } from '../suspension/evaluate-chassis.ts';
+import type { SteeringPerformance } from '../suspension/evaluate-steering.ts';
 import { isSolid, type ChassisDesign } from './design.ts';
 
 export type Severity = 'fatal' | 'warning' | 'note';
@@ -32,6 +33,8 @@ export const DIAGNOSIS_LIMITS = {
   criticalSpeedMs: 160 / 3.6,
   /** Bump steer of a front wheel, rad/m (10°/m). */
   bumpSteer: 10 / DEG,
+  /** A steered solid axle's turn of the wheels from its drag link per 50 mm of axle travel, rad (0.5°). */
+  axleSteer: 0.5 / DEG,
   /** Rear roll steer toward the outside of the turn that counts, rad per g of lateral acceleration (ours: 0.1°/g). */
   rearRollSteer: 0.1 / DEG,
   zetaLow: 0.15,
@@ -55,8 +58,8 @@ export const DIAGNOSIS_LIMITS = {
 
 const fmt = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
-/** The engineering diagnoses of a design, worst first. */
-export function diagnoseChassis(d: ChassisDesign, perf: ChassisPerformance): ChassisDiagnostic[] {
+/** The engineering diagnoses of a design, worst first; the steering's figures (evaluateSteering) add its own. */
+export function diagnoseChassis(d: ChassisDesign, perf: ChassisPerformance, steering: SteeringPerformance | null = null): ChassisDiagnostic[] {
   const out: ChassisDiagnostic[] = [];
   const add = (id: string, severity: Severity, title: string, text: string, fix?: string): void => {
     out.push({ id, severity, title, text, fix });
@@ -90,6 +93,15 @@ export function diagnoseChassis(d: ChassisDesign, perf: ChassisPerformance): Cha
       t('Кермо смикає на нерівностях'),
       t('Кожне переднє колесо повертається на {deg}° на 100 мм ходу: на нерівній дорозі авто саме змінює напрямок.', { deg: fmt(Math.abs(front.bumpSteer) * DEG * 0.1, 1) }),
       t('Постав внутрішній шарнір рульової тяги на висоту, де тяга не підрулює.'),
+    );
+  }
+  if (steering && Math.abs(steering.axleSteer) > L.axleSteer) {
+    add(
+      'axle-steer',
+      'warning',
+      t('Кермо смикає на нерівностях'),
+      t('Коли міст піднімається на 50 мм, колеса самі повертаються на {deg}°: кінець поздовжньої тяги йде своєю дугою, а міст своєю.', { deg: fmt(Math.abs(steering.axleSteer) * DEG, 1) }),
+      t('Постав поздовжню рульову тягу паралельно поперечній тязі моста.'),
     );
   }
   const rearSteerPerG = rear.rollSteer * perf.roll.suspensionGradient[1] * G;

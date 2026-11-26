@@ -86,3 +86,31 @@ describe('the corner on its rig', () => {
     model.dispose();
   });
 });
+
+describe('the lasers', () => {
+  it('show the static camber and toe of the setup, and follow a change of it at once', () => {
+    const DEG = Math.PI / 180;
+    const angles = (setup: Partial<ReturnType<typeof factorySetup>>): { camber: number; toe: number } => {
+      const rc = resolveCorner(corner, { ...factorySetup(corner), ...setup });
+      const model = new CornerModel(rc);
+      model.update(rigFrame(rc, rc.staticTravelM, cornerFrame()));
+      const p = (model.laser as unknown as { positions: Float32Array }).positions;
+      const at = (p.length / 3 - 4) * 3;
+      // The toe laser's second line, from behind the patch to ahead of it, in the road's plane (scene x across, z ahead).
+      const dx = p[at + 9]! - p[at + 6]!;
+      const dz = p[at + 11]! - p[at + 8]!;
+      const plumb = [p[3]! - p[0]!, p[4]! - p[1]!, p[5]! - p[2]!];
+      const laser = [p[9]! - p[6]!, p[10]! - p[7]!, p[11]! - p[8]!];
+      const cos = (plumb[0]! * laser[0]! + plumb[1]! * laser[1]! + plumb[2]! * laser[2]!) / (Math.hypot(...plumb) * Math.hypot(...laser));
+      model.dispose();
+      // Toe-in turns the front of the left wheel inboard, to −x.
+      return { camber: Math.acos(Math.min(1, cos)) / DEG, toe: Math.atan2(-dx, dz) / DEG };
+    };
+    const set = angles({ camberDeg: -2, toeDeg: 0.4 });
+    expect(set.camber).toBeCloseTo(2, 2);
+    expect(set.toe).toBeCloseTo(0.4, 2);
+    const other = angles({ camberDeg: -0.5, toeDeg: -0.2 });
+    expect(other.camber).toBeCloseTo(0.5, 2);
+    expect(other.toe).toBeCloseTo(-0.2, 2);
+  });
+});

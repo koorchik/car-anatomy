@@ -13,7 +13,8 @@
 import { CARS } from '../data/cars.ts';
 import { tyreVertical } from '../vehicle/tyre-data.ts';
 import {
-  AXLE_KEYS, CAR_KEYS, DAMPER_CHOICES, DRIVES, FRONT_LAYOUTS, KNUCKLES, REAR_LAYOUTS, SOLID_LATERALS, SOLID_LINKS, TYRES,
+  AXLE_KEYS, BOX_GEARS, CAR_KEYS, DAMPER_CHOICES, DAMPER_KINDS, DRIVES, FRONT_LAYOUTS, KNUCKLES, REAR_LAYOUTS,
+  SOLID_LATERALS, SOLID_LINKS, SPRING_KINDS, STEERING_ASSISTS, STEERING_GEARS, TYRES,
   axleOf, isDriven, withAxle, type AxleEnd, type AxleKey, type AxleParams, type ChassisDesign,
   type DesignLayout,
 } from './design.ts';
@@ -43,7 +44,9 @@ export type LimitReason =
   /** The sweep of a pivot axis is what makes the layout: fixed for a trailing arm and a swing axle. */
   | 'layout-fixed'
   /** A tube's wall thinner than half its diameter. */
-  | 'bar-wall';
+  | 'bar-wall'
+  /** A drag link steeper than 25° in the front view (plan). */
+  | 'drag-link';
 
 export interface Range {
   min: number;
@@ -186,6 +189,12 @@ export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey, a
       return fixed(-80, 80);
     case 'beamTorsionNmRad':
       return fixed(0, 20000);
+    case 'rockerRatio':
+      return fixed(0.6, 1.6);
+    case 'rockerProgressionDeg':
+      return fixed(-20, 25);
+    case 'thirdSpringNmm':
+      return fixed(0, 150);
     case 'lowerLinkMm':
       return fixed(300, 900);
     case 'upperLinkMm':
@@ -204,7 +213,7 @@ export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey, a
     case 'toeDeg':
       return a.layout === 'swing-axle' ? { min: 0, max: 0, minWhy: 'no-adjuster', maxWhy: 'no-adjuster' } : fixed(-0.6, 0.6);
     case 'springNmm':
-      return springRange(d, end, axleGeometryOf(a, end, d.drive));
+      return springRange(d, end, axleGeometryOf(a, end, d.drive, d.wheelbaseMm));
     case 'damperCompression':
       return fixed(100, 30000);
     case 'damperRebound':
@@ -225,6 +234,19 @@ export function axleRange(d: ChassisDesign, end: AxleEnd, key: AxleNumericKey, a
       const max = Math.min(100, UNSPRUNG_SHARE * d.massKg);
       return { min: 15, max, maxWhy: max < 100 ? 'unsprung' : undefined };
     }
+    // Steering: a c-factor from a slow truck rack to a quick racing one, box ratios of road cars, a variable gear from
+    // slower toward the lock to much quicker, the arms from anti-Ackermann to past full Ackermann (estimates of a
+    // buildable range, not limits of the model).
+    case 'rackMmPerRev':
+      return fixed(30, 120);
+    case 'boxRatio':
+      return fixed(10, 26);
+    case 'variableRatio':
+      return fixed(0.6, 1.8);
+    case 'ackermann':
+      return fixed(-0.5, 1.5);
+    case 'dragLinkDeg':
+      return { min: -25, max: 25, minWhy: 'drag-link', maxWhy: 'drag-link' };
   }
 }
 
@@ -243,9 +265,11 @@ const CLAMP_ORDER = [
   'trackMm', 'tyreWidthMm', 'rimIn', 'tyreAspect', 'kingpinOffsetMm', 'kpiDeg', 'casterDeg', 'scrubMm', 'lowerArmMm',
   'upperArmMm', 'upperAngleDeg', 'lowerBallZMm', 'upperBallZMm', 'lowerPivotZMm', 'svAngleDeg', 'tieRodDzMm',
   'sweepDeg', 'pivotArmMm', 'pivotYMm', 'pivotDzMm', 'pivotSvDeg', 'beamPos', 'shearDzMm', 'beamArmMm', 'beamBushInMm',
-  'beamBushDzMm', 'beamTorsionNmRad', 'lowerLinkMm', 'upperLinkMm', 'linkAngleDeg', 'upperLinkAngleDeg', 'lateralZMm',
+  'beamBushDzMm', 'beamTorsionNmRad', 'rockerRatio', 'rockerProgressionDeg', 'thirdSpringNmm', 'lowerLinkMm',
+  'upperLinkMm', 'linkAngleDeg', 'upperLinkAngleDeg', 'lateralZMm',
   'diffOutputYMm', 'diffOutputDzMm', 'camberDeg', 'toeDeg', 'damperCompression', 'damperRebound', 'damperKneeMs',
-  'damperHighRatio', 'barMm', 'barWallMm', 'barArmMm', 'unsprungKg',
+  'damperHighRatio', 'barMm', 'barWallMm', 'barArmMm', 'unsprungKg', 'rackMmPerRev', 'boxRatio', 'variableRatio',
+  'dragLinkDeg',
 ] as const satisfies readonly AxleNumericKey[];
 
 const clamp = (v: number, r: Range): number => Math.min(r.max, Math.max(r.min, v));
@@ -269,6 +293,7 @@ function typed(input: unknown): ChassisDesign {
   out.car = typeof own(src, 'car') === 'string' && Object.hasOwn(CARS, own(src, 'car') as string) ? own(src, 'car') : null;
   out.drive = oneOf(DRIVES, own(src, 'drive'), DEFAULT_CHASSIS.drive);
   out.tyre = oneOf(TYRES, own(src, 'tyre'), DEFAULT_CHASSIS.tyre);
+  out.dampers = oneOf(DAMPER_KINDS, own(src, 'dampers'), DEFAULT_CHASSIS.dampers);
   for (const end of ['F', 'R'] as const) {
     const k = (key: AxleKey): string => `${key}${end}`;
     const layouts: readonly DesignLayout[] = end === 'F' ? FRONT_LAYOUTS : REAR_LAYOUTS;
@@ -277,8 +302,15 @@ function typed(input: unknown): ChassisDesign {
     out[k('solidLateral')] = oneOf(SOLID_LATERALS, own(src, k('solidLateral')), 'panhard');
     out[k('solidLinks')] = oneOf(SOLID_LINKS, own(src, k('solidLinks')), 'four');
     out[k('damper')] = oneOf(DAMPER_CHOICES, own(src, k('damper')), 'comfort');
+    out[k('springKind')] = oneOf(SPRING_KINDS, own(src, k('springKind')), 'coil');
     const spring = own(src, k('springNmm'));
     out[k('springNmm')] = isNumber(spring) ? spring : null;
+    // A solid axle is steered by a box and a drag link, never a rack.
+    const gears = out[k('layout')] === 'live-axle' ? BOX_GEARS : STEERING_GEARS;
+    out[k('steeringGear')] = oneOf(gears, own(src, k('steeringGear')), gears === BOX_GEARS ? 'recirculating-ball' : 'rack');
+    out[k('assist')] = oneOf(STEERING_ASSISTS, own(src, k('assist')), DEFAULT_CHASSIS.assistF);
+    const ackermann = own(src, k('ackermann'));
+    out[k('ackermann')] = isNumber(ackermann) ? ackermann : null;
   }
   return out as unknown as ChassisDesign;
 }
@@ -301,13 +333,20 @@ function clampAxle(d: ChassisDesign, end: AxleEnd): ChassisDesign {
       changed = true;
     }
   }
+  if (a.ackermann !== null) {
+    const v = clamp(a.ackermann, axleRange(d, end, 'ackermann', a));
+    if (v !== a.ackermann) {
+      patch.ackermann = v;
+      changed = true;
+    }
+  }
   return changed ? withAxle(d, end, patch) : d;
 }
 
 /** The axle clamped and built; falls back to typical geometry, then the typical tyre and track, then the end's typical
  *  axle, until it builds. */
 function buildable(d: ChassisDesign, end: AxleEnd): ChassisDesign {
-  const builds = (x: ChassisDesign): boolean => !(axleGeometryOf(axleOf(x, end), end, x.drive) instanceof Error);
+  const builds = (x: ChassisDesign): boolean => !(axleGeometryOf(axleOf(x, end), end, x.drive, x.wheelbaseMm) instanceof Error);
   let out = clampAxle(d, end);
   if (builds(out)) return out;
   const layout = axleOf(out, end).layout;

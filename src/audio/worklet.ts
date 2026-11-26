@@ -3,11 +3,12 @@
 
 import type { ValveState } from '../engine/valve-control.ts';
 import { EngineSynth, type ListenPosition, type SynthConfig } from './synth.ts';
-import type { AnyLoadReadings, LoadCommand, LoadSnapshot, LoadSpec } from '../engine/load.ts';
+import type { AnyLoadReadings, LoadCommand, LoadFrame, LoadSnapshot, LoadSpec } from '../engine/load.ts';
 import { LoadedCrank, type CrankReadings } from '../engine/loaded-crank.ts';
 import { createLoad } from '../engine/loads.ts';
 import type { EngineState } from '../engine/sim.ts';
 import type { EngineTorqueMap } from '../engine/torque-map.ts';
+import { ProcessMeter, scopeClock, type LoadMethod } from './process-meter.ts';
 
 declare const sampleRate: number;
 declare function registerProcessor(name: string, ctor: unknown): void;
@@ -30,8 +31,12 @@ export type WorkletCommand =
   | { type: 'torqueMap'; map: EngineTorqueMap | null }
   | { type: 'load'; spec: LoadSpec | null }
   | { type: 'loadCommand'; command: LoadCommand }
-  /** The load's state from the other copy (LoadSnapshot), with the state and speed of that copy's engine. */
-  | { type: 'loadRestore'; snapshot: LoadSnapshot; state: EngineState; rpm: number };
+  /**
+   * The audio thread takes over from the main-thread copy: the load's state (LoadSnapshot, null for a load without
+   * one), with the state and speed of that copy's engine. `seq` comes back in every report from then on, so the main
+   * thread can tell reports from before the hand-over, which describe a car it has driven on since.
+   */
+  | { type: 'loadRestore'; snapshot: LoadSnapshot | null; state: EngineState; rpm: number; seq: number };
 
 export interface WorkletReport {
   angle: number;
@@ -47,6 +52,15 @@ export interface WorkletReport {
   loadSnapshot?: LoadSnapshot;
   /** Variable valve gear, only for engines that have it. */
   valves?: ValveState;
+  /** What a page shows of the load (a car's speed, gear and angles), for a load that has it. */
+  frame?: LoadFrame;
+  /** The last hand-over this thread has taken (loadRestore's seq). */
+  seq: number;
+  /** Share of the blocks' time process() took over the last window (process-meter.ts), and how it was timed. */
+  processShare: number;
+  loadMethod: LoadMethod;
+  /** Samples per simulation step now: 16, or 32 while the thread runs short of time. */
+  stepSamples: number;
 }
 
 const REPORT_EVERY = 512;
@@ -56,6 +70,8 @@ class EngineProcessor extends AudioWorkletProcessor {
   private sinceReport = 0;
   private torqueMap: EngineTorqueMap | null = null;
   private loadSpec: LoadSpec | null = null;
+  private seq = 0;
+  private readonly meter = new ProcessMeter(scopeClock(), sampleRate);
 
   constructor() {
     super();
@@ -113,8 +129,9 @@ class EngineProcessor extends AudioWorkletProcessor {
         this.synth?.sim.crank?.load.command(cmd.command);
         break;
       case 'loadRestore': {
+        this.seq = cmd.seq;
         const sim = this.synth?.sim;
-        if (!sim?.crank?.load.restore) break;
+        if (!cmd.snapshot || !sim?.crank?.load.restore) break;
         sim.crank.load.restore(cmd.snapshot);
         sim.adopt(cmd.state, cmd.rpm);
         break;
@@ -134,9 +151,23 @@ class EngineProcessor extends AudioWorkletProcessor {
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const out = outputs[0];
     if (!out || !this.synth) return true;
+    const meter = this.meter;
+    meter.begin();
     const left = out[0]!;
     const right = out[1] ?? left;
-    this.synth.process(left, right);
+    const synth = this.synth;
+    // Short of time for two windows running: a step twice as long, if the load on the crank is stable at it; with time
+    // to spare again, back to the fine one.
+    if (synth.stepSamples === 16) {
+      if (meter.wantsCoarse && (synth.sim.crank?.load.maxStepS?.() ?? Infinity) >= 32 / sampleRate) {
+        synth.stepSamples = 32;
+        meter.settle();
+      }
+    } else if (meter.wantsFine) {
+      synth.stepSamples = 16;
+      meter.settle();
+    }
+    synth.process(left, right);
     this.sinceReport += left.length;
     if (this.sinceReport >= REPORT_EVERY) {
       this.sinceReport = 0;
@@ -152,9 +183,15 @@ class EngineProcessor extends AudioWorkletProcessor {
         crank: sim.crank ? sim.crank.readings() : null,
         valves: sim.valves.vvt ? { ...sim.valves.state } : undefined,
         loadSnapshot: sim.crank?.load.snapshot?.(),
+        frame: sim.crank?.load.frame?.(),
+        seq: this.seq,
+        processShare: meter.share,
+        loadMethod: meter.method,
+        stepSamples: synth.stepSamples,
       };
       this.port.postMessage(report);
     }
+    meter.end(left.length);
     return true;
   }
 }

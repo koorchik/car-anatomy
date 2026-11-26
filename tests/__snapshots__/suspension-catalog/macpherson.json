@@ -1,0 +1,110 @@
+{
+ "page": {
+  "layout": "macpherson",
+  "track": 1.46,
+  "travel": {
+   "bumpM": 0.14,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "lower-arm",
+    "front": [0.22, 0.35, 0.2606],
+    "rear": [-0.1282, 0.3387, 0.2947],
+    "ball": [0.017, 0.68, 0.2426]
+   }
+  ],
+  "rods": [
+   {
+    "id": "tie-rod",
+    "body": [0.077, 0.28, 0.3766],
+    "knuckle": [0.12, 0.69, 0.3346],
+    "steer": true
+   }
+  ],
+  "strut": {
+   "top": [-0.057, 0.56, 0.7986],
+   "lower": [-0.005, 0.59, 0.3826]
+  },
+  "knuckle": "plain",
+  "wheelCentre": [0, 0.73, 0.3286],
+  "spring": {
+   "rate": 25000,
+   "body": [-0.057, 0.56, 0.7986]
+  },
+  "halfshaft": {
+   "diffOutput": [0, 0.25, 0.3286],
+   "outerJoint": [0, 0.6613, 0.3286]
+  },
+  "sprungKg": 400,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": null,
+  "curves": {
+   "camber": [2.093, 0.872, 0, -0.48, -0.488],
+   "toe": [0.596, 0.354, 0, -0.347, -0.564],
+   "halfTrack": [-27.31, -10.438, 0, 4.012, 1.224],
+   "rcHeight": [354.571, 245.073, 132.383, 13.019, -117.463]
+  },
+  "camberReversal": 0.06,
+  "joints": {
+   "plungeMm": [-10.6, 10.1],
+   "innerDeg": 19.5,
+   "outerDeg": 20.3
+  }
+ },
+ "civic-type-r-fk8": {
+  "layout": "macpherson",
+  "track": 1.599,
+  "travel": {
+   "bumpM": 0.14,
+   "droopM": 0.1
+  },
+  "wishbones": [
+   {
+    "id": "lower-arm",
+    "front": [0.22, 0.4195, 0.2497],
+    "rear": [-0.1282, 0.4082, 0.2837],
+    "ball": [0.017, 0.7495, 0.2317]
+   }
+  ],
+  "rods": [
+   {
+    "id": "tie-rod",
+    "body": [0.077, 0.3495, 0.3657],
+    "knuckle": [0.12, 0.7595, 0.3237],
+    "steer": true
+   }
+  ],
+  "strut": {
+   "top": [-0.057, 0.6295, 0.7877],
+   "lower": [-0.005, 0.6595, 0.3717]
+  },
+  "knuckle": "dual-axis",
+  "wheelCentre": [0, 0.7995, 0.3177],
+  "spring": {
+   "rate": 34820,
+   "body": [-0.057, 0.6295, 0.7877]
+  },
+  "halfshaft": {
+   "diffOutput": [0, 0.371, 0.315],
+   "outerJoint": [0, 0.7651, 0.3177]
+  },
+  "sprungKg": 411.05,
+  "unsprungKg": 40,
+  "tyre": "street",
+  "tyreRadiusM": 0.3275,
+  "curves": {
+   "camber": [2.093, 0.872, 0, -0.482, -0.494],
+   "toe": [0.563, 0.335, 0, -0.331, -0.539],
+   "halfTrack": [-26.897, -10.27, 0, 3.936, 1.179],
+   "rcHeight": [384.462, 264.677, 142.503, 13.762, -126.897]
+  },
+  "camberReversal": 0.06,
+  "joints": {
+   "plungeMm": [-12.4, 9.8],
+   "innerDeg": 20.6,
+   "outerDeg": 21.4
+  }
+ }
+}

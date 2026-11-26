@@ -214,6 +214,9 @@ export class CoilSpring {
   private readonly endTurns: number;
   private readonly steps: number;
   private readonly radial: number;
+  /** cos and sin round the wire, the same every frame. */
+  private readonly cosPhi: Float64Array;
+  private readonly sinPhi: Float64Array;
 
   constructor(meanR: number, turns: number, endTurns: number, perTurn = 32, radial = 8) {
     this.meanR = meanR;
@@ -221,6 +224,7 @@ export class CoilSpring {
     this.endTurns = endTurns;
     this.steps = Math.ceil(turns * perTurn);
     this.radial = radial;
+    [this.cosPhi, this.sinPhi] = roundTable(radial);
     const count = (this.steps + 1) * radial;
     this.positions = new Float32Array(count * 3);
     this.normals = new Float32Array(count * 3);
@@ -241,7 +245,7 @@ export class CoilSpring {
 
   /** Writes the coil `length` long (seat to seat) with wire of radius `wire`. */
   update(length: number, wire: number): void {
-    const { meanR: R, turns, endTurns, steps, radial, positions: P, normals: N } = this;
+    const { meanR: R, turns, endTurns, steps, radial, positions: P, normals: N, cosPhi, sinPhi } = this;
     const closed = 2 * wire;
     const active = turns - 2 * endTurns;
     const activePitch = Math.max(closed, (length - 2 * wire - 2 * endTurns * closed) / active);
@@ -278,9 +282,8 @@ export class CoilSpring {
       const by = tz * c - tx * s;
       const bz = tx * 0 - ty * c;
       for (let j = 0; j < radial; j++) {
-        const phi = (j / radial) * 2 * Math.PI;
-        const cp = Math.cos(phi);
-        const sp = Math.sin(phi);
+        const cp = cosPhi[j]!;
+        const sp = sinPhi[j]!;
         const nx = cp * c + sp * bx;
         const ny = sp * by;
         const nz = cp * s + sp * bz;
@@ -295,7 +298,13 @@ export class CoilSpring {
     }
     this.geometry.attributes.position!.needsUpdate = true;
     this.geometry.attributes.normal!.needsUpdate = true;
-    this.geometry.computeBoundingSphere();
+    // The coil lies in a cylinder of radius R + wire from the seat down to where its last turn ends: the sphere round
+    // that cylinder, without a pass over every vertex (computeBoundingSphere cost as much as writing them). Pressed
+    // past solid, the coil is drawn solid and so longer than `length`; the cylinder follows the coil, not `length`.
+    const sphere = (this.geometry.boundingSphere ??= new THREE.Sphere());
+    const half = (2 * wire + 2 * endTurns * closed + active * activePitch) / 2;
+    sphere.center.set(0, -half, 0);
+    sphere.radius = Math.sqrt((R + wire) * (R + wire) + half * half);
   }
 
   /** Solid height of the coil with this wire: every turn touching. */
@@ -318,6 +327,9 @@ export class Bellows {
   /** Radius of each ring and its rate along the boot (per unit of u): the profile does not change with the pose. */
   private readonly ringR: Float64Array;
   private readonly ringDr: Float64Array;
+  private readonly maxR: number;
+  private readonly cosPhi: Float64Array;
+  private readonly sinPhi: Float64Array;
   // Scratch
   private readonly c = new THREE.Vector3();
   private readonly t = new THREE.Vector3();
@@ -339,6 +351,7 @@ export class Bellows {
       const fade = Math.min(1, u * 8, (1 - u) * 8);
       return base + depth * fold * fade;
     };
+    [this.cosPhi, this.sinPhi] = roundTable(radial);
     this.ringR = new Float64Array(rings + 1);
     this.ringDr = new Float64Array(rings + 1);
     const du = 1 / rings;
@@ -347,6 +360,7 @@ export class Bellows {
       this.ringR[i] = radius(u);
       this.ringDr[i] = (radius(Math.min(1, u + du)) - radius(Math.max(0, u - du))) / (2 * du);
     }
+    this.maxR = Math.max(...this.ringR);
     const count = (rings + 1) * radial;
     this.positions = new Float32Array(count * 3);
     this.normals = new Float32Array(count * 3);
@@ -398,9 +412,8 @@ export class Bellows {
       // Slope of the radius along the boot tilts the normal, so the folds shade as folds.
       const slope = this.ringDr[i]! / Math.max(len, 1e-6);
       for (let j = 0; j < radial; j++) {
-        const phi = (j / radial) * 2 * Math.PI;
-        const cp = Math.cos(phi);
-        const sp = Math.sin(phi);
+        const cp = this.cosPhi[j]!;
+        const sp = this.sinPhi[j]!;
         const rx = cp * n.x + sp * bi.x;
         const ry = cp * n.y + sp * bi.y;
         const rz = cp * n.z + sp * bi.z;
@@ -419,6 +432,21 @@ export class Bellows {
     }
     this.geometry.attributes.position!.needsUpdate = true;
     this.geometry.attributes.normal!.needsUpdate = true;
-    this.geometry.computeBoundingSphere();
+    // The curve stays inside the hull of its four control points: a sphere round them, widened by the largest ring.
+    const sphere = (this.geometry.boundingSphere ??= new THREE.Sphere());
+    sphere.center.copy(a).add(b).multiplyScalar(0.5);
+    const reach = Math.max(sphere.center.distanceTo(a), sphere.center.distanceTo(p1), sphere.center.distanceTo(p2));
+    sphere.radius = reach + this.maxR;
   }
+}
+
+/** cos and sin of `n` angles evenly round a circle, for the rings of a tube rewritten every frame. */
+function roundTable(n: number): [Float64Array, Float64Array] {
+  const cos = new Float64Array(n);
+  const sin = new Float64Array(n);
+  for (let j = 0; j < n; j++) {
+    cos[j] = Math.cos((j / n) * 2 * Math.PI);
+    sin[j] = Math.sin((j / n) * 2 * Math.PI);
+  }
+  return [cos, sin];
 }

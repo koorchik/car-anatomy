@@ -17,6 +17,8 @@ import { parseRoute } from './shell/routes.ts';
 import type { DesignerPage } from './ui/designer/designer-page.ts';
 import type { DynoPanel } from './ui/dyno/dyno-panel.ts';
 import type { EnginesSection } from './ui/engines/section.ts';
+import type { AutomaticSection } from './ui/gearboxes/automatic/section.ts';
+import type { GearboxPages } from './ui/gearboxes/pages.ts';
 import type { GearboxSection } from './ui/gearboxes/section.ts';
 import type { SumpPage } from './ui/sump/sump-page.ts';
 import type { SystemsView } from './ui/systems-view.ts';
@@ -52,8 +54,8 @@ declare global {
       systems: SystemsView;
       readonly dyno: DynoPanel | null;
       readonly sump: SumpPage | null;
-      /** The gearbox section while it is shown. */
-      readonly gearbox: GearboxSection | null;
+      /** The gearbox page while it is shown: the manual pages' section or the automatic's (pages.ts). */
+      readonly gearbox: GearboxSection | AutomaticSection | null;
       freeze: (options: FreezeOptions | null) => void;
       loadAll: () => Promise<void>;
     };
@@ -65,7 +67,7 @@ const engines = first as EnginesSection;
 // gearbox pages, which both run the one Drive.
 if (first.id === 'engines' || first.id === 'gearboxes') window.__engine = {
   get drive() {
-    return (first as EnginesSection | GearboxSection).drive;
+    return first.id === 'engines' ? engines.drive : ((first as GearboxPages).drive as Drive);
   },
   stage: shell.stage,
   get designer() {
@@ -82,7 +84,7 @@ if (first.id === 'engines' || first.id === 'gearboxes') window.__engine = {
   },
   get gearbox() {
     const shown = shell.section;
-    return shown?.id === 'gearboxes' ? (shown as GearboxSection) : null;
+    return shown?.id === 'gearboxes' ? ((shown as GearboxPages).page as GearboxSection | AutomaticSection | null) : null;
   },
   freeze: (options) => shell.freeze(options),
   loadAll: () => (first.id === 'engines' ? engines.loadAll() : Promise.resolve()),

@@ -2,7 +2,7 @@
 // comparison table, the designer's track widget, the tests and scripts/sump-table.ts, so all of them agree.
 
 import type { Design } from '../designer/design.ts';
-import { evaluate } from '../designer/physics.ts';
+import { evaluate, type Performance } from '../designer/physics.ts';
 import type { Engine } from '../engine/kinematics.ts';
 import type { SumpKind, SystemsSpec } from '../engine/systems-spec.ts';
 import type { WellPlace } from '../systems/sump.ts';
@@ -22,9 +22,13 @@ export const testTrack = (): Track => (track ??= buildTrack(TEST_CIRCUIT, 1));
 
 const laps = new Map<string, LapTrace>();
 
-/** The stand-in powertrain of this engine in this car: the one the oil page's lap drives, and the lap with weight transfer. */
-export function lapPowertrain(design: Design, publishedHp: number | null, car: VehicleSpec): Powertrain {
-  const torque = lapTorqueCurve(evaluate({ ...design, factory: null }).points, publishedHp);
+/**
+ * The stand-in powertrain of this engine in this car: the one the oil page's lap drives, and the lap with weight transfer.
+ * `perf` saves a caller that already ran the model the second run: only its points are read, and they do not depend on
+ * the factory calibration.
+ */
+export function lapPowertrain(design: Design, publishedHp: number | null, car: VehicleSpec, perf: Pick<Performance, 'points'> = evaluate({ ...design, factory: null })): Powertrain {
+  const torque = lapTorqueCurve(perf.points, publishedHp);
   return idealGearbox({
     torqueAt: torque.at,
     idleRpm: Math.max(600, design.factory?.idleRpm ?? 800),

@@ -3,6 +3,7 @@
 import { CAR_LIST } from '../data/cars.ts';
 import { ENGINES, engineFacts } from '../data/engines.ts';
 import { GEARBOX_PAGE_NAMES } from '../data/gearbox-names.ts';
+import { SUSPENSION_CAR_LINKS } from '../data/suspension-links.ts';
 import type { EngineFacts } from '../designer/catalogue.ts';
 import { ALL_LAYERS, BalanceForces, atRpm, massesOf, roughly } from '../engine/balance-forces.ts';
 import { COOLING_NAMES, FUEL_SYSTEM_NAMES } from '../designer/systems.ts';
@@ -59,7 +60,8 @@ const figures = (engine: Engine): Array<[string, string]> => {
 
 /** The gearbox row: the gearbox of each car with this engine, when its page can be opened (the whole-car plan's cross links). */
 const gearboxRows = (s: EngineSpec): string => {
-  const pages = pageIndex({ gearboxes: (page) => pageShown('gearboxes', page) });
+  // A variant's address (page/variant) opens with its page.
+  const pages = pageIndex({ gearboxes: (target) => pageShown('gearboxes', target.split('/')[0]!) });
   return carsWithEngine(s.id, CAR_LIST)
     .flatMap((car) =>
       carLinks(car, pages)
@@ -68,6 +70,19 @@ const gearboxRows = (s: EngineSpec): string => {
     )
     .join('');
 };
+
+/** A suspension page's name as the engine article links it; the same words as the suspension pages' own. */
+const suspensionName = (page: string): string =>
+  page === 'macpherson' ? t('Стійка Макферсон') : page === 'double-wishbone' ? t('Подвійні поперечні важелі') : page === 'multilink' ? t('Багаторичажна підвіска') : page;
+
+/** The suspension row: each car with this engine on a suspension page that can be opened (suspensions plan, real cars). */
+const suspensionRows = (s: EngineSpec): string =>
+  SUSPENSION_CAR_LINKS.filter((link) => link.engine === s.id && pageShown('suspensions', link.page))
+    .map(
+      (link) =>
+        `<div><dt>${t('Підвіска')}</dt><dd><a class="sibling" href="#/suspensions/${link.page}/${link.car}">${escapeHtml(suspensionName(link.page))}</a> ${link.end === 'F' ? t('спереду') : t('ззаду')}, ${escapeHtml(link.name)}</dd></div>`,
+    )
+    .join('');
 
 const BAL_LABELS: Array<[keyof ReturnType<typeof balance>, string, string]> = [
   ['force1', t('Сила, 1-й порядок'), t('Трусить двигун з частотою обертів')],
@@ -230,7 +245,7 @@ export function articleHtml(engine: Engine): string {
     ${isVariant ? '' : `<p class="lead">${escapeHtml(a.lead)}</p>`}
     <dl class="figures">${figures(engine)
       .map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`)
-      .join('')}${gearboxRows(s)}</dl>
+      .join('')}${gearboxRows(s)}${suspensionRows(s)}</dl>
     ${verify}
     ${engine.isRotary ? '' : `<p class="note">${t('{link}: як олива в піддоні поводиться на треку і чи дістане її насос.', { link: `<a class="sibling" href="#/sump/${s.id}">${t('Мащення на треку')}</a>` })}</p>`}
     ${facts ? factsHtml(facts, voiceText(s)) : ''}

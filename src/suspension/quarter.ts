@@ -12,6 +12,7 @@
 
 import type { ResolvedCorner } from './setup.ts';
 import { bumpStopForce, coilForce, damperForce, G, tyreNormalForce } from './forces.ts';
+import type { DamperController } from './damper-control.ts';
 
 /** The road as the quarter car reads it: enveloped height and its slope at x (RoadBuffer, or a plain function). */
 export interface RoadInput {
@@ -46,6 +47,8 @@ export interface QuarterOut {
   /** Support force on the body: everything the corner pushes up with, N. */
   supportN: number;
   inAir: boolean;
+  /** Power an active damper's actuator puts in, W (0 for the other kinds). */
+  actuatorW: number;
 }
 
 const STATE = 4; // zb, vb, w, vw
@@ -61,8 +64,10 @@ export class QuarterSim {
   readonly state = new Float64Array(STATE);
   readonly out: QuarterOut = {
     t: 0, x: 0, roadZ: 0, bodyZ: 0, wheelZ: 0, travel: 0, bodyAcc: 0, wheelAcc: 0, tyreN: 0, springN: 0, damperN: 0,
-    stopN: 0, damperV: 0, supportN: 0, inAir: false,
+    stopN: 0, damperV: 0, supportN: 0, inAir: false, actuatorW: 0,
   };
+  /** A controlled damper (damper-control.ts); null: the damper's own curve. */
+  control: DamperController | null = null;
   private readonly w0: number;
   private readonly ms: number;
   private readonly mu: number;
@@ -107,6 +112,7 @@ export class QuarterSim {
 
   /** Puts the corner at rest at road position x (on whatever road is there). */
   reset(x: number): void {
+    this.control?.reset();
     this.t = 0;
     this.x = x;
     const c = this.corner;
@@ -150,7 +156,10 @@ export class QuarterSim {
         : Ld > c.topOutM
           ? -bumpStopForce(Ld - c.topOutM, bs.rate, bs.lengthM)
           : 0;
-    const S = Fs * mrS + (Fd + Fstop) * mrD;
+    const ctl = this.control;
+    // A controlled damper's support at the wheel (with an active one's actuator, which is not the damper's).
+    const Sd = ctl ? ctl.support(vb, qd, Fd * mrD) : Fd * mrD;
+    const S = Fs * mrS + Fstop * mrD + Sd;
     const roadZ = this.road.heightAt(x);
     const defl = this.r - (w - roadZ);
     const deflRate = this.road.slopeAt(x) * this.speed - vw;
@@ -173,11 +182,14 @@ export class QuarterSim {
       o.wheelAcc = aw;
       o.tyreN = Fz;
       o.springN = Fs;
-      o.damperN = Fd;
+      // The force along the damper itself: the controller's for a semi-active or adaptive one, the passive curve under
+      // an active one's actuator.
+      o.damperN = ctl && ctl.kind !== 'active' && mrD !== 0 ? Sd / mrD : Fd;
       o.stopN = Fstop;
       o.damperV = vd;
       o.supportN = S;
       o.inAir = Fz === 0;
+      o.actuatorW = ctl ? ctl.actuatorW : 0;
     }
   }
 
@@ -188,6 +200,7 @@ export class QuarterSim {
   step(h = QUARTER_STEP_S): void {
     const s = this.state;
     const d = this.tmp;
+    this.advanceControl(h);
     this.derivs(s, this.x, d, true);
     s[1] += h * d[1];
     s[3] += h * d[3];
@@ -197,12 +210,21 @@ export class QuarterSim {
     this.t += h;
   }
 
+  /** A controlled damper's lag and preview, held through the step that follows. */
+  private advanceControl(h: number): void {
+    const ctl = this.control;
+    if (!ctl) return;
+    const ahead = ctl.lookAheadM(this.speed);
+    ctl.advance(h, this.state[1], ahead > 0 ? { now: this.road.heightAt(this.x), ahead: this.road.heightAt(this.x + ahead) } : null);
+  }
+
   /** One classic Runge-Kutta step: the reference for the tests, not for the page. `out` is left at the step's start. */
   stepRk4(h: number): void {
     const s = this.state;
     const tmp = this.tmp;
     const x = this.x;
     const v = this.speed;
+    this.advanceControl(h);
     this.derivs(s, x, this.k1, true);
     for (let i = 0; i < STATE; i++) tmp[i] = s[i] + (h / 2) * this.k1[i];
     this.derivs(tmp, x + (h / 2) * v, this.k2, false);

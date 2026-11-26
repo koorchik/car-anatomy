@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { CAMERA_FAR, CameraMove, ease, farPlane, fitDistance, presetDirection, type FrameView } from '../src/scene/camera-moves.ts';
-import { fitBox, partKeyOf, systemOf } from '../src/scene/stage.ts';
+import { fitBox, partKeyOf, pickFrom, systemOf } from '../src/scene/stage.ts';
 import { FAST_SECONDS_TO_RAISE, QUALITY_BEST, QUALITY_LEAST, QualityGovernor, SLOW_FRAMES_TO_DROP } from '../src/scene/stage-quality.ts';
 
 /** A ray hit with only what partKeyOf reads. */
@@ -58,6 +58,26 @@ describe('what a hit names', () => {
     expect(systemOf(car)).toBeNull();
     gear.userData.system = 'synchro';
     expect(systemOf(gear)).toBe('synchro');
+  });
+
+  it('looks through glass to a solid part, and through a car\'s body to the glass inside it', () => {
+    const glass = (part: string, pickLast = false): THREE.Mesh => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ transparent: true }));
+      mesh.userData.part = part;
+      if (pickLast) mesh.userData.pickLast = true;
+      return mesh;
+    };
+    const solid = box(1);
+    solid.userData.part = 'crank';
+    const info = (key: string) => ({ name: key, text: '' });
+    const body = glass('car.body', true);
+    const block = glass('block');
+    const at = (...objects: THREE.Object3D[]) => objects.map((object, i) => hit({ object, distance: i }));
+    expect(pickFrom(at(body, block, solid), info)!.key).toBe('crank');
+    expect(pickFrom(at(body, block), info)!.key).toBe('block');
+    expect(pickFrom(at(body), info)!.key).toBe('car.body');
+    // A part without a card is passed over.
+    expect(pickFrom(at(body, block), (key) => (key === 'block' ? null : info(key)))!.key).toBe('car.body');
   });
 });
 

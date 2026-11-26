@@ -15,8 +15,9 @@ const CIRCLE = 64;
 /** What the drawing shows: points are the corner's own vectors, read on every update(). */
 export interface SchematicPoints {
   /** Joints and the part each belongs to (for picking through userData.instanceParts); a null point is hidden. */
-  joints: Array<{ at: THREE.Vector3 | null; part: string }>;
-  bars: Array<{ a: THREE.Vector3 | null; b: THREE.Vector3 | null; part: string }>;
+  joints: Array<{ at: THREE.Vector3 | null; part: string; link?: string; hidden?: boolean }>;
+  /** `link` names the link a bar or joint belongs to, so that one taken away (CornerModel.setLinksRemoved) is hidden. */
+  bars: Array<{ a: THREE.Vector3 | null; b: THREE.Vector3 | null; part: string; link?: string; hidden?: boolean }>;
   /** The two pivots of each wishbone, for its dashed bush axis. */
   bushAxes: Array<[THREE.Vector3, THREE.Vector3]>;
   /** The steering axis from above the knuckle down to the road; not shown when the corner has none now (a multilink
@@ -95,13 +96,13 @@ export class CornerSchematic {
   update(): void {
     const p = this.points;
     for (let i = 0; i < p.joints.length; i++) {
-      const at = p.joints[i]!.at;
-      if (!at) this.joints.setMatrixAt(i, HIDDEN);
+      const { at, hidden } = p.joints[i]!;
+      if (!at || hidden) this.joints.setMatrixAt(i, HIDDEN);
       else this.joints.setMatrixAt(i, this.m.makeTranslation(at.x, at.y, at.z));
     }
     for (let i = 0; i < p.bars.length; i++) {
-      const { a, b } = p.bars[i]!;
-      if (!a || !b) {
+      const { a, b, hidden } = p.bars[i]!;
+      if (!a || !b || hidden) {
         this.bars.setMatrixAt(i, HIDDEN);
         continue;
       }

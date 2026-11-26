@@ -7,6 +7,7 @@
 import { t } from '../i18n/t.ts';
 import { G } from '../suspension/forces.ts';
 import { evaluateChassis, type ChassisPerformance } from '../suspension/evaluate-chassis.ts';
+import { evaluateSteering, type SteeringPerformance } from '../suspension/evaluate-steering.ts';
 import {
   causesOf as coreCausesOf, compareMetrics, previewEffects as corePreviewEffects, type Cause, type Effect, type Metric,
   type Probe, type SensitivityModel,
@@ -15,13 +16,34 @@ import { paramRange, type NumericKey } from './constraints.ts';
 import type { ChassisDesign, DesignKey } from './design.ts';
 import { controlsFor, axleControl, type ChassisControl } from './controls.ts';
 import { editChassis } from './edit.ts';
-import { springRateNm, chassisToSpec } from './to-spec.ts';
+import { ackermannShown, springRateNm, chassisToSpec } from './to-spec.ts';
 import { withDesignOnlyGeometry } from './geometry.ts';
 
 const DEG = 180 / Math.PI;
 
+/** The steering's figures (P13-core). NaN ones (a drag link's bump steer on an independent axle) stay silent. */
+export function steeringMetrics(s: SteeringPerformance): Metric[] {
+  const pct = (id: string, name: string, value: number): Metric => ({ id, name, value, format: 'percent' });
+  const val = (id: string, name: string, value: number, unit: string, digits: number, scale: number): Metric => ({ id, name, value, format: 'value', unit, digits, scale });
+  const nm = t('Н·м');
+  return [
+    val('steerRatio', t('Передатне число керма'), s.ratioCentre, '', 1, 2),
+    val('steerRatioLock', t('Передатне число керма на упорі'), s.ratioLock, '', 1, 2),
+    val('turns', t('Обертів керма від упору до упору'), s.turnsLockToLock, '', 2, 0.5),
+    pct('turningCircle', t('Діаметр розвороту'), s.turningCircleM),
+    val('ackermann', t('Частка Аккермана на упорі'), s.ackermann * 100, '%', 0, 20),
+    val('noseLift', t('Підйом носа на упорі'), s.noseLiftM * 1000, t('мм'), 1, 2),
+    val('lockCamber', t('Розвал зовнішнього колеса на упорі'), s.outerCamberLock * DEG, '°', 1, 1),
+    val('steerTorque', t('Зусилля на кермі на 0,3 g'), s.torqueNm, nm, 1, 1),
+    val('parkingTorque', t('Зусилля на кермі на місці'), s.parkingTorqueNm, nm, 1, 2),
+    val('splitMuTorque', t('Тягне кермо на гальмах на різному покритті'), s.splitMuTorqueNm, nm, 1, 1),
+    val('spindleTug', t('Момент від тяги на плечі осі колеса'), s.spindleNm, nm, 0, 20),
+    val('axleSteer', t('Підрулювання моста на 50 мм ходу'), s.axleSteer * DEG, '°', 2, 0.5),
+  ];
+}
+
 /** The figures the checks compare. Signed ones and those near zero say both values; the rest a percentage. */
-export function chassisMetrics(perf: ChassisPerformance): Metric[] {
+export function chassisMetrics(perf: ChassisPerformance, steering: SteeringPerformance | null = null): Metric[] {
   const [f, r] = perf.axles;
   const pct = (id: string, name: string, value: number): Metric => ({ id, name, value, format: 'percent' });
   const val = (id: string, name: string, value: number, unit: string, digits: number, scale: number): Metric => ({ id, name, value, format: 'value', unit, digits, scale });
@@ -71,19 +93,33 @@ export function chassisMetrics(perf: ChassisPerformance): Metric[] {
     val('reserveF', t('Запас ходу до відбійника спереду'), f.travelReserveM * 1000, mm, 0, 20),
     val('reserveR', t('Запас ходу до відбійника ззаду'), r.travelReserveM * 1000, mm, 0, 20),
     pct('unsprung', t('Непідресорена маса'), perf.unsprungShare),
+    pct('ladenRideF', t('Частота кузова з вантажем спереду'), f.laden.rideHz),
+    pct('ladenRideR', t('Частота кузова з вантажем ззаду'), r.laden.rideHz),
+    val('ladenSagF', t('Просідання з вантажем спереду'), f.laden.sagM * 1000, mm, 0, 10),
+    val('ladenSagR', t('Просідання з вантажем ззаду'), r.laden.sagM * 1000, mm, 0, 10),
     val('propUnload', t('Розвантаження заднього колеса під газом'), perf.propUnload * 100, share, 1, 5),
+    ...(steering ? steeringMetrics(steering) : []),
   ];
 }
 
 /** The figures of a design; none when its chassis cannot stand on its springs. */
 export function chassisSnapshot(d: ChassisDesign): Metric[] {
   let perf: ChassisPerformance;
+  let spec: ReturnType<typeof chassisToSpec>;
   try {
-    perf = evaluateChassis(chassisToSpec(d));
+    spec = chassisToSpec(d);
+    perf = evaluateChassis(spec);
   } catch {
     return [];
   }
-  return chassisMetrics(perf);
+  // A linkage that cannot steer loses the steering's figures, not the chassis'.
+  let steering: SteeringPerformance | null = null;
+  try {
+    steering = evaluateSteering(spec);
+  } catch {
+    steering = null;
+  }
+  return chassisMetrics(perf, steering);
 }
 
 /** The edits of the checks solve their axles at design only (withDesignOnlyGeometry). */
@@ -92,10 +128,13 @@ const MODEL: SensitivityModel<ChassisDesign> = {
   edit: (d, patch) => withDesignOnlyGeometry(() => editChassis(d, patch)),
 };
 
-/** The value a control shows now: a number, or the typical spring's rate when the design keeps it. */
+/** The value a control shows now: a number, the typical spring's rate when the design keeps it, or the Ackermann share
+ *  of the template's arms. */
 function shownValue(d: ChassisDesign, control: ChassisControl): unknown {
   const v = (d as unknown as Record<string, unknown>)[control.key];
-  if (control.kind !== 'spring' || v !== null) return v;
+  if (v !== null) return v;
+  if (control.kind === 'auto') return Math.round(ackermannShown(d) * 1000) / 1000;
+  if (control.kind !== 'spring') return v;
   const axle = axleControl(control.key);
   return axle ? Math.round(springRateNm(d, axle[0])) / 1000 : v;
 }
@@ -103,7 +142,7 @@ function shownValue(d: ChassisDesign, control: ChassisControl): unknown {
 /** Values to try for a control instead of its own: ten percent of its range up and down where there is room, every
  *  other option of a choice, the other side of a toggle. */
 export function controlTries(d: ChassisDesign, control: ChassisControl): Array<{ value: unknown; label: string }> {
-  if (control.kind === 'number' || control.kind === 'spring') {
+  if (control.kind === 'number' || control.kind === 'spring' || control.kind === 'auto') {
     const value = shownValue(d, control);
     if (typeof value !== 'number') return [];
     const range = paramRange(d, control.key as NumericKey);

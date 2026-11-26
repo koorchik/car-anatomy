@@ -6,6 +6,7 @@
 import { jtektKingpinOffsetM, SPLIT_KNUCKLE_DEFAULTS } from '../suspension/templates/macpherson.ts';
 import { multilinkDefaults } from '../suspension/templates/multilink.ts';
 import { wishboneDefaults } from '../suspension/templates/double-wishbone.ts';
+import { pushrodDefaults } from '../suspension/templates/pushrod.ts';
 import { PIVOT_TYPICAL } from '../suspension/templates/pivot.ts';
 import { TWIST_BEAM_TYPICAL } from '../suspension/templates/twist-beam.ts';
 import { SOLID_TYPICAL } from '../suspension/templates/solid-axle.ts';
@@ -13,6 +14,10 @@ import { TYPICAL_BRAKE_FRONT, TYPICAL_FINAL_DRIVE } from '../suspension/template
 import { designOf, type AxleEnd, type AxleParams, type CarParams, type ChassisDesign, type DesignLayout } from './design.ts';
 
 const mm = (m: number): number => Math.round(m * 1e6) / 1e3;
+
+/** The steering gear a front layout brings; nothing at the rear, which is not steered. Leaving a live axle keeps its
+ *  box: a box with a centre link and an idler arm steers an independent axle too. */
+const steeredBy = (gear: AxleParams['steeringGear'], end: AxleEnd): Partial<AxleParams> => (end === 'F' ? { steeringGear: gear } : {});
 
 /** The typical values of a layout's own parameters on one end of the car. */
 export function layoutDefaults(layout: DesignLayout, end: AxleEnd): Partial<AxleParams> {
@@ -23,9 +28,12 @@ export function layoutDefaults(layout: DesignLayout, end: AxleEnd): Partial<Axle
       return { knuckle: 'plain', kingpinOffsetMm: mm(split.kingpinOffsetM), kpiDeg: split.kpiDeg, diffOutputYMm: 250, diffOutputDzMm: 0, unsprungKg: 40 };
     }
     case 'double-wishbone':
-    case 'multilink': {
+    case 'multilink':
+    case 'pushrod': {
       const it = layout === 'multilink' ? multilinkDefaults(axle) : wishboneDefaults(axle);
+      const rocker = pushrodDefaults(axle);
       return {
+        ...(layout === 'pushrod' ? { rockerRatio: rocker.rockerRatio, rockerProgressionDeg: rocker.progressionDeg, thirdSpringNmm: 0 } : {}),
         lowerArmMm: mm(it.lowerArmM),
         upperArmMm: mm(it.upperArmM),
         upperAngleDeg: it.upperAngleDeg,
@@ -85,6 +93,8 @@ export function layoutDefaults(layout: DesignLayout, end: AxleEnd): Partial<Axle
         // Half an axle housing with its differential (or half a de Dion tube) on top of the wheel: the typical chassis'
         // 60 kg, an estimate.
         unsprungKg: layout === 'live-axle' ? 60 : 50,
+        // A steered live axle has a box and a pitman arm (decision 20).
+        ...steeredBy('recirculating-ball', end),
       };
     }
   }
@@ -120,6 +130,9 @@ function baseAxle(end: AxleEnd): AxleParams {
     beamBushInMm: 100,
     beamBushDzMm: 0,
     beamTorsionNmRad: 2000,
+    rockerRatio: 1,
+    rockerProgressionDeg: 15,
+    thirdSpringNmm: 0,
     solidLateral: 'panhard',
     solidLinks: 'four',
     lowerLinkMm: 550,
@@ -132,6 +145,7 @@ function baseAxle(end: AxleEnd): AxleParams {
     camberDeg: 0,
     toeDeg: 0,
     springNmm: null,
+    springKind: 'coil',
     damper: 'comfort',
     // About what the «comfort» preset gives the default car (to-spec.ts), so switching to 'custom' starts near it.
     damperCompression: 2500,
@@ -148,6 +162,16 @@ function baseAxle(end: AxleEnd): AxleParams {
     tyreAspect: 45,
     rimIn: 17,
     brakeInboard: false,
+    // Steering: a rack, 50 mm a turn, which gives the typical strut about 14:1 overall; a box of 16:1 when the
+    // design takes one; a constant ratio; an electric motor on the column, as compact cars have it; the template's
+    // steering arms; a level drag link on a steered axle. Estimates.
+    steeringGear: 'rack',
+    rackMmPerRev: 50,
+    boxRatio: 16,
+    variableRatio: 1,
+    assist: 'electric-column',
+    ackermann: null,
+    dragLinkDeg: 0,
   };
 }
 
@@ -169,6 +193,7 @@ export const DEFAULT_CAR: CarParams = {
   driveFront: 0.5,
   finalDrive: TYPICAL_FINAL_DRIVE,
   tyre: 'street',
+  dampers: 'passive',
 };
 
 export const DEFAULT_CHASSIS: ChassisDesign = Object.freeze(designOf(DEFAULT_CAR, typicalAxle('macpherson', 'F'), typicalAxle('multilink', 'R')));

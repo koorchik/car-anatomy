@@ -139,6 +139,8 @@ export interface DriveRender {
   /** Engine speed and road speed, m/s, every 128 samples. */
   rpm: Float32Array;
   speed: Float32Array;
+  /** The driven wheels' mean spin, rad/s, every 128 samples: what the engine turns with through a locked clutch. */
+  wheel: Float32Array;
   story: DriveStory;
 }
 
@@ -147,12 +149,14 @@ export interface DriveRender {
  * an upshift into every gear, braking to a stop and idle in neutral. The worklet's way: the synth steps the engine
  * every 16 samples and the driver acts between blocks of 128.
  */
-export function renderDrive(carId: string, story?: Partial<StoryOptions>): DriveRender {
+export function renderDrive(carId: string, story?: Partial<StoryOptions>, stepSamples = 16): DriveRender {
   const car = carById(carId);
   const spec = car && engineById(car.engine);
   if (!car || !spec) throw new Error(`Unknown car ${carId} or its engine`);
   const cd = buildCarDrive(carId);
   const synth = new EngineSynth(synthConfig(buildEngine(spec)), FS);
+  // The worklet's coarser step when the audio thread runs short (process-meter.ts).
+  synth.stepSamples = stepSamples;
   const load = new VehicleLoad(vehicleLoadSpec(cd));
   synth.sim.attach(new LoadedCrank(cd.map, load));
   const drive = new DriveStory(cd, load, synth.sim);
@@ -163,15 +167,19 @@ export function renderDrive(carId: string, story?: Partial<StoryOptions>): Drive
   const r = new Float32Array(most);
   const rpm = new Float32Array(most / block);
   const speed = new Float32Array(most / block);
+  const wheel = new Float32Array(most / block);
+  const omega = load.vehicle.bus.omega;
   let offset = 0;
   while (!drive.done && offset + block <= most) {
     drive.drive(block / FS);
     synth.process(l.subarray(offset, offset + block), r.subarray(offset, offset + block));
     rpm[offset / block] = synth.sim.rpm;
     speed[offset / block] = load.chassis.v;
+    wheel[offset / block] = cd.driven.reduce((sum, i) => sum + omega[i]!, 0) / cd.driven.length;
     offset += block;
   }
-  return { l: l.slice(0, offset), r: r.slice(0, offset), rpm: rpm.slice(0, offset / block), speed: speed.slice(0, offset / block), story: drive };
+  const n = offset / block;
+  return { l: l.slice(0, offset), r: r.slice(0, offset), rpm: rpm.slice(0, n), speed: speed.slice(0, n), wheel: wheel.slice(0, n), story: drive };
 }
 
 export const rmsDb = (x: Float32Array, from = 0, to = x.length): number => {
