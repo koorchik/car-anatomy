@@ -86,7 +86,7 @@ export class EngineFeatures {
     const s = this.section;
     const { slots } = s.ctx;
     const app = slots.root;
-    const balance = new BalancePanel(slots.tools.parent, app, this.forcesSwitch);
+    const balance = new BalancePanel(slots.tools.parent, app, this.forcesSwitch, s.ctx.view);
     this.balance = balance;
     // The valve gear's labels stay after the card, as they were when both were made at the start.
     if (this.valves) app.append(this.valves.element);

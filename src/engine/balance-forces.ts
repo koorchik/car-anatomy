@@ -306,7 +306,9 @@ export class BalanceForces {
       const d = pistonPin(e, c, theta);
       const first = (m.reciprocatingKg * r * Math.cos(gamma)) / 1000;
       const second = (-m.reciprocatingKg * this.secondAccel(c, theta)) / 1000;
-      for (const along of [first, second]) {
+      // Both orders in turn, without an array a frame: the 3D layer calls this every frame.
+      for (let order = 0; order < 2; order++) {
+        const along = order === 0 ? first : second;
         const a = this.arrows[k++]!;
         a.x = d * ux;
         a.y = d * uy;
