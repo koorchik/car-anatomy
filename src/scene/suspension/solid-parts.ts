@@ -1,6 +1,6 @@
 // Cards of a solid axle's parts (solid-axle-model.ts): what is its own (the housing or the de Dion tube, the trailing
 // links, the Panhard rod, Watt's linkage, the leaf springs, the differential on the body) and the wheel end shared with
-// the corners (parts.ts). Only the keys the axle draws get a card. Text: src/i18n/en/suspension-axles.ts.
+// the corners (parts.ts). Only the keys the axle draws get a card. English: src/i18n/en/suspension.ts.
 
 import { t } from '../../i18n/t.ts';
 import type { AxleSpec, SolidAxleLinkage } from '../../suspension/spec.ts';
@@ -14,7 +14,7 @@ const OWN: Record<string, PartInfo> = {
   },
   'susp.de-dion-tube': {
     name: t('Труба де Діона'),
-    text: t('Легка труба, що жорстко тримає обидві маточини, як картер моста, але без диференціала: його закріплено на кузові. Тому колеса лишаються паралельними, а непідресорена маса менша. Труба обходить диференціал ззаду.'),
+    text: t('Легка труба, що жорстко тримає обидві маточини, як картер моста, але без диференціала: його закріплено на кузові. Тому колеса лишаються паралельними, а непідресорена маса менша. Тут труба обходить диференціал ззаду.'),
   },
   'susp.lower-link': {
     name: t('Нижня поздовжня тяга'),
@@ -22,7 +22,7 @@ const OWN: Record<string, PartInfo> = {
   },
   'susp.upper-link': {
     name: t('Верхня поздовжня тяга'),
-    text: t('Разом із нижньою тягою не дає мосту провертатися від моменту на колесах. Кут між верхніми й нижніми тягами в боковому виді задає, наскільки задок присідає під час розгону.'),
+    text: t('Разом із нижньою тягою не дає мосту провертатися від моменту на колесах. Від того, де в боковому виді перетинаються лінії верхніх і нижніх тяг, залежить, наскільки задок присідає під час розгону.'),
   },
   'susp.panhard-rod': {
     name: t('Тяга Панара'),
@@ -42,7 +42,7 @@ const OWN: Record<string, PartInfo> = {
   },
   'susp.bush': {
     name: t('Сайлентблок'),
-    text: t('Гумова втулка у вушку тяги. Коли тяг більше, ніж треба, міст не може рухатися, не стиснувши їх, і тоді сайлентблоки беруть закушування. Сайт фарбує їх червоним відповідно до того, наскільки розтягнуто чи стиснуто тягу.'),
+    text: t('Гумова втулка у вушку тяги. Коли тяг більше, ніж треба, міст не може рухатися, не стиснувши їх, і тоді закушування беруть на себе сайлентблоки. Сайт фарбує їх червоним відповідно до того, наскільки розтягнуто чи стиснуто тягу.'),
   },
   'susp.spring': {
     name: t('Пружина'),

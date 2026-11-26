@@ -440,14 +440,14 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Сталева труба від колеса до колеса з диференціалом посередині. Обидва колеса сидять на ній жорстко, тож удар під одним нахиляє й друге, а вся вага картера з диференціалом і головною передачею ходить разом із колесами як непідресорена маса. Піввісі обертаються всередині картера.':
     'A steel tube from wheel to wheel with the differential in the middle. Both wheels sit on it rigidly, so a bump under one tilts the other too, and the whole weight of the housing with the differential and the final drive moves with the wheels as unsprung mass. The halfshafts turn inside the housing.',
   'Труба де Діона': 'De Dion tube',
-  'Легка труба, що жорстко тримає обидві маточини, як картер моста, але без диференціала: його закріплено на кузові. Тому колеса лишаються паралельними, а непідресорена маса менша. Труба обходить диференціал ззаду.':
-    'A light tube that holds both hubs rigidly, like an axle housing, but without the differential: that is mounted on the body. So the wheels stay parallel and the unsprung mass is smaller. The tube passes behind the differential.',
+  'Легка труба, що жорстко тримає обидві маточини, як картер моста, але без диференціала: його закріплено на кузові. Тому колеса лишаються паралельними, а непідресорена маса менша. Тут труба обходить диференціал ззаду.':
+    'A light tube that holds both hubs rigidly, like an axle housing, but without the differential: that is mounted on the body. So the wheels stay parallel and the unsprung mass is smaller. Here the tube passes behind the differential.',
   'Нижня поздовжня тяга': 'Lower trailing link',
   'Тримає міст уздовж авто й передає на кузов силу тяги й гальмування. Хитається на сайлентблоках з обох кінців.':
     'Holds the axle fore and aft and passes the drive and braking forces to the body. It pivots on bushings at both ends.',
   'Верхня поздовжня тяга': 'Upper trailing link',
-  'Разом із нижньою тягою не дає мосту провертатися від моменту на колесах. Кут між верхніми й нижніми тягами в боковому виді задає, наскільки задок присідає під час розгону.':
-    'Together with the lower link it keeps the axle from rotating under the torque at the wheels. The angle between the upper and lower links in side view sets how much the rear squats under acceleration.',
+  'Разом із нижньою тягою не дає мосту провертатися від моменту на колесах. Від того, де в боковому виді перетинаються лінії верхніх і нижніх тяг, залежить, наскільки задок присідає під час розгону.':
+    'Together with the lower link it keeps the axle from rotating under the torque at the wheels. Where the lines of the upper and lower links meet in side view sets how much the rear squats under acceleration.',
   'Тяга Панара': 'Panhard rod',
   'Поперечна тяга від кузова з одного боку до моста з другого. Тримає міст упоперек, але ходить по дузі, тож на ході зсуває міст убік. Центр крену лежить на її висоті.':
     'A lateral rod from the body on one side to the axle on the other. It locates the axle sideways, but swings in an arc, so over its travel it shifts the axle sideways. The roll center lies at its height.',
@@ -460,7 +460,7 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Сережка ресори': 'Leaf spring shackle',
   'Коротка ланка між заднім вушком ресори й кузовом. Ресора на ході змінює довжину між вушками, і сережка хитається, щоб їй не заважати.':
     'A short link between the rear eye of the leaf spring and the body. The spring changes its length between the eyes over its travel, and the shackle swings so as not to resist it.',
-  'Гумова втулка у вушку тяги. Коли тяг більше, ніж треба, міст не може рухатися, не стиснувши їх, і тоді сайлентблоки беруть закушування. Сайт фарбує їх червоним відповідно до того, наскільки розтягнуто чи стиснуто тягу.':
+  'Гумова втулка у вушку тяги. Коли тяг більше, ніж треба, міст не може рухатися, не стиснувши їх, і тоді закушування беруть на себе сайлентблоки. Сайт фарбує їх червоним відповідно до того, наскільки розтягнуто чи стиснуто тягу.':
     'A rubber bushing in the eye of a link. When there are more links than needed, the axle cannot move without squeezing them, and then the bushings take up the binding. The site colors them red according to how far the link is stretched or compressed.',
   'Стоїть на мосту й упирається в кузов. Міст тримають тяги, тож пружина лише несе вагу й приймає удари.':
     'Sits on the axle and bears against the body. The links locate the axle, so the spring only carries the weight and takes the bumps.',
