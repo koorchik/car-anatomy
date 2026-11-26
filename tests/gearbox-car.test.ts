@@ -1,5 +1,6 @@
 // The car mode of the gearbox page (stage K3a): the dash says what drive.snapshot() says, the 3D turns every member of
-// the box as the solver has it, and the car's frame crosses threads as plain data.
+// the box as the solver has it, and the car's frame crosses threads as plain data. The drives step the solver in Node for
+// tens of simulated seconds, so they get the time the sound tests get on a busy machine.
 
 import { describe, expect, it } from 'vitest';
 import type { DriveSnapshot } from '../src/audio/drive.ts';
@@ -57,7 +58,7 @@ describe('the car mode', () => {
     expect(seen.top).toBeGreaterThan(150);
     // Without a car on the crank there is no car dash.
     expect(carReadings({ ...snapshotOf(sim, load), vehicle: undefined })).toBeNull();
-  });
+  }, 60_000);
 
   it('turns every member of the box by the core\'s P·φ: the angles the solver has, and the teeth in mesh', () => {
     const { cd, spec, load, sim, story } = drive();
@@ -82,7 +83,7 @@ describe('the car mode', () => {
     });
     expect(checked).toBeGreaterThan(10);
     expect(sim.state).toBe('running');
-  });
+  }, 60_000);
 
   it('pushes the sleeve of the gear asked for, home once it holds, and lights the power path through it', () => {
     const { cd, spec, load } = drive();
@@ -123,7 +124,7 @@ describe('the car mode', () => {
     expect(load.frame(kept)).toBe(kept);
     expect(kept).toEqual(fresh);
     expect(fresh.speed).toBeGreaterThan(1);
-  });
+  }, 60_000);
 
   it('shows the slip of a driven wheel: none rolling, positive spinning, negative locked', () => {
     const { load } = drive();
