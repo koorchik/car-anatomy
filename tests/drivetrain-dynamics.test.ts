@@ -890,6 +890,30 @@ describe('11. the Prius power-split hybrid', () => {
     expect(states.has('cranking')).toBe(false);
   });
 
+  it('a lifted pedal brings the engine down without a surge of the car or a stall on the way', () => {
+    for (const kmh of [50, 100]) {
+      const r = hybridRig(pd);
+      const c = r.load.control;
+      c.pedal = 1;
+      runRig(r, 30, () => r.load.chassis.v > kmh / 3.6);
+      c.pedal = 0;
+      let t = 0;
+      let lowest = Number.POSITIVE_INFINITY;
+      const at: number[] = [];
+      runRig(r, 3, () => {
+        t += r.dt;
+        // While the control still wants the engine, MG1 brings it down to its target and holds it there.
+        if (c.engineOn) lowest = Math.min(lowest, r.sim.rpm);
+        for (const mark of [0.15, 0.5, 1]) if (at.length < 3 && Math.abs(t - mark) < r.dt / 2) at.push(r.load.chassis.v);
+      });
+      expect(lowest, `${kmh} km/h`).toBeGreaterThan(0.8 * pd.map.idleRpm);
+      // The engine's torque dies with its throttle in tens of milliseconds; after that the car only slows. The
+      // engine's spin-down energy goes into the battery, or the engine comes down more slowly: it does not drive the car.
+      expect(at[1]!, `${kmh} km/h`).toBeLessThan(at[0]!);
+      expect(at[2]!, `${kmh} km/h`).toBeLessThan(at[1]!);
+    }
+  });
+
   it('the brake pedal stops the car and holds it: recovery only slows it, and MG2 never drives it backward', () => {
     const r = hybridRig(pd);
     const c = r.load.control;
@@ -899,17 +923,24 @@ describe('11. the Prius power-split hybrid', () => {
     c.brake = 0.4;
     let vMin = 0;
     let recovered = 0;
+    let driven = 0;
     let pushedBack = 0;
+    let t = 0;
     runRig(r, 10, () => {
+      t += r.dt;
       const v = r.load.chassis.v;
       vMin = Math.min(vMin, v);
-      // MG2's mechanical power is negative while it recovers. Standing or rolling back, MG2 holds no torque (the
-      // control sees the speed a step late, hence a newton-metre's slack).
+      // MG2's mechanical power is negative while it recovers. Once the engine's torque has died away with its
+      // throttle (the manifold empties in tens of milliseconds), MG2 never drives under the brake pedal: an engine
+      // spinning down must not have its energy sent to the wheels against the brakes. Standing or rolling back, MG2
+      // holds no torque (the control sees the speed a step late, hence a newton-metre's slack).
       const p2 = c.mg2Nm * c.mg2Omega;
       if (v > 5) recovered = Math.min(recovered, p2);
+      if (t > 0.1) driven = Math.max(driven, p2);
       if (v <= 0) pushedBack = Math.max(pushedBack, Math.abs(c.mg2Nm));
     });
     expect(recovered).toBeLessThan(-10000);
+    expect(driven).toBeLessThan(50);
     expect(pushedBack).toBeLessThan(1);
     // The tyres' own spring lets the body settle back a little once the wheels stand, nothing more.
     expect(vMin * 3.6).toBeGreaterThan(-1);

@@ -12,7 +12,8 @@
 //   LINE_SHARE of its full-load torque (a petrol engine is most efficient near full load), never so slow that MG1
 //   would pass its speed limit backward;
 // - MG1 holds that engine speed: its torque is the engine's reaction, 30/108 of the engine torque at the sun, plus a
-//   PI term on the speed error. Its torque also reaches the output through the ring;
+//   PI term on the speed error (no wind-up while MG1 sits on a limit). Its torque also reaches the output through the
+//   ring. When the battery cannot take what MG1 generates beyond the reaction, the engine comes down more slowly;
 // - MG2 makes up the rest of the asked output torque, within its torque and power and within what the battery can
 //   give or take at its state of charge;
 // - a road speed cap (the car's limited top speed) takes the asked torque away above the cap, and the brake pedal
@@ -229,23 +230,52 @@ export class ThsControl {
 
     // 4. MG1 holds the engine speed: the engine's reaction at the sun plus the speed loop.
     let t1 = 0;
+    let reaction = 0;
+    let integralBefore = this.integral;
     if (this.engineOn || we > REST_OMEGA) {
       // The speed MG1's resolver sees: the carrier's, from MG1 and the output. Holding the box side of the damper
       // rather than the crank keeps the loop off the damper's own mode, which the crank's speed would feed back.
       const err = target - (w1 - k.mg1[1] * wo) / k.mg1[0];
+      integralBefore = this.integral;
       this.integral = clamp(this.integral + err * dt, -50, 50);
-      t1 = (this.kp * err + this.ki * this.integral - input.engineNm) / k.mg1[0];
+      reaction = -input.engineNm / k.mg1[0];
+      t1 = (this.kp * err + this.ki * this.integral) / k.mg1[0] + reaction;
     } else {
       this.integral = 0;
     }
+    const asked1 = t1;
     t1 = limitMotor(t1, w1, sp.mg1Limits);
+    // Anti-windup: while MG1 sits on a limit, the integral does not push further into it. Otherwise it winds up
+    // while MG1 pulls the engine down at full torque and then drives it on through the target, down to a stall.
+    if (t1 !== asked1) this.integral = integralBefore;
 
     // 5. MG2 makes up the asked output torque, within its limits and the battery's.
-    let t2 = limitMotor((demand - k.mg1[1] * t1) / k.mg2, w2, sp.mg2Limits);
-    const p1 = electricPower(t1 * w1);
     const out = dischargeLimitW(sp.battery, this.soc);
     const into = chargeLimitW(sp.battery, this.soc);
+    let t2 = limitMotor((demand - k.mg1[1] * t1) / k.mg2, w2, sp.mg2Limits);
+    let p1 = electricPower(t1 * w1);
     let pb = p1 + electricPower(t2 * w2);
+    // More charge than the battery takes, with MG1 generating beyond the engine's reaction (the speed loop pulling
+    // the engine down, as when the pedal lifts at high revs): the engine comes down more slowly instead. Otherwise
+    // MG2 would have to drive the wheels with what the battery refuses, and the car would surge on a lifted pedal.
+    if (pb < -into && p1 < 0) {
+      // The battery's power is monotonic in t1 between MG1's torque and the bare reaction (MG2 following to keep the
+      // asked output), so a bisection finds the torque at the charge limit; the bare reaction is the most it eases.
+      let bad = t1;
+      let good = limitMotor(reaction, w1, sp.mg1Limits);
+      if (this.batteryFor(good, demand, w1, w2) >= -into) {
+        for (let i = 0; i < 24; i++) {
+          const mid = 0.5 * (bad + good);
+          if (this.batteryFor(mid, demand, w1, w2) >= -into) good = mid;
+          else bad = mid;
+        }
+      }
+      t1 = good;
+      t2 = limitMotor((demand - k.mg1[1] * t1) / k.mg2, w2, sp.mg2Limits);
+      p1 = electricPower(t1 * w1);
+      pb = p1 + electricPower(t2 * w2);
+      this.integral = integralBefore;
+    }
     if ((pb > out || pb < -into) && Math.abs(w2) > 1e-3) {
       t2 = limitMotor(mechanicalPower(clamp(pb, -into, out) - p1) / w2, w2, sp.mg2Limits);
       pb = p1 + electricPower(t2 * w2);
@@ -262,6 +292,13 @@ export class ThsControl {
     // 6. Friction brakes for what the motors did not recover.
     const friction = brakeNm > 0 ? clamp((Math.max(0, -wanted) - Math.max(0, -delivered)) / brakeNm, 0, 1) * this.brake : 0;
     for (let i = 0; i < WHEELS; i++) bus.brakeNm[i] = friction * sp.brakeNm[i]!;
+  }
+
+  /** The battery's power with MG1 at t1 and MG2 making up the asked output torque, W. */
+  private batteryFor(t1: number, demand: number, w1: number, w2: number): number {
+    const k = this.spec.kin;
+    const t2 = limitMotor((demand - k.mg1[1] * t1) / k.mg2, w2, this.spec.mg2Limits);
+    return electricPower(t1 * w1) + electricPower(t2 * w2);
   }
 
   /** Throttle that gives this engine torque at this speed: the map's charge, linear between shut and full. */
