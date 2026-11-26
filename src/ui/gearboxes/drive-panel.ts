@@ -184,7 +184,9 @@ export class DrivePanel {
       s[key] = text;
       this.el(id).textContent = text;
     };
-    set('gbx-clutch-slip', 'slip', t('{rpm} об/хв', { rpm: fmt(Math.abs((f.clutchSlip * 30) / Math.PI)) }));
+    // An open clutch passes nothing: the engine and the input shaft turning apart is not slip that heats the disc
+    // (open as car-readings.ts has it).
+    set('gbx-clutch-slip', 'slip', f.clutch <= 0 ? t('розімкнене') : t('{rpm} об/хв', { rpm: fmt(Math.abs((f.clutchSlip * 30) / Math.PI)) }));
     set('gbx-clutch-temp', 'temp', t('{c} °C', { c: fmt(f.clutchC) }));
     set('gbx-clutch-launch', 'launch', t('{kj} кДж', { kj: fmt(fig.launchJ / 1000, 1) }));
     set('gbx-clutch-total', 'total', t('{kj} кДж', { kj: fmt(f.clutchJ / 1000, 1) }));

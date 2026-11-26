@@ -122,8 +122,8 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   'Щоб завести, вичавіть зчеплення (C) або поставте нейтраль (N).': 'To start the engine, press the clutch (C) or select neutral (N).',
   'Двигун заглух: зчеплення замкнулося, а обертів не вистачило. Вичавіть зчеплення (C) або поставте нейтраль і заведіть знову.':
     'The engine stalled: the clutch locked up without enough revs. Press the clutch (C) or select neutral, and start it again.',
-  'Час вище: {gear}': 'Shift up: {gear}',
-  'Краще нижче: {gear}': 'Shift down: {gear}',
+  'Перемкніть вище: {gear}': 'Shift up: {gear}',
+  'Перемкніть нижче: {gear}': 'Shift down: {gear}',
   'Помічники': 'Driver aids',
   'Автозчеплення': 'Auto clutch',
   'Вимкніть його, щоб рушати самому педаллю зчеплення (C) і газом.': 'Turn it off to pull away yourself with the clutch pedal (C) and the gas.',

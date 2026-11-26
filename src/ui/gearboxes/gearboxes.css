@@ -914,12 +914,17 @@ body.gbx-car .gbx-hint {
   }
 }
 
-/* The car's demonstrations in the title row, under one label. */
+/*
+ * The car's demonstrations in the title row, under one label, on a line of their own after the row's other buttons:
+ * inline, the label read the layout steps («Попередня», «Наступна») as demonstrations too.
+ */
 .gbx-car-demos {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  order: 1;
+  flex-basis: 100%;
 }
 
 .gbx-car-demos[hidden] {
