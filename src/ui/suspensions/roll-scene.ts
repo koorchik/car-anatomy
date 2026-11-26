@@ -27,7 +27,7 @@ import {
 import { factorySetup, resolveCorner } from '../../suspension/setup.ts';
 import { rollModel, understeerGradient } from '../../suspension/statics.ts';
 import { axleOf, isDriven, type ChassisDesign } from '../../suspension-designer/design.ts';
-import { designCorner, TYPICAL_RWD } from '../../suspension-designer/page-cars.ts';
+import { designCorner, TYPICAL_RWD, type SuspensionPage } from '../../suspension-designer/page-cars.ts';
 import {
   BAR_RANGE_MM, barMmOf, inertiaSource, ROLL_HOT_HATCH, rollChassis, rollDesignOf, rollSpec, withBars, type BarChoice,
   type InertiaSource,
@@ -432,12 +432,11 @@ export class RollScene {
     const b = this.built;
     if (!b) return [];
     const k = this.chartAxle();
-    const page = this.choice?.page ?? SUSPENSION_PAGES[0]!;
     const of = (sweep: RollSweep, axle: 0 | 1): { ay: number[]; camber: number[] } => ({
       ay: sweep.states.map((s) => s.ay),
       camber: sweep.states.map((s) => s.camberRoad[2 * axle + 1]!),
     });
-    const own: CamberSeries = { label: this.ownLabel(k), color: PAGE_COLORS[page.id], faint: false, ...of(b.sweep, k) };
+    const own: CamberSeries = { label: this.ownLabel(k), color: PAGE_COLORS[this.ownLayout(k)], faint: false, ...of(b.sweep, k) };
     const built = this.references();
     const refs = REFERENCES.filter((r) => !(k === 0 && r.design === b.design)).map((r): CamberSeries => {
       const ref = built[REFERENCES.indexOf(r)]!;
@@ -446,9 +445,15 @@ export class RollScene {
     return [own, ...refs];
   }
 
-  private ownLabel(k: 0 | 1): string {
+  /** The page layout of the shown axle: a car's other axle is not the page's (the hot hatch's rear is a multilink). */
+  private ownLayout(k: 0 | 1): SuspensionPage['id'] {
     const page = this.choice?.page ?? SUSPENSION_PAGES[0]!;
-    const name = this.choice?.car ? this.choice.car.link.name : pageName(page.id);
+    const layout = this.built ? axleOf(this.built.design, k === 0 ? 'F' : 'R').layout : page.id;
+    return SUSPENSION_PAGES.find((p) => p.id === layout)?.id ?? page.id;
+  }
+
+  private ownLabel(k: 0 | 1): string {
+    const name = this.choice?.car ? this.choice.car.link.name : pageName(this.ownLayout(k));
     return `${name}, ${k === 0 ? t('передня вісь') : t('задня вісь')}`;
   }
 
