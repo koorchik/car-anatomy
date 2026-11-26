@@ -60,6 +60,16 @@ class WheelsOnly {
     }
   }
 
+  /** In the x-ray the tyres turn to glass, as the whole axles' tyres do. */
+  setView(view: ViewMode): void {
+    const tyre = this.materials[0]!;
+    const glass = view === 'xray';
+    tyre.transparent = glass;
+    tyre.opacity = glass ? 0.22 : 1;
+    tyre.depthWrite = !glass;
+    tyre.needsUpdate = true;
+  }
+
   dispose(): void {
     for (const g of this.geometries) g.dispose();
     for (const m of this.materials) m.dispose();
@@ -124,6 +134,7 @@ export class SpecChassisModel implements SceneModel<null> {
 
   setView(view: ViewMode): void {
     for (const a of this.axles) a?.setView(view);
+    for (const w of this.plain) w.setView(view);
   }
 
   setExplode(amount: number): void {

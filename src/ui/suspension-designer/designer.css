@@ -392,6 +392,11 @@ body.susp-designer .view-tools .tool:has(#speed) {
 }
 
 @media (max-width: 860px) {
+  /* The shell hides the lines under a page's name on a phone; this one explains the wheels standing alone in 3D. */
+  .engine-name .sd-title .sd-3d-note {
+    display: block;
+  }
+
   .sd-headline {
     font-size: 12.5px;
     gap: 2px 10px;
