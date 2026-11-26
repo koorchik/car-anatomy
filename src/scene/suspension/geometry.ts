@@ -298,10 +298,11 @@ export class CoilSpring {
     }
     this.geometry.attributes.position!.needsUpdate = true;
     this.geometry.attributes.normal!.needsUpdate = true;
-    // The coil lies in a cylinder of radius R + wire from the seat down to its length: the sphere round that cylinder,
-    // without a pass over every vertex (computeBoundingSphere cost as much as writing them).
+    // The coil lies in a cylinder of radius R + wire from the seat down to where its last turn ends: the sphere round
+    // that cylinder, without a pass over every vertex (computeBoundingSphere cost as much as writing them). Pressed
+    // past solid, the coil is drawn solid and so longer than `length`; the cylinder follows the coil, not `length`.
     const sphere = (this.geometry.boundingSphere ??= new THREE.Sphere());
-    const half = Math.max(length, 2 * wire) / 2;
+    const half = (2 * wire + 2 * endTurns * closed + active * activePitch) / 2;
     sphere.center.set(0, -half, 0);
     sphere.radius = Math.sqrt((R + wire) * (R + wire) + half * half);
   }
