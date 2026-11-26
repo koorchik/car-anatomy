@@ -139,7 +139,8 @@ export function diagnoseBuild(p: CarPerformance): CarDiagnostic[] {
   }
 
   // Gearing.
-  if (p.vmaxAtLimiter) {
+  // An ideal box puts v_max at the engine's peak power: where that is the rev limit, the limiter is the best there is.
+  if (p.vmaxAtLimiter && p.gearboxKind !== 'ideal') {
     add('limiter', 'note', t('Найвища передача впирається у відсічку'), t('На {kmh} км/год двигун доходить до межі обертів раніше, ніж опір повітря зупиняє розгін.', { kmh: n0(p.vmaxKmh) }), t('Довша головна передача.'));
   }
   if (p.donorLimitKmh !== null) {

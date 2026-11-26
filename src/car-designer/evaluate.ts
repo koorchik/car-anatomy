@@ -35,7 +35,7 @@ import { engineEnvelope, type Box3 } from '../engine/envelope.ts';
 import { buildEngine, type Engine } from '../engine/kinematics.ts';
 import type { EngineSpec } from '../engine/spec.ts';
 import { systemsOf, type SystemsSpec } from '../engine/systems-spec.ts';
-import { resolveGearboxDesign } from '../gearbox-designer/constraints.ts';
+import { paramRange, resolveGearboxDesign } from '../gearbox-designer/constraints.ts';
 import { DEFAULT_GEARBOX_DESIGN, type GearboxDesign, type GearboxType } from '../gearbox-designer/design.ts';
 import { drivenGripN, evaluateGearbox, type GearboxPerformance } from '../gearbox-designer/evaluate.ts';
 import { gearboxMass } from '../gearbox-designer/mass.ts';
@@ -198,17 +198,18 @@ function fitOf(car: CarRecord, box: Box3, donorBox: Box3): EngineFit {
 export const donorGearbox = (car: CarRecord): GearboxDesign | null => (car.gearbox && gearboxById(car.gearbox)?.car ? gearboxCopy(car.gearbox) : null);
 
 /**
- * An ideal box as a gearbox design: the gear count and spread in a geometric ladder, top gear at the limiter at the
- * speed where full power meets the road load, as the oil page's stand-in box has it; teeth picked by the designer.
+ * An ideal box as a gearbox design with top gear at `overallTop` (engine speed per wheel speed): the gear count and
+ * spread in a geometric ladder, teeth picked by the designer.
  */
-function idealDesign(car: CarRecord, type: GearboxType, ideal: IdealGearbox, vtopMs: number, redlineRpm: number, radiusM: number): GearboxDesign {
+function idealDesign(car: CarRecord, type: GearboxType, ideal: IdealGearbox, overallTop: number): GearboxDesign {
   const base = donorGearbox(car) ?? { ...DEFAULT_GEARBOX_DESIGN, type };
-  const overallTop = ((redlineRpm / RPM) * radiusM) / vtopMs;
   let finalDrive = base.finalDrive;
   let topRatio = overallTop / finalDrive;
-  // Keep the top gear where boxes have it; the final drive takes the rest.
-  if (topRatio < 0.6 || topRatio > 1.2) {
-    topRatio = Math.min(1.2, Math.max(0.6, topRatio));
+  // Keep the top gear where boxes have it, and low enough that first gear stays within the designer's range at this
+  // spread; the final drive takes the rest.
+  const highest = Math.min(1.2, paramRange(base, 'firstRatio').max / ideal.spread);
+  if (topRatio < 0.6 || topRatio > highest) {
+    topRatio = Math.min(highest, Math.max(0.6, topRatio));
     finalDrive = overallTop / topRatio;
   }
   const n = ideal.gears;
@@ -230,6 +231,50 @@ function idealDesign(car: CarRecord, type: GearboxType, ideal: IdealGearbox, vto
     finalDrive,
     factory: null,
   });
+}
+
+/**
+ * How much longer an ideal box's top gear should be than in `perf` so that v_max falls at the engine's peak power, the
+ * longest that still gains speed: the gearbox model's wheel power in top gear, moved along the speed axis (the same
+ * power at the same engine speed), against the road load. Null when the curve says nothing.
+ */
+function peakPowerStretch(perf: GearboxPerformance, rl: RoadLoadCoeffs): number | null {
+  const tr = perf.traction;
+  const top = tr.gears[tr.gears.length - 1];
+  if (!top) return null;
+  let best = -1;
+  let at = -1;
+  top.forEach((f, i) => {
+    const p = f === null ? -1 : f * (tr.kmh[i]! / KMH);
+    if (p > best) {
+      best = p;
+      at = i;
+    }
+  });
+  if (best <= 0) return null;
+  // The peak between its samples: a parabola through the three round it.
+  let v = tr.kmh[at]! / KMH;
+  const prev = top[at - 1];
+  const next = top[at + 1];
+  if (prev !== null && prev !== undefined && next !== null && next !== undefined) {
+    const p0 = prev * (tr.kmh[at - 1]! / KMH);
+    const p2 = next * (tr.kmh[at + 1]! / KMH);
+    const curve = p0 - 2 * best + p2;
+    if (curve < 0) {
+      const shift = Math.max(-1, Math.min(1, (0.5 * (p0 - p2)) / curve));
+      v += (shift * (tr.kmh[at + 1]! - tr.kmh[at]!)) / KMH;
+      best -= 0.25 * (p0 - p2) * shift;
+    }
+  }
+  // The speed where the peak power meets the road load.
+  let lo = 1;
+  let hi = 200;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (roadLoadN(rl, mid, 0) * mid < best) lo = mid;
+    else hi = mid;
+  }
+  return lo / v;
 }
 
 /**
@@ -516,8 +561,9 @@ export function* evaluateSteps(input: unknown): Generator<void, CarPerformance, 
     const ideal = (g as { ideal: IdealGearbox }).ideal;
     car = place(0);
     const vehicle = { ...vehicleSpec(car), roadLoad: buildRoadLoad(donor, car) };
+    // A first guess as the lap's stand-in box has it: top gear at the limiter where full power meets the road load.
     const vtop = topSpeed(vehicle, lapTorque.peakPowerW, DRIVELINE.efficiency);
-    gearboxDesign = idealDesign(donor, type, ideal, vtop, parts.design.rpmLimit, vehicle.tyreRadiusM);
+    gearboxDesign = idealDesign(donor, type, ideal, ((parts.design.rpmLimit / RPM) * vehicle.tyreRadiusM) / vtop);
     lapBox = { kind: 'ideal', ideal };
   } else {
     const own = kind === 'donor' ? donorBox! : kind === 'catalogue' ? gearboxCopy((g as { catalogue: string }).catalogue) : (g as { design: GearboxDesign }).design;
@@ -539,8 +585,19 @@ export function* evaluateSteps(input: unknown): Generator<void, CarPerformance, 
     const d = parts.design;
     designEngine = { key: JSON.stringify(d), map: torqueMapFor(d, perf, d.factory?.published ?? null), firingPerRev: (parts.engine.cylinders.length * 360) / parts.engine.cycle };
   }
-  const gearboxKey = JSON.stringify([gearboxDesign, designEngine?.key ?? null]);
-  const gearbox = remember(gearboxes, gearboxKey, () => evaluateGearbox(gearboxDesign, designEngine));
+  const run = (d: GearboxDesign): GearboxPerformance => remember(gearboxes, JSON.stringify([d, designEngine?.key ?? null]), () => evaluateGearbox(d, designEngine));
+  if (kind === 'ideal') {
+    // The guess runs on the stand-in's efficiency and the published peak; the gearbox model's own top-gear power then
+    // puts v_max at the engine's peak power, so the ideal box is never the one that holds the car back.
+    const guess = run(gearboxDesign);
+    const stretch = peakPowerStretch(guess, roadLoad);
+    yield;
+    if (stretch !== null) {
+      const overallTop = guess.gears[guess.gears.length - 1]!.overall / stretch;
+      gearboxDesign = rebaseGearbox(idealDesign(donor, type, (g as { ideal: IdealGearbox }).ideal, overallTop), car, roadLoad, build, engineId, tyre);
+    }
+  }
+  const gearbox = run(gearboxDesign);
   const gearboxReliability = assessGearbox(gearbox);
   if (kind === 'catalogue' || kind === 'design') lapBox = { kind: 'real', gears: gearbox.gears.map((x) => ({ overall: x.overall, efficiency: x.efficiency })) };
   yield;

@@ -113,6 +113,22 @@ describe('the odd presets', () => {
   });
 });
 
+describe('an ideal box', () => {
+  it.each(DONORS.map((c) => c.id))('%s: keeps its gear count and spread, and gives up no top speed to the donor\'s box', (id) => {
+    const factory = evaluateBuild(factoryBuild(id));
+    for (const [gears, spread] of [[6, 4.3], [10, 8], [3, 2]] as const) {
+      const p = evaluateBuild({ ...factoryBuild(id), gearbox: { ideal: { gears, spread } } });
+      const ratios = p.gearbox.gears.map((g) => g.ratio);
+      expect(ratios.length).toBe(gears);
+      // Within what whole teeth allow.
+      expect(Math.abs(ratios[0]! / ratios[gears - 1]! / spread - 1), `${gears}/${spread}`).toBeLessThan(0.03);
+      // Top gear puts v_max at the engine's peak power: no real box of the same engine and car goes faster (within
+      // the tyre slip and the teeth the designer picks).
+      expect(p.vmaxKmh, `${gears}/${spread}`).toBeGreaterThan(factory.vmaxKmh * 0.985);
+    }
+  });
+});
+
 /** Builds that between them use every kind of unit. */
 function sampleBuilds(): CarBuild[] {
   const civic = factoryBuild('civic-type-r-fk8');
