@@ -22,7 +22,8 @@ describe('menu', () => {
   it('turns a section into a link once it registers a visible page, and not before', () => {
     const hidden = menuItems([...SECTIONS, fake('suspensions', [])], parseRoute('#/suspensions'));
     expect(hidden.find((item) => item.id === 'suspensions')).toMatchObject({ href: null, current: false });
-    const shown = menuItems([...SECTIONS, fake('gearboxes', [{ key: 'catalogue', href: '#/gearboxes/manual-rwd' }]), fake('car', [{ key: 'overview', href: '#/car' }])], parseRoute('#/gearboxes/manual-rwd'));
+    // The first entry of a section wins, so the stand-ins go before the registry's own, which may have no page yet.
+    const shown = menuItems([fake('gearboxes', [{ key: 'catalogue', href: '#/gearboxes/manual-rwd' }]), fake('car', [{ key: 'overview', href: '#/car' }]), ...SECTIONS], parseRoute('#/gearboxes/manual-rwd'));
     expect(shown.map((item) => item.id)).toEqual(['car', 'engines', 'gearboxes', 'suspensions']);
     expect(shown.find((item) => item.id === 'gearboxes')).toMatchObject({ href: '#/gearboxes/manual-rwd', current: true });
     expect(shown.find((item) => item.id === 'engines')!.current).toBe(false);

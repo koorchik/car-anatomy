@@ -7,6 +7,7 @@
 import { DEFAULT_ENGINE } from '../ui/engines/routes.ts';
 import { loadEngines } from '../ui/engines/load.ts';
 import { loadSuspensions } from '../ui/suspensions/load.ts';
+import { loadCar } from '../ui/car/load.ts';
 import type { Route, SectionId } from './routes.ts';
 import type { Section } from './section.ts';
 
@@ -43,6 +44,8 @@ export const SECTIONS: readonly SectionEntry[] = [
     ],
   },
   { id: 'suspensions', load: loadSuspensions },
+  // The overview of a car, at its address without a menu item until stage C1c gives it a page.
+  { id: 'car', load: loadCar },
 ];
 
 /** The entry of the section a route belongs to. */

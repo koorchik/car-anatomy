@@ -1,0 +1,15 @@
+/* The car overview, under body.section-car. Only the 3D at stage C1a: no dash, no engine hints, no side panels and,
+ * while the car stands still, no choice of time. The section's chunk loads it after the shell's styles. */
+
+body.section-car {
+  --dash-h: 0px;
+}
+
+body.section-car .dash,
+body.section-car #hint,
+body.section-car #panel,
+body.section-car #panel-open,
+body.section-car #panel-toggle-closed,
+body.section-car .view-tools .tool:has(#speed) {
+  display: none;
+}
