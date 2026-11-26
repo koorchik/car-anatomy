@@ -47,13 +47,13 @@ export function matrixSteps(box: Gearbox): MatrixStep[] {
   steps.push({
     closed: gear('8').closed,
     title: t('Восьма: вихід швидший за вхід'),
-    text: t('{closed}: вихід стоїть на номограмі вище за вхід, число {ratio}. На трасі двигун крутиться повільніше, ніж колеса.', { closed: join(gear('8').closed), ratio: ratio('8') }),
+    text: t('{closed}: вихід стоїть на номограмі вище за вхід, число {ratio}. На трасі двигун крутиться повільніше за карданний вал.', { closed: join(gear('8').closed), ratio: ratio('8') }),
   });
   const skip = shiftChange(box, '8', '2');
   steps.push({
     closed: gear('2').closed,
     title: t('З восьмої на другу'),
-    text: t('Навіть цей стрибок через шість передач міняє лише один елемент: {off} відпускає, {on} замикає. Тому автомат може скинути кілька передач одним перемиканням, коли водій тисне газ до підлоги.', { off: join(skip.off), on: join(skip.on) }),
+    text: t('Навіть цей стрибок на шість передач вниз міняє лише один елемент: {off} відпускає, {on} замикає. Тому автомат може скинути кілька передач одним перемиканням, коли водій тисне газ до підлоги.', { off: join(skip.off), on: join(skip.on) }),
   });
   steps.push({
     closed: gear('R').closed,

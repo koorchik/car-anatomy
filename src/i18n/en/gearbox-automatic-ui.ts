@@ -20,11 +20,11 @@ export const GEARBOX_AUTOMATIC_UI_EN: Record<string, string> = {
   '{closed}: усі прямі номограми лежать на висоті входу, і весь механізм крутиться як одна деталь. Число 1, жодне зачеплення не котиться, тому втрат у зачепленнях немає.':
     '{closed}: every line of the lever diagram lies at the input\'s height, and the whole mechanism turns as one piece. The ratio is 1, no mesh rolls, so there is no mesh loss.',
   'Восьма: вихід швидший за вхід': 'Eighth: the output faster than the input',
-  '{closed}: вихід стоїть на номограмі вище за вхід, число {ratio}. На трасі двигун крутиться повільніше, ніж колеса.':
+  '{closed}: вихід стоїть на номограмі вище за вхід, число {ratio}. На трасі двигун крутиться повільніше за карданний вал.':
     '{closed}: the output stands above the input on the lever diagram, ratio {ratio}. On the highway the engine turns slower than the driveshaft.',
   'З восьмої на другу': 'From eighth to second',
-  'Навіть цей стрибок через шість передач міняє лише один елемент: {off} відпускає, {on} замикає. Тому автомат може скинути кілька передач одним перемиканням, коли водій тисне газ до підлоги.':
-    'Even this jump across six gears changes only one element: {off} lets go, {on} closes. So the automatic can drop several gears in one shift when the driver floors the gas.',
+  'Навіть цей стрибок на шість передач вниз міняє лише один елемент: {off} відпускає, {on} замикає. Тому автомат може скинути кілька передач одним перемиканням, коли водій тисне газ до підлоги.':
+    'Even this jump down six gears changes only one element: {off} lets go, {on} closes. So the automatic can drop several gears in one shift when the driver floors the gas.',
   '{closed}: вихід опускається нижче нуля й крутиться назад, число −{ratio}.': '{closed}: the output drops below zero and turns backward, ratio −{ratio}.',
   'Два елементи: нейтраль': 'Two elements: neutral',
   '{closed} лишають два ступені свободи. Вихід ні до чого не прив’язаний: на номограмі прямі вільно хитаються, а на столі вихід просто стоїть, поки вхід крутиться.':
