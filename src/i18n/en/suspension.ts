@@ -435,4 +435,46 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Ступенів свободи: {value}': 'Degrees of freedom: {value}',
   'Про цю компоновку загалом': 'About this layout in general',
   '{value} мм рейки': '{value} mm of rack',
+  // The cards of a solid axle's parts (src/scene/suspension/solid-parts.ts).
+  'Картер моста': 'Axle housing',
+  'Сталева труба від колеса до колеса з диференціалом посередині. Обидва колеса сидять на ній жорстко, тож удар під одним нахиляє й друге, а вся вага картера з диференціалом і головною передачею ходить разом із колесами як непідресорена маса. Піввісі обертаються всередині картера.':
+    'A steel tube from wheel to wheel with the differential in the middle. Both wheels sit on it rigidly, so a bump under one tilts the other too, and the whole weight of the housing with the differential and the final drive moves with the wheels as unsprung mass. The halfshafts turn inside the housing.',
+  'Труба де Діона': 'De Dion tube',
+  'Легка труба, що жорстко тримає обидві маточини, як картер моста, але без диференціала: його закріплено на кузові. Тому колеса лишаються паралельними, а непідресорена маса менша. Труба обходить диференціал ззаду.':
+    'A light tube that holds both hubs rigidly, like an axle housing, but without the differential: that is mounted on the body. So the wheels stay parallel and the unsprung mass is smaller. The tube passes behind the differential.',
+  'Нижня поздовжня тяга': 'Lower trailing link',
+  'Тримає міст уздовж авто й передає на кузов силу тяги й гальмування. Хитається на сайлентблоках з обох кінців.':
+    'Holds the axle fore and aft and passes the drive and braking forces to the body. It pivots on bushings at both ends.',
+  'Верхня поздовжня тяга': 'Upper trailing link',
+  'Разом із нижньою тягою не дає мосту провертатися від моменту на колесах. Кут між верхніми й нижніми тягами в боковому виді задає, наскільки задок присідає під час розгону.':
+    'Together with the lower link it keeps the axle from rotating under the torque at the wheels. The angle between the upper and lower links in side view sets how much the rear squats under acceleration.',
+  'Тяга Панара': 'Panhard rod',
+  'Поперечна тяга від кузова з одного боку до моста з другого. Тримає міст упоперек, але ходить по дузі, тож на ході зсуває міст убік. Центр крену лежить на її висоті.':
+    'A lateral rod from the body on one side to the axle on the other. It locates the axle sideways, but swings in an arc, so over its travel it shifts the axle sideways. The roll center lies at its height.',
+  'Механізм Ватта': 'Watt’s linkage',
+  'Коромисло на мосту й дві тяги до кузова в протилежні боки. Коли міст іде вгору чи вниз, коромисло повертається, і середина моста лишається майже на одній вертикалі, без бічного зсуву тяги Панара. Центр крену лежить на осі коромисла.':
+    'A rocker on the axle and two links to the body running in opposite directions. When the axle moves up or down, the rocker turns, and the middle of the axle stays almost on one vertical line, without the sideways shift of a Panhard rod. The roll center lies at the rocker’s pivot.',
+  'Ресора': 'Leaf spring',
+  'Пакет зігнутих сталевих листів. Тримає вагу, працює пружиною й сама тримає міст уздовж і впоперек, тож тяг не треба. Видно, як вона прогинається на ході, а міст на ній трохи повертається.':
+    'A pack of curved steel leaves. It carries the weight, works as the spring and locates the axle both fore and aft and sideways by itself, so no links are needed. You can see it flex over the travel, and the axle turn slightly on it.',
+  'Сережка ресори': 'Leaf spring shackle',
+  'Коротка ланка між заднім вушком ресори й кузовом. Ресора на ході змінює довжину між вушками, і сережка хитається, щоб їй не заважати.':
+    'A short link between the rear eye of the leaf spring and the body. The spring changes its length between the eyes over its travel, and the shackle swings so as not to resist it.',
+  'Гумова втулка у вушку тяги. Коли тяг більше, ніж треба, міст не може рухатися, не стиснувши їх, і тоді сайлентблоки беруть закушування. Сайт фарбує їх червоним відповідно до того, наскільки розтягнуто чи стиснуто тягу.':
+    'A rubber bushing in the eye of a link. When there are more links than needed, the axle cannot move without squeezing them, and then the bushings take up the binding. The site colors them red according to how far the link is stretched or compressed.',
+  'Стоїть на мосту й упирається в кузов. Міст тримають тяги, тож пружина лише несе вагу й приймає удари.':
+    'Sits on the axle and bears against the body. The links locate the axle, so the spring only carries the weight and takes the bumps.',
+  'Нижнім вушком кріпиться до моста, верхнім до кузова. Гасить коливання кузова й підскакування важкого моста.':
+    'Its lower eye is mounted on the axle and its upper eye on the body. It damps the oscillation of the body and the hop of the heavy axle.',
+  'Обертається на підшипнику в кінці моста. До її фланця кріпляться гальмівний диск і колесо.':
+    'Turns on a bearing at the end of the axle. The brake rotor and the wheel bolt to its flange.',
+  'Закріплений на кінці моста й охоплює диск. Тиск гальмівної рідини притискає колодки до диска.':
+    'Mounted on the end of the axle and straddling the rotor. Brake fluid pressure presses the pads against the rotor.',
+  'Диференціал на кузові': 'Body-mounted differential',
+  'Головна передача й диференціал закріплені на кузові, а не на мосту, тож їхня вага не ходить із колесами. Момент до коліс передають піввісі з шарнірами на обох кінцях.':
+    'The final drive and the differential are mounted on the body, not on the axle, so their weight does not move with the wheels. Halfshafts with joints at both ends carry the torque to the wheels.',
+  'Іде від диференціала на кузові до маточини на трубі. Відстань між маточинами стала, а виходи диференціала нерухомі, тож на ході піввісь мусить трохи змінювати довжину: це бере внутрішній шарнір.':
+    'Runs from the differential on the body to the hub on the tube. The distance between the hubs is fixed and the differential’s outputs do not move, so over the travel the halfshaft has to change its length a little: the inner joint takes this up.',
+  'Підлога над мостом і кронштейни, до яких кріпляться тяги, пружини й амортизатори.':
+    'The floor above the axle and the brackets that the links, springs and shock absorbers mount to.',
 };
