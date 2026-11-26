@@ -358,6 +358,8 @@
   color: var(--bone);
   font-size: 13px;
   line-height: 1.4;
+  /* Its own layer: without it the page showed through a tall sheet on software rendering. */
+  will-change: transform;
 }
 
 .forces-sheet::backdrop {
