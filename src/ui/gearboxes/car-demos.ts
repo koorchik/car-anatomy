@@ -63,6 +63,9 @@ const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { 
 /** Demonstration 3's upshift speed: the S14's power peak, 6750 rpm (the gearboxes plan's numbers for the E30). */
 export const SHIFT_DEMO_RPM = 6750;
 
+/** How deep the acceleration fell below where it was, m/s², from the lowest change (negative for a dip). */
+const dip = (change: number): number => Math.max(0, -change);
+
 /** Engine speed right after an upshift at `rpm` from a gear of ratio `from` into one of `to`: the classic drop. */
 export const shiftDrop = (rpm: number, from: number, to: number): number => (rpm * to) / from;
 
@@ -258,7 +261,9 @@ export function pullAwayDemo(): CarDemo {
 
 /** Shifting and revs: 1→2 at the power peak, then a downshift without and with rev matching. */
 export function shiftingDemo(cd: CarDrive): CarDemo {
-  const ratio = (name: string): number => cd.gears.find((g) => g.name === name)?.ratio ?? Number.NaN;
+  // The ratios as the text prints them, to three places, so the sum the visitor reads is the sum the text works out:
+  // the E30's teeth give 3.71739 and 2.40373, whose own quotient would print 4365 under «6 750 · 2,404/3,717».
+  const ratio = (name: string): number => Math.round((cd.gears.find((g) => g.name === name)?.ratio ?? Number.NaN) * 1000) / 1000;
   const r1 = ratio('1');
   const r2 = ratio('2');
   const r3 = ratio('3');
@@ -289,7 +294,7 @@ export function shiftingDemo(cd: CarDrive): CarDemo {
       },
       (v, c) => {
         c.gear('2');
-        out.accel = v.accel;
+        out.accel = v.accel - a0;
         out.peak = v.rpm;
         return true;
       },
@@ -351,7 +356,7 @@ export function shiftingDemo(cd: CarDrive): CarDemo {
           { k: num(r2 / r3, 2) },
         ),
         frame: downshift(false, without),
-        result: () => (without.kj > 0 ? t('Провал прискорення {a} м/с², у диск {kj} кДж.', { a: num(without.accel, 1), kj: num(without.kj, 2) }) : ''),
+        result: () => (without.kj > 0 ? t('Провал прискорення {a} м/с², у диск {kj} кДж.', { a: num(dip(without.accel), 1), kj: num(without.kj, 2) }) : ''),
       },
       {
         title: t('Униз з підгазовкою'),
@@ -359,7 +364,7 @@ export function shiftingDemo(cd: CarDrive): CarDemo {
         frame: downshift(true, withBlip),
         result: () =>
           withBlip.kj > 0 || withBlip.peak > 0
-            ? t('Провал прискорення {a} м/с², у диск {kj} кДж, оберти піднялися до {rpm} об/хв ще до замикання.', { a: num(withBlip.accel, 1), kj: num(withBlip.kj, 2), rpm: num(withBlip.peak) })
+            ? t('Провал прискорення {a} м/с², у диск {kj} кДж, оберти піднялися до {rpm} об/хв ще до замикання.', { a: num(dip(withBlip.accel), 1), kj: num(withBlip.kj, 2), rpm: num(withBlip.peak) })
             : '',
       },
     ],

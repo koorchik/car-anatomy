@@ -229,8 +229,9 @@ describe('the full dash in the car', () => {
     expect(second!.ratio).toBeCloseTo(2.404, 2);
     expect(SHIFT_DEMO_RPM).toBe(6750);
     expect(shiftDrop(6750, 3.717, 2.404)).toBeCloseTo(4366, 0);
+    // The text works the sum out on the ratios it prints, so the visitor can check it: 6 750 · 2,404/3,717 ≈ 4 366.
     const text = shiftingDemo(cd).steps[0]!.text.replace(/\s/g, '');
-    expect(text).toContain(Math.round(shiftDrop(6750, first!.ratio, second!.ratio)).toLocaleString('uk-UA').replace(/\s/g, ''));
+    expect(text).toContain('6750·2,404/3,717≈4366');
     const { done, result, r } = runDemoStep((c) => shiftingDemo(c), 0);
     expect(done).toBe(true);
     expect(r.sim.state).toBe('running');
@@ -239,8 +240,25 @@ describe('the full dash in the car', () => {
     const [before, , expected, after] = (result.replace(/[\s\u202f\u00a0]/g, '').match(/\d+(?:,\d+)?/g) ?? []).filter((x) => !x.includes(',')).map(Number);
     expect(before!).toBeGreaterThanOrEqual(6750);
     expect(before!).toBeLessThan(7100);
-    expect(expected!).toBeCloseTo(shiftDrop(before!, first!.ratio, second!.ratio), -1);
+    expect(expected!).toBeCloseTo(shiftDrop(before!, 3.717, 2.404), -1);
     expect(Math.abs(after! - expected!) / expected!).toBeLessThan(0.05);
+  }, 120_000);
+
+  it('demonstration 3 downshifts 3→2 with a dip in the acceleration and heat in the disc, and the rev matching takes most of both away', () => {
+    const figures = (at: number) => {
+      const { done, result } = runDemoStep((c) => shiftingDemo(c), at);
+      expect(done).toBe(true);
+      // «Провал прискорення A м/с², у диск K кДж…»: a dip is told as a depth, never with a minus.
+      const [a, kj] = (result.replace(/[\s\u202f\u00a0]/g, '').match(/-?\d+,\d+/g) ?? []).map((x) => Number(x.replace(',', '.')));
+      return { a: a!, kj: kj! };
+    };
+    const plain = figures(1);
+    const matched = figures(2);
+    expect(plain.a).toBeGreaterThan(1);
+    expect(matched.a).toBeGreaterThanOrEqual(0);
+    expect(matched.a).toBeLessThan(plain.a - 0.5);
+    expect(plain.kj).toBeGreaterThan(0.3);
+    expect(matched.kj).toBeLessThan(0.1 * plain.kj);
   }, 120_000);
 
   it('lays out the Getrag 265 as a dogleg, first back on the left, and lets the lever cross only in neutral', () => {
