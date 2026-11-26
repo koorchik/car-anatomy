@@ -1,7 +1,8 @@
 // Whole chassis of typical cars from the axle templates, for the tests (the catalogue's cars and the designer's come as
-// designs through src/suspension-designer/ since stage P8a, which reuses typicalLongitudinal and barLinkOf). Nothing here is a real car: the masses are the research's worked examples
-// (docs/research/suspensions.md, 3.3 and 13.2), the axles the templates' typical geometry, the springs set for a ride
-// frequency and the dampers for a damping ratio, and the anti-roll bars typical sizes. The inertias come from the NHTSA
+// designs through src/suspension-designer/ since stage P8a, which reuses typicalLongitudinal and barLinkOf). Nothing
+// here is a real car: the masses are the research's worked examples (docs/research/suspensions.md, 3.3 and 13.2), the
+// axles the templates' typical geometry, the springs set for a ride frequency and the dampers for a damping ratio, and
+// the anti-roll bars typical sizes. The inertias come from the NHTSA
 // regression (src/vehicle/body-estimate.ts). The brake balance is the research's working 0.7 in front, the road load
 // the generic car's of src/vehicle/constants.ts, the final drive and the drag's height estimates. Every number is an
 // estimate (docs/suspension-model.md).
