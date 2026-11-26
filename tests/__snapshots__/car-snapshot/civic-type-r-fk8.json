@@ -1,0 +1,304 @@
+{
+  "car": {
+    "id": "civic-type-r-fk8",
+    "name": "Honda Civic Type R (FK8)",
+    "engine": "i4/civic-type-r-k20c1",
+    "gearbox": "manual-transaxle",
+    "suspension": {
+      "front": "macpherson",
+      "rear": "multilink"
+    },
+    "mount": {
+      "axis": "transverse",
+      "front": "right",
+      "position": "front"
+    },
+    "drive": "fwd"
+  },
+  "massKg": 1380,
+  "drivingMassKg": 1455,
+  "body": {
+    "frontShare": 0.62,
+    "cgHeightM": null,
+    "wheelbaseM": 2.699,
+    "trackFrontM": 1.599,
+    "trackRearM": 1.593,
+    "inertia": null,
+    "seat": null
+  },
+  "tyreRadiiM": {
+    "front": 0.3177,
+    "rear": 0.3177
+  },
+  "dimensions": {
+    "lengthM": 4.557,
+    "widthM": 1.877,
+    "heightM": 1.434,
+    "frontOverhangM": 0.936,
+    "rearOverhangM": 0.922,
+    "groundClearanceM": 0.125,
+    "shape": "hatch",
+    "profile": {
+      "bonnetFront": [
+        0.807,
+        0.73
+      ],
+      "cowl": [
+        -0.268,
+        0.969
+      ],
+      "roofX": [
+        -1.442,
+        -2.136
+      ]
+    }
+  },
+  "packaging": {
+    "crankFront": [
+      0.2,
+      -0.42,
+      0.4
+    ],
+    "bay": {
+      "min": [
+        -0.22,
+        -0.6,
+        0.15
+      ],
+      "max": [
+        0.7,
+        0.6,
+        0.75
+      ]
+    },
+    "exhaustExit": {
+      "at": [
+        -3.58,
+        0,
+        0.27
+      ],
+      "side": "centre"
+    },
+    "fuelTank": [
+      -1.95,
+      0,
+      0.3
+    ],
+    "radiator": {
+      "at": [
+        0.7,
+        0,
+        0.5
+      ],
+      "side": "centre"
+    },
+    "intercooler": {
+      "at": [
+        0.82,
+        0,
+        0.36
+      ],
+      "side": "centre"
+    }
+  },
+  "engineBox": {
+    "min": [
+      0.0713,
+      -0.42,
+      0.1944
+    ],
+    "max": [
+      0.3287,
+      0.102,
+      0.7395
+    ]
+  },
+  "overflow": {
+    "fits": true,
+    "past": {
+      "front": 0,
+      "rear": 0,
+      "left": 0,
+      "right": 0,
+      "top": 0,
+      "bottom": 0
+    },
+    "throughLid": null
+  },
+  "anchors": {
+    "bellhousing": [
+      0.2,
+      0.0805,
+      0.4
+    ],
+    "cg": [
+      -1.0256,
+      0,
+      0
+    ],
+    "crankFront": [
+      0.2,
+      -0.42,
+      0.4
+    ],
+    "exhaustEnd": [
+      -3.58,
+      0,
+      0.27
+    ],
+    "flywheel": [
+      0.2,
+      0.0805,
+      0.4
+    ],
+    "front.left.contact": [
+      0,
+      0.7995,
+      0
+    ],
+    "front.left.diffOutput": [
+      0.025,
+      0.371,
+      0.315
+    ],
+    "front.left.rackEnd": [
+      0.077,
+      0.3495,
+      0.3657
+    ],
+    "front.left.strutTop": [
+      -0.057,
+      0.6295,
+      0.7877
+    ],
+    "front.left.wheelCentre": [
+      0,
+      0.7995,
+      0.3177
+    ],
+    "front.right.contact": [
+      0,
+      -0.7995,
+      0
+    ],
+    "front.right.diffOutput": [
+      0.025,
+      -0.371,
+      0.315
+    ],
+    "front.right.rackEnd": [
+      0.077,
+      -0.3495,
+      0.3657
+    ],
+    "front.right.strutTop": [
+      -0.057,
+      -0.6295,
+      0.7877
+    ],
+    "front.right.wheelCentre": [
+      0,
+      -0.7995,
+      0.3177
+    ],
+    "rear.left.contact": [
+      -2.699,
+      0.7965,
+      0
+    ],
+    "rear.left.damperTop": [
+      -2.7702,
+      0.4906,
+      0.5131
+    ],
+    "rear.left.wheelCentre": [
+      -2.699,
+      0.7965,
+      0.3177
+    ],
+    "rear.right.contact": [
+      -2.699,
+      -0.7965,
+      0
+    ],
+    "rear.right.damperTop": [
+      -2.7702,
+      -0.4906,
+      0.5131
+    ],
+    "rear.right.wheelCentre": [
+      -2.699,
+      -0.7965,
+      0.3177
+    ]
+  },
+  "exhaust": {
+    "points": [
+      [
+        0.3699,
+        0.1815,
+        0.3063
+      ],
+      [
+        0.3099,
+        0.1815,
+        0.1863
+      ],
+      [
+        -0.0301,
+        0.0907,
+        0.175
+      ],
+      [
+        -0.4301,
+        0,
+        0.175
+      ],
+      [
+        -2.949,
+        0,
+        0.175
+      ],
+      [
+        -3.38,
+        0,
+        0.2225
+      ],
+      [
+        -3.58,
+        0,
+        0.27
+      ]
+    ],
+    "lengthM": 4.0628,
+    "catalyst": {
+      "s": 0.35,
+      "at": [
+        0.1073,
+        0.1277,
+        0.1688
+      ]
+    },
+    "muffler": {
+      "s": 1.8,
+      "at": [
+        -1.3261,
+        -0.0234,
+        0.1677
+      ],
+      "alongPipe": true
+    }
+  },
+  "systems": [
+    "air",
+    "body",
+    "cooling",
+    "engine",
+    "exhaust",
+    "front-suspension",
+    "fuel",
+    "gearbox",
+    "rear-suspension"
+  ],
+  "trackLengthM": 2167.627
+}
