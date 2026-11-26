@@ -28,6 +28,8 @@ export const DICTIONARIES = {
   'suspension-macpherson': { module: 'src/i18n/en/suspension-macpherson.ts', load: () => import('./en/suspension-macpherson.ts').then((m) => m.SUSPENSION_MACPHERSON_EN) },
   'gearbox-designer': { module: 'src/i18n/en/gearbox-designer.ts', load: () => import('./en/gearbox-designer.ts').then((m) => m.GEARBOX_DESIGNER_EN) },
   'suspension-designer': { module: 'src/i18n/en/suspension-designer.ts', load: () => import('./en/suspension-designer.ts').then((m) => m.SUSPENSION_DESIGNER_EN) },
+  /** The tyre scene of the suspension page and the cards of the cut tyre. */
+  'suspension-tyre': { module: 'src/i18n/en/suspension-tyre.ts', load: () => import('./en/suspension-tyre.ts').then((m) => m.SUSPENSION_TYRE_EN) },
 } satisfies Record<string, DictionaryModule>;
 
 export type DictionaryName = keyof typeof DICTIONARIES;

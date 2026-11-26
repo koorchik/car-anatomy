@@ -8,6 +8,7 @@ import { articleHtml } from './article.ts';
 import { SCENES, sceneLabel } from './scenes.ts';
 import { setupPanelHtml } from './setup-panel.ts';
 import { stripLegendHtml } from './strip-chart.ts';
+import { tyrePanelHtml } from './tyre-scene.ts';
 
 export const titleHtml = (): string => `
     <h1 id="susp-title">${t('Стійка Макферсон')}</h1>
@@ -25,11 +26,11 @@ export const toolsHtml = (minMm: number, maxMm: number): string => `<div class="
       <span class="tool-label">${t('Хід колеса')}: <output id="susp-travel-value" for="susp-travel">0</output></span>
       <input type="range" id="susp-travel" min="${minMm}" max="${maxMm}" step="1" value="0" />
     </label>
-    <label class="tool susp-explode-tool susp-only-travel">
+    <label class="tool susp-explode-tool susp-only-travel susp-also-tyre">
       <span class="tool-label">${t('Розібрати')}</span>
       <input type="range" id="susp-explode" min="0" max="1" step="0.01" value="0" />
     </label>
-    <div class="susp-checks">
+    <div class="susp-checks susp-not-tyre">
       <label class="check"><input type="checkbox" id="susp-forces" checked /> ${t('Сили')}</label>
       <label class="check"><input type="checkbox" id="susp-laser" checked /> ${t('Лазери')}</label>
     </div>
@@ -106,8 +107,11 @@ export const panelHtml = (): string => `<div class="panel-scroll susp-panel" id=
         </dl>
         <p class="susp-note">${t('Хід рахується від проєктної висоти кузова, плюс — колесо вгору. Розвал від’ємний, коли верх колеса нахилений до кузова; сходження додатне, коли перед колеса повернутий до середини авто.')}</p>
       </section>
+      ${tyrePanelHtml()}
+      <div class="susp-not-tyre">
       ${setupPanelHtml()}
       ${articleHtml()}
       <p class="susp-note">${t('«Рентген» робить шину, диск і корпус амортизатора скляними, «Механізм» лишає самі ланки й шарніри. Клацни будь-яку деталь, щоб дізнатися, що вона робить.')}</p>
+      </div>
     </div>
   `;

@@ -10,16 +10,31 @@ body.section-suspensions.susp-scene-bump {
   --dash-h: 156px;
 }
 
+/* The tyre scene's dash: the patch and the side force (TYRE_DASH_PX in section.ts). */
+body.section-suspensions.susp-scene-tyre {
+  --dash-h: 190px;
+}
+
 /* No shared dash and no engine hints; the rig holds the wheel still, so it offers no choice of time. */
 body.section-suspensions .dash,
 body.section-suspensions #hint,
-body.section-suspensions.susp-scene-travel .view-tools .tool:has(#speed) {
+body.section-suspensions.susp-scene-travel .view-tools .tool:has(#speed),
+body.section-suspensions.susp-scene-tyre .view-tools .tool:has(#speed) {
   display: none;
 }
 
 /* What belongs to one scene only. */
 body.susp-scene-bump .susp-only-travel,
 body.susp-scene-travel .susp-only-bump {
+  display: none;
+}
+
+/* The tyre scene: its own controls only, the explode slider kept, no corner setup. */
+body.susp-scene-bump .susp-only-tyre,
+body.susp-scene-travel .susp-only-tyre,
+body.susp-scene-tyre .susp-only-bump,
+body.susp-scene-tyre .susp-only-travel:not(.susp-also-tyre),
+body.susp-scene-tyre .susp-not-tyre {
   display: none;
 }
 
@@ -217,6 +232,38 @@ body.susp-scene-travel .susp-only-bump {
     --dash-h: 188px;
   }
 
+  body.section-suspensions.susp-scene-tyre {
+    --dash-h: 200px;
+  }
+
+  .susp-tyre-dash {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .susp-tyre-dash > section {
+    padding: 6px 6px;
+  }
+
+  .susp-tyre-dash > section + section {
+    border-left: 1px solid var(--rule);
+  }
+
+  /* The bump dash puts its chart in the first cell; here the two pictures sit side by side. */
+  .susp-tyre-dash > .susp-dash-chart:first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .susp-tyre-dash > .susp-dash-chart + .susp-dash-chart {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .tyre-dash-note {
+    margin-left: 0;
+  }
+
   /* Two sliders side by side would read as one with two thumbs: on a phone each keeps its name. */
   .susp-travel-tool .tool-label,
   .susp-explode-tool .tool-label {
@@ -293,4 +340,77 @@ body.susp-scene-travel .susp-only-bump {
   .susp-number dd {
     text-align: left;
   }
+}
+
+/* The tyre scene (tyre-scene.ts): two pictures in the dash, charts and the sidewall code in the panel. */
+.susp-dash.susp-tyre-dash {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.tyre-dash-note {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.tyre-dash-note::before {
+  display: none !important;
+}
+
+.tyre-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.tyre-charts h3 {
+  margin-bottom: 0;
+}
+
+.tyre-chart {
+  display: block;
+  width: 100%;
+  height: 170px;
+}
+
+.tyre-chart-square {
+  height: 260px;
+}
+
+.tyre-code input[type='text'] {
+  font: inherit;
+  font-size: 16px;
+  padding: 6px 8px;
+  color: var(--bone);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+
+.tyre-code-samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.tyre-code-samples .btn {
+  font-size: 12.5px;
+  padding: 3px 8px;
+}
+
+.tyre-code-bad {
+  grid-column: 1 / -1;
+  color: #ffb36b !important;
+}
+
+.susp-ev {
+  font-size: 11.5px;
+  color: var(--bone-dim);
+  white-space: nowrap;
+  cursor: help;
+}
+
+.susp-tyre-article h3:first-child {
+  margin-top: 6px;
 }

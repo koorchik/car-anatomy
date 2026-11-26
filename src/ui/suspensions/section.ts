@@ -1,6 +1,7 @@
 // The suspensions section (`#/suspensions…`): the full MacPherson corner of the macpherson page in two scenes. The bump scene
 // (stage P1d) rolls the corner over an obstacle and plays the run back with its strip chart and numbers; the travel scene
-// (stage P1b) holds the wheel on a rig at the travel a slider picks. The Setup panel (build order, A3) edits
+// (stage P1b) holds the wheel on a rig at the travel a slider picks; the tyre scene (stage P11, tyre-scene.ts) puts
+// one tyre on the stage in place of the corner. The Setup panel (build order, A3) edits
 // the corner's setup in both, and every change shows at once on the arrows, the lasers, the tyre and the numbers. There
 // is no engine here, so the sound is suspended while the section is shown (the plan of the whole car, its amendments to
 // the suspensions plan, item 9).
@@ -13,6 +14,7 @@ import { t } from '../../i18n/t.ts';
 import { registerParts } from '../../scene/parts-registry.ts';
 import { CornerModel, cornerFrame } from '../../scene/suspension/corner-model.ts';
 import { SUSPENSION_REGISTERED } from '../../scene/suspension/parts.ts';
+import { TYRE_PARTS } from '../../scene/suspension/tyre-parts.ts';
 import { rigFrame, rigTravelRange } from '../../scene/suspension/rig-frame.ts';
 import type { Stage } from '../../scene/stage.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
@@ -32,10 +34,13 @@ import { dashHtml, obstacleSize, panelHtml, titleHtml, toolsHtml } from './marku
 import { DEFAULT_SCENE, sceneOf, stepScene, type SceneId } from './scenes.ts';
 import { SetupPanel } from './setup-panel.ts';
 import { StripChart } from './strip-chart.ts';
+import { TYRE_HEADING, TyreScene, tyreDashHtml } from './tyre-scene.ts';
 import './suspensions.css';
 
 /** The corner seen from the inboard side and a little from the front: the strut, the arm, the rack and the shaft. */
 const HOME: readonly [number, number, number] = [-0.72, 0.42, 0.8];
+/** The tyre from its outboard side, a little from the front and from below the glass road, where the patch shows. */
+const TYRE_HOME: readonly [number, number, number] = [0.62, -0.5, 0.6];
 /** The class on <body> that the section's styles live under (suspensions plan, what the section needs of the shell). */
 const BODY_CLASS = 'section-suspensions';
 /** The shell's class for a closed right panel, which its layout keeps on <body> whatever the section. */
@@ -48,6 +53,8 @@ const OPENING_FACTOR = 0.1;
 const HOLD_S = 0.6;
 /** Height of the bump scene's dash, px; suspensions.css gives --dash-h the same. */
 const DASH_PX = { wide: 156, small: 188 };
+/** Height of the tyre scene's dash, px; suspensions.css gives --dash-h the same. */
+const TYRE_DASH_PX = { wide: 190, small: 200 };
 /** Real seconds between two writes of the clock. */
 const CLOCK_EVERY_S = 0.1;
 /** Frames the frame-time figure averages over (window.__suspension.section.frameStats). */
@@ -78,6 +85,11 @@ export class SuspensionSection implements Section {
   private model!: CornerModel;
   private setupPanel!: SetupPanel;
   private strip!: StripChart;
+  private tyre!: TyreScene;
+  /** The page's heading as the corner's scenes have it; the tyre scene names its tyre instead. */
+  private heading = { title: '', sub: '' };
+  /** The model the stage shows now: the corner, or the tyre of the tyre scene. */
+  private onStage: CornerModel | TyreScene['model'] | null = null;
   private readonly frameData = cornerFrame();
   private readonly sample = newBumpSample();
   private scene: SceneId = DEFAULT_SCENE;
@@ -119,8 +131,20 @@ export class SuspensionSection implements Section {
     slots.tools.add(toolsHtml(Math.round(range.min * 1000), Math.round(range.max * 1000)));
     slots.panel.add(panelHtml());
     slots.afterDash.add(dashHtml());
+    slots.afterDash.add(tyreDashHtml());
+    this.heading = { title: this.$('susp-title').textContent ?? '', sub: this.$('susp-sub').textContent ?? '' };
     this.strip = new StripChart(this.$<HTMLCanvasElement>('susp-strip'));
     this.setupPanel = new SetupPanel(this.$('susp-panel'), factory, () => (this.dirty = true));
+    registerParts(TYRE_PARTS);
+    // The tyre scene's pressure is the corner's, as a change from its nominal.
+    this.tyre = new TyreScene(
+      slots.root,
+      {
+        get: () => (this.setupPanel.current.pressureBar / factory.pressureBar - 1) * 100,
+        set: (pct) => this.setupPanel.edit({ pressureBar: factory.pressureBar * (1 + pct / 100) }),
+      },
+      () => ctx.view.set('xray'),
+    );
     this.listen();
     ctx.keys.bind(
       SUSPENSION_KEY_CONTEXTS[0],
@@ -152,6 +176,11 @@ export class SuspensionSection implements Section {
     return { scene: this.scene, tau: this.tau, paused: this.paused, run: this.run, resolved: this.resolved, setup: this.setupPanel.current };
   }
 
+  /** The tyre scene, for checks in the browser (its `current` state and `edit`). */
+  get tyreScene(): TyreScene {
+    return this.tyre;
+  }
+
   /** The section's own frame time over the last frames, ms (not the drawing: the stage's render is the shell's). */
   frameStats(): { mean: number; max: number; frames: number } {
     const n = Math.min(this.frames, FRAME_WINDOW);
@@ -176,7 +205,7 @@ export class SuspensionSection implements Section {
   private listen(): void {
     const { view } = this.ctx;
     this.$<HTMLInputElement>('susp-travel').addEventListener('input', (event) => this.setTravel(Number((event.target as HTMLInputElement).value)));
-    this.$<HTMLInputElement>('susp-explode').addEventListener('input', (event) => this.model.setExplode(Number((event.target as HTMLInputElement).value)));
+    this.$<HTMLInputElement>('susp-explode').addEventListener('input', (event) => (this.onStage ?? this.model).setExplode(Number((event.target as HTMLInputElement).value)));
     const overlays = (): void => this.model.setOverlays({ forces: this.$<HTMLInputElement>('susp-forces').checked, laser: this.$<HTMLInputElement>('susp-laser').checked });
     this.$('susp-forces').addEventListener('change', overlays);
     this.$('susp-laser').addEventListener('change', overlays);
@@ -192,7 +221,7 @@ export class SuspensionSection implements Section {
     this.$('susp-pause').addEventListener('click', () => this.setPaused(!this.paused));
     // The view is the shell's and outlives this section: another section's choice is not drawn here until it is back.
     view.onChange((mode) => {
-      if (this.shown) this.model.setView(mode);
+      if (this.shown) (this.onStage ?? this.model).setView(mode);
     });
   }
 
@@ -269,7 +298,7 @@ export class SuspensionSection implements Section {
       return;
     }
     this.shown = true;
-    const { stage, slots, audio, keys, view } = this.ctx;
+    const { stage, slots, audio, keys } = this.ctx;
     audio.suspend();
     const canvas = stage.renderer.domElement;
     const results = slots.results.parent;
@@ -298,8 +327,8 @@ export class SuspensionSection implements Section {
     const own = [BODY_CLASS, ...(body.classList.contains(PANEL_CLOSED) ? [PANEL_CLOSED] : [])].join(' ');
     this.borrowed.push(this.borrow(() => body.className, (v) => (body.className = v), own));
     slots.partCard.hidden = true;
-    stage.setModel(this.model, { home: HOME });
-    this.model.setView(view.mode);
+    this.onStage = null;
+    this.putOnStage(scene);
     keys.use(SUSPENSION_KEY_CONTEXTS);
     this.setScene(scene, false);
   }
@@ -313,8 +342,13 @@ export class SuspensionSection implements Section {
     const body = document.body;
     body.classList.toggle('susp-scene-bump', scene === 'bump');
     body.classList.toggle('susp-scene-travel', scene === 'travel');
+    body.classList.toggle('susp-scene-tyre', scene === 'tyre');
     setSegment(this.$('susp-scene'), scene);
     this.$('susp-dash').hidden = scene !== 'bump';
+    this.$('tyre-dash').hidden = scene !== 'tyre';
+    this.$('susp-title').textContent = scene === 'tyre' ? TYRE_HEADING.title : this.heading.title;
+    this.$('susp-sub').textContent = scene === 'tyre' ? TYRE_HEADING.sub : this.heading.sub;
+    this.putOnStage(scene);
     if (record) this.ctx.router.replace({ query: { s: scene === DEFAULT_SCENE ? null : scene } });
     if (!changed) return;
     if (scene === 'bump') {
@@ -325,6 +359,11 @@ export class SuspensionSection implements Section {
     } else {
       this.model.setRoad(null);
       this.readout();
+    }
+    if (scene === 'tyre') {
+      this.$<HTMLInputElement>('susp-explode').value = '0';
+      this.tyre.model.setExplode(0);
+      this.tyre.show();
     }
     time.refresh();
     // The first bump scene opens slowed down ten times (step 1); after that the visitor's choice of time stands, and
@@ -339,6 +378,18 @@ export class SuspensionSection implements Section {
     this.ctx.panels.relayout();
   }
 
+  /** Puts the scene's model on the stage, giving the other one back to the section without disposing it. */
+  private putOnStage(scene: SceneId): void {
+    const want = scene === 'tyre' ? this.tyre.model : this.model;
+    if (this.onStage === want) return;
+    const { stage, view, slots } = this.ctx;
+    if (this.onStage) stage.release(this.onStage);
+    slots.partCard.hidden = true;
+    stage.setModel(want, { home: scene === 'tyre' ? TYRE_HOME : HOME });
+    want.setView(view.mode);
+    this.onStage = want;
+  }
+
   /** Sets a shared value for as long as the section is shown, and gives back what restores it. */
   private borrow<T>(get: () => T, set: (value: T) => void, value: T): () => void {
     const before = get();
@@ -350,7 +401,8 @@ export class SuspensionSection implements Section {
     if (!this.shown) return;
     this.shown = false;
     const { stage, slots, time } = this.ctx;
-    stage.release(this.model);
+    if (this.onStage) stage.release(this.onStage);
+    this.onStage = null;
     slots.partCard.hidden = true;
     time.clock(null);
     this.clockShown = Number.NaN;
@@ -364,6 +416,7 @@ export class SuspensionSection implements Section {
     const time = this.ctx.time;
     const frozen = time.frozen;
     if (this.scene === 'bump') this.bumpFrame(frozen ? null : dt);
+    else if (this.scene === 'tyre') this.tyre.frame();
     else {
       rigFrame(this.resolved, this.travel, this.frameData);
       this.model.update(this.frameData);
@@ -414,12 +467,14 @@ export class SuspensionSection implements Section {
   }
 
   layout(viewport: Viewport): PanelSizes {
-    const dash = this.scene === 'bump' ? (viewport.small ? DASH_PX.small : DASH_PX.wide) : 0;
+    const dash =
+      this.scene === 'bump' ? (viewport.small ? DASH_PX.small : DASH_PX.wide) : this.scene === 'tyre' ? (viewport.small ? TYRE_DASH_PX.small : TYRE_DASH_PX.wide) : 0;
     return { right: 380, left: 0, dash, rightLabel: t('Налаштувати') };
   }
 
   laidOut(): void {
     this.strip.resize();
+    this.tyre.resize();
   }
 
   time(): TimeCapabilities {
