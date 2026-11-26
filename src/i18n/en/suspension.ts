@@ -25,7 +25,7 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Точки кріплення стійки, важеля й рульової тяги виміряні на справжньому компактному передньопривідному авто: JTEKT Engineering Journal 1019E (2023), таблиця 1. Модель авто стаття не називає. Висота центра колеса, межі ходу, пружина, відбійник і піввісь типові: їх у статті немає.':
     'The mounting points of the strut, the arm and the tie rod were measured on a real compact front-wheel-drive car: JTEKT Engineering Journal 1019E (2023), Table 1. The paper does not name the car. The wheel center height, the travel limits, the spring, the bump stop and the halfshaft are typical: the paper does not give them.',
   'Підвіски. Анатомія авто': 'Suspensions. Car Anatomy',
-  'Налаштувати': 'Adjust',
+  'Налаштувати': 'Setup',
   // The scenes and the bump scene (src/ui/suspensions/markup.ts, bump-text.ts, strip-chart.ts).
   'Сцена': 'Scene',
   'Перешкода': 'Obstacle',
