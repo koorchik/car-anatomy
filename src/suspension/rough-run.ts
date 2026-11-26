@@ -1,7 +1,7 @@
-// The rough-road scene (suspensions plan, scenes, «Погана дорога», stage P3): one corner drives along an ISO 8608 road
+// The rough-road scene (suspensions plan, scenes, the rough road, stage P3): one corner drives along an ISO 8608 road
 // at a steady speed. Two things answer the same question in two ways:
 //   - a run in time on the road of a fixed seed (RoughRun): the bars of the ride triangle and what the page plays back.
-//     The same corner, road and seed give the same numbers, so the visitor's «Запам'ятати як A» compares fairly;
+//     The same corner, road and seed give the same numbers, so the visitor's 'remember as A' compares fairly;
 //   - the frequency-domain estimate swept over the damping (roughSweep): the curves «ζ against comfort and grip», with
 //     the minimum of each read off the model, not taken from the plan's «about 0.2».
 // A run is a few tens of thousands of quarter-car steps and the road segments under them (about 0.1 s), so the page

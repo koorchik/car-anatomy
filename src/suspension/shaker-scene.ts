@@ -1,4 +1,4 @@
-// The shaker scene (suspensions plan, scenes, «Стенд», stage P3): the corner on a post that moves the tyre with the
+// The shaker scene (suspensions plan, scenes, the shaker, stage P3): the corner on a post that moves the tyre with the
 // same velocity amplitude at every frequency. The curves are the analytic response of the linear quarter car
 // (quarterGains), the points the stepped sine of the quarter car in time (shaker.ts), and three reference dampers
 // show the invariant point: at √(k_t/m_u) the body moves m_u/m_s of the post's motion whatever the damper, exactly

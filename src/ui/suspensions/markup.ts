@@ -5,6 +5,9 @@
 import { t } from '../../i18n/t.ts';
 import { BUMP_SPEED_KMH, OBSTACLE_IDS, WHEEL_IDS, type ObstacleId, type WheelId } from '../../suspension/bump.ts';
 import { articleHtml } from './article.ts';
+import { rideArticleHtml } from './ride-article.ts';
+import { roadDashHtml, roadPanelHtml, rideWheelHtml } from './road-scene.ts';
+import { shakerDashHtml, shakerPanelHtml } from './shaker-scene.ts';
 import { SCENES, sceneLabel } from './scenes.ts';
 import { setupPanelHtml } from './setup-panel.ts';
 import { stripLegendHtml } from './strip-chart.ts';
@@ -35,7 +38,8 @@ export const toolsHtml = (minMm: number, maxMm: number): string => `<div class="
     </div>
   `;
 
-/** The bump scene's dash: drive again or pause, the strip chart, the numbers of the last run. */
+/** The bump scene's dash: drive again or pause, the strip chart, the numbers of the last run; then the dashes of the
+ *  rough road and the shaker. */
 export const dashHtml = (): string => `<footer class="susp-dash" id="susp-dash" hidden>
       <section class="susp-dash-event">
         <button type="button" class="btn primary" id="susp-go">${t('Наїхати')}</button>
@@ -50,7 +54,9 @@ export const dashHtml = (): string => `<footer class="susp-dash" id="susp-dash" 
         <dl class="susp-numbers" id="susp-numbers"></dl>
       </section>
       <p class="visually-hidden" id="susp-live" aria-live="polite"></p>
-    </footer>`;
+    </footer>
+    ${roadDashHtml()}
+    ${shakerDashHtml()}`;
 
 export const obstacleLabel = (id: ObstacleId): string =>
   ({
@@ -106,7 +112,11 @@ export const panelHtml = (): string => `<div class="panel-scroll susp-panel" id=
         </dl>
         <p class="susp-note">${t('Хід рахується від проєктної висоти кузова, плюс — колесо вгору. Розвал від’ємний, коли верх колеса нахилений до кузова; сходження додатне, коли перед колеса повернутий до середини авто.')}</p>
       </section>
+      ${roadPanelHtml()}
+      ${shakerPanelHtml()}
+      ${rideWheelHtml()}
       ${setupPanelHtml()}
+      ${rideArticleHtml()}
       ${articleHtml()}
       <p class="susp-note">${t('«Рентген» робить шину, диск і корпус амортизатора скляними, «Механізм» лишає самі ланки й шарніри. Клацни будь-яку деталь, щоб дізнатися, що вона робить.')}</p>
     </div>

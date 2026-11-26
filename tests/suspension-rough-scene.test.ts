@@ -1,4 +1,4 @@
-// The rough-road and shaker scenes of stage P3 (suspensions plan, «Етап 3»): the bars of the ride triangle, the
+// The rough-road and shaker scenes of stage P3 (suspensions plan, stage 3): the bars of the ride triangle, the
 // damping sweep, the stepped-sine points against the analytic curves and the invariant point with and without tyre
 // damping.
 
@@ -146,5 +146,35 @@ describe('the stand', () => {
     // Same phase: the height scales with the amplitude v/ω and nothing else.
     expect(post.heightAt(x) / before).toBeCloseTo(1.2 / 12, 9);
     expect(post.amplitudeM).toBeCloseTo(0.08 / (2 * Math.PI * 12), 12);
+  });
+});
+
+describe('what the scenes say', async () => {
+  const { airAlarm, invariantCaption, percent, rideBars, rideScale, sweepCaption } = await import('../src/ui/suspensions/ride-text.ts');
+
+  it('names the comfort band, flags a wheel off the road and keeps the bars on one scale for any damper', () => {
+    const scene = { ...ROUGH_DEFAULT, ...ROUGH_BROKEN };
+    const rc = at('worn', scene);
+    const r = new RoughRun(rc, scene, 6).run();
+    const bars = rideBars(r);
+    expect(bars.map((b) => b.id)).toEqual(['comfort', 'grip', 'travel']);
+    expect(bars[0].note).toMatch(/неприємно/);
+    expect(bars[1].alarm).toBe(true);
+    expect(airAlarm(r)).toMatch(/^Колесо втрачає дорогу \d/);
+    // The scale comes from the sweep, which does not depend on the damper chosen.
+    const firm = at('track', scene);
+    const [soft, hard] = [rideScale(roughSweep(rc, scene), null), rideScale(roughSweep(firm, scene), null)];
+    expect(hard.comfort / soft.comfort).toBeCloseTo(1, 9);
+    expect(hard.grip / soft.grip).toBeCloseTo(1, 9);
+    expect(sweepCaption(roughSweep(rc, scene))).toMatch(/ζ 0,1\d.*ζ 0,[5-7]\d/);
+    expect(percent(0.0061)).toBe('0,61 %');
+    expect(percent(0.997)).toBe('99,7 %');
+    expect(percent(0.14)).toBe('14 %');
+  });
+
+  it('explains why the curves meet nearly or exactly, with the spread measured', () => {
+    const rc = resolveCorner(corner, factory);
+    expect(invariantCaption(invariantCheck(rc, true), true)).toMatch(/щонайбільше на 6,0 %.*Вимкни «Демпфування шини»/);
+    expect(invariantCaption(invariantCheck(rc, false), false)).toMatch(/0,00 %.*сходяться точно/);
   });
 });
