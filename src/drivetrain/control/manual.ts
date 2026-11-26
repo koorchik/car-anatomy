@@ -10,7 +10,7 @@
 // - near idle in a gear it lets go the same way, so the car brakes to a stop without stalling, as the auto clutches of
 //   small cars did.
 //
-// Rev matching (the pages' «Підгазовка» helper, stage K3b; Honda's Rev-Match on the Civic Type R): while the clutch is
+// Rev matching (the pages' rev-matching helper, stage K3b; Honda's Rev-Match on the Civic Type R): while the clutch is
 // (nearly) open and the lever asks for a gear that needs the engine faster than it turns, the control asks for
 // throttle (`blip`, read by VehicleLoad.engineRequest) until the engine meets the input speed that gear will have.
 //

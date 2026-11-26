@@ -21,7 +21,11 @@ import type { SetupLabels } from './setup-panel.ts';
 const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { maximumFractionDigits: digits, minimumFractionDigits: digits });
 
 /** A gearbox model on the table: what the section drives each frame, and the gear a demonstration lights. */
-export type TableModel = SceneModel<GearboxFrame> & { gearMesh(id: string): THREE.Mesh | undefined };
+export type TableModel = SceneModel<GearboxFrame> & {
+  gearMesh(id: string): THREE.Mesh | undefined;
+  /** The teeth blurred by the members' speeds, rad/s, in real time; null sharp (a model without it stays sharp). */
+  setBlur?(speeds: ArrayLike<number> | null): void;
+};
 
 /** The description a page's box is built from: the layout's own. */
 export type TableDesc = LayshaftDesc | TransaxleDesc;

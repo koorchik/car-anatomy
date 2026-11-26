@@ -83,7 +83,6 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   'В авто': 'In the car',
   'двигун через зчеплення й коробку везе авто, зчеплення працює саме': 'the engine drives the car through the clutch and the gearbox, the clutch works by itself',
   'В авто час іде справжній': 'In the car, time runs at its real pace',
-  'Коробку налаштовують на столі, а авто їде з нею': 'The gearbox is set up on the bench, and the car drives with it',
   'км/год': 'km/h',
   '{kmh} км/год': '{kmh} km/h',
   'Зчеплення': 'Clutch',
@@ -112,4 +111,92 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   'Попередня компоновка коробки': 'Previous transmission layout',
   'Наступна компоновка коробки': 'Next transmission layout',
   'Коробки цієї компоновки': 'Transmissions of this layout',
+  // The full dash of the car mode (stage K3b): the gate, the clutch, the drive panel and its charts.
+  'Педаль зчеплення': 'Clutch pedal',
+  'авто': 'auto',
+  'Диск': 'Disc',
+  '{c} °C': '{c} °C',
+  'Куліса: {pattern}': 'Shift gate: {pattern}',
+  'З двигуном': 'With the engine',
+  'Дорога й графіки': 'Road and charts',
+  'Щоб завести, вичавіть зчеплення (C) або поставте нейтраль (N).': 'To start the engine, press the clutch (C) or select neutral (N).',
+  'Двигун заглух: зчеплення замкнулося, а обертів не вистачило. Вичавіть зчеплення (C) або поставте нейтраль і заведіть знову.':
+    'The engine stalled: the clutch locked up without enough revs. Press the clutch (C) or select neutral, and start it again.',
+  'Час вище: {gear}': 'Shift up: {gear}',
+  'Краще нижче: {gear}': 'Shift down: {gear}',
+  'Помічники': 'Driver aids',
+  'Автозчеплення': 'Auto clutch',
+  'Вимкніть його, щоб рушати самому педаллю зчеплення (C) і газом.': 'Turn it off to pull away yourself with the clutch pedal (C) and the gas.',
+  'Підгазовка': 'Rev matching',
+  'Перемикаючи вниз, система піднімає оберти до тих, які матиме нижча передача, і зчеплення замикається без ривка.':
+    'On a downshift the system raises the revs to what the lower gear will need, and the clutch engages without a jolt.',
+  'Підказки перемикання': 'Shift hints',
+  'Дорога': 'Road',
+  'Ухил': 'Grade',
+  'Покриття': 'Surface',
+  'Сухий асфальт': 'Dry asphalt',
+  'Мокрий': 'Wet',
+  'Сніг': 'Snow',
+  'Лід': 'Ice',
+  'Ковзання': 'Slip',
+  'Температура диска': 'Disc temperature',
+  'Енергія за рушання': 'Energy of the launch',
+  'Усього в диск': 'Total into the disc',
+  'Розгін з місця': 'From a standstill',
+  '0–100 км/год': '0–100 km/h',
+  '0–400 м': '0–400 m',
+  '{kj} кДж': '{kj} kJ',
+  '{s} с, {kmh} км/год': '{s} s, {kmh} km/h',
+  'Тяга': 'Traction',
+  'Сила на колесах за швидкістю на повному газу в кожній передачі, кН. Пунктир — опір руху на цьому ухилі, крапка — авто зараз.':
+    'Force at the wheels against speed at full throttle in each gear, kN. Dashed: the road load on this grade; the dot: the car now.',
+  'Звідки ця крива: двигун на стенді. Момент узято з останнього заміру на сторінці двигуна.':
+    'Where this curve comes from: the engine on the dyno. The torque is the latest run on the engine page.',
+  'Момент узято з моделі двигуна. Зробіть замір на стенді на <a href="{href}">сторінці двигуна</a> на повному газу, і крива візьме його.':
+    'The torque comes from the engine model. Make a full-throttle run on the dyno on the <a href="{href}">engine page</a>, and the curve will take it.',
+  'Останні 10 с': 'Last 10 s',
+  'м/с²': 'm/s²',
+  'м/с³': 'm/s³',
+  'Н·м на колесах': 'N·m at the wheels',
+  // Demonstrations 2 and 3, in the car.
+  'рушаємо': 'pulling away',
+  'перемикання': 'shifting',
+  'Ще раз': 'Again',
+  '{demo} · {n} з {count}': '{demo} · {n} of {count}',
+  'Рушаємо': 'Pulling away',
+  'Зчеплення відпускаємо повільно': 'Letting the clutch up slowly',
+  'Автозчеплення вимкнено: педаль тепер у водія. Трохи газу, близько 2000 об/хв, і педаль повільно, за дві з половиною секунди, проходить місце, де диск починає тримати. Диск ковзає, оберти просідають, авто повзе, а лічильник енергії зчеплення в панелі «Дорога й графіки» росте.':
+    'The auto clutch is off: the pedal is the driver\'s now. A little gas, about 2000 rpm, and the pedal slowly, over two and a half seconds, passes the point where the disc starts to bite. The disc slips, the revs sag, the car creeps, and the clutch energy counter in the "Road and charts" panel climbs.',
+  'Оберти просіли до {rpm} об/хв, у диск пішло {kj} кДж.': 'The revs sagged to {rpm} rpm; {kj} kJ went into the disc.',
+  'Різко й без газу': 'Abruptly, with no gas',
+  'Та сама перша передача, але педаль кинуто одразу і без газу. Зчеплення замикається миттєво, двигун мусить одразу зрушити авто вагою понад тонну — і глухне.':
+    'The same first gear, but the pedal is dropped at once with no gas. The clutch locks instantly, the engine has to move a car of over a tonne at once, and it stalls.',
+  'Двигун заглух за {s} с після того, як зчеплення замкнулося.': 'The engine stalled {s} s after the clutch locked.',
+  'Багато газу': 'Lots of gas',
+  'Тепер 4500 об/хв і газ майже до підлоги, а педаль іде вгору за секунду. Двигун тримає високі оберти, диск довго ковзає, і вся різниця швидкостей іде в тепло: кілоджоулі в диск і градуси на ньому.':
+    'Now 4500 rpm and the gas almost floored, and the pedal comes up in a second. The engine holds high revs, the disc slips for a long time, and all the difference in speed turns into heat: kilojoules into the disc and degrees on it.',
+  '{kj} кДж у диск, диск нагрівся до {c} °C.': '{kj} kJ into the disc; the disc heated up to {c} °C.',
+  'Підйом 15 %, без газу': '15% hill, no gas',
+  'Ухил 15 %: на кожні 100 м уперед дорога піднімається на 15 м. Зчеплення вичавлене, гальмо відпускаємо — і без газу авто котиться назад.':
+    'A 15% grade: the road rises 15 m for every 100 m ahead. The clutch is down, the brake is let go, and with no gas the car rolls back.',
+  'За дві секунди авто покотилося назад до {kmh} км/год.': 'In two seconds the car rolled back to {kmh} km/h.',
+  'Підйом 15 %, з газом': '15% hill, with gas',
+  'Той самий підйом. Газ, зчеплення потроху вгору, і гальмо відпускаємо, коли диск уже тримає: авто їде вгору, а не назад. Диск ковзає довше, ніж на рівному, бо тримає ще й вагу авто на схилі.':
+    'The same hill. Gas, the clutch up bit by bit, and the brake let go once the disc bites: the car goes up, not back. The disc slips longer than on the level, since it also holds the car\'s weight on the slope.',
+  'Авто їде вгору {kmh} км/год, у диск пішло {kj} кДж.': 'The car climbs at {kmh} km/h; {kj} kJ went into the disc.',
+  'Перемикання і оберти': 'Shifting and revs',
+  '1→2 на {rpm} об/хв': '1→2 at {rpm} rpm',
+  'Газ у підлогу в першій, скільки тримають шини, до {rpm} об/хв, і вгору. Швидкість за мить перемикання майже та сама, тож оберти падають у відношенні чисел передач: {rpm} · {r2}/{r1} ≈ {drop} об/хв. На графіку «Тяга» точка перескакує з кривої першої на криву другої.':
+    'Floored in first, as far as the tires hold, to {rpm} rpm, and up. The road speed barely changes during the shift, so the revs fall in the ratio of the gears: {rpm} · {r2}/{r1} ≈ {drop} rpm. On the Traction chart the dot jumps from the first gear\'s curve to the second\'s.',
+  'У моделі: перед перемиканням {before} об/хв, і {before} · {r2}/{r1} = {expected}; коли зчеплення замкнулося на другій — {after} об/хв.':
+    'In the model: {before} rpm before the shift, and {before} · {r2}/{r1} = {expected}; {after} rpm when the clutch locked in second.',
+  'Униз без підгазовки': 'Down without rev matching',
+  'Третя, газ скинуто, і вниз на другу. Друга потребує обертів у {k} раза більших, ніж третя на тій самій швидкості. Без підгазовки зчеплення замикається, коли двигун ще повільніший за первинний вал, і різниця гаситься об авто: воно смикається, на стрічці провал прискорення.':
+    'Third, off the gas, and down to second. Second needs {k} times the revs of third at the same speed. Without rev matching the clutch engages while the engine is still slower than the input shaft, and the car takes up the difference: it jolts, and the strip shows a dip in acceleration.',
+  'Провал прискорення {a} м/с², у диск {kj} кДж.': 'Acceleration dip {a} m/s²; {kj} kJ into the disc.',
+  'Униз з підгазовкою': 'Down with rev matching',
+  'Те саме перемикання з підгазовкою: поки зчеплення розімкнене, система відкриває дросель і доганяє оберти двигуна до обертів первинного вала на другій. Зчеплення замикається майже без ковзання, і ривка немає.':
+    'The same shift with rev matching: while the clutch is disengaged, the system opens the throttle and brings the engine up to the input shaft\'s revs in second. The clutch engages with almost no slip, and there is no jolt.',
+  'Провал прискорення {a} м/с², у диск {kj} кДж, оберти піднялися до {rpm} об/хв ще до замикання.':
+    'Acceleration dip {a} m/s²; {kj} kJ into the disc; the revs rose to {rpm} rpm before the clutch engaged.',
 };

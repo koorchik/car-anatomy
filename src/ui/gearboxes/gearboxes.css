@@ -683,3 +683,233 @@ body.gbx-car .gbx-pedal .latch {
     display: none;
   }
 }
+
+/* ---- The full dash of the car (stage K3b) ---- */
+
+/* Three pedals in the order of a car: clutch, brake, gas. */
+body.gbx-car .dash:has(> .gbx-gears-col:not([data-section-away])) {
+  grid-template-columns: 172px 212px 140px 214px minmax(250px, 1fr);
+}
+
+body.gbx-car .gbx-pedal {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+body.gbx-car .gbx-pedal .gbx-clutch {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+body.gbx-car .gbx-pedal .gbx-brake {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+body.gbx-car .gbx-pedal #pedal {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+body.gbx-car .gbx-pedal .latch {
+  grid-column: 3;
+}
+
+.gbx-clutch[hidden] {
+  display: none;
+}
+
+.gbx-clutch .pedal-fill {
+  background: linear-gradient(0deg, #4f7f8c, #7fb3c0);
+}
+
+/* The gate beside the car's figures, the hint under both. */
+body.gbx-car .gbx-gears-col {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 14px;
+}
+
+body.gbx-car .gbx-gears-col h4 {
+  grid-column: 1 / -1;
+}
+
+body.gbx-car .gbx-gate {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+body.gbx-car #gbx-car-figures {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+body.gbx-car .gbx-hint {
+  grid-column: 1 / -1;
+}
+
+.gbx-gate {
+  width: 128px;
+  height: 112px;
+  touch-action: none;
+}
+
+.gbx-gate[hidden] {
+  display: none;
+}
+
+.gbx-gate-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  user-select: none;
+}
+
+.gbx-gate-slot {
+  fill: none;
+  stroke: rgba(236, 230, 214, 0.28);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gbx-gate-label {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 13px;
+  fill: var(--bone-dim);
+}
+
+.gbx-gate-label.asked {
+  fill: var(--bone);
+}
+
+.gbx-gate-label.holds {
+  fill: #ea6a15;
+}
+
+.gbx-gate-knob circle {
+  fill: var(--bone);
+  stroke: #0d2a33;
+  stroke-width: 2;
+  cursor: grab;
+}
+
+.gbx-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  color: #f0b35c;
+}
+
+.gbx-hint[hidden] {
+  display: none;
+}
+
+/* The drive panel, where the table has its settings. */
+.gbx-drive[hidden] {
+  display: none;
+}
+
+.gbx-drive-block {
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.gbx-drive-block:last-child {
+  border-bottom: 0;
+}
+
+.gbx-drive-block h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.gbx-drive-block .check {
+  display: flex;
+  margin-top: 4px;
+}
+
+.gbx-drive-block .note {
+  margin: 2px 0 6px;
+  font-size: 12.5px;
+}
+
+.gbx-drive-range {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.gbx-drive-range b {
+  font-variant-numeric: tabular-nums;
+}
+
+.gbx-drive-label {
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+
+.gbx-surface {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.gbx-surface button {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.gbx-drive-figures {
+  font-size: 13.5px;
+}
+
+.gbx-traction {
+  display: block;
+  width: 100%;
+  height: 170px;
+}
+
+.gbx-strip {
+  display: block;
+  width: 100%;
+  height: 190px;
+}
+
+@media (max-width: 1240px) {
+  body.gbx-car .dash:has(> .gbx-gears-col:not([data-section-away])) {
+    grid-template-columns: 150px 180px 112px 190px minmax(220px, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  /* A phone: start and speed at the left, the gate in the middle, three pedals at the right. */
+  body.gbx-car .dash:has(> .gbx-gears-col:not([data-section-away])) {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) 150px;
+  }
+
+  body.gbx-car .gbx-gears-col {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    justify-items: center;
+    gap: 2px;
+  }
+
+  body.gbx-car .gbx-gears-col h4 {
+    display: none;
+  }
+
+  body.gbx-car .gbx-gate {
+    grid-row: 1;
+    width: 112px;
+    height: 96px;
+  }
+
+  body.gbx-car .gbx-hint {
+    grid-row: 2;
+    font-size: 11.5px;
+    text-align: center;
+  }
+}

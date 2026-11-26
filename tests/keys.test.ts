@@ -19,7 +19,7 @@ function siteKeys(): ShellKeys {
   const engines = engineKeys({ gas: noop, ignition: noop, step: noop, table: noop, mute: noop, layer: noop, closeHelp: noop, lap: () => false });
   keys.bind('engines', engines.engines);
   keys.bind('engines/sump', engines.sump);
-  const gearboxes = gearboxKeys({ gas: noop, ignition: noop, mute: noop, gear: noop, brake: noop });
+  const gearboxes = gearboxKeys({ gas: noop, ignition: noop, mute: noop, gear: noop, brake: noop, clutch: noop });
   keys.bind('gearboxes', gearboxes.gearboxes);
   keys.bind('gearboxes/drive', gearboxes.drive);
   keys.bind(SUSPENSION_KEY_CONTEXTS[0], suspensionKeys({ event: () => true, scene: noop }));
@@ -113,7 +113,7 @@ describe('keys of the site', () => {
     // 6 to 8 are gears too, held back from the views, though the help does not list them.
     expect(keys.of('gearboxes/drive').some((b) => b.label === null && b.codes.includes('Digit8'))).toBe(true);
     expect(shellCaps(drive)).not.toContain('6');
-    expect(own.flatMap((row) => row.caps)).toEqual(expect.arrayContaining(['R', 'N', 'B']));
+    expect(own.flatMap((row) => row.caps)).toEqual(expect.arrayContaining(['R', 'N', 'B', 'C']));
     // The shell's views by number are not offered in the car, V is.
     expect(shellCaps(drive)).not.toContain('2');
     expect(shellCaps(drive)).toContain('V');
