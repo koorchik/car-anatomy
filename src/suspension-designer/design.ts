@@ -186,12 +186,29 @@ export const CAR_KEYS = [
 /** The key of an axle parameter on one end: axleKey('springNmm', 'R') is 'springNmmR'. */
 export const axleKey = <K extends AxleKey>(key: K, end: AxleEnd): `${K}${AxleEnd}` & DesignKey => `${key}${end}` as `${K}${AxleEnd}` & DesignKey;
 
-/** One axle's parameters without the suffix. */
-export function axleOf(d: ChassisDesign, end: AxleEnd): AxleParams {
+/** The suffixed keys of each end, in AXLE_KEYS order: built once, since axleOf runs thousands of times a second. */
+const SUFFIXED: Record<AxleEnd, readonly string[]> = { F: AXLE_KEYS.map((k) => `${k}F`), R: AXLE_KEYS.map((k) => `${k}R`) };
+
+/** Axles already read from a design: designs are never changed once made (every edit makes a new one), and the
+ *  model reads the same axle of the same design many times over. */
+const AXLES = new WeakMap<ChassisDesign, { F?: Readonly<AxleParams>; R?: Readonly<AxleParams> }>();
+
+/** One axle's parameters without the suffix. The object is shared and frozen: copy it to change it. */
+export function axleOf(d: ChassisDesign, end: AxleEnd): Readonly<AxleParams> {
+  let seen = AXLES.get(d);
+  const hit = seen?.[end];
+  if (hit) return hit;
   const out = {} as Record<AxleKey, unknown>;
   const src = d as unknown as Record<string, unknown>;
-  for (const key of AXLE_KEYS) out[key] = src[`${key}${end}`];
-  return out as unknown as AxleParams;
+  const keys = SUFFIXED[end];
+  for (let i = 0; i < AXLE_KEYS.length; i++) out[AXLE_KEYS[i]] = src[keys[i]];
+  const axle = Object.freeze(out) as unknown as Readonly<AxleParams>;
+  if (!seen) {
+    seen = {};
+    AXLES.set(d, seen);
+  }
+  seen[end] = axle;
+  return axle;
 }
 
 /** The design with some parameters of one axle replaced. */
