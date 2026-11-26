@@ -283,7 +283,12 @@ export function traceUsage(gc: GripChassis, trace: LapTrace): Float32Array {
   return out;
 }
 
-/** The lap with weight transfer: simulateLap with this chassis' grip model, on the same car, tyre and powertrain. */
+/**
+ * The lap with weight transfer: simulateLap with this chassis' grip model, on the same car, tyre and powertrain. The
+ * chassis must be built for this tyre and this mass, or the trace would carry one tyre's label and another's grip.
+ */
 export function transferLap(track: Track, car: VehicleSpec, tyre: TyreSpec, pt: Powertrain, gc: GripChassis): LapTrace {
+  if (gc.tyre.id !== tyre.id || gc.tyre.mu !== tyre.mu) throw new Error(`Grip chassis is fitted to ${gc.tyre.id} (μ ${gc.tyre.mu}), the lap runs on ${tyre.id} (μ ${tyre.mu})`);
+  if (Math.abs(gc.massKg - car.massKg) > 1e-6 * car.massKg) throw new Error(`Grip chassis weighs ${gc.massKg} kg, the lap's car ${car.massKg} kg`);
   return simulateLap(track, car, tyre, pt, { grip: gripModel(gc) });
 }

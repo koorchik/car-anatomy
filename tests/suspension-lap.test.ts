@@ -152,6 +152,14 @@ describe('the lap with weight transfer', () => {
     expect(crest).toBeLessThanOrEqual(Math.sqrt(G * radius) + 1e-6);
   });
 
+  it('refuses a chassis fitted to other tyres or another mass', () => {
+    const c = SUMP_CARS[0]!;
+    const pt = lapPowertrain(designOf(c), hpOf(c), c.vehicle);
+    const street = gripChassisFor(recordOf(c), TYRES.street);
+    expect(() => transferLap(testTrack(), c.vehicle, TYRES.slick, pt, street)).toThrow(/street/);
+    expect(() => transferLap(testTrack(), c.vehicle, TYRES.street, pt, { ...street, massKg: street.massKg + 100 })).toThrow(/kg/);
+  });
+
   it('is computed in a fraction of a second', () => {
     const c = SUMP_CARS[0]!;
     const pt = lapPowertrain(designOf(c), hpOf(c), c.vehicle);
