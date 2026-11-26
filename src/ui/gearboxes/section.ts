@@ -302,6 +302,8 @@ export class GearboxSection implements Section {
           engine: `<a href="#/engines/${car.engine}">${t('двигун {name}, {hp} к.с.', { name: engineName, hp: num(facts?.powerHp ?? 0) })}</a>`,
         })
       : record.name;
+    // The car mode drives the page's car: a box without one stays on the table.
+    this.el('gbx-modes').querySelector<HTMLElement>('[data-mode="drive"]')!.hidden = !car;
     // A new panel in a fresh element: the last page's panel leaves with its listeners.
     const host = this.el('gbx-setup');
     const fresh = host.cloneNode(false) as HTMLElement;
