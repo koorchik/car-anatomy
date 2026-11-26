@@ -69,6 +69,11 @@ export interface DraftLoss {
   source: Array<[string, number]>;
   share: number;
   states?: Array<{ elements: string[]; share: number }>;
+  /**
+   * Gain on the converter's multiplication T_t − T_p, added to the source: behind a converter the gearbox input
+   * carries the turbine's torque, which the damper (pump torque plus the lock-up clutch's) does not see.
+   */
+  converter?: number;
 }
 
 export type DraftElement =
@@ -128,6 +133,8 @@ export interface CoreLoss {
   gains: Float64Array;
   share: number;
   states: Array<{ elements: Int32Array; share: number }>;
+  /** DraftLoss.converter, 0 for none. */
+  converter: number;
 }
 
 export interface CoreElements {
@@ -485,6 +492,7 @@ export function buildCore(draft: CoreDraft): DrivetrainCore {
     gains: Float64Array.from(l.source, ([, g]) => g),
     share: l.share,
     states: (l.states ?? []).map((st) => ({ elements: Int32Array.from(st.elements, (id) => elementAt(id, `the loss at ${l.member}`)), share: st.share })),
+    converter: l.converter ?? 0,
   }));
   const cv = draft.converter ?? null;
   if (cv && !(cv.kStall > 0)) throw new Error('drivetrain: a converter needs a positive K_stall');
@@ -518,14 +526,15 @@ export function buildCore(draft: CoreDraft): DrivetrainCore {
 /**
  * The gearbox's mesh losses at its input: in each gear, 1 − η of its power path (StateInfo.efficiency: η_m per
  * loaded mesh) times the torque the damper spring passes on. The direct gear loses nothing; neutral and a gear
- * half-engaged lose nothing either, since no state matches. Needs the launch draft's damper.
+ * half-engaged lose nothing either, since no state matches. Needs the launch draft's damper; behind a torque
+ * converter (`converter`) the turbine's multiplication is added to the damper's torque.
  */
-export function gearLossDraft(box: Gearbox): CoreDraft {
+export function gearLossDraft(box: Gearbox, converter = false): CoreDraft {
   const d = emptyDraft();
   const states = box.states
     .filter((s) => s.kind === 'gear' && s.efficiency !== null && s.efficiency < 1)
     .map((s) => ({ elements: s.closed, share: 1 - s.efficiency! }));
-  if (states.length) d.losses!.push({ member: box.spec.input, source: [[DAMPER, 1]], share: 0, states });
+  if (states.length) d.losses!.push({ member: box.spec.input, source: [[DAMPER, 1]], share: 0, states, ...(converter ? { converter: 1 } : {}) });
   return d;
 }
 

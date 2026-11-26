@@ -104,5 +104,5 @@ export function automaticCore(box: Gearbox, parts: ConverterParts, load: Automat
   const brake: FrictionDef = { faces: 2, rIn: 100, rOut: 150, muStatic: 0.4, muKinetic: 0.36, stribeck: DRY_STRIBECK, clampN: 0, actuator: 'hydraulic' };
   brake.clampN = load.brakeNm / (brake.muStatic * ((brake.rIn + brake.rOut) / 2000) * brake.faces);
   wheels.elements.push({ id: BRAKE, kind: 'friction', a: WHEELS, b: null, friction: brake });
-  return buildCore(mergeDrafts(converterLaunchDraft(box.spec.input, parts), gearboxDraft(box), gearLossDraft(box), wheels));
+  return buildCore(mergeDrafts(converterLaunchDraft(box.spec.input, parts), gearboxDraft(box), gearLossDraft(box, true), wheels));
 }

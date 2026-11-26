@@ -5,15 +5,15 @@ import { describe, expect, it } from 'vitest';
 import { automaticLabInput } from '../src/data/converter-lab-input.ts';
 import { automaticCore, withPlanetaryFriction, WHEELS } from '../src/drivetrain/automatic.ts';
 import {
-  capacity, CONVERTER_SR, converterDamper, converterTorques, couplingPoint, kForStall, lockupClutch, newConverterPoint, stallSpeed, torqueRatio, TURBINE_INERTIA,
+  capacity, converterDamper, converterTorques, couplingPoint, kForStall, lockupClutch, newConverterPoint, stallSpeed, torqueRatio, TURBINE_INERTIA,
 } from '../src/drivetrain/converter.ts';
+import { SLIP_TARGET_RPM } from '../src/drivetrain/control/lockup.ts';
 import { fullLoad, labEngineTorque, runConverterLab } from '../src/drivetrain/converter-lab.ts';
 import { BRAKE, CRANK, elementIndex, LOCKUP, memberIndex, PUMP, TURBINE } from '../src/drivetrain/core.ts';
 import { DrivetrainSolver } from '../src/drivetrain/solver.ts';
 import { buildGearbox, stateByName } from '../src/drivetrain/topology.ts';
 import { peakTorque } from '../src/engine/torque-map.ts';
 
-const RPM = 30 / Math.PI;
 const input = automaticLabInput();
 const run = runConverterLab(input);
 const frameAt = (t: number) => Math.min(run.frames - 1, Math.round(t / run.frameS));
@@ -68,7 +68,6 @@ describe('the converter law', () => {
       converterTorques(wp, wt, 100, c);
       expect(c.pump * wp - c.turbine * wt).toBeGreaterThanOrEqual(-1e-9);
     }
-    expect(CONVERTER_SR.length).toBe(13);
   });
 });
 
@@ -156,7 +155,7 @@ describe('7. torque converter', () => {
 describe('the lab (demonstration 9)', () => {
   it('the pull-away: SR rises from 0 past the coupling point while TR falls along the measured curve', () => {
     const from = frameAt(run.phases.pull);
-    const to = frameAt(run.phases.lockup);
+    const to = frameAt(run.phases.cruise);
     expect(run.sr[from]!).toBeLessThan(0.05);
     expect(run.sr[to]!).toBeGreaterThan(run.coupling);
     let crossed = -1;
@@ -170,7 +169,7 @@ describe('the lab (demonstration 9)', () => {
   });
 
   it('the stator is held below the coupling point and freewheels past it', () => {
-    for (let i = frameAt(run.phases.pull); i < frameAt(run.phases.lockup); i++) {
+    for (let i = frameAt(run.phases.pull); i < frameAt(run.phases.cruise); i++) {
       if (run.sr[i]! < run.coupling - 1e-3) expect(run.statorFree[i]).toBe(0);
       if (run.sr[i]! > run.coupling + 1e-3) expect(run.statorFree[i]).toBe(1);
     }
@@ -180,13 +179,21 @@ describe('the lab (demonstration 9)', () => {
     expect(run.turbineNm[stall]! / run.pumpNm[stall]!).toBeCloseTo(1.81, 4);
   });
 
-  it('the lock-up brings the slip down to a few tens of rpm', () => {
-    const before = run.slipRpm[frameAt(run.phases.lockup)]!;
-    const end = run.slipRpm[run.frames - 1]!;
-    expect(before).toBeGreaterThan(80);
-    expect(end).toBeGreaterThan(20);
-    expect(end).toBeLessThan(60);
-    expect(Math.max(...run.lockupNm.subarray(frameAt(run.phases.lockup + 0.5)))).toBeGreaterThan(20);
+  it('at a held speed the lock-up takes the slip from the open converter\'s down to the controller\'s target', () => {
+    // The rig holds the car's speed and the pedal stays: the open converter settles at its own slip, and whatever the
+    // slip does after the lock-up command is the clutch's doing, not a rising engine speed.
+    const open = frameAt(run.phases.lockup - 0.02);
+    const end = run.frames - 1;
+    expect(run.speedKmh[end]!).toBeCloseTo(run.speedKmh[frameAt(run.phases.cruise + 0.05)]!, 3);
+    expect(run.slipRpm[open]!).toBeCloseTo(run.slipRpm[frameAt(run.phases.cruise + 0.4)]!, 0);
+    // The open converter carries all the engine gives at its own slip: well over the target at 35 % pedal.
+    expect(run.slipRpm[open]!).toBeGreaterThan(2 * SLIP_TARGET_RPM);
+    expect(Math.abs(run.pumpNm[open]! - run.engineNm[open]!)).toBeLessThan(0.01 * run.engineNm[open]!);
+    expect(run.lockupNm[open]!).toBe(0);
+    // The controller holds its target, and the clutch carries most of the torque.
+    expect(Math.abs(run.slipRpm[end]! - SLIP_TARGET_RPM)).toBeLessThan(0.1 * SLIP_TARGET_RPM);
+    expect(run.lockupNm[end]!).toBeGreaterThan(run.pumpNm[end]!);
+    expect(run.lockupNm[end]! + run.pumpNm[end]!).toBeCloseTo(run.engineNm[end]!, -1);
   });
 
   it('the lock-up clutch and the converter sit between the pump and the turbine of the core', () => {
@@ -201,6 +208,5 @@ describe('the lab (demonstration 9)', () => {
     expect(core.members[core.elements.b[e]!]).toBe(TURBINE);
     expect(core.converter.pump).toBe(memberIndex(core, PUMP));
     expect(core.converter.turbine).toBe(memberIndex(core, TURBINE));
-    expect(RPM).toBeGreaterThan(9);
   });
 });

@@ -78,14 +78,15 @@ describe('15. budget with the car (stage K2b)', () => {
 });
 
 describe('15. budget of the automatic (stage K12a)', () => {
-  it('ZF 8HP51 with its converter slipping and clutch C slipping, the car braked: under 20 µs per step', async () => {
+  it('ZF 8HP51 with its converter, its lock-up clutch and clutch C slipping, the car braked: under 20 µs per step', async () => {
     // The car as one inertia behind its final drive (the Supra on its chassis comes with stage K12b), its brake
     // holding, first selected but clutch C at a share of the clamp it needs: the engine held at 2000 rpm, the
-    // converter near stall and C slipping, so every step evaluates the converter and factorises with a slipping pack.
+    // converter near stall, the lock-up clutch at a light controlled clamp and C slipping, so every step evaluates the
+    // converter and factorises with two slipping packs.
     const { automaticLabInput } = await import('../src/data/converter-lab-input.ts');
     const { automaticCore, withPlanetaryFriction } = await import('../src/drivetrain/automatic.ts');
     const { converterDamper, lockupClutch, TURBINE_INERTIA } = await import('../src/drivetrain/converter.ts');
-    const { PUMP } = await import('../src/drivetrain/core.ts');
+    const { LOCKUP, PUMP } = await import('../src/drivetrain/core.ts');
     const input = automaticLabInput();
     const box = buildGearbox(withPlanetaryFriction(input.spec, input.ratedInputNm));
     const core = automaticCore(
@@ -103,6 +104,8 @@ describe('15. budget of the automatic (stage K12a)', () => {
     s.command[elementIndex(core, 'B')] = 1;
     const c = elementIndex(core, 'C');
     s.command[c] = 0.6;
+    const lockup = elementIndex(core, LOCKUP);
+    s.command[lockup] = 0.05;
     s.command[elementIndex(core, 'brake')] = 1;
     const h = 1 / 3000;
     for (let i = 0; i < 3000; i++) s.step(h);
@@ -111,7 +114,7 @@ describe('15. budget of the automatic (stage K12a)', () => {
     const t0 = performance.now();
     for (let i = 0; i < 30000; i++) {
       s.step(h);
-      if (s.state[c] === SLIP) slipping++;
+      if (s.state[c] === SLIP && s.state[lockup] === SLIP) slipping++;
       if (s.converter.sr < 0.9) converting++;
     }
     const us = ((performance.now() - t0) / 30000) * 1000;

@@ -95,6 +95,8 @@ export class AutomaticSection implements Section {
   private beforeLab: string[] | null = null;
   /** The lab was asked for and its run is on its way. */
   private labWanted = false;
+  /** The turbine's whole rpm the dash shows in the lab, NaN to redraw. */
+  private labRpmShown = Number.NaN;
   /** The last shift between two gears of the matrix, for the note under the buttons. */
   private lastShift: { from: string; to: string } | null = null;
   /** The engine was stalled by elements that hold the input. */
@@ -498,6 +500,7 @@ export class AutomaticSection implements Section {
     this.table.select('1');
     this.lastShift = null;
     this.el('gba-lab').hidden = false;
+    this.labRpmShown = Number.NaN;
     this.lab = new ConverterLabUi(this.el('gba-lab'), run);
     const { time } = this.ctx;
     time.refresh();
@@ -618,7 +621,10 @@ export class AutomaticSection implements Section {
     }
     this.tacho.update(shown.engineRpm, false);
     this.ctx.time.clock(lab.seconds);
-    // The dash's shafts follow the lab: the turbine is the input, first gear the rest.
+    // The dash's shafts follow the lab: the turbine is the input, first gear the rest. Words only when the rpm changes.
+    const whole = Math.round(Math.max(0, shown.turbineRpm));
+    if (whole === this.labRpmShown) return;
+    this.labRpmShown = whole;
     const s = this.shown;
     const input = t('{rpm} об/хв', { rpm: num(Math.max(0, shown.turbineRpm)) });
     const output = t('{rpm} об/хв', { rpm: num(Math.max(0, shown.turbineRpm) / (this.table.state.ratio ?? 1)) });

@@ -2,7 +2,8 @@
 // computed ahead (src/drivetrain/converter-lab.ts), played back at the shell's slow-down. Each step plays its stretch
 // of the run in a loop, with a chart of its own: the stall test as the engine's full-load curve against the pump's
 // parabola (n/K)², the pull-away and the coupling point on the measured TR(SR) curve, the lock-up as the slip over
-// time. The 3D gets the converter's wheels and the gearbox in first, turned at the run's speeds.
+// time at the speed the rig holds. The 3D gets the converter's wheels and the gearbox in first, turned at the run's
+// speeds.
 //
 // The stator's speed while it freewheels is not in the run (the model has no stator member): for the picture it turns
 // between standing at the coupling point and the turbine's speed at SR 1 [illustration]. The circulation arrows run
@@ -53,6 +54,8 @@ export class ConverterLabUi {
   private held = 0;
   private readonly shown: LabShown = { moved: 0, engineRpm: 0, turbineRpm: 0, converter: { pump: 0, turbine: 0, stator: 0, flow: 0, strength: 0 } };
   private readonly texts = new Map<string, string>();
+  /** The run's frame the readouts and the chart show, −1 to redraw: they change only when it does. */
+  private drawnIndex = -1;
   private scaleX: (v: number) => number = (v) => v;
   private scaleY: (v: number) => number = (v) => v;
 
@@ -90,6 +93,7 @@ export class ConverterLabUi {
     (this.el('gba-lab-prev') as HTMLButtonElement).disabled = this.at === 0;
     (this.el('gba-lab-next') as HTMLButtonElement).disabled = this.at === this.steps.length - 1;
     this.el('gba-lab-chart').innerHTML = this.chartSvg(step.chart);
+    this.drawnIndex = -1;
     this.update();
   }
 
@@ -138,8 +142,8 @@ export class ConverterLabUi {
   private buildSteps(): LabStep[] {
     const r = this.run;
     const p: Record<LabPhase, number> = r.phases;
-    let coupled = p.lockup;
-    for (let i = this.frameAt(p.pull); i < this.frameAt(p.lockup); i++) {
+    let coupled = p.cruise;
+    for (let i = this.frameAt(p.pull); i < this.frameAt(p.cruise); i++) {
       if (r.sr[i]! >= r.coupling) {
         coupled = i * r.frameS;
         break;
@@ -149,6 +153,7 @@ export class ConverterLabUi {
     const slipFrom = r.slipRpm[this.frameAt(p.lockup)]!;
     const slipTo = r.slipRpm[r.frames - 1]!;
     const pedal = r.pedal[this.frameAt(p.lockup - r.frameS)]!;
+    const cruiseKmh = r.speedKmh[this.frameAt(p.lockup)]!;
     return [
       {
         title: t('Тест на зупинці'),
@@ -173,20 +178,20 @@ export class ConverterLabUi {
       {
         title: t('Точка зчеплення'),
         text: t(
-          'На SR = {sc} TR доходить до 1: далі реактор мав би штовхати оливу вперед, і муфта вільного ходу його відпускає. Він крутиться разом з оливою, а гідротрансформатор працює як звичайна гідромуфта: момент на турбіні дорівнює моменту насоса, а турбіна крутиться трохи повільніше.',
+          'На SR = {sc} TR доходить до 1: далі реактор мав би штовхати оливу вперед, і муфта вільного ходу його відпускає. Він крутиться разом з оливою, а гідротрансформатор працює як звичайна гідромуфта: момент на турбіні майже дорівнює моменту насоса, а турбіна крутиться трохи повільніше.',
           { sc: num(r.coupling, 2) },
         ),
         from: Math.max(p.pull, coupled - 0.3),
-        to: p.lockup,
+        to: p.cruise,
         chart: 'curve',
       },
       {
         title: t('Блокування'),
         text: t(
-          'Тепер замикається муфта блокування. Ковзання між двигуном і турбіною падає з {from} до {to} об/хв: керування навмисно лишає кілька десятків обертів, щоб вібрація двигуна не йшла в кузов. Втрати в оливі майже зникають.',
-          { from: num(slipFrom), to: num(slipTo) },
+          'Стенд тримає швидкість авто на {kmh} км/год, педаль та сама. Відкритий гідротрансформатор при цьому ковзає на {from} об/хв. Тепер замикається муфта блокування, і ковзання між двигуном і турбіною падає до {to} об/хв: керування навмисно лишає кілька десятків обертів, щоб вібрація двигуна не йшла в кузов. Більшу частину моменту тепер передає муфта, і втрати в оливі майже зникають.',
+          { kmh: num(cruiseKmh), from: num(slipFrom), to: num(slipTo) },
         ),
-        from: p.lockup - 0.3,
+        from: p.lockup - 0.4,
         to: r.durationS,
         chart: 'slip',
       },
@@ -197,6 +202,8 @@ export class ConverterLabUi {
   private update(): void {
     const r = this.run;
     const i = this.index();
+    if (i === this.drawnIndex) return;
+    this.drawnIndex = i;
     const free = r.statorFree[i] === 1;
     this.set('gba-lab-engine', t('{rpm} об/хв · {nm} Н·м', { rpm: num(r.engineRpm[i]!), nm: num(r.engineNm[i]!) }));
     this.set('gba-lab-turbine', t('{rpm} об/хв · {nm} Н·м', { rpm: num(Math.max(0, r.turbineRpm[i]!)), nm: num(r.turbineNm[i]! + r.lockupNm[i]!) }));
@@ -219,10 +226,10 @@ export class ConverterLabUi {
       x = r.sr[i]!;
       y = r.tr[i]!;
     } else {
-      x = this.time;
+      x = i * r.frameS;
       y = Math.max(0, r.slipRpm[i]!);
       const trace = this.root.querySelector<SVGPathElement>('#gba-lab-trace');
-      if (trace) trace.setAttribute('d', this.tracePath(this.steps[this.at]!.from, this.time));
+      if (trace) trace.setAttribute('d', this.tracePath(this.steps[this.at]!.from, x));
     }
     dot.setAttribute('cx', this.scaleX(x).toFixed(1));
     dot.setAttribute('cy', this.scaleY(y).toFixed(1));

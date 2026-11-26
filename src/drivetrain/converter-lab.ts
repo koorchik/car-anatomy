@@ -9,7 +9,12 @@
 // - the pull-away: the brake released, the pedal at PULL_PEDAL (with the converter's 1.8 times more torque at the
 //   start, a floored pedal would spin the tyres, which this lab does not model); the speed ratio rises, the torque
 //   ratio falls along the measured curve to 1 at the coupling point, and the stator starts to freewheel;
-// - the lock-up: the clutch closes under a slip controller (control/lockup.ts) to LOCKUP_SLIP_RPM.
+// - the cruise: the rig holds the car's speed from here on, as a level road would at the pedal's steady speed; the
+//   engine settles where the open converter carries its torque, at the converter's own slip;
+// - the lock-up: the clutch closes under a slip controller (control/lockup.ts) to SLIP_TARGET_RPM, at the same speed
+//   and pedal, so the change in slip is the clutch's alone. Without the hold the car would keep accelerating in first,
+//   and the open converter's slip falls by itself as its speed rises (T ∝ n² at a given SR): a lock-up shown that way
+//   would show the engine's speed, not the clutch.
 //
 // The engine is the dyno's torque map on the crank member (engine-stub.ts) with the boost the turbo holds at each
 // speed (a steady turbo, no spool lag); the car is one inertia behind the final drive, without road load or tyre
@@ -46,16 +51,18 @@ export const LAB = {
   settleS: 1.5,
   /** Pedal of the pull-away. */
   pullPedal: 0.35,
-  /** From the brake's release to the lock-up command. */
+  /** From the brake's release to the speed hold. */
   pullS: 1.5,
-  /** The lock-up closing and holding. */
+  /** The speed held with the converter open, long enough for the engine to settle. */
+  cruiseS: 0.8,
+  /** The lock-up closing and holding, the speed still held. */
   lockS: 2,
   /** The throttle and the brake move over this time, s. */
   rampS: 0.2,
 };
 
 /** The phases of the run, in order, for the page's steps. */
-export type LabPhase = 'idle' | 'stall' | 'settle' | 'pull' | 'lockup';
+export type LabPhase = 'idle' | 'stall' | 'settle' | 'pull' | 'cruise' | 'lockup';
 
 /** One run of the lab: equal-time frames, LAB_FRAME_S apart, in flat arrays. */
 export interface ConverterLabRun {
@@ -144,10 +151,11 @@ export function runConverterLab(input: LabInput): ConverterLabRun {
     if (id === CRANK || id === PUMP) s.phiDot[k] = idle;
   });
 
-  const phases: Record<LabPhase, number> = { idle: 0, stall: LAB.idleS, settle: 0, pull: 0, lockup: 0 };
+  const phases: Record<LabPhase, number> = { idle: 0, stall: LAB.idleS, settle: 0, pull: 0, cruise: 0, lockup: 0 };
   phases.settle = phases.stall + LAB.stallS;
   phases.pull = phases.settle + LAB.settleS;
-  phases.lockup = phases.pull + LAB.pullS;
+  phases.cruise = phases.pull + LAB.pullS;
+  phases.lockup = phases.cruise + LAB.cruiseS;
   const durationS = phases.lockup + LAB.lockS;
   const frames = Math.floor(durationS / LAB_FRAME_S) + 1;
   const f32 = () => new Float32Array(frames);
@@ -173,6 +181,8 @@ export function runConverterLab(input: LabInput): ConverterLabRun {
     const pedal = t < phases.settle ? ramp(t, phases.stall, LAB.rampS) : t < phases.pull ? 1 - ramp(t, phases.settle, LAB.rampS) : LAB.pullPedal * ramp(t, phases.pull, LAB.rampS);
     const brakeShare = 1 - ramp(t, phases.pull, LAB.rampS);
     s.command[brake] = brakeShare;
+    // The rig takes the car's speed as it is when the cruise starts and holds it.
+    if (t >= phases.cruise && Number.isNaN(s.drive[wheels]!)) s.drive[wheels] = s.memberSpeed(wheels);
     const wc = s.memberSpeed(crank);
     const engineNm = labEngineTorque(map, wc, pedal);
     s.memberTorque[crank] = engineNm;
