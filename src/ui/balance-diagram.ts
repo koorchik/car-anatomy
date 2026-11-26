@@ -269,7 +269,7 @@ export class ForceDiagram {
     if (!this.plans) return '';
     const legend = Array.from(this.note.childNodes, (n) => n.textContent?.trim() ?? '')
       .filter(Boolean)
-      .map((piece) => (piece.endsWith('.') ? piece : `${piece}.`));
+      .map((piece) => `${piece[0]!.toUpperCase()}${piece.slice(1)}${piece.endsWith('.') ? '' : '.'}`);
     return [diagramLabel(this.plans.force, this.plans.couple), ...legend].join(' ');
   }
 
