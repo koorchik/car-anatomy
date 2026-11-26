@@ -132,6 +132,8 @@ export class ShakerScene {
   holdHz(hz: number): void {
     this.setSweeping(false);
     this.targetHz = Math.min(SHAKER_BAND_HZ[1], Math.max(SHAKER_BAND_HZ[0], hz));
+    this.sliderAt = sliderOfHz(this.targetHz);
+    this.slider.value = String(this.sliderAt);
     this.writeHz();
   }
 
