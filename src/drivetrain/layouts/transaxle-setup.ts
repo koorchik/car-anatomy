@@ -5,15 +5,17 @@
 // - the final drive is a pair inside the case, so another final drive is other teeth on it: the helical pair keeps
 //   its centre distance and module (the helix closes the distance), the crown wheel and pinion keep their module and
 //   stay near the factory pair's size;
-// - a loose gear may turn on either shaft (its sleeve's shaft), and an added speed turns loose on the input shaft,
-//   where the high speeds of both catalogue boxes do.
+// - a loose gear may turn on either shaft (its sleeve's shaft), and it turns on a needle bearing, so under its teeth
+//   there must be room for the bearing and a rim;
+// - an added speed takes a free side of a sleeve already there (the 911's seventh shares the reverse sleeve on the
+//   output shaft), and only without one a new sleeve on the input shaft.
 //
 // The setup holds only what the visitor changed, and the description is derived from the factory one each time
 // (setupDesc), so the factory setup gives the factory box back exactly.
 
 import { gearGeometry, helixForCentre } from '../gear-geometry.ts';
 import { pairCandidates } from '../gear-pick.ts';
-import { bevelSizes, type TransaxleDesc, type TransaxleFinalDesc, type TransaxlePairDesc, type TransaxleSleeveDesc } from './transaxle.ts';
+import { bevelSizes, TRANSAXLE_SHAFTS, type TransaxleDesc, type TransaxleFinalDesc, type TransaxlePairDesc, type TransaxleSleeveDesc } from './transaxle.ts';
 
 /** Speed counts the panel offers: the 911's seven at most (the brief of K6a-geom). */
 export const TRANSAXLE_SPEEDS: readonly number[] = [4, 5, 6, 7];
@@ -29,11 +31,11 @@ const MIN_TEETH = 12;
 const MIN_BEVEL_PINION = 8;
 /** How far a re-toothed crown wheel and pinion's cone distance may stray from the factory pair's, in teeth (hypot). */
 const BEVEL_SIZE_SPAN = 12;
-/** A loose gear's root circle clears its shaft by at least this, mm. */
-const SHAFT_CLEAR = 1;
-/** Shaft radii of transaxle-model.ts as shares of the centre distance: the input and the output shaft. */
-const INPUT_SHAFT = 0.17;
-const OUTPUT_SHAFT = 0.19;
+/**
+ * The rim a loose gear keeps between its root circle and the needle bearing in its bore, in modules: half the tooth
+ * height of 2.25 modules, the thinnest rim AGMA 2001's rim thickness factor still admits (backup ratio 0.5) [to verify].
+ */
+const RIM_MODULES = 0.5 * 2.25;
 
 export interface TransaxleSetup {
   /** Forward speeds. */
@@ -67,8 +69,9 @@ const looseShaft = (desc: TransaxleDesc, index: number): 'input' | 'output' =>
 
 /**
  * Whether speed `index` with these teeth can be built and drawn: a helix within TRANSAXLE_HELIX closes the centre
- * distance, and the loose gear's root circle clears its shaft as transaxle-model.ts draws it (the fixed gear may be
- * cut on its shaft, which the model then draws thinner).
+ * distance, and the loose gear's root circle leaves room for its shaft and needle bearing as transaxle-model.ts draws
+ * them (TRANSAXLE_SHAFTS) plus a rim of RIM_MODULES. The fixed gear may be cut on its shaft, which the model then
+ * draws thinner.
  */
 export function transaxlePairFits(desc: TransaxleDesc, index: number, pair: TransaxlePairDesc, teeth: readonly [number, number]): boolean {
   if (teeth[0] < MIN_TEETH || teeth[1] < MIN_TEETH) return false;
@@ -78,7 +81,8 @@ export function transaxlePairFits(desc: TransaxleDesc, index: number, pair: Tran
   const onInput = looseShaft(desc, index) === 'input';
   const which = onInput ? 0 : 1;
   const rf = gearGeometry({ teeth: teeth[which], module: pair.module, helix, pressureAngle: desc.pressureAngle, shift: shift[which], faceWidth: pair.faceWidth }).rf;
-  return rf >= (onInput ? INPUT_SHAFT : OUTPUT_SHAFT) * desc.centreMm + SHAFT_CLEAR;
+  const bore = ((onInput ? TRANSAXLE_SHAFTS.input : TRANSAXLE_SHAFTS.output) + TRANSAXLE_SHAFTS.needle) * desc.centreMm;
+  return rf >= bore + RIM_MODULES * pair.module;
 }
 
 function fittingPairs(desc: TransaxleDesc, index: number, pair: TransaxlePairDesc, ratio: number, coprime: boolean) {
@@ -154,8 +158,9 @@ export function finalTeethForRatio(factory: TransaxleFinalDesc, ratio: number): 
 /**
  * The same box with another speed count: a speed taken off the top (its sleeve side freed, an empty sleeve dropped),
  * or a speed added from the top step continued geometrically (i_new = i_top²/i_below) at the finest pair's module
- * and the narrowest face, loose on the input shaft: on a free side of an input-shaft sleeve, or on a new sleeve at the
- * back.
+ * and the narrowest face, on a free side of a sleeve already there (input shaft first, then output), or on a new
+ * input-shaft sleeve at the back. A shared sleeve also keeps the 3D within its draw budget: the Civic's seventh
+ * shares the reverse sleeve, as the 911's does.
  */
 export function withTransaxleSpeedCount(desc: TransaxleDesc, count: number): TransaxleDesc {
   const [lo, hi] = [TRANSAXLE_SPEEDS[0]!, TRANSAXLE_SPEEDS[TRANSAXLE_SPEEDS.length - 1]!];
@@ -185,7 +190,8 @@ export function withTransaxleSpeedCount(desc: TransaxleDesc, count: number): Tra
 }
 
 function placeSpeed(sleeves: TransaxleSleeveDesc[], speed: number): TransaxleSleeveDesc[] {
-  const free = sleeves.findIndex((s) => s.shaft === 'input' && (s.front === null || s.back === null));
+  const freeOn = (shaft: 'input' | 'output') => sleeves.findIndex((s) => s.shaft === shaft && (s.front === null || s.back === null));
+  const free = freeOn('input') >= 0 ? freeOn('input') : freeOn('output');
   if (free < 0) return [...sleeves, { id: String(speed), shaft: 'input', front: speed, back: null }];
   return sleeves.map((s, i) => (i !== free ? s : s.back === null ? { ...s, back: speed } : { ...s, front: speed }));
 }

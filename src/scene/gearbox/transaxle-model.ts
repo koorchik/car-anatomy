@@ -15,7 +15,7 @@
 // A SceneModel<GearboxFrame> (model-types.ts); what every gearbox model does the same way is in scene-base.ts.
 
 import * as THREE from 'three';
-import { transaxleFrame, TRANSAXLE_LAYOUT, type GearboxPoint, type TransaxleFrame } from '../../drivetrain/layouts/transaxle.ts';
+import { transaxleFrame, TRANSAXLE_LAYOUT, TRANSAXLE_SHAFTS, type GearboxPoint, type TransaxleFrame } from '../../drivetrain/layouts/transaxle.ts';
 import type { GearDef, SleevePlace } from '../../drivetrain/spec.ts';
 import type { Gearbox } from '../../drivetrain/topology.ts';
 import { extrude, gearShape, hullShape, merge, MM, zCylinder, type Pulley2D } from '../geometry.ts';
@@ -40,12 +40,12 @@ export interface TransaxleModelOptions {
 }
 
 // Layout estimates (not data), as fractions of the input-to-output centre distance a unless marked mm.
-const INPUT_SHAFT = 0.17;
-const OUTPUT_SHAFT = 0.19;
+const INPUT_SHAFT = TRANSAXLE_SHAFTS.input;
+const OUTPUT_SHAFT = TRANSAXLE_SHAFTS.output;
 const IDLER_SHAFT = 0.12;
 const IDLER_STUB = 8;
 const STUB_CLEAR = 1;
-const NEEDLE = 0.07;
+const NEEDLE = TRANSAXLE_SHAFTS.needle;
 const HUB = 0.4;
 const SLEEVE = 0.52;
 const GROOVE_DEPTH = 0.06;
@@ -326,8 +326,11 @@ export class TransaxleModel extends GearboxSceneBase implements SceneModel<Gearb
       const shaftR = this.shaftRadius(shaft);
       // Hub and sleeve no larger than the gears they engage.
       const engaged = [place.front, place.back].flatMap((id) => (id ? [elements.get(id)!.a] : []));
-      const gearRoots = this.gears.filter((g) => engaged.includes(g.def.member)).map((g) => drawnGear({ ...g.def, boreRadius: 0 }).rf);
-      const hubR = Math.min(HUB * a, Math.max(shaftR + 6, Math.min(...gearRoots) - 1));
+      const engagedGears = this.gears.filter((g) => engaged.includes(g.def.member));
+      const gearRoots = engagedGears.map((g) => drawnGear({ ...g.def, boreRadius: 0 }).rf);
+      // The dog rings sit inside the hub's radius and around the loose gears' bores: a hub over a thin-rimmed gear
+      // grows past its root rather than turn the dog ring inside out.
+      const hubR = Math.min(HUB * a, Math.max(shaftR + 6, Math.min(...gearRoots) - 1, Math.max(...engagedGears.map((g) => g.bore)) + 2.6));
       const sleeveR = Math.max(hubR + 4, Math.min(SLEEVE * a, Math.min(...gearRoots) + 8));
       const groove = GROOVE_DEPTH * a;
       const w = place.width;

@@ -321,8 +321,8 @@ describe('no part runs into a part of another member', () => {
     expect(clashesOf(boxOf(id))).toEqual({});
   });
 
-  // The settings panel of the page (stage K6a-geom): 4 and 7 speeds, the final drive at both ends of its slider and
-  // the speeds at both ends of theirs.
+  // The settings panel of the page (stage K6a-geom): 4 and 7 speeds, the final drive at both ends of its slider, the
+  // speeds at both ends of theirs, and every speed as small as it goes with the final drive at its largest.
   it.each(BOXES)('$id, as the settings panel changes it', ({ id }) => {
     const factory = gearboxById(id)!.layout.desc as TransaxleDesc;
     const model = transaxleSetupModel(factory);
@@ -340,9 +340,25 @@ describe('no part runs into a part of another member', () => {
       }
       setups.push(setup);
     }
+    // Small loose gears next to a big ring gear: the thinnest rims the panel allows, under their sleeves' dog rings.
+    let thin = model.setFinalDrive(model.setSpeeds(model.factory, 7), model.finalRange[0]);
+    for (let i = 2; i < 7; i++) {
+      const teeth = model.teethForRatio(model.desc(thin), i, model.ratioRange[1]);
+      if (teeth) thin = model.setTeeth(thin, i, teeth);
+    }
+    setups.push(thin);
     for (const setup of setups) {
       const desc = model.desc(setup);
-      expect(clashesOf(buildGearbox(transaxleSpec(desc))), `${desc.speeds.map((p) => p.teeth.join('/')).join(' ')}, final ${desc.final.teeth.join('/')}`).toEqual({});
+      const box = buildGearbox(transaxleSpec(desc));
+      const name = `${desc.speeds.map((p) => p.teeth.join('/')).join(' ')}, final ${desc.final.teeth.join('/')}`;
+      expect(clashesOf(box), name).toEqual({});
+      // The draw budget of the factory boxes holds for whatever the panel sets.
+      const high = new TransaxleModel(box, { quality: 'high' });
+      for (const view of ['solid', 'xray', 'mechanism'] as const) {
+        high.setView(view);
+        expect(high.drawStats().draws, `${name}, ${view}`).toBeLessThanOrEqual(60);
+      }
+      high.dispose();
     }
   });
 });

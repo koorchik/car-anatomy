@@ -100,6 +100,13 @@ const GAP = 4;
 /** mm the speed gears keep from the crown wheel's tips. */
 const CROWN_CLEAR = 6;
 
+/**
+ * Shaft radii and the needle bearing under a loose gear as the 3D draws them (transaxle-model.ts), in shares of the
+ * input-to-output centre distance [estimates]. The settings panel holds a re-toothed loose gear to them, so whatever
+ * it allows the 3D can draw.
+ */
+export const TRANSAXLE_SHAFTS = { input: 0.17, output: 0.19, needle: 0.07 } as const;
+
 /** Shafts for the dynamics [estimate, as layshaft.ts]: steel, 0.4 of the centre distance across, the input 150 mm on to the clutch. */
 const SHAFT_SHARE = 0.4;
 const INPUT_REACH = 150;

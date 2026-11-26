@@ -4,10 +4,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { gearboxById } from '../src/data/gearboxes.ts';
-import { centreDistance } from '../src/drivetrain/gear-geometry.ts';
+import { centreDistance, gearGeometry } from '../src/drivetrain/gear-geometry.ts';
 import { transaxleSetupModel } from '../src/drivetrain/layouts/setup-model.ts';
 import { finalTeethForRatio, transaxleHelix, transaxlePairFits, TRANSAXLE_SPEEDS } from '../src/drivetrain/layouts/transaxle-setup.ts';
-import { bevelSizes, transaxleSpec, type TransaxleDesc } from '../src/drivetrain/layouts/transaxle.ts';
+import { bevelSizes, TRANSAXLE_SHAFTS, transaxleSpec, type TransaxleDesc } from '../src/drivetrain/layouts/transaxle.ts';
 import { buildGearbox } from '../src/drivetrain/topology.ts';
 
 const BOXES = ['manual-transaxle', 'manual-transaxle/porsche-911-carrera-t-992'] as const;
@@ -36,7 +36,7 @@ describe.each(BOXES)('the settings of %s', (id) => {
     expect(model.ratios(factory)).toEqual(factory.speeds.map((s) => s.teeth[1] / s.teeth[0]));
   });
 
-  it('give 4 to 7 speeds, keep the teeth of the speeds left, and add a speed loose on the input shaft', () => {
+  it('give 4 to 7 speeds, keep the teeth of the speeds left, and add a speed on a free side of a sleeve', () => {
     expect(model.speedCounts).toEqual(TRANSAXLE_SPEEDS);
     for (const n of TRANSAXLE_SPEEDS) {
       const desc = model.desc(model.setSpeeds(model.factory, n));
@@ -49,6 +49,35 @@ describe.each(BOXES)('the settings of %s', (id) => {
       // Speeds stay in order: an added one is above the top.
       const r = model.ratios(desc);
       expect(r.every((v, i) => i === 0 || v < r[i - 1]!)).toBe(true);
+    }
+    // Both boxes have a sleeve with a free side (reverse's), so a seventh speed takes it instead of a new sleeve.
+    const six = model.desc(model.setSpeeds(model.factory, 6)).sleeves.length;
+    expect(model.desc(model.setSpeeds(model.factory, 7)).sleeves.length).toBe(six);
+  });
+
+  it('leave room under every loose gear the panel offers for its shaft, needle bearing and rim', () => {
+    // The bore: the shaft plus the needle bearing as the 3D draws them; the rim: half a tooth height (2.25 modules).
+    const room = (desc: TransaxleDesc, i: number): number => {
+      const pair = desc.speeds[i]!;
+      const sleeve = desc.sleeves.find((s) => s.front === i + 1 || s.back === i + 1)!;
+      const which = sleeve.shaft === 'input' ? 0 : 1;
+      const helix = transaxleHelix(desc, pair, pair.teeth);
+      const rf = gearGeometry({ teeth: pair.teeth[which], module: pair.module, helix, pressureAngle: desc.pressureAngle, shift: (pair.shift ?? [0, 0])[which], faceWidth: pair.faceWidth }).rf;
+      const bore = ((sleeve.shaft === 'input' ? TRANSAXLE_SHAFTS.input : TRANSAXLE_SHAFTS.output) + TRANSAXLE_SHAFTS.needle) * desc.centreMm;
+      return (rf - bore) / (1.125 * pair.module);
+    };
+    // The factory boxes themselves.
+    factory.speeds.forEach((_, i) => expect(room(factory, i), `factory speed ${i + 1}`).toBeGreaterThanOrEqual(1));
+    const seven = model.desc(model.setSpeeds(model.factory, 7));
+    for (let i = 0; i < 7; i++) {
+      for (let r = model.ratioRange[0]; r <= model.ratioRange[1]; r += 0.25) {
+        const teeth = model.teethForRatio(seven, i, r)!;
+        const desc = model.desc(model.setTeeth(model.setSpeeds(model.factory, 7), i, teeth));
+        const own = factory.speeds[i];
+        // The factory pair is offered as it is.
+        if (own && own.teeth[0] === teeth[0] && own.teeth[1] === teeth[1]) continue;
+        expect(room(desc, i), `speed ${i + 1} at ${r}: ${teeth.join('/')}`).toBeGreaterThanOrEqual(1 - 1e-9);
+      }
     }
   });
 
