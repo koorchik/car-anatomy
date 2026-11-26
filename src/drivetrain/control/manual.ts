@@ -10,9 +10,10 @@
 // - near idle in a gear it lets go the same way, so the car brakes to a stop without stalling, as the auto clutches of
 //   small cars did.
 //
-// Rev matching (the pages' rev-matching helper, stage K3b; Honda's Rev-Match on the Civic Type R): while the clutch is
-// (nearly) open and the lever asks for a gear that needs the engine faster than it turns, the control asks for
-// throttle (`blip`, read by VehicleLoad.engineRequest) until the engine meets the input speed that gear will have.
+// Rev matching (the pages' rev-matching helper, stage K3b; Honda's Rev-Match on the Civic Type R): once the lever has
+// asked for another gear, while the clutch is (nearly) open and that gear needs the engine faster than it turns, the
+// control asks for throttle (`blip`, read by VehicleLoad.engineRequest) until the engine meets the input speed that
+// gear will have. It lets go when the clutch closes again: a clutch held down in the same gear gets no blip.
 //
 // It steps on the audio thread inside VehicleLoad: plain numbers, no allocation, no text.
 
@@ -82,7 +83,7 @@ const BLIP_LEAD_S = 0.12;
 const BLIP_CLAMP = 0.2;
 
 const RAD = Math.PI / 30;
-const CONTROL_SIZE = 9;
+const CONTROL_SIZE = 11;
 
 export class ManualControl {
   readonly spec: ManualSpec;
@@ -106,6 +107,13 @@ export class ManualControl {
   blip = 0;
   /** Engine speed on the last step, rad/s, for its acceleration. */
   private lastOmega = 0;
+  /**
+   * The rev matching's shift: 0 none, 1 a gear asked for while the clutch is still closed, 2 the clutch open for it.
+   * It ends when the clutch closes past BLIP_CLAMP again or the lever goes to neutral.
+   */
+  private matching = 0;
+  /** The gear the lever asked for on the last step. */
+  private lastTarget = -1;
 
   constructor(spec: ManualSpec) {
     this.spec = spec;
@@ -182,6 +190,11 @@ export class ManualControl {
       }
     }
     s.command[sp.clutch] = this.clamp;
+    if (this.target !== this.lastTarget) this.matching = this.target < 0 ? 0 : 1;
+    this.lastTarget = this.target;
+    if (this.clamp <= BLIP_CLAMP) {
+      if (this.matching === 1) this.matching = 2;
+    } else if (this.matching === 2) this.matching = 0;
     this.blip = this.revMatch ? this.blipFor(s, input, dt) : 0;
     this.lastOmega = input.omega;
 
@@ -191,7 +204,7 @@ export class ManualControl {
   /** The rev matching's throttle: open while the gear asked for needs the engine faster and the clutch can slip. */
   private blipFor(s: DrivetrainSolver, input: CrankInput, dt: number): number {
     const sp = this.spec;
-    if (sp.output === undefined || this.target < 0 || this.clamp > BLIP_CLAMP || input.state !== 'running') return 0;
+    if (sp.output === undefined || this.matching !== 2 || this.target < 0 || input.state !== 'running') return 0;
     const want = s.memberSpeed(sp.output) * sp.gears[this.target]!.ratio;
     const rising = Math.max(0, (input.omega - this.lastOmega) / dt);
     const gap = want - input.omega - rising * BLIP_LEAD_S;
@@ -219,6 +232,8 @@ export class ManualControl {
     out[o + 6] = PHASES.indexOf(this.phase);
     out[o + 7] = this.clamp;
     out[o + 8] = this.revMatch ? 1 : 0;
+    out[o + 9] = this.matching;
+    out[o + 10] = this.lastTarget;
   }
 
   restore(from: Float64Array, o: number): void {
@@ -231,5 +246,7 @@ export class ManualControl {
     this.phase = PHASES[from[o + 6]!] ?? 'engaged';
     this.clamp = from[o + 7]!;
     this.revMatch = from[o + 8]! !== 0;
+    this.matching = from[o + 9]!;
+    this.lastTarget = from[o + 10]!;
   }
 }

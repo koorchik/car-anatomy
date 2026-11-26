@@ -152,6 +152,37 @@ describe('the full dash in the car', () => {
     expect(matched.minA).toBeGreaterThan(plain.minA + 1);
   }, 60_000);
 
+  it('blips only for a gear change: a clutch held down in the same gear lets the engine fall to idle', () => {
+    const r = rig();
+    r.sim.start();
+    r.run(1.5);
+    r.command({ action: 'revMatch', on: true });
+    for (const gear of ['1', '2', '3']) {
+      r.command({ action: 'gear', gear });
+      r.run(0.6);
+      r.sim.pedal = 0.6;
+      r.run(2.5);
+      r.sim.pedal = 0;
+    }
+    r.command({ action: 'autoClutch', on: false });
+    r.command({ action: 'clutch', pedal: 0 });
+    r.run(0.2);
+    expect(r.load.control.gearIn(r.load.vehicle.solver)).toBe('3');
+    const idle = r.load.control.spec.idleRpm;
+    // Coasting in third with the pedal down: nothing asked for another gear, so the engine idles.
+    r.command({ action: 'clutch', pedal: 1 });
+    let blipped = false;
+    r.run(2, () => (blipped ||= r.load.control.blip > 0));
+    expect(blipped).toBe(false);
+    expect(r.sim.rpm).toBeLessThan(1.3 * idle);
+    // Now the lever into second with the pedal still down: the engine is brought up to second's input speed.
+    r.command({ action: 'gear', gear: '2' });
+    r.run(1.5, () => (blipped ||= r.load.control.blip > 0));
+    expect(blipped).toBe(true);
+    const shaft = (r.load.vehicle.solver.memberSpeed(r.load.control.spec.input) * 30) / Math.PI;
+    expect(Math.abs(r.sim.rpm - shaft) / shaft).toBeLessThan(0.1);
+  }, 60_000);
+
   it('stalls when the driver drops the clutch in first without gas, and the auto clutch never does', () => {
     for (const auto of [false, true]) {
       const r = rig();
