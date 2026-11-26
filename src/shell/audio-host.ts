@@ -1,6 +1,6 @@
 // The one Drive of the site (AudioHost in section.ts). Sound starts after the visitor's first gesture, as it always
 // has; the volume, the mute and where to listen from move here from the engine pages later. A change of section hands
-// the next one the Drive with no load and the engine off (the plan of the whole car, «Звук: один Drive»).
+// the next one the Drive with no load and the engine off (the plan of the whole car, sound: one Drive).
 
 import { Drive, type DriveSnapshot } from '../audio/drive.ts';
 import type { Engine } from '../engine/kinematics.ts';

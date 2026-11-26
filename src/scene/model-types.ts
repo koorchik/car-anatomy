@@ -26,8 +26,8 @@ export interface FrameState {
 }
 
 /**
- * What the stage shows, from any section: an engine, a gearbox, a corner, a whole car (the plan of the whole car,
- * «Stage для всіх розділів»). F is what the model draws in a frame. Several models at once are one composed model
+ * What the stage shows, from any section: an engine, a gearbox, a corner, a whole car (the plan of the whole car, the
+ * stage for every section). F is what the model draws in a frame. Several models at once are one composed model
  * (CarAssembly, EngineWithGearbox) that implements this itself, so the stage always holds one.
  */
 export interface SceneModel<F> {

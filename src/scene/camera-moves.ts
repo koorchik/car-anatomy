@@ -1,6 +1,6 @@
 // Where the stage's camera stands and how it gets there: the distance that frames a model in the free part of the
-// window, the named views («Спереду», «Збоку», «Зверху») and a smooth move between two views (the plan of the whole
-// car, «Stage для всіх розділів», changes 1 and 5). No DOM and no renderer, so tests/stage.test.ts checks it in Node.
+// window, the named views (front, side, top) and a smooth move between two views (the plan of the whole car, the
+// stage for every section, changes 1 and 5). No DOM and no renderer, so tests/stage.test.ts checks it in Node.
 //
 // Directions are in the world, from the target toward the camera: +Z is the front of an engine (kinematics.ts) and of
 // a car or a corner (ISO x forward), +Y is up, +X is the side an engine is drawn from and a corner's outboard side.

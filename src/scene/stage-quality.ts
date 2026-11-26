@@ -1,5 +1,5 @@
 // How sharp the stage draws: a machine that cannot keep up gets fewer pixels, and gets them back once it can (the plan
-// of the whole car, «Stage для всіх розділів», change 7). No DOM: the stage feeds it each drawn frame's time, and
+// of the whole car, the stage for every section, change 7). No DOM: the stage feeds it each drawn frame's time, and
 // tests/stage.test.ts plays frames through it. A frozen page (a snapshot) does not feed it, so its quality stands.
 
 /** The resolution as a share of the device's: from the best down to the least, a step at a time. */

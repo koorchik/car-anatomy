@@ -1,6 +1,6 @@
 // The one 3D stage of the site: renderer, studio light, shadow floor, orbit camera, framing in the free part of the
-// window, part picking and the resolution a machine can keep up with (the plan of the whole car, «Stage для всіх
-// розділів»). Every section shows its model here through SceneModel (model-types.ts); several models at once come as
+// window, part picking and the resolution a machine can keep up with (the plan of the whole car, the stage for
+// every section). Every section shows its model here through SceneModel (model-types.ts); several models at once come as
 // one composed model. The pure parts are in camera-moves.ts and stage-quality.ts.
 
 import * as THREE from 'three';

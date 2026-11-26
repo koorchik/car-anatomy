@@ -1,5 +1,5 @@
 // What each part of a model is called and does, for the name that follows the pointer and the card a click opens (the
-// plan of the whole car, «Stage для всіх розділів» → «Реєстр деталей»). The stage finds a part here by the key its mesh
+// plan of the whole car, the stage for every section → the part registry). The stage finds a part here by the key its mesh
 // carries (tag() in model-types.ts), whichever section drew it.
 //
 // Each section registers its own dictionary when its code arrives: the engines their parts with the dyno's and the

@@ -1,4 +1,4 @@
-// Every colour that carries a meaning on the site (the plan of the whole car, «Візуальна мова» → «Кольори»): the
+// Every colour that carries a meaning on the site (the plan of the whole car, visual language → colours): the
 // fluids and gases of the systems layers, the gases of the strokes, the power path, damage, highlights, marks, lasers
 // and the force arrows. Sections take them from here, so the same thing has the same colour everywhere: the oil in the
 // sump, in the oil layer and in a damper in the X-ray is one colour.
