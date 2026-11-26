@@ -46,11 +46,17 @@ export function sameEngine(a: EngineTorqueMap, b: EngineTorqueMap): boolean {
 }
 
 /**
+ * Whether a run measured full load: a sweep (always at a floored pedal) or a step test at full throttle. Points the
+ * visitor recorded by hand carry no throttle (null) and were taken at whatever the pedal held, so they never count.
+ */
+const fullLoadRun = (run: Run): boolean => (run.kind === 'sweep' || run.kind === 'steps') && run.throttle !== null && run.throttle >= 0.99;
+
+/**
  * The full-load torque a dyno run measured, if it was a full-throttle run on this engine: the steady torque, so with
  * the share that went into the engine's own rotating parts added back (the dyno's inertia correction).
  */
 export function runTorque(run: Run | null | undefined, map: EngineTorqueMap): TorqueSource | null {
-  if (!run || !sameEngine(run.map, map) || (run.throttle !== null && run.throttle < 0.99)) return null;
+  if (!run || !sameEngine(run.map, map) || !fullLoadRun(run)) return null;
   const points = run.points.map((p) => ({ rpm: p.rpm, nm: p.nm + p.inertiaNm })).sort((a, b) => a.rpm - b.rpm);
   if (points.length < 4) return null;
   return (rpm) => {

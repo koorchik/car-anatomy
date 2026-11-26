@@ -242,14 +242,18 @@ describe('the full dash in the car', () => {
       const rpm = 1500 + k * 200;
       return { rpm, nm: 200, inertiaNm: 10, manifoldBar: 1, settled: true };
     });
-    const run = { kind: 'sweep', engine: 'S14', map: cd.map, absorber: 'eddy', rate: 300, throttle: null, points, stopped: null, stoppedAt: null } as unknown as Run;
+    // As the dyno records a sweep: always at a floored pedal (dyno-panel.ts, startSweep).
+    const run = { kind: 'sweep', engine: 'S14', map: cd.map, absorber: 'eddy', rate: 300, throttle: 1, points, stopped: null, stoppedAt: null } as unknown as Run;
     expect(sameEngine(cd.map, structuredClone(cd.map))).toBe(true);
     expect(runTorque(run, cd.map)!(3000)).toBeCloseTo(210, 9);
     expect(traction(cd, 0, run).source).toBe('dyno');
     const other = buildCarDrive('bmw-m3-e30').map;
     const foreign = { ...run, map: { ...other, wotNm: other.wotNm.map((v) => v * 1.1) } } as Run;
     expect(runTorque(foreign, cd.map)).toBeNull();
-    expect(traction(cd, 0, { ...run, throttle: 0.5 } as Run).source).toBe('map');
+    expect(traction(cd, 0, { ...run, kind: 'steps', throttle: 0.5 } as Run).source).toBe('map');
+    expect(traction(cd, 0, { ...run, kind: 'steps', throttle: 1 } as Run).source).toBe('dyno');
+    // Points recorded by hand were held at whatever the pedal was: not a full-load curve.
+    expect(traction(cd, 0, { ...run, kind: 'points', throttle: null } as Run).source).toBe('map');
   });
 
   it('hints an upshift at the limiter and a downshift when the engine labours', () => {
