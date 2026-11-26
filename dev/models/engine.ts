@@ -1,7 +1,8 @@
-// A catalogue engine with the inertia force arrows of its page, as the engine page draws them today.
+// A catalogue engine with the inertia force arrows of its page, one view of them at a time, as the engine page draws them.
 
 import { CATALOGUE, engineById, pageChoices } from '../../src/data/engines.ts';
-import { BalanceForces, arrowScale, massesOf, type ForceLayers } from '../../src/engine/balance-forces.ts';
+import { BalanceForces, arrowScale, massesOf } from '../../src/engine/balance-forces.ts';
+import { BalancePhasors, type BalanceView, type PhasorView } from '../../src/engine/balance-phasors.ts';
 import { buildEngine } from '../../src/engine/kinematics.ts';
 import { BalanceOverlay } from '../../src/scene/balance-arrows.ts';
 import type { EngineModel } from '../../src/scene/model-types.ts';
@@ -16,11 +17,13 @@ const pageArrowScale = (id: string): number => arrowScale(pageChoices(id).map((c
 /** Crank degrees per second while it turns: slow enough to follow one arrow round. */
 const SPIN = 60;
 
-const layersOf = (values: Values): ForceLayers => ({
-  order1: values.order1 as boolean,
-  order2: values.order2 as boolean,
-  balancing: values.balancing as boolean,
-});
+/** The view the controls choose, or null when the forces are off. A rotary has only its turning masses. */
+const viewOf = (phasors: BalancePhasors, values: Values): PhasorView | null => {
+  const chosen = values.forces as BalanceView | 'off';
+  if (chosen === 'off') return null;
+  const view = phasors.views.includes(chosen) ? chosen : phasors.views[0]!;
+  return phasors.view(view, { counterweights: values.counterweights as boolean, shafts: values.balancers as boolean });
+};
 
 export default defineModel({
   title: 'Двигун каталогу з силами інерції',
@@ -50,10 +53,20 @@ export default defineModel({
     { key: 'theta', label: 'Кут колінвала, °', kind: 'range', min: 0, max: 720, step: 1, value: 30 },
     { key: 'spin', label: 'Крутити колінвал', kind: 'toggle', value: false },
     { key: 'running', label: 'Працює (спалахи й гази)', kind: 'toggle', value: false },
-    { key: 'forces', label: 'Сили інерції', kind: 'toggle', value: true },
-    { key: 'order1', label: '1-й порядок', kind: 'toggle', value: true },
-    { key: 'order2', label: '2-й порядок', kind: 'toggle', value: true },
-    { key: 'balancing', label: 'Противаги й вали', kind: 'toggle', value: true },
+    {
+      key: 'forces',
+      label: 'Сили інерції',
+      kind: 'choice',
+      value: 'order1',
+      options: [
+        { value: 'order1', label: '1-й порядок' },
+        { value: 'order2', label: '2-й порядок' },
+        { value: 'rotating', label: 'Обертові маси' },
+        { value: 'off', label: 'Вимкнено' },
+      ],
+    },
+    { key: 'counterweights', label: 'Противаги', kind: 'toggle', value: true },
+    { key: 'balancers', label: 'Вали', kind: 'toggle', value: true },
   ],
   create(values) {
     const spec = engineById(values.engine as string)!;
@@ -61,9 +74,10 @@ export default defineModel({
     const model: EngineModel = engine.isRotary ? new RotaryEngineModel(engine) : new PistonEngineModel(engine);
     // No catalogue engine has balance shafts yet: the designer's choice, tried on any of them.
     const masses = values.shafts === 'spec' ? massesOf(spec) : { ...massesOf(spec), shafts: Number(values.shafts) as 0 | 1 | 2 };
-    const overlay = new BalanceOverlay(new BalanceForces(engine, masses), pageArrowScale(spec.id), layersOf(values));
+    const phasors = new BalancePhasors(new BalanceForces(engine, masses));
+    const overlay = new BalanceOverlay(phasors, pageArrowScale(spec.id));
     model.mounted.add(overlay.group);
-    overlay.group.visible = values.forces as boolean;
+    overlay.setView(viewOf(phasors, values));
     /** Degrees turned since spinning started, so the crank starts from the slider's angle and not from the clock. */
     let spun = 0;
     return {
@@ -79,8 +93,7 @@ export default defineModel({
         if (overlay.group.visible) overlay.update(theta);
       },
       set(key, next) {
-        if (key === 'forces') overlay.group.visible = next.forces as boolean;
-        else if (key === 'order1' || key === 'order2' || key === 'balancing') overlay.setLayers(layersOf(next));
+        if (key === 'forces' || key === 'counterweights' || key === 'balancers') overlay.setView(viewOf(phasors, next));
       },
       setView: (view) => model.setView(view),
       setExplode: (amount) => model.setExplode(amount),
