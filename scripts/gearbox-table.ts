@@ -34,6 +34,7 @@ import { roadLoadCoeffs, roadLoadN, roadLoadRule } from '../src/vehicle/road-loa
 import { staticWheelLoadN, tyreAt } from '../src/vehicle/tyre.ts';
 import { evaluateGearbox } from '../src/gearbox-designer/evaluate.ts';
 import { catalogueGearboxPresets, oddGearboxPresets, type GearboxPreset } from '../src/gearbox-designer/presets.ts';
+import { designVehicle } from '../src/gearbox-designer/vehicle.ts';
 
 const DEG = 180 / Math.PI;
 const helix = (beta: number): string => (beta === 0 ? 'spur' : `${(Math.abs(beta) * DEG).toFixed(2)}° ${beta > 0 ? 'R' : 'L'}`);
@@ -192,8 +193,10 @@ function printDesigner(preset: GearboxPreset): void {
       `power band ${e.powerBand[0].toFixed(0)}–${e.powerBand[1].toFixed(0)} rpm`,
   );
   console.log(
-    'upshifts at the limit: ' +
-      e.shifts.map((x) => `${x.from}→${x.to} to ${x.rpmAfter.toFixed(0)} rpm${x.inBand ? '' : ' (below the band)'}, sync ${(x.syncS * 1000).toFixed(0)} ms, break ${(x.pauseS * 1000).toFixed(0)} ms`).join('; '),
+    `upshifts (limit ${designVehicle(d).map.limitRpm} rpm): ` +
+      e.shifts
+        .map((x) => `${x.from}→${x.to} ${x.rpmBefore.toFixed(0)} to ${x.rpmAfter.toFixed(0)} rpm${x.inBand ? '' : ' (below the band)'}, sync ${(x.syncS * 1000).toFixed(0)} ms, break ${(x.pauseS * 1000).toFixed(0)} ms`)
+        .join('; '),
   );
 }
 

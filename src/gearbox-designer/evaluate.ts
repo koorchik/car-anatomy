@@ -8,9 +8,11 @@
 // heaviest box (tests/gearbox-designer 7), where the whole core would need about 20 000 steps. The standing start
 // follows the protocol of src/drivetrain/runs.ts step for step (the launch at a held engine speed with the clutch's
 // torque rising, full load after it locks, the driver keeping the driven tyres at GRIP_TARGET of their peak with weight
-// transfer, the tyre's steady slip in the engine speed, upshifts at the rev limit with the torque going and coming
-// back), on the same masses, efficiencies, tyre and road load, but with steps sized by speed instead of 1 ms. Two
-// things are the designer's own:
+// transfer, the tyre's steady slip in the engine speed, upshifts with the torque going and coming back), on the same
+// masses, efficiencies, tyre and road load, but with steps sized by speed instead of 1 ms. Three things are the
+// designer's own:
+// - the shift point: the plan's driver shifts where the next gear pulls at least as hard, or at the rev limit
+//   (upshiftOmega). On every car of the catalogue that point lies past the limit, so it is runs.ts's shift at the limit;
 // - the synchroniser: the clutch stays open for the driver's RUN.shiftS or until the synchroniser of the new gear has
 //   matched the speeds (synchro-math.ts, with the design's cones, lining, cone angle and the driver's force), whichever
 //   is longer, as the whole model's driver waits for the sleeve to lock;
@@ -176,9 +178,11 @@ interface Model {
   states: StateInfo[];
   /** Body mass with the undriven wheels, kg. */
   mBody: number;
-  /** Engine speed of the launch and of the upshifts, rad/s. */
+  /** Engine speed of the launch and the rev limit, rad/s. */
   omegaLaunch: number;
-  omegaShift: number;
+  omegaLimit: number;
+  /** Engine speed of each upshift k → k+1, rad/s (upshiftOmega). */
+  shiftOmegas: number[];
   /** Clutch-open time of each upshift k → k+1, s. */
   pauses: number[];
   syncs: number[];
@@ -195,8 +199,40 @@ const fullLoadTorque = (map: EngineTorqueMap, omega: number): number => mapValue
 const spin = (v: DesignVehicle, omegaIn: number): number => v.spinLoss.a * Math.sign(omegaIn) + v.spinLoss.b * omegaIn;
 
 /** Steady force at the driven tyres from torque T at the input, N (runs.ts forceFromInput). */
-const forceFrom = (m: Model, g: GearModel, torque: number, omegaIn: number): number =>
+const forceFrom = (m: Pick<Model, 'v'>, g: GearModel, torque: number, omegaIn: number): number =>
   (g.overall * m.v.axleEfficiency * (g.efficiency * torque - spin(m.v, omegaIn))) / m.v.radius;
+
+/**
+ * Engine speed at which the driver leaves gear `from` for `to` (gearbox plan, the designer's model): the lowest speed
+ * at which the next gear pulls at least as hard at the same road speed, or the rev limit if it never does below it.
+ * An engine whose power holds to the limit (every car of the catalogue) shifts at the limit, as runs.ts does; one whose
+ * power falls away before it, such as a diesel or an old long-stroke engine, shifts earlier. Searched in 25 rpm steps
+ * from where the next gear would land at idle, then halved down to a hundredth of a revolution per minute.
+ */
+function upshiftOmega(v: DesignVehicle, from: GearModel, to: GearModel): number {
+  const map = v.map;
+  const limit = map.limitRpm / RPM;
+  const k = to.overall / from.overall;
+  const pulls = (omega: number): boolean =>
+    forceFrom({ v }, to, fullLoadTorque(map, omega * k), omega * k) >= forceFrom({ v }, from, fullLoadTorque(map, omega), omega);
+  const step = 25 / RPM;
+  let lo = Math.max(map.idleRpm / RPM, map.idleRpm / RPM / k);
+  if (lo >= limit) return limit;
+  if (pulls(lo)) return lo;
+  for (let hi = lo + step; lo < limit; lo = hi, hi += step) {
+    hi = Math.min(hi, limit);
+    if (!pulls(hi)) continue;
+    let a = lo;
+    let b = hi;
+    while ((b - a) * RPM > 0.01) {
+      const mid = (a + b) / 2;
+      if (pulls(mid)) b = mid;
+      else a = mid;
+    }
+    return b;
+  }
+  return limit;
+}
 
 /** Driven axle load at acceleration ax on a grade, N (longitudinal.ts). */
 function drivenAxleN(v: DesignVehicle, ax: number, grade = 0): number {
@@ -232,16 +268,19 @@ function buildModel(d: GearboxDesign): Model {
   const col = box.basis.indexOf(box.spec.input);
   let inputInertia = DISC_HUB;
   box.P.forEach((row, i) => (inputInertia += inertia[i]! * row[col]! ** 2));
-  const omegaShift = map.limitRpm / RPM;
+  const omegaLimit = map.limitRpm / RPM;
   const omegaLaunch = Math.min(peakTorque(map).rpm, RUN.launchShare * map.limitRpm) / RPM;
   const syncs: number[] = [];
   const pauses: number[] = [];
+  const shiftOmegas: number[] = [];
   for (let k = 0; k + 1 < gears.length; k++) {
-    const t = upshiftSync(d, box, k + 2, gears[k]!.overall, gears[k + 1]!.overall, omegaShift, inputInertia, v);
+    const omega = upshiftOmega(v, gears[k]!, gears[k + 1]!);
+    const t = upshiftSync(d, box, k + 2, gears[k]!.overall, gears[k + 1]!.overall, omega, inputInertia, v);
+    shiftOmegas.push(omega);
     syncs.push(t);
     pauses.push(Math.max(RUN.shiftS, t));
   }
-  return { v, box, teeth, gears, states, mBody, omegaLaunch, omegaShift, pauses, syncs, inputInertia };
+  return { v, box, teeth, gears, states, mBody, omegaLaunch, omegaLimit, shiftOmegas, pauses, syncs, inputInertia };
 }
 
 /**
@@ -342,7 +381,7 @@ function standingStart(m: Model): { zeroTo100S: number | null; zeroTo400mS: numb
     const gWas = g;
     // Phase changes, checked at the start of each step as runs.ts does.
     if (phase === 'launch' && now.omegaIn >= m.omegaLaunch * (1 - 1e-9)) phase = 'drive';
-    if (phase === 'drive' && now.omegaIn >= m.omegaShift * (1 - 1e-9)) {
+    if (phase === 'drive' && now.omegaIn >= (m.shiftOmegas[g] ?? m.omegaLimit) * (1 - 1e-9)) {
       if (g < gears.length - 1) {
         phase = 'lift';
         liftT = t;
@@ -367,7 +406,7 @@ function standingStart(m: Model): { zeroTo100S: number | null; zeroTo400mS: numb
       dt = Math.min(0.25, 0.3 / Math.max(Math.abs(k1.a), 0.1));
       if (phase === 'launch' && t < RUN.launchRampS) dt = Math.min(dt, 0.01, RUN.launchRampS - t);
       if (phase === 'drive' && t - backT < RUN.torqueRampS) dt = Math.min(dt, 0.015, backT + RUN.torqueRampS - t);
-      const target = phase === 'launch' ? m.omegaLaunch : phase === 'drive' ? m.omegaShift : Infinity;
+      const target = phase === 'launch' ? m.omegaLaunch : phase === 'drive' ? (m.shiftOmegas[g] ?? m.omegaLimit) : Infinity;
       const reach = speedAt(target, k1.omegaIn);
       if (k1.a > 0 && Number.isFinite(reach)) dt = Math.min(dt, Math.max(1e-4, ((reach - vel) / k1.a) * 1.0005));
       if (phase === 'limit' && k1.a > 0 && vel < hold) dt = Math.min(dt, Math.max(1e-4, ((hold - vel) / k1.a) * 1.0005));
@@ -514,8 +553,9 @@ export function evaluateGearbox(d: GearboxDesign): GearboxPerformance {
   const topGear = m.gears[m.gears.length - 1]!;
   const band = powerBand(m);
   const shifts = m.syncs.map((syncS, k): ShiftFigures => {
-    const rpmAfter = (map.limitRpm * m.gears[k + 1]!.overall) / m.gears[k]!.overall;
-    return { from: k + 1, to: k + 2, rpmBefore: map.limitRpm, rpmAfter, inBand: rpmAfter >= band[0], syncS, pauseS: m.pauses[k]! };
+    const rpmBefore = m.shiftOmegas[k]! * RPM;
+    const rpmAfter = (rpmBefore * m.gears[k + 1]!.overall) / m.gears[k]!.overall;
+    return { from: k + 1, to: k + 2, rpmBefore, rpmAfter, inBand: rpmAfter >= band[0], syncS, pauseS: m.pauses[k]! };
   });
   return {
     gears,

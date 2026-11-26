@@ -13,7 +13,10 @@ import { paramRange, resolveGearboxDesign, type NumericKey } from '../src/gearbo
 import {
   CLUTCH_KINDS, DAMPER_CHOICES, DEFAULT_GEARBOX_DESIGN, DIFF_CHOICES, MAX_GEARS, MIN_GEARS, MIN_STEP, SYNCHRO_MATERIALS, type GearboxDesign,
 } from '../src/gearbox-designer/design.ts';
-import { evaluateGearbox } from '../src/gearbox-designer/evaluate.ts';
+import { evaluateGearbox, type GearFigures } from '../src/gearbox-designer/evaluate.ts';
+import { engineById } from '../src/data/engines.ts';
+import { catalogueTorqueMap } from '../src/designer/torque-map.ts';
+import { mapValue } from '../src/engine/torque-map.ts';
 import { catalogueGearboxPresets, designFromRecord, oddGearboxPresets, withGearboxType } from '../src/gearbox-designer/presets.ts';
 import { designBuild } from '../src/gearbox-designer/to-spec.ts';
 
@@ -376,6 +379,30 @@ describe('figures', () => {
     expect(short.vmaxKmh).toBeGreaterThan(0.97 * top.kmhAtLimit);
     expect(short.at400mKmh!).toBeLessThanOrEqual(short.vmaxKmh + 1e-9);
     expect(short.at400mKmh!).toBeGreaterThan(0.99 * short.vmaxKmh);
+  });
+
+  it('the driver shifts up where the next gear pulls as hard, or at the rev limit', () => {
+    // Gearbox plan: the driver shifts where the next gear's force is no less than the present one's. Counted here
+    // from the torque map and each gear's overall ratio and efficiency alone (the spin loss, a fraction of a per cent,
+    // left out). A diesel's power falls away before its limit, so it shifts early; the E30's holds, so it shifts at it.
+    const d = resolveGearboxDesign({ ...DEFAULT_GEARBOX_DESIGN, engine: 'i4d' });
+    const e = evaluateGearbox(d);
+    const map = catalogueTorqueMap(engineById('i4d')!);
+    const force = (g: GearFigures, rpm: number) => g.overall * g.efficiency * mapValue(map, map.wotNm, Math.min(rpm, map.limitRpm));
+    let early = 0;
+    for (const s of e.shifts) {
+      const from = e.gears[s.from - 1]!;
+      const to = e.gears[s.to - 1]!;
+      const after = (rpm: number) => (rpm * to.overall) / from.overall;
+      if (s.rpmBefore < map.limitRpm - 1) {
+        early++;
+        expect(Math.abs(force(to, s.rpmAfter) / force(from, s.rpmBefore) - 1)).toBeLessThan(0.005);
+        expect(force(to, after(s.rpmBefore - 100))).toBeLessThan(force(from, s.rpmBefore - 100));
+      } else expect(force(to, s.rpmAfter)).toBeLessThan(force(from, s.rpmBefore));
+    }
+    expect(early).toBeGreaterThanOrEqual(3);
+    const limit = catalogueTorqueMap(engineById(DEFAULT_GEARBOX_DESIGN.engine)!).limitRpm;
+    for (const s of e30.shifts) expect(s.rpmBefore).toBeCloseTo(limit, 9);
   });
 
   it('rev drop on an upshift at the limit is the ratio step', () => {
