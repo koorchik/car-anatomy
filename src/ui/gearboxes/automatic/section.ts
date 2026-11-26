@@ -346,6 +346,8 @@ export class AutomaticSection implements Section {
   }
 
   private select(gear: string): void {
+    // The lab plays its run in first; a gear or an element chosen by hand belongs to the table, so the lab closes.
+    if (this.lab) this.routeLab(false);
     const before = this.table.gear;
     this.table.select(gear);
     this.lastShift = before && before !== gear && gear !== 'N' ? { from: before, to: gear } : null;
@@ -353,6 +355,7 @@ export class AutomaticSection implements Section {
   }
 
   private toggleElement(id: string): void {
+    if (this.lab) this.routeLab(false);
     this.table.toggle(id);
     this.lastShift = null;
     this.stateChanged();

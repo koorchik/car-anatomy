@@ -189,7 +189,10 @@
 }
 
 /* The torque converter's lab (demonstration 9): the demonstration card, wider, with a chart and readouts. */
+/* The converter stands at the right end of the model, where the demo card sits: the lab's card goes to the left. */
 .gba-lab {
+  left: calc(var(--left-w) + 18px);
+  right: auto;
   width: min(380px, calc(100vw - var(--panel-w) - var(--left-w) - 36px));
   bottom: calc(var(--dash-h) + var(--tools-h, 74px) + 18px);
   max-height: calc(100dvh - var(--dash-h) - var(--tools-h, 74px) - 84px);
@@ -323,6 +326,8 @@
   }
 
   .gba-lab {
+    left: 10px;
+    right: 10px;
     width: auto;
     max-height: calc(100dvh - var(--dash-h) - 90px);
     overflow-y: auto;
