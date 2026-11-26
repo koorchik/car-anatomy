@@ -109,7 +109,9 @@ function printPowerSplit(record: GearboxRecord, box: Gearbox): void {
   if (!desc) return;
   const { sun, ring } = desc.split;
   console.log(`kinematics from the derived box: ω_MG1 = ${k.mg1[0].toFixed(4)}·ω_engine ${k.mg1[1] < 0 ? '−' : '+'} ${Math.abs(k.mg1[1]).toFixed(4)}·ω_out, ω_MG2 = ${k.mg2.toFixed(4)}·ω_out, ω_ring = ${k.ring.toFixed(4)}·ω_out`);
-  console.log(`  that is ${sun}·ω_MG1 + ${ring}·ω_ring = ${sun + ring}·ω_engine; MG2 reduction ${Math.abs(k.mg2 / k.ring).toFixed(4)} (ORNL 2.636)`);
+  // Times z_s, the derived coefficients give the Willis relation back: z_s·ω_MG1 + z_r·ω_ring = (z_s + z_r)·ω_engine.
+  const ringPart = (-k.mg1[1] / k.ring) * sun;
+  console.log(`  that is ${sun}·ω_MG1 + ${ringPart.toFixed(4)}·ω_ring = ${(k.mg1[0] * sun).toFixed(4)}·ω_engine (teeth: ${sun}, ${ring}, ${sun + ring}); MG2 reduction ${Math.abs(k.mg2 / k.ring).toFixed(4)} (ORNL 2.636)`);
   const example = (k.mg1[0] * 2000 + k.mg1[1] * (3000 / k.ring));
   console.log(`  engine 2000 rpm, ring 3000 rpm: MG1 ${example.toFixed(1)} rpm (research §12: −600)`);
   const hybrid = HYBRID_CARS.find((h) => h.gearbox === record.id);
