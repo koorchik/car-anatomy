@@ -32,6 +32,8 @@ const BUDGET_MS = 4;
 const CHUNK = 2000;
 /** The frequency slider's resolution over the logarithmic band. */
 const SLIDER_STEPS = 1000;
+/** Real milliseconds between two writes of the frequency's number while the sweep runs. */
+const HZ_TEXT_EVERY_MS = 100;
 
 const fmt = (v: number, digits: number): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 const LOG_BAND = [Math.log(SHAKER_BAND_HZ[0]), Math.log(SHAKER_BAND_HZ[1])] as const;
@@ -88,6 +90,12 @@ export class ShakerScene {
   private targetHz = SHAKER_BAND_HZ[0];
   private hz = SHAKER_BAND_HZ[0];
   private shownPoints = -1;
+  /** The slider's number as written last (its rounded value and digits) and when, ms. */
+  private hzKey = Number.NaN;
+  private hzWrittenAt = -Infinity;
+  private readonly slider: HTMLInputElement;
+  /** The slider position the sweep set last. */
+  private sliderAt = -1;
 
   constructor(root: HTMLElement, corner: CornerSpec, unsprungKg: number, onChange: () => void) {
     this.root = root;
@@ -96,7 +104,8 @@ export class ShakerScene {
     this.onChange = onChange;
     this.bodyChart = new FrfChart(this.$<HTMLCanvasElement>('susp-shaker-body-chart'), 'bodyAcc');
     this.tyreChart = new FrfChart(this.$<HTMLCanvasElement>('susp-shaker-tyre-chart'), 'tyreForce');
-    this.$<HTMLInputElement>('susp-shaker-hz').addEventListener('input', (e) => {
+    this.slider = this.$<HTMLInputElement>('susp-shaker-hz');
+    this.slider.addEventListener('input', (e) => {
       this.setSweeping(false);
       this.targetHz = hzOfSlider(Number((e.target as HTMLInputElement).value));
       this.writeHz();
@@ -190,8 +199,12 @@ export class ShakerScene {
         if (l >= LOG_BAND[1]) [l, this.sweepDir] = [LOG_BAND[1], -1];
         if (l <= LOG_BAND[0]) [l, this.sweepDir] = [LOG_BAND[0], 1];
         this.targetHz = Math.exp(l);
-        const slider = this.$<HTMLInputElement>('susp-shaker-hz');
-        if (document.activeElement !== slider) slider.value = String(sliderOfHz(this.targetHz));
+        const slider = this.slider;
+        const at = sliderOfHz(this.targetHz);
+        if (at !== this.sliderAt && document.activeElement !== slider) {
+          this.sliderAt = at;
+          slider.value = String(at);
+        }
       }
       while (left > 1e-9) {
         const h = Math.min(SHOW_STEP_S, left);
@@ -229,8 +242,20 @@ export class ShakerScene {
     button.textContent = on ? t('Тримати частоту') : t('Прохід частот');
   }
 
+  /**
+   * The slider's number and the charts' line. A frame of the sweep moves the frequency a little; formatting the number
+   * in the page's locale every frame is too slow (CLAUDE.md), so it is written only when its digits change, and while
+   * sweeping no more often than HZ_TEXT_EVERY_MS.
+   */
   private writeHz(): void {
-    this.$('susp-shaker-hz-value').textContent = t('{value} Гц', { value: fmt(this.targetHz, this.targetHz < 10 ? 2 : 1) });
+    const digits = this.targetHz < 10 ? 2 : 1;
+    const key = Math.round(this.targetHz * 10 ** digits) * 10 + digits;
+    const now = performance.now();
+    if (key !== this.hzKey && (!this.sweeping || now - this.hzWrittenAt >= HZ_TEXT_EVERY_MS)) {
+      this.hzKey = key;
+      this.hzWrittenAt = now;
+      this.$('susp-shaker-hz-value').textContent = t('{value} Гц', { value: fmt(this.targetHz, digits) });
+    }
     this.bodyChart.setHz(this.hz);
     this.tyreChart.setHz(this.hz);
   }
