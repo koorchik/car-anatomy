@@ -8,7 +8,8 @@ export const GEARBOX_AUTOMATIC_EN: Record<string, GearboxTextEn> = {
       'The gear ratios, the reverse and the final drive come from Toyota\'s 2024 technical specifications of the GR Supra. We took the gearset teeth 48/96, 54/96, 60/96 and 24/102, the joins between the sets and the shift matrix from the English Wikipedia, ' +
       'which cites a ZF repair manual for sets 1 and 2. These teeth reproduce every Toyota figure to the last digit. The 500 N·m torque rating is from Wikipedia too. ' +
       'The sources do not say how many planets each set has. They can be spaced evenly only if the sun and ring teeth add up to a multiple of the planet count: 144 allows 3, 4 or 6, 150 allows 3, 5 or 6, 156 allows 3, 4 or 6, 126 allows 3 or 6. ' +
-      'We took the largest count up to five that leaves room for the carrier\'s posts between the planets: 4, 5, 4 and 3. The 1.75 mm module, the face widths, the straight-cut teeth and the places of the sets and plate packs along the axis are our estimates.',
+      'We took the largest count up to five that leaves room for the carrier\'s posts between the planets: 4, 5, 4 and 3. The 1.75 mm module, the face widths, the straight-cut teeth and the places of the sets and plate packs along the axis are our estimates. ' +
+      'We found no primary source for the 8HP\'s stall speed. The torque converter has the shape of the measured GM 6T40 curve (EPA), and we chose its size, K = 100 rpm/√(N·m), so that the B58 engine stalls at about 2200 rpm. The 273 mm diameter and the lock-up clutch are estimates too.',
   },
 };
 

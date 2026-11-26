@@ -76,3 +76,47 @@ describe('15. budget with the car (stage K2b)', () => {
     expect(us).toBeLessThan(10);
   });
 });
+
+describe('15. budget of the automatic (stage K12a)', () => {
+  it('ZF 8HP51 with its converter slipping and clutch C slipping, the car braked: under 20 µs per step', async () => {
+    // The car as one inertia behind its final drive (the Supra on its chassis comes with stage K12b), its brake
+    // holding, first selected but clutch C at a share of the clamp it needs: the engine held at 2000 rpm, the
+    // converter near stall and C slipping, so every step evaluates the converter and factorises with a slipping pack.
+    const { automaticLabInput } = await import('../src/data/converter-lab-input.ts');
+    const { automaticCore, withPlanetaryFriction } = await import('../src/drivetrain/automatic.ts');
+    const { converterDamper, lockupClutch, TURBINE_INERTIA } = await import('../src/drivetrain/converter.ts');
+    const { PUMP } = await import('../src/drivetrain/core.ts');
+    const input = automaticLabInput();
+    const box = buildGearbox(withPlanetaryFriction(input.spec, input.ratedInputNm));
+    const core = automaticCore(
+      box,
+      { engineInertia: input.map.inertia, damper: converterDamper(input.map.inertia), turbineInertia: TURBINE_INERTIA, kStall: 100, lockup: lockupClutch(500) },
+      input.load,
+    );
+    const s = new DrivetrainSolver(core);
+    const w = 2000 * (Math.PI / 30);
+    s.drive[memberIndex(core, CRANK)] = w;
+    core.coords.forEach((id, k) => {
+      if (id === CRANK || id === PUMP) s.phiDot[k] = w;
+    });
+    s.command[elementIndex(core, 'A')] = 1;
+    s.command[elementIndex(core, 'B')] = 1;
+    const c = elementIndex(core, 'C');
+    s.command[c] = 0.6;
+    s.command[elementIndex(core, 'brake')] = 1;
+    const h = 1 / 3000;
+    for (let i = 0; i < 3000; i++) s.step(h);
+    let slipping = 0;
+    let converting = 0;
+    const t0 = performance.now();
+    for (let i = 0; i < 30000; i++) {
+      s.step(h);
+      if (s.state[c] === SLIP) slipping++;
+      if (s.converter.sr < 0.9) converting++;
+    }
+    const us = ((performance.now() - t0) / 30000) * 1000;
+    expect(slipping).toBeGreaterThan(0.9 * 30000);
+    expect(converting).toBeGreaterThan(0.9 * 30000);
+    expect(us).toBeLessThan(20);
+  });
+});

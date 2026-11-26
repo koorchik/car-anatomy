@@ -53,6 +53,8 @@ export interface PlanetaryDesc {
   meshEfficiency: number;
   /** Outer radius of the case, mm (3D). */
   caseRadius: number;
+  /** The torque converter in front (stage K12a): its size, K_stall in rpm/√(N·m), for the car's engine. */
+  converter?: { kStall: number };
 }
 
 export const sunId = (k: number): string => `S${k}`;
@@ -178,6 +180,7 @@ export function planetarySpec(desc: PlanetaryDesc): GearboxSpec {
     output: desc.output,
     meshEfficiency: desc.meshEfficiency,
     packs: desc.elements.map((e) => ({ element: e.id, ...e.pack })),
+    ...(desc.converter ? { launch: { kind: 'converter' as const, kStall: desc.converter.kStall, curve: 'gm-6t40' as const, lockup: 'lockup' } } : {}),
   };
 }
 

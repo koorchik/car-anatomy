@@ -90,6 +90,15 @@ export interface CoreDraft {
   meshes: Array<{ a: string; teethA: number; b: string; teethB: number }>;
   diffs?: DraftDiff[];
   losses?: DraftLoss[];
+  /** A torque converter between two members (converter.ts); the first draft's wins. */
+  converter?: DraftConverter | null;
+}
+
+/** A torque converter: the pump and the turbine members and its size, K_stall in rpm/√(N·m). */
+export interface DraftConverter {
+  pump: string;
+  turbine: string;
+  kStall: number;
 }
 
 export interface CoreSprings {
@@ -163,9 +172,11 @@ export interface DrivetrainCore {
   anchorSlots: number;
   diffs: CoreDiffs;
   losses: CoreLoss[];
+  /** The torque converter as member indices; pump −1 for none. */
+  converter: { pump: number; turbine: number; kStall: number };
 }
 
-const emptyDraft = (): CoreDraft => ({ members: [], links: [], springs: [], elements: [], prefer: [], drag: null, meshes: [], diffs: [], losses: [] });
+const emptyDraft = (): CoreDraft => ({ members: [], links: [], springs: [], elements: [], prefer: [], drag: null, meshes: [], diffs: [], losses: [], converter: null });
 
 /** One draft of several: members, links, springs and elements side by side; the first drag wins. */
 export function mergeDrafts(...drafts: CoreDraft[]): CoreDraft {
@@ -180,6 +191,7 @@ export function mergeDrafts(...drafts: CoreDraft[]): CoreDraft {
     out.diffs!.push(...(d.diffs ?? []));
     out.losses!.push(...(d.losses ?? []));
     out.drag ??= d.drag;
+    out.converter ??= d.converter ?? null;
   }
   return out;
 }
@@ -262,7 +274,8 @@ export function launchDraft(input: string, parts: LaunchParts): CoreDraft {
  */
 export function anchorCrank(draft: CoreDraft, slot: number): CoreDraft {
   const damper = draft.springs.find((s) => s.id === DAMPER);
-  if (!damper || damper.a !== CRANK || damper.b !== DISC) throw new Error(`drivetrain: no damper from ${CRANK} to ${DISC} to anchor`);
+  // Behind the damper: the disc ring, or a converter's pump (converterLaunchDraft).
+  if (!damper || damper.a !== CRANK || damper.b === null) throw new Error(`drivetrain: no damper from ${CRANK} to a member to anchor`);
   const touches = (id: string | null) => id === CRANK;
   if (draft.links.some((l) => l.some(([id]) => touches(id))) || draft.elements.some((e) => touches(e.a) || touches(e.b))) {
     throw new Error(`drivetrain: the ${CRANK} is linked to more than its damper`);
@@ -270,9 +283,42 @@ export function anchorCrank(draft: CoreDraft, slot: number): CoreDraft {
   return {
     ...draft,
     members: draft.members.filter((m) => m.id !== CRANK),
-    springs: draft.springs.map((s) => (s === damper ? { id: DAMPER, a: DISC, b: null, anchor: slot, stiffness: s.stiffness, damping: s.damping } : s)),
+    springs: draft.springs.map((s) => (s === damper ? { id: DAMPER, a: damper.b!, b: null, anchor: slot, stiffness: s.stiffness, damping: s.damping } : s)),
     prefer: draft.prefer.filter((id) => id !== CRANK),
   };
+}
+
+/** Member and element ids of a converter's launch draft. */
+export const PUMP = 'pump';
+export const TURBINE = 'turbine';
+export const LOCKUP = 'lockup';
+
+/** What sits between the crank and an automatic's input (stage K12a). */
+export interface ConverterParts {
+  /** Crank and flexplate, kg·m². */
+  engineInertia: number;
+  /** The spring from the crank to the pump (converterDamper); its inertia is the pump's with the cover. */
+  damper: DamperDef;
+  /** The turbine wheel, kg·m². */
+  turbineInertia: number;
+  kStall: number;
+  /** The lock-up clutch between the pump and the turbine. */
+  lockup: FrictionDef;
+}
+
+/**
+ * Crank → spring → pump with the cover → fluid → turbine, bolted to the gearbox input; the lock-up clutch joins the
+ * pump to the turbine. The stator is no member: its torque goes to the case (converter.ts).
+ */
+export function converterLaunchDraft(input: string, parts: ConverterParts): CoreDraft {
+  const d = emptyDraft();
+  d.members.push({ id: CRANK, inertia: parts.engineInertia }, { id: PUMP, inertia: parts.damper.inertia }, { id: TURBINE, inertia: parts.turbineInertia });
+  d.links.push([[TURBINE, 1], [input, -1]]);
+  d.springs.push({ id: DAMPER, a: CRANK, b: PUMP, stiffness: parts.damper.stiffness, damping: parts.damper.damping });
+  d.elements.push({ id: LOCKUP, kind: 'friction', a: PUMP, b: TURBINE, friction: parts.lockup, heated: true });
+  d.converter = { pump: PUMP, turbine: TURBINE, kStall: parts.kStall };
+  d.prefer.push(CRANK, PUMP);
+  return d;
 }
 
 export const BRAKE = 'brake';
@@ -440,6 +486,9 @@ export function buildCore(draft: CoreDraft): DrivetrainCore {
     share: l.share,
     states: (l.states ?? []).map((st) => ({ elements: Int32Array.from(st.elements, (id) => elementAt(id, `the loss at ${l.member}`)), share: st.share })),
   }));
+  const cv = draft.converter ?? null;
+  if (cv && !(cv.kStall > 0)) throw new Error('drivetrain: a converter needs a positive K_stall');
+  const converter = cv ? { pump: at(cv.pump, 'the converter'), turbine: at(cv.turbine, 'the converter'), kStall: cv.kStall } : { pump: -1, turbine: -1, kStall: 1 };
   const anchorSlots = draft.springs.reduce((m, s) => Math.max(m, s.anchor === undefined ? 0 : s.anchor + 1), 0);
 
   return {
@@ -462,6 +511,7 @@ export function buildCore(draft: CoreDraft): DrivetrainCore {
     anchorSlots,
     diffs: coreDiffs,
     losses,
+    converter,
   };
 }
 
