@@ -16,6 +16,11 @@ body.section-suspensions.susp-scene-travel {
   --dash-h: 188px;
 }
 
+/* The roll scene's dash: events, chart, numbers (roll-scene.ts). */
+body.section-suspensions.susp-scene-roll {
+  --dash-h: 188px;
+}
+
 /* A control or block the page hides keeps hidden whatever its display. */
 .susp-panel [hidden],
 .susp-title [hidden],
@@ -35,7 +40,14 @@ body.section-suspensions:not(.susp-scene-travel) .susp-only-travel,
 body.section-suspensions:not(.susp-scene-bump) .susp-only-bump,
 body.section-suspensions:not(.susp-scene-road) .susp-only-road,
 body.section-suspensions:not(.susp-scene-shaker) .susp-only-shaker,
-body.section-suspensions:not(.susp-scene-road):not(.susp-scene-shaker) .susp-only-ride {
+body.section-suspensions:not(.susp-scene-road):not(.susp-scene-shaker) .susp-only-ride,
+body.section-suspensions:not(.susp-scene-roll) .susp-only-roll {
+  display: none;
+}
+
+/* The roll scene turns the whole car on its own model: the corner's overlays and setup are not its. */
+body.susp-scene-roll .susp-checks,
+body.susp-scene-roll .susp-setup {
   display: none;
 }
 
@@ -627,6 +639,130 @@ body.section-suspensions.susp-scene-shaker {
   white-space: nowrap;
 }
 
+/* The roll scene: its tools, dash and panel (roll-scene.ts). */
+.susp-ay-tool input[type='range'] {
+  width: 200px;
+}
+
+.susp-ay-tool output {
+  font-variant-numeric: tabular-nums;
+}
+
+.susp-roll-dash {
+  grid-template-columns: 170px minmax(260px, 1fr) minmax(250px, 330px);
+}
+
+.susp-roll-dash .susp-number dt {
+  white-space: normal;
+}
+
+.susp-roll-dash .susp-number dd {
+  white-space: nowrap;
+}
+
+.susp-roll-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.susp-roll-controls h3 {
+  margin-bottom: 0;
+}
+
+.susp-roll-controls > .btn {
+  align-self: flex-start;
+}
+
+.susp-roll-controls .btn[aria-pressed='true'] {
+  background: var(--bone);
+  color: #0b222a;
+}
+
+.susp-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.susp-bar-mm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--bone-dim);
+}
+
+.susp-bar-mm input {
+  width: 58px;
+  background: rgba(11, 34, 42, 0.6);
+  color: var(--bone);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.susp-caption.alarm {
+  color: #ffb36b;
+}
+
+.susp-caption:empty {
+  display: none;
+}
+
+.susp-load-legend {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 13.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.susp-load-legend i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  background: var(--c);
+  border-radius: 2px;
+}
+
+.susp-roll-numbers-phone {
+  display: none;
+}
+
+.susp-roll-article h3 {
+  margin: 14px 0 6px;
+}
+
+.susp-roll-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  margin: 6px 0 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.susp-roll-table th,
+.susp-roll-table td {
+  border-bottom: 1px solid var(--rule);
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.susp-roll-table th {
+  font-weight: 400;
+  color: var(--bone-dim);
+}
+
 /* The pages' phone layout, after the rules it overrides. */
 @media (max-width: 860px) {
   body.section-suspensions.susp-scene-travel {
@@ -687,6 +823,54 @@ body.section-suspensions.susp-scene-shaker {
 
   .susp-nav .btn {
     padding: 3px 10px;
+  }
+
+  body.section-suspensions.susp-scene-roll {
+    --dash-h: 196px;
+  }
+
+  .susp-ay-tool .tool-label {
+    display: inline;
+  }
+
+  .susp-ay-tool input[type='range'] {
+    width: min(200px, calc(100vw - 190px));
+  }
+
+  /* The chart over the buttons; the numbers go to the panel. */
+  .susp-roll-dash {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 44px;
+  }
+
+  .susp-roll-dash > .susp-dash-chart {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .susp-roll-dash > .susp-dash-numbers {
+    display: none;
+  }
+
+  .susp-roll-numbers-phone {
+    display: flex;
+    margin: 0;
+    font-size: 13px;
+    gap: 3px;
+  }
+
+  .susp-roll-numbers-phone .susp-number {
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .susp-roll-numbers-phone .susp-number dt {
+    white-space: normal;
+  }
+
+  .susp-roll-numbers-phone .susp-number dd {
+    text-align: right;
+    white-space: nowrap;
   }
 }
 

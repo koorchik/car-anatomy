@@ -6,6 +6,6 @@ import type { Route } from '../../shell/routes.ts';
 import type { Section } from '../../shell/section.ts';
 
 export async function loadSuspensions(_route: Route): Promise<Section> {
-  const { SuspensionSection } = await withDictionaries(['suspension', 'suspension-macpherson', 'suspension-double-wishbone', 'suspension-multilink', 'suspension-trailing-arm', 'suspension-semi-trailing', 'suspension-swing-axle', 'suspension-pushrod'], () => import('./section.ts'));
+  const { SuspensionSection } = await withDictionaries(['suspension', 'suspension-macpherson', 'suspension-double-wishbone', 'suspension-multilink', 'suspension-trailing-arm', 'suspension-semi-trailing', 'suspension-swing-axle', 'suspension-pushrod', 'car'], () => import('./section.ts'));
   return new SuspensionSection();
 }

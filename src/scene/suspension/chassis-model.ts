@@ -33,6 +33,11 @@ export interface ChassisModelOptions {
   body?: boolean;
   /** Holes in the body's bay lid where an engine comes up through it (the car overview). */
   lidCutouts?: readonly LidCutout[];
+  /**
+   * Axles to stand in place of the chassis's own, built by the caller in the same axle frames (the roll scene builds
+   * them from the car's design, with the bars it chose). The chassis then owns and disposes of them.
+   */
+  axles?: { front: AxleModel; rear: AxleModel };
 }
 
 /** An independent axle of the chassis, from its resolved left corner. */
@@ -56,8 +61,8 @@ export class ChassisModel implements SceneModel<ChassisFrame> {
   constructor(chassis: CarChassis, options: ChassisModelOptions = {}) {
     this.chassis = chassis;
     const car = chassis.car;
-    this.front = independentAxle(chassis.front);
-    this.rear = independentAxle(chassis.rear);
+    this.front = options.axles?.front ?? independentAxle(chassis.front);
+    this.rear = options.axles?.rear ?? independentAxle(chassis.rear);
     // Each axle's own frame sits on its axle line in the CG frame.
     this.front.group.position.set(0, 0, chassis.front.xCg * 10);
     this.rear.group.position.set(0, 0, chassis.rear.xCg * 10);

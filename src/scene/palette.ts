@@ -110,6 +110,25 @@ export const SUSPENSION_FORCE = {
   weight: '#a3abb0',
 } as const;
 
+/**
+ * The roll scene's load bars (suspensions plan, the roll scene, step 2): the static load and the three parts of its
+ * change, through the links at once (the links' orange), through the springs and the bar once the body rolls (the
+ * spring's green), and the unsprung masses' own.
+ */
+export const LOAD_SHARE = {
+  static: SUSPENSION_FORCE.weight,
+  geometric: SUSPENSION_FORCE.links,
+  elastic: SUSPENSION_FORCE.spring,
+  unsprung: '#c98bff',
+} as const;
+
+/** The stripe along an anti-roll bar that shows its twist (suspensions plan, the roll scene, step 1). */
+export const BAR_STRIPE = '#f2c14e';
+
+/** The roll scene's construction: the lines from the patches through the instant centres, and the roll centre, as the
+ *  travel scene's front view colours them (suspensions.css, .susp-fv-ic and .susp-fv-rc). */
+export const ROLL_CENTRE = { instant: '#b5e48c', roll: '#ffd25a', jack: '#ffffff' } as const;
+
 /** The overlays' own white: arrows whose instances carry their colour, a sum. */
 export const OVERLAY_WHITE = '#ffffff';
 

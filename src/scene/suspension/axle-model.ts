@@ -9,13 +9,15 @@
 //
 // The subframe, the towers, the bar and the rack are typical drawing: the hardpoints say where links meet the body,
 // not what the body or the bar look like (docs/suspension-model.md, the chassis section). The bar's ends turn about its
-// torsion section to keep each link its length, so the links never stretch as a steered strut turns them.
+// torsion section to keep each link its length, so the links never stretch as a steered strut turns them; in the roll
+// scene a stripe along the section runs from one arm's turn to the other's, so the bar is seen to twist in roll and only
+// turn in heave.
 //
 // Every axle is a SceneModel<AxleFrame> (model-types.ts) with all of its optional methods, as a chassis needs them.
 
 import * as THREE from 'three';
 import { markDamaged, tag, type SceneModel, type ViewMode } from '../model-types.ts';
-import { HIGHLIGHT } from '../palette.ts';
+import { BAR_STRIPE, HIGHLIGHT } from '../palette.ts';
 import { merge } from '../geometry.ts';
 import { glassMaterial } from '../materials.ts';
 import type { PartInfo } from '../parts-info.ts';
@@ -34,6 +36,12 @@ export interface AxleFrame {
   rack: number;
   /** Left and right wheels turned forward since the start, rad. */
   spin: [number, number];
+  /**
+   * Height of the road under the left and right wheels in the axle's frame, m (0 when left out): a body that heaves
+   * and rolls over the road (the roll scene) sees the road lower under the side that rises, and each tyre is pressed
+   * onto the road where it is.
+   */
+  roadLift?: [number, number];
 }
 
 export const axleFrame = (): AxleFrame => ({ travel: [0, 0], rack: 0, spin: [0, 0] });
@@ -64,6 +72,8 @@ export interface IndependentAxleOptions {
   /** The car's wheel (CornerModelOptions.wheel). */
   wheel?: CornerModelOptions['wheel'];
   antiRollBar: boolean;
+  /** A stripe along the bar that shows its twist (the roll scene); left off elsewhere, where the bar is just a part. */
+  barStripe?: boolean;
 }
 
 const X = new THREE.Vector3(1, 0, 0);
@@ -85,6 +95,11 @@ const BAR = {
   linkInM: 0.02,
   /** Where a link sits on the spring link of a multilink, as a share of its length from the body. */
   onRod: 0.85,
+  /** Where it sits on a wishbone, as a share of the way from the middle of its bush axis to its ball joint. */
+  onArm: 0.8,
+  /** The stripe along the torsion section that shows its twist: half its width, rad, and its sections. */
+  stripeHalf: 0.45,
+  stripeSections: 24,
   /** The torsion section: behind the links' lower ends, and this much inboard of them. */
   backM: 0.17,
   inM: 0.12,
@@ -127,6 +142,7 @@ interface AxleMaterials {
   boot: THREE.MeshStandardMaterial;
   bootGlass: THREE.MeshStandardMaterial;
   tower: THREE.MeshStandardMaterial;
+  stripe: THREE.MeshStandardMaterial;
 }
 
 function axleMaterials(): AxleMaterials {
@@ -142,6 +158,7 @@ function axleMaterials(): AxleMaterials {
     boot: new THREE.MeshStandardMaterial({ color: '#232427', metalness: 0, roughness: 0.6 }),
     bootGlass: glassMaterial('#5d6670', 0.06, 0.5),
     tower: glassMaterial('#bcd9e4', 0.07, 0.5),
+    stripe: new THREE.MeshStandardMaterial({ color: BAR_STRIPE, emissive: BAR_STRIPE, emissiveIntensity: 0.25, metalness: 0.2, roughness: 0.5, side: THREE.DoubleSide }),
   };
 }
 
@@ -159,7 +176,7 @@ interface BarEnd {
   link: THREE.Mesh;
   /** The link's top on the corner at design, scene, and where it is carried: a point of the carrier, or of a rod. */
   top0: THREE.Vector3;
-  seat: { kind: 'carrier' } | { kind: 'rod'; rod: number; along: number };
+  seat: { kind: 'carrier' } | { kind: 'rod'; rod: number; along: number } | { kind: 'arm'; arm: number; along: number };
   /** The bar's end at design and the bend the arm turns about (both on the torsion axis's line along scene x). */
   end0: THREE.Vector3;
   pivot: THREE.Vector3;
@@ -208,6 +225,8 @@ export class IndependentAxleModel implements AxleModel {
   private readonly towers: THREE.Group = new THREE.Group();
   private readonly barGroup: THREE.Group = new THREE.Group();
   private readonly ends: BarEnd[] = [];
+  /** The stripe along the bar's torsion section: its live positions, the section's half length, axis and radius, scene. */
+  private stripe: { positions: Float32Array; attr: THREE.BufferAttribute; half: number; y: number; z: number; r: number } | null = null;
   private readonly rack: {
     group: THREE.Group;
     housing: THREE.Mesh;
@@ -304,7 +323,7 @@ export class IndependentAxleModel implements AxleModel {
     this.addSides(this.towers, towerLeft, towerRight);
 
     // ---- Anti-roll bar ----
-    if (options.antiRollBar) this.buildBar(this.barLayout(options.corner), options.which, key);
+    if (options.antiRollBar) this.buildBar(this.barLayout(options.corner), options.which, key, options.barStripe ?? false);
 
     // ---- Rack ----
     if (steer) {
@@ -397,10 +416,19 @@ export class IndependentAxleModel implements AxleModel {
     } else {
       const onId = spec.spring.on ?? link.rods.find((r) => !r.steer)?.id;
       const rod = link.rods.findIndex((r) => r.id === onId);
-      if (rod < 0) throw new Error('An anti-roll bar on links needs a link to stand on');
-      const r = link.rods[rod]!;
-      top = toScene(r.body).lerp(toScene(r.knuckle), BAR.onRod);
-      seat = { kind: 'rod', rod, along: BAR.onRod };
+      if (rod >= 0) {
+        const r = link.rods[rod]!;
+        top = toScene(r.body).lerp(toScene(r.knuckle), BAR.onRod);
+        seat = { kind: 'rod', rod, along: BAR.onRod };
+      } else {
+        // On wishbones: the one the spring sits on, else the lowest, near its ball joint (a point of the arm).
+        let arm = link.wishbones.findIndex((w) => w.id === onId);
+        if (arm < 0) arm = link.wishbones.reduce((best, w, i) => (best < 0 || w.ball[2] < link.wishbones[best]!.ball[2] ? i : best), -1);
+        if (arm < 0) throw new Error('An anti-roll bar on links needs a link or a wishbone to stand on');
+        const w = link.wishbones[arm]!;
+        top = toScene(w.front).add(toScene(w.rear)).multiplyScalar(0.5).lerp(toScene(w.ball), BAR.onArm);
+        seat = { kind: 'arm', arm, along: BAR.onArm };
+      }
       end = top.clone().add(new THREE.Vector3(-BAR.linkInM * 10, BAR.linkM.rod * 10, 0));
     }
     const bend = new THREE.Vector3(end.x - BAR.inM * 10, end.y, end.z - BAR.backM * 10);
@@ -408,13 +436,14 @@ export class IndependentAxleModel implements AxleModel {
     return { top, end, bend, middle, seat };
   }
 
-  private buildBar(layout: BarLayout, which: 'front' | 'rear', key: (k: string) => string): void {
+  private buildBar(layout: BarLayout, which: 'front' | 'rear', key: (k: string) => string, stripe: boolean): void {
     const m = this.m;
     const r = (BAR.diameter[which] / 2) * 10;
     // The torsion section across the car, from bend to bend, and on each side the arm from its bend to its end.
     const middle = tag(new THREE.Mesh(rodBetween(new THREE.Vector3(-layout.bend.x, layout.bend.y, layout.bend.z), layout.bend, r, 14), m.bar), key('susp.anti-roll-bar'));
     middle.castShadow = true;
     this.barGroup.add(middle);
+    if (stripe) this.buildStripe(layout, r, key);
     const inward = new THREE.Vector3(-1, 0, 0);
     const armPath = roundedPath([layout.bend.clone().addScaledVector(inward, BAR.bendM * 10), layout.bend, layout.end], BAR.bendM * 10);
     const armGeo = merge([
@@ -444,16 +473,65 @@ export class IndependentAxleModel implements AxleModel {
     }
   }
 
-  /** The link's top now (the side's own frame, scene): on the corner's carrier, or on its rod. */
+  /**
+   * A stripe along the torsion section, on its top at design. Each arm turns its end of the section, so the stripe
+   * runs from the right arm's angle to the left one's: in roll it twists along the bar, in heave it only turns.
+   */
+  private buildStripe(layout: BarLayout, r: number, key: (k: string) => string): void {
+    const n = BAR.stripeSections;
+    const positions = new Float32Array((n + 1) * 2 * 3);
+    const index: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = 2 * i;
+      index.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    const attr = new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('position', attr);
+    geo.setIndex(index);
+    const mesh = tag(new THREE.Mesh(geo, this.m.stripe), key('susp.anti-roll-bar'));
+    mesh.frustumCulled = false;
+    this.barGroup.add(mesh);
+    this.stripe = { positions, attr, half: Math.abs(layout.bend.x), y: layout.bend.y, z: layout.bend.z, r: r * 1.04 };
+    this.poseStripe(0, 0);
+    geo.computeVertexNormals();
+  }
+
+  /** The stripe at the arms' turns: `left` at the left end (+x), `right` at the right end. */
+  private poseStripe(left: number, right: number): void {
+    const st = this.stripe;
+    if (!st) return;
+    const n = BAR.stripeSections;
+    const p = st.positions;
+    for (let i = 0; i <= n; i++) {
+      const u = i / n;
+      const x = -st.half + 2 * st.half * u;
+      const phi = right + (left - right) * u;
+      for (let e = 0; e < 2; e++) {
+        const a = phi + (e === 0 ? -BAR.stripeHalf : BAR.stripeHalf);
+        const o = (2 * i + e) * 3;
+        // rotation.x turns y toward z: the top (+y) at a turn φ is (cos φ, sin φ) in (y, z).
+        p[o] = x;
+        p[o + 1] = st.y + st.r * Math.cos(a);
+        p[o + 2] = st.z + st.r * Math.sin(a);
+      }
+    }
+    st.attr.needsUpdate = true;
+  }
+
+  /** The link's top now (the side's own frame, scene): on the corner's carrier, on its rod or on its wishbone. */
   private linkTop(end: BarEnd, out: THREE.Vector3): THREE.Vector3 {
     const c = end.corner;
     if (end.seat.kind === 'carrier') {
       const carrier = c.carrier ?? c.knuckle;
       carrier.updateMatrix();
       out.copy(end.top0).applyMatrix4(carrier.matrix);
-    } else {
+    } else if (end.seat.kind === 'rod') {
       const rod = c.linkSet.rods[end.seat.rod]!;
       out.copy(rod.bodyEnd).lerp(rod.knuckleEnd, end.seat.along);
+    } else {
+      const arm = c.linkSet.arms[end.seat.arm]!;
+      out.copy(arm.front).add(arm.rear).multiplyScalar(0.5).lerp(arm.ball, end.seat.along);
     }
     return out.add(c.body.position);
   }
@@ -505,6 +583,11 @@ export class IndependentAxleModel implements AxleModel {
       this.frame.rack = frame.rack;
       this.frame.spin[0] = frame.spin[0];
       this.frame.spin[1] = frame.spin[1];
+      if (frame.roadLift) {
+        const lift = (this.frame.roadLift ??= [0, 0]);
+        lift[0] = frame.roadLift[0];
+        lift[1] = frame.roadLift[1];
+      } else this.frame.roadLift = undefined;
     }
     const f = this.frame;
     // The right corner is the left one mirrored: the rack moving left moves its inner joint inboard.
@@ -513,7 +596,7 @@ export class IndependentAxleModel implements AxleModel {
       cf.travel = f.travel[i]!;
       cf.rack = i === 0 ? f.rack : -f.rack;
       cf.spin = f.spin[i]!;
-      cf.roadLift = 0;
+      cf.roadLift = f.roadLift?.[i] ?? 0;
       cf.bodyZ = 0;
       (i === 0 ? this.left : this.right).update(cf);
     }
@@ -541,6 +624,8 @@ export class IndependentAxleModel implements AxleModel {
       }
     }
     for (const end of this.ends) this.poseBar(end);
+    // The left side's arm is the first end; the right one's turn about x reads the same through its mirror.
+    if (this.ends.length === 2) this.poseStripe(this.ends[0]!.arm.rotation.x, this.ends[1]!.arm.rotation.x);
     this.subframe.position.y = -e * 1.5;
     this.barGroup.position.y = -e * 2.4;
     this.towers.position.y = e * 6;

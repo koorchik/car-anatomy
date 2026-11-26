@@ -1,15 +1,15 @@
 // The scenes of the suspension page and the address that picks one (`?s=`, suspensions plan, addresses). The bump
 // scene opens by default; the rough road and the shaker are stage P3's; the travel scene is the rig of stage P1b, where
-// a slider holds the wheel at any travel. More scenes come with their stages (travel curves, roll…) and join this list;
-// ↑ and ↓ go through it.
+// a slider holds the wheel at any travel; the roll scene (stage P7) turns the whole car. More scenes come with their
+// stages and join this list; ↑ and ↓ go through it.
 
 import { t } from '../../i18n/t.ts';
 
-export type SceneId = 'bump' | 'road' | 'shaker' | 'travel';
-export const SCENES: readonly SceneId[] = ['bump', 'road', 'shaker', 'travel'];
+export type SceneId = 'bump' | 'road' | 'shaker' | 'travel' | 'roll';
+export const SCENES: readonly SceneId[] = ['bump', 'road', 'shaker', 'travel', 'roll'];
 export const DEFAULT_SCENE: SceneId = 'bump';
 
-export const sceneLabel = (id: SceneId): string => ({ bump: t('Перешкода'), road: t('Погана дорога'), shaker: t('Стенд'), travel: t('Хід колеса') })[id];
+export const sceneLabel = (id: SceneId): string => ({ bump: t('Перешкода'), road: t('Погана дорога'), shaker: t('Стенд'), travel: t('Хід колеса'), roll: t('Крен') })[id];
 
 /** The scenes of the ride (stage P3): they share the wheel's mass and the article on measuring a suspension. */
 export const isRideScene = (id: SceneId): id is 'road' | 'shaker' => id === 'road' || id === 'shaker';
