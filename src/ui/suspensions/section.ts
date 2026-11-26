@@ -17,7 +17,7 @@ import { rigFrame, rigTravelRange } from '../../scene/suspension/rig-frame.ts';
 import type { Stage } from '../../scene/stage.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
 import { onSegment, setSegment } from '../../shell/segmented.ts';
-import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
+import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, TimeMode, Viewport } from '../../shell/section.ts';
 import {
   BUMP_DEFAULT, BUMP_PUNCH, clampScene, newBumpSample, resolveBumpCorner, runBump, sampleTrace, traceSeconds, type BumpRun,
   type BumpScene, type ObstacleId, type WheelId,
@@ -93,6 +93,8 @@ export class SuspensionSection implements Section {
   private shown = false;
   /** The page has opened its first bump scene in the slow-down ×0.1 (step 1); later the visitor's choice stands. */
   private openedSlow = false;
+  /** The time the bump scene ran in when the visitor went to a scene that offers only true time, to come back to. */
+  private bumpTime: { mode: TimeMode; factor: number } | null = null;
   /** What the section changed on the shared page while shown, each giving it back. */
   private borrowed: Array<() => void> = [];
   /** The freeze the camera has gone home for (TimeControl.frozen). */
@@ -305,6 +307,8 @@ export class SuspensionSection implements Section {
   /** Shows a scene: its controls, its dash and its choice of time; `record` writes it into the address. */
   private setScene(scene: SceneId, record = true): void {
     const changed = scene !== this.scene || !document.body.classList.contains(`susp-scene-${scene}`);
+    const time = this.ctx.time;
+    if (changed && this.scene === 'bump' && scene !== 'bump') this.bumpTime = { mode: time.mode, factor: time.factor };
     this.scene = scene;
     const body = document.body;
     body.classList.toggle('susp-scene-bump', scene === 'bump');
@@ -322,12 +326,14 @@ export class SuspensionSection implements Section {
       this.model.setRoad(null);
       this.readout();
     }
-    const time = this.ctx.time;
     time.refresh();
-    // The first bump scene opens slowed down ten times (step 1); after that the visitor's choice of time stands.
+    // The first bump scene opens slowed down ten times (step 1); after that the visitor's choice of time stands, and
+    // the rig's true time, which the rig alone forced, does not replace it.
     if (scene === 'bump' && !this.openedSlow) {
       this.openedSlow = true;
       time.set('slowdown', OPENING_FACTOR);
+    } else if (scene === 'bump' && this.bumpTime) {
+      time.set(this.bumpTime.mode, this.bumpTime.factor);
     }
     // The dash comes or goes and the tools row changes: the corner is framed again above them.
     this.ctx.panels.relayout();
