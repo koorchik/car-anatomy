@@ -147,6 +147,12 @@ body.section-suspensions.susp-scene-shaker {
   margin: 2px 0 0;
 }
 
+.susp-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .susp-setup-reset,
 #susp-punch {
   align-self: flex-start;
@@ -1025,4 +1031,10 @@ body.section-suspensions.susp-scene-shaker {
   .susp-bars-foot {
     font-size: 11px;
   }
+}
+
+/* What one page of the section (the catalogue or the designer) put into the shared places, while the other is shown
+ * (SuspensionsHost, PAGE_AWAY). */
+[data-susp-away] {
+  display: none !important;
 }

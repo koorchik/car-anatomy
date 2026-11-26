@@ -176,6 +176,19 @@ export interface ChassisPerformance {
    *  and extrapolate past it: a graph over the travel needs its own solves (buildAxleLite's `at`) or a full table. */
   roll: RollModel;
   chassis: Chassis;
+  /** A steady left turn at lateral acceleration `ay` (m/s²) by the same models as the understeer and the skidpad, for
+   *  the designer's graphs: worked out only when asked, so the sensitivity passes pay nothing for it. */
+  turnAt(ay: number): SteadyTurn;
+}
+
+/** One point of a steady left turn (ChassisPerformance.turnAt). */
+export interface SteadyTurn {
+  /** α_f − α_r, rad: the slip angles' share of the steer beyond the geometric L/R; NaN past an axle's peak. */
+  slipDiff: number;
+  /** What the roll steer of the two axles adds to the steer, rad (the rear's steer less the front's). */
+  rollSteerDiff: number;
+  /** Wheel loads FL, FR, RL, RR, N; a wheel off the road carries nothing. */
+  loads: [number, number, number, number];
 }
 
 /** Options of evaluateChassis. */
@@ -821,6 +834,15 @@ export function evaluateChassis(spec: ChassisSpec, options: EvaluateChassisOptio
     propUnload,
     roll,
     chassis: c,
+    turnAt(ay) {
+      const [fl, fr] = loads(0, ay, true);
+      const [rl, rr] = loads(1, ay, true);
+      return {
+        slipDiff: slipAngles(ay, true, true),
+        rollSteerDiff: steerOf(1, ay * suspensionShare) - steerOf(0, ay * suspensionShare),
+        loads: [fl, fr, rl, rr],
+      };
+    },
   };
 }
 

@@ -33,6 +33,8 @@ import { POSE_SIZE } from '../../suspension/solve.ts';
 import type { CornerSpec } from '../../suspension/spec.ts';
 import { withInnerToeShift } from '../../suspension/travel-curves.ts';
 import type { ChassisDesign } from '../../suspension-designer/design.ts';
+import { encodeChassis } from '../../suspension-designer/codec.ts';
+import { carriedNote, designWithSetup, handNote, pageDesign } from '../../suspension-designer/from-setup.ts';
 import { pageCorner } from '../../suspension-designer/page-cars.ts';
 import { designSweep, morphCorner, rollCentreBySweep } from '../../suspension-designer/pivot-morph.ts';
 import { allTableHeadHtml, allTableHtml } from './all-table.ts';
@@ -343,8 +345,21 @@ export class SuspensionSection implements Section {
     return this.ctx.slots.root.querySelector<T>(`#${id}`)!;
   }
 
+  /** The page's car with the visitor's setup of the corner shown, in the designer (build order, A3). */
+  private openDesigner(): void {
+    const { page, car } = this.choice;
+    const end = car ? car.link.end : page.base.end;
+    const carried = designWithSetup(pageDesign(page, car), end, this.setupPanel.current, factorySetup(this.pageCorner));
+    handNote(carriedNote(carried.dropped));
+    this.ctx.router.push({ section: 'suspensions', page: 'designer', path: [encodeChassis(carried.design)], query: {} });
+  }
+
   private listen(): void {
     const { view } = this.ctx;
+    this.$('susp-setup-designer').addEventListener('click', (event) => {
+      event.preventDefault();
+      this.openDesigner();
+    });
     this.$<HTMLInputElement>('susp-travel').addEventListener('input', (event) => this.setTravel(Number((event.target as HTMLInputElement).value)));
     this.$<HTMLInputElement>('susp-explode').addEventListener('input', (event) => this.model.setExplode(Number((event.target as HTMLInputElement).value)));
     const overlays = (): void => this.model.setOverlays({ forces: !this.removed.length && this.$<HTMLInputElement>('susp-forces').checked, laser: this.$<HTMLInputElement>('susp-laser').checked });

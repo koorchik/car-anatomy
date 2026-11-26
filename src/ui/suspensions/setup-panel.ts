@@ -42,7 +42,10 @@ export const setupPanelHtml = (): string => `<section class="susp-setup" aria-la
     ${slider('susp-toe', t('Сходження в статиці'), SETUP_RANGES.toeDeg[0], SETUP_RANGES.toeDeg[1], 0.01)}
     ${slider('susp-pressure', t('Тиск у шині'), SETUP_RANGES.pressureBar[0], SETUP_RANGES.pressureBar[1], 0.1)}
     <dl class="susp-readout susp-setup-sum" id="susp-setup-sum"></dl>
-    <button type="button" class="btn susp-setup-reset" id="susp-setup-reset">${t('Заводські')}</button>
+    <div class="susp-setup-actions">
+      <button type="button" class="btn susp-setup-reset" id="susp-setup-reset">${t('Заводські')}</button>
+      <a class="btn" id="susp-setup-designer" href="#/suspensions/designer">${t('Відкрити в конструкторі')}</a>
+    </div>
   </section>`;
 
 export class SetupPanel {

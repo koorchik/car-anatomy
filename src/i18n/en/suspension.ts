@@ -609,4 +609,11 @@ export const SUSPENSION_EN: Record<string, string> = {
   'бокове прискорення, g': 'lateral acceleration, g',
   'Перенесення на цій осі, кН': 'Load transfer on this axle, kN',
   'час, с': 'time, s',
+  // The Setup panel's way into the designer, and what the designer says of a design carried from it (from-setup.ts).
+  'Авто зі сторінки підвіски з твоїм налаштуванням.': 'The car from the suspension page with your setup.',
+  'висоту кузова': 'the ride height',
+  'тиск у шині': 'the tire pressure',
+  'Конструктор поки не задає {settings}: тут стоять заводські значення.': 'The designer cannot set {settings} yet: the factory values stand here.',
+  ' і ': ' and ',
+  'Відкрити в конструкторі': 'Open in the designer',
 };

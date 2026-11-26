@@ -235,7 +235,8 @@ export function diagnoseChassis(d: ChassisDesign, perf: ChassisPerformance, stee
       t('Зменш нахил осей важелів у боковому виді.'),
     );
   }
-  if (rear.toe < 0) {
+  // Toe-out the page can show: a solver's −0.000° is a zero toe, not a nervous axle.
+  if (rear.toe * DEG <= -0.005) {
     add(
       'rear-toe-out',
       'note',
