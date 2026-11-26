@@ -56,9 +56,13 @@ export function describe(before: Metric, after: Metric): Effect | null {
     const size = (Math.abs(b - a) / scale) * 100;
     if (size < 1) return null;
     const digits = before.digits ?? 0;
+    const from = valueText(a, digits);
+    const to = valueText(b, digits);
+    // A change the decimals cannot show ("143→143 мм") is not worth a line.
+    if (from === to) return null;
     // Degrees and percent stand right after the number, as elsewhere on the site; other units after a space.
     const unit = !before.unit ? '' : /^[°%]/.test(before.unit) ? before.unit : ` ${before.unit}`;
-    return { id: before.id, name: before.name, text: `${valueText(a, digits)}→${valueText(b, digits)}${unit}`, size };
+    return { id: before.id, name: before.name, text: `${from}→${to}${unit}`, size };
   }
   const size = (Math.abs(b - a) / Math.max(Math.abs(a), 1e-6)) * 100;
   if (size < 1) return null;

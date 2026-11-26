@@ -519,6 +519,17 @@ describe('sensitivity', () => {
     }
   }, 60_000);
 
+  it('never lists a change its decimals cannot show', () => {
+    for (const p of CHASSIS_PRESETS) {
+      for (const c of sensitivityPass(p.design())) {
+        for (const e of c.effects) {
+          const both = e.text.match(/^([−\d,.+]+)→([−\d,.+]+)/);
+          if (both) expect(both[1], `${p.id}: ${c.key} → ${e.id} ${e.text}`).not.toBe(both[2]);
+        }
+      }
+    }
+  }, 60_000);
+
   it('names what a stiffer front bar changes, and leaves the design as it was', () => {
     const d = DEFAULT_CHASSIS;
     const copy = JSON.stringify(d);
