@@ -35,6 +35,9 @@ import { mirrorY } from '../src/suspension/vec.ts';
 import { solidAxle, SOLID_BUMP_STOP_TRAVEL_M, SOLID_TYPICAL, type SolidAxleIntent } from '../src/suspension/templates/solid-axle.ts';
 import { newSolidSample, SolidAxle, type SolidSample } from '../src/suspension/solid-kinematics.ts';
 import { LEAF_LINK_SHARE } from '../src/suspension/solve-axle.ts';
+import {
+  ackermannArmShare, ackermannInner, ackermannShare, CornerSteering, turningCircleM, withAckermann,
+} from '../src/suspension/steering.ts';
 
 const DEG = Math.PI / 180;
 
@@ -1582,5 +1585,86 @@ describe('solid axles: Panhard rod, Watt’s linkage, leaf springs, de Dion', ()
     // A travel that is not a number is refused, not measured as the design pose.
     const axle = new SolidAxle(solidAxle(base));
     expect(() => axle.measureAt(Number.NaN, 0.05, 'left', newSolidSample())).toThrow(/numbers/);
+  });
+});
+
+describe('steering an independent axle (P13-core)', () => {
+  const D = Math.PI / 180;
+  const L = 2.65;
+  const corners: Array<[string, AxleSpec]> = [
+    ['JTEKT strut', jtektCorner().axle],
+    ['double wishbone', doubleWishbone(wishboneDefaults('front'))],
+  ];
+
+  it('full Ackermann: both wheels square to their paths about one centre on the rear axle\'s line', () => {
+    const t = 1.45;
+    for (const outerDeg of [5, 15, 30]) {
+      const outer = outerDeg * D;
+      const inner = ackermannInner(outer, L, t);
+      // The two wheels' axes cross the rear axle's line at the same point.
+      const centreFromOuter = L / Math.tan(outer) - t / 2;
+      const centreFromInner = L / Math.tan(inner) + t / 2;
+      expect(centreFromOuter).toBeCloseTo(centreFromInner, 9);
+      expect(ackermannShare(inner, outer, L, t)).toBeCloseTo(1, 9);
+      expect(ackermannShare(outer, outer, L, t)).toBeCloseTo(0, 9);
+      // The turning circles follow from the angles: each front wheel runs at L / sin δ from the centre, so the outer
+      // circle is wider than the inner by about the axis track.
+      const outerR = turningCircleM(outer, L) / 2;
+      const innerR = turningCircleM(inner, L) / 2;
+      expect(Math.hypot(L, centreFromOuter + t / 2)).toBeCloseTo(outerR, 9);
+      expect(Math.hypot(L, centreFromInner - t / 2)).toBeCloseTo(innerR, 9);
+      expect(outerR).toBeGreaterThan(innerR);
+    }
+  });
+
+  for (const [name, spec] of corners) {
+    it(`${name}: the steering arms' share sets the Ackermann the linkage gives, measured at the lock`, () => {
+      const measured = [0, 0.5, 1].map((share) => {
+        const turned = withAckermann(spec, share, L);
+        expect(ackermannArmShare(turned, L)).toBeCloseTo(share, 9);
+        const steering = new CornerSteering(turned);
+        const lock = steering.lock(38 * D);
+        expect(Math.max(lock.left, lock.right) / D).toBeCloseTo(38, 3);
+        return ackermannShare(lock.left, lock.right, L, steering.axisTrackM);
+      });
+      // Arms parallel to the car: about parallel steer. Toward the Jeantaud lines: more Ackermann, though the rule is
+      // first order and the rack's offset from the arms' line takes some of it.
+      expect(Math.abs(measured[0])).toBeLessThan(0.1);
+      expect(measured[1]).toBeGreaterThan(measured[0] + 0.15);
+      expect(measured[2]).toBeGreaterThan(measured[1] + 0.15);
+    });
+
+    it(`${name}: caster tips the outer wheel into negative camber and the inner one out; the inclination lifts the nose`, () => {
+      const steering = new CornerSteering(spec);
+      const straight = steering.at(0);
+      expect(straight.left).toBeCloseTo(0, 12);
+      const lock = steering.lock(30 * D);
+      const d = steering.design;
+      // In a left turn the right wheel is the outer one.
+      expect(lock.camberRight).toBeLessThan(d.camber - 1 * D);
+      expect(lock.camberLeft).toBeGreaterThan(d.camber + 1 * D);
+      // First order about straight ahead, the camber change of a wheel steered by δ is −δ·sin ν on the outer wheel
+      // (the caster), plus (1 − cos δ)·sin σ on both (the inclination, second order).
+      const small = steering.at(0.004);
+      const outer = small.right;
+      expect((small.camberRight - d.camber) / (-outer * Math.sin(d.caster))).toBeGreaterThan(0.8);
+      expect((small.camberRight - d.camber) / (-outer * Math.sin(d.caster))).toBeLessThan(1.2);
+      // Both wheels' centres drop relative to the body, on the average: the body rises. About d·sin σ·(1 − cos δ) per
+      // wheel, d the kingpin offset at the hub; the caster lowers one side as much as it lifts the other.
+      const lift = (lock.dropLeft + lock.dropRight) / 2;
+      const meanSteer = (lock.left + lock.right) / 2;
+      const expected = d.kingpinOffset * Math.sin(d.kpi) * (1 - Math.cos(meanSteer));
+      expect(lift).toBeGreaterThan(0);
+      expect(lift / expected).toBeGreaterThan(0.6);
+      expect(lift / expected).toBeLessThan(1.6);
+    });
+  }
+
+  it('turns the steering wheel toward the side it is turned: both wheels left for a positive travel', () => {
+    for (const [, spec] of corners) {
+      const s = new CornerSteering(spec).at(0.01);
+      expect(s.left).toBeGreaterThan(0);
+      expect(s.right).toBeGreaterThan(0);
+    }
   });
 });

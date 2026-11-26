@@ -7,6 +7,7 @@
 import type { TyreChoice } from '../vehicle/tyre-data.ts';
 import type { VehicleBody } from '../vehicle/car.ts';
 import type { RoadLoadCoeffs } from '../vehicle/road-load.ts';
+import type { SteeredBeamSpec, SteeringAssist, SteeringGear } from './steering.ts';
 
 /** ISO 8855, metres: x forward, y left, z up. Points of an independent corner are given for the left side. */
 export type Vec3 = readonly [number, number, number];
@@ -308,6 +309,19 @@ export interface ChassisSpec {
   longitudinal: ChassisLongitudinal;
   /** 'measured' only for published hardpoints (JTEKT). Everything else is typical geometry. */
   geometry: 'measured' | 'typical';
+  /** How the front wheels are steered (stage P13-core, steering.ts); absent where nothing says. */
+  steering?: ChassisSteering;
+}
+
+/** The steering of a chassis' front axle: the gear, the assist, the lock and, on a solid axle, its linkage. */
+export interface ChassisSteering {
+  gear: SteeringGear;
+  assist: SteeringAssist;
+  /** The inner wheel's steer at full lock, rad. */
+  lockInnerRad: number;
+  /** A steered solid front axle's knuckles, tie rod, drag link and pitman arm; null on an independent axle (its tie rods
+   *  are the steered rods of its linkage). */
+  beam: SteeredBeamSpec | null;
 }
 
 /**

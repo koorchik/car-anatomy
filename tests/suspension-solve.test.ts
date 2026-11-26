@@ -10,6 +10,10 @@ import { solidAxle, SOLID_TYPICAL, type SolidAxleIntent } from '../src/suspensio
 import { SolidAxleSolver } from '../src/suspension/solve-axle.ts';
 import { newSolidSample, SolidAxle } from '../src/suspension/solid-kinematics.ts';
 import type { SolidAxleLinkage } from '../src/suspension/spec.ts';
+import {
+  ackermannShare, gearInputFor, gearOutput, gearOutputRate, linkTravel, rotateAbout, SteeredBeam, type SteeringGear,
+} from '../src/suspension/steering.ts';
+import { steeredBeam } from '../src/suspension/templates/steered-beam.ts';
 
 const spec = macphersonJtekt({ wheelCentreZM: 0.3 });
 const axle = buildAxle(spec);
@@ -794,5 +798,110 @@ describe('solid axle solver (weighted least squares)', () => {
     expect(live.spec.diff).toBe('axle');
     live.measureAt(0.08, -0.05, 'left', out);
     expect(out.plunge).toBe(0);
+  });
+});
+
+describe('steered solid axle: knuckles, tie rod, drag link, pitman arm (P13-core)', () => {
+  const D = Math.PI / 180;
+  const frontAxle = (lateral: SolidAxleIntent['lateral']): AxleSpec<SolidAxleLinkage> =>
+    solidAxle({ ...SOLID_TYPICAL.panhard, lateral, front: true, driven: false });
+  const beamOf = (s: AxleSpec<SolidAxleLinkage>, dragLinkDeg: number, ackermann: number | null = null): SteeredBeam =>
+    new SteeredBeam(s, steeredBeam(s, { dragLinkDeg, ackermann, wheelbaseM: 2.4 }));
+  const panhard = frontAxle('panhard');
+
+  it('runs the front axle\'s links back to the body and puts the Panhard rod\'s body end on the steering box\'s side', () => {
+    for (const r of panhard.linkage.rods) expect(r.body[0], r.id).toBeLessThan(r.knuckle[0]);
+    const lat = panhard.linkage.lateral;
+    if (lat.kind !== 'panhard') throw new Error('expected a Panhard rod');
+    expect(lat.body[1]).toBeGreaterThan(0);
+    expect(lat.axle[1]).toBeLessThan(0);
+  });
+
+  it('keeps the drag link and the tie rod at their lengths across the pitman arm\'s swing and the axle\'s travel', () => {
+    const b = beamOf(panhard, 10);
+    const pt = [0, 0, 0];
+    for (const [zL, zR] of [[0, 0], [0.06, 0.06], [0.05, -0.05], [-0.08, 0.02]] as const) {
+      const state = b.axle.rest();
+      b.axle.solve(state, zL, zR);
+      for (const phi of [-0.4, -0.1, 0, 0.2, 0.45]) {
+        const right = b.knuckleTurn(state, phi);
+        const left = b.leftTurn(right);
+        // Drag link: the pitman ball (body) to the right knuckle's end, turned about its kingpin, then placed by the axle.
+        const kpR = { p: mirrorY(b.beam.kingpinLower), u: unit(mirrorY(sub(b.beam.kingpinUpper, b.beam.kingpinLower))) };
+        b.axle.solver.point(state, rotateAbout(b.beam.dragKnuckle, kpR.p, kpR.u, right), pt);
+        const P = b.pitmanBall(b.sign * phi);
+        expect(Math.abs(dist(P, [pt[0], pt[1], pt[2]]) - b.dragLinkM), `drag link at ${zL}/${zR}, φ ${phi}`).toBeLessThan(1e-9);
+        // Tie rod, in the axle.
+        const kpL = { p: b.beam.kingpinLower, u: unit(sub(b.beam.kingpinUpper, b.beam.kingpinLower)) };
+        const AL = rotateAbout(b.beam.armBall, kpL.p, kpL.u, left);
+        const AR = rotateAbout(mirrorY(b.beam.armBall), kpR.p, kpR.u, right);
+        expect(Math.abs(dist(AL, AR) - b.tieRodM)).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it('turns both wheels the same way from the pitman arm, the ratio from the mechanism: steer per pitman angle', () => {
+    const b = beamOf(panhard, 0);
+    const s = b.at(0.1);
+    expect(s.left).toBeGreaterThan(0);
+    expect(s.right).toBeGreaterThan(0);
+    // On centre the road wheels turn by about the pitman angle times the ratio of the pitman arm to the steering arm's
+    // lateral lever, the arm's run behind the kingpin (a lateral push on its end).
+    const rate = b.ratePerPitman();
+    expect(rate).toBeGreaterThan(0.8);
+    expect(rate).toBeLessThan(1.6);
+    expect((b.at(1e-4).left + b.at(1e-4).right) / 2 / 1e-4).toBeCloseTo(rate, 3);
+  });
+
+  it('steers the wheels in heave when the drag link is not parallel to the Panhard rod, and not when it is', () => {
+    // Parallel and as long as the rod: the two arcs coincide, so only second-order terms of the axle's roll are left.
+    expect(Math.abs(beamOf(panhard, 0).heaveSteer(0.05)) / D).toBeLessThan(0.05);
+    expect(Math.abs(beamOf(panhard, 0).heaveSteer(-0.05)) / D).toBeLessThan(0.05);
+    // Tilted by α: first order, the drag link's end moves across by about Δz·tan α against the steering arm's run.
+    let prev = 0;
+    for (const deg of [5, 10, 20]) {
+      const steer = Math.abs(beamOf(panhard, deg).heaveSteer(0.05));
+      const expected = (0.05 * Math.tan(deg * D)) / 0.15;
+      expect(steer / expected, `${deg}°`).toBeGreaterThan(0.75);
+      expect(steer / expected, `${deg}°`).toBeLessThan(1.25);
+      expect(steer).toBeGreaterThan(prev);
+      prev = steer;
+    }
+    // The sign follows the tilt.
+    expect(Math.sign(beamOf(panhard, 10).heaveSteer(0.05))).toBe(-Math.sign(beamOf(panhard, -10).heaveSteer(0.05)));
+  });
+
+  it('reaches the lock with the inner wheel turned more than the outer, Ackermann growing with the arms\' share', () => {
+    const shares = [0, 0.5, 1].map((share) => {
+      const b = beamOf(panhard, 0, share);
+      const lock = b.lock(38 * D);
+      expect(Math.max(lock.left, lock.right) / D).toBeCloseTo(38, 3);
+      const axis = b.axis();
+      return ackermannShare(lock.left, lock.right, 2.4, 2 * (panhard.wheelCentre[1] - axis.scrub));
+    });
+    expect(Math.abs(shares[0])).toBeLessThan(0.1);
+    expect(shares[1]).toBeGreaterThan(shares[0]);
+    expect(shares[2]).toBeGreaterThan(shares[1]);
+  });
+});
+
+describe('steering gears (P13-core)', () => {
+  const rack: SteeringGear = { kind: 'rack', rackPerRevM: 0.05, boxRatio: 16, pitmanArmM: 0.14, variable: 1 };
+  it('moves a rack by its travel per turn, and a box\'s pitman arm by the angle over its ratio', () => {
+    expect(gearOutput(rack, 2 * Math.PI)).toBeCloseTo(0.05, 12);
+    expect(gearOutput({ ...rack, kind: 'recirculating-ball' }, 16)).toBeCloseTo(1, 12);
+    // A centre link moves by the pitman arm's sine.
+    const box: SteeringGear = { ...rack, kind: 'worm-roller' };
+    expect(linkTravel(box, 0.5 * 16)).toBeCloseTo(0.14 * Math.sin(0.5), 12);
+  });
+
+  it('quickens a variable gear toward the lock and keeps its centre', () => {
+    const v: SteeringGear = { ...rack, variable: 1.4 };
+    expect(gearOutputRate(v, 0)).toBeCloseTo(gearOutputRate(rack, 0), 12);
+    expect(gearOutputRate(v, 2 * Math.PI) / gearOutputRate(rack, 2 * Math.PI)).toBeCloseTo(1.4, 12);
+    // The output is the integral of the rate.
+    const h = 1e-5;
+    for (const th of [0.3, 2, 4]) expect((gearOutput(v, th + h) - gearOutput(v, th - h)) / (2 * h)).toBeCloseTo(gearOutputRate(v, th), 6);
+    expect(gearInputFor((t) => gearOutput(v, t), gearOutput(v, 3.7))).toBeCloseTo(3.7, 5);
   });
 });
