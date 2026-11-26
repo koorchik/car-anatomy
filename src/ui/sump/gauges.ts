@@ -4,6 +4,7 @@
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
 import type { LubeRun } from '../../lubrication/run.ts';
+import { FLUID } from '../../scene/palette.ts';
 import type { LapTrace } from '../../vehicle/lap.ts';
 import { G, TYRES, type TyreId } from '../../vehicle/vehicle.ts';
 
@@ -11,7 +12,8 @@ const BONE = '#ece6d6';
 const DIM = 'rgba(236, 230, 214, 0.55)';
 const RULE = 'rgba(236, 230, 214, 0.16)';
 const RED = '#ff5a3c';
-const OIL = '#e8a93a';
+/** The oil's colour everywhere on the site, so the gauge reads as the oil in the sump beside it. */
+const OIL = FLUID.oil;
 const BLUE = '#62c6ec';
 
 /** One formatter per number of digits, made once: toLocaleString with options builds a new one on every call. */

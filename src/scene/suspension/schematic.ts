@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import type { CornerMaterials } from './materials.ts';
+import { MEASURE } from '../palette.ts';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const DASHES = 14;
@@ -59,9 +60,9 @@ export class CornerSchematic {
     const count = bush + 2 * DASHES + 2 * CIRCLE;
     this.positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
-    const axisColor = new THREE.Color('#ffd27a');
-    const steerColor = new THREE.Color('#ff9b3d');
-    const wheelColor = new THREE.Color('#9fb6bf');
+    const axisColor = new THREE.Color(MEASURE.bushAxis);
+    const steerColor = new THREE.Color(MEASURE.steerAxis);
+    const wheelColor = new THREE.Color(MEASURE.wheel);
     for (let i = 0; i < count; i++) {
       const c = i < bush ? axisColor : i < bush + 2 * DASHES ? steerColor : wheelColor;
       colors.set([c.r, c.g, c.b], 3 * i);

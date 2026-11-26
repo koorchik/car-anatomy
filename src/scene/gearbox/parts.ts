@@ -1,5 +1,5 @@
-// Part cards of the gearbox models, keyed `gbx-…` (the part labels of the gearboxes plan, 3D section). The shell's part
-// registry (O2b) takes this dictionary as the gearbox section's; until then the model viewer reads it directly.
+// Part cards of the gearbox models, keyed `gbx-…` (the part labels of the gearboxes plan, 3D section). The gearbox
+// section registers this dictionary (parts-registry.ts) when it mounts; the model viewer reads it directly.
 
 import { t } from '../../i18n/t.ts';
 import type { PartInfo } from '../parts-info.ts';

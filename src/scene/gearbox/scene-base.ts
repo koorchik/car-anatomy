@@ -2,21 +2,22 @@
 // its own copy and can move onto this when its page is done): owned materials, glass shells, the power glow, the
 // highlight, a failed part, ghosting, render bands, views, pulling apart, anchors and giving back cached geometry.
 //
-// The whole-car plan's SceneModel contract (setHighlight, setGhost, setRenderBand, anchors) is implemented
-// structurally; O2b adds the type to model-types.ts.
+// The models built on it declare the SceneModel contract of model-types.ts (setHighlight, setGhost, setRenderBand,
+// anchors come from here).
 
 import * as THREE from 'three';
 import { MM } from '../geometry.ts';
 import { glassMaterial } from '../materials.ts';
 import type { ViewMode } from '../model-types.ts';
+import { DAMAGE as DAMAGE_COLOR, HIGHLIGHT as HIGHLIGHT_COLORS, POWER } from '../palette.ts';
 import { releaseGeometry } from './geometry-cache.ts';
 
-/** Power path colour (the colour table of the whole-car plan; moves to palette.ts with O2b) and how bright a full share glows. */
-export const POWER_GLOW = new THREE.Color('#ea6a15');
+/** Power path colour (palette.ts) and how bright a full share glows. */
+export const POWER_GLOW = new THREE.Color(POWER);
 export const GLOW_GAIN = 0.3;
 /** Hover highlight of the whole box in the car overview. */
-const HIGHLIGHT = new THREE.Color('#3d7fd9').multiplyScalar(0.22);
-const DAMAGE = new THREE.Color('#ff2a10');
+const HIGHLIGHT = new THREE.Color(HIGHLIGHT_COLORS.gearbox).multiplyScalar(0.22);
+const DAMAGE = new THREE.Color(DAMAGE_COLOR);
 
 export abstract class GearboxSceneBase {
   readonly group = new THREE.Group();

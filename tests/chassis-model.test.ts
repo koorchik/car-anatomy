@@ -14,30 +14,13 @@ import { carChassis, lockFromTurning, sweepPoints, type CarChassis } from '../sr
 import { Axle, newCornerSample } from '../src/suspension/kinematics.ts';
 import { CornerSolver } from '../src/suspension/solve.ts';
 import type { LayoutId, Vec3 } from '../src/suspension/spec.ts';
-import type { ViewMode } from '../src/scene/model-types.ts';
+import type { SceneModel } from '../src/scene/model-types.ts';
 
 const context = new Proxy({}, { get: () => () => ({ addColorStop: () => {} }), set: () => true });
 vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => context }) });
 
 const { ChassisModel, chassisFrame } = await import('../src/scene/suspension/chassis-model.ts');
 const { bodyShape } = await import('../src/scene/car/body-shell.ts');
-
-/**
- * The shell's SceneModel<F>, word for word from the whole-car plan («Stage для всіх розділів»). O2b puts it in
- * model-types.ts and the chassis then declares it; until then this keeps the chassis fitting it.
- */
-interface SceneModel<F> {
-  group: THREE.Group;
-  update(frame: F): void;
-  setView(view: ViewMode): void;
-  setExplode(amount: number): void;
-  setFailure(part: string | null): void;
-  dispose(): void;
-  anchors?(): Record<string, THREE.Vector3>;
-  setHighlight?(on: boolean): void;
-  setGhost?(alpha: number): void;
-  setRenderBand?(base: number): void;
-}
 
 const IDS = Object.keys(CHASSIS_CARS);
 const chassisOf = (id: string): CarChassis => carChassis(CARS[id]!, CHASSIS_CARS[id]!, DRIVE_CARS[id]?.driveline.diffOutputs ?? {});

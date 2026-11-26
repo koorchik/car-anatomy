@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { DEG, type Engine } from '../../engine/kinematics.ts';
 import { hasDirectInjectors, hasPortInjectors, isDieselSystem, type SystemsSpec } from '../../engine/systems-spec.ts';
+import { SPARK } from '../palette.ts';
 import type { PistonAnchors, RotaryAnchors } from './anchors.ts';
 import { addRoute, bankPoint, emptyPlan, pointAlong, type LayerPlan } from './route.ts';
 
@@ -212,7 +213,7 @@ export function fuelPlan(engine: Engine, systems: SystemsSpec, a: PistonAnchors)
         const tip = cyl(c.alpha, s * 0.3 * b, a.deck + 0.01 * b, c.z);
         const dir = v(Math.sin((c.alpha + s * 35) * DEG), Math.cos((c.alpha + s * 35) * DEG), 0);
         plan.parts.push({ part: 'glow-plug', shape: 'cylinder', position: tip.clone().addScaledVector(dir, 0.3 * b), axis: dir, radius: 0.03 * b, length: 0.6 * b, material: 'metal' });
-        plan.flashes!.push({ part: 'glow-plug', position: tip, slot: slots.glow, color: '#ff7a2a', size: 0.7 });
+        plan.flashes!.push({ part: 'glow-plug', position: tip, slot: slots.glow, color: SPARK.glowPlug, size: 0.7 });
       });
     }
     return plan;
@@ -241,7 +242,7 @@ export function fuelPlan(engine: Engine, systems: SystemsSpec, a: PistonAnchors)
       plan.flashes!.push({ part: 'spark-plug', position: tip.clone(), slot: slots.spark(i) });
       const top = tip.clone().addScaledVector(dir, length);
       plugTops.push(top);
-      if (systems.ignition === 'coil-on-plug') plan.flashes!.push({ part: 'coil', position: top, slot: slots.spark(i), size: 0.5, color: '#9fd0ff' });
+      if (systems.ignition === 'coil-on-plug') plan.flashes!.push({ part: 'coil', position: top, slot: slots.spark(i), size: 0.5, color: SPARK.coil });
     }
   });
   const leadFrom = (from: THREE.Vector3, to: THREE.Vector3, i: number): void => {

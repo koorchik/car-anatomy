@@ -36,6 +36,7 @@ import {
 } from './geometry.ts';
 import { createMaterials, glowTexture, hotPipeMaterial, type EngineMaterials, type HotPipeUniforms } from './materials.ts';
 import { GAS, disposeTree, markDamaged, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
+import { GAS_COLORS } from './palette.ts';
 import type { PistonAnchors, SystemsLook, TurboAnchor } from './systems/anchors.ts';
 import { panDims, panShape, type PanShape } from '../systems/sump.ts';
 import { systemsOf } from '../engine/systems-spec.ts';
@@ -181,7 +182,7 @@ export class PistonEngineModel implements EngineModel {
     this.buildSolidDetails(heads);
 
     for (let i = 0; i < 2; i++) {
-      const light = new THREE.PointLight('#ff8a3a', 0, this.bore * 9, 2);
+      const light = new THREE.PointLight(GAS_COLORS.flame, 0, this.bore * 9, 2);
       this.flash.push(light);
       this.mounted.add(light);
     }

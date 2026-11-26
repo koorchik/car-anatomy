@@ -190,6 +190,7 @@ export class Shell {
     this.route = route;
     if (section !== this.shown) {
       this.shown?.leave(route);
+      this.audio.release();
       this.show(section);
       this.relayout();
     }

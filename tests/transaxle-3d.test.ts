@@ -18,27 +18,13 @@ import type { GearLayer } from '../src/scene/gearbox/gear-mesh.ts';
 import type { GearboxFrame } from '../src/scene/gearbox/gearbox-model.ts';
 import { GEARBOX_PARTS } from '../src/scene/gearbox/parts.ts';
 import { TransaxleModel } from '../src/scene/gearbox/transaxle-model.ts';
-import type { ViewMode } from '../src/scene/model-types.ts';
+import type { SceneModel } from '../src/scene/model-types.ts';
 import { blockBackZMm, gearboxToCar, transaxleStubs } from '../src/vehicle/gearbox-place.ts';
 import { crankFrontZMm, engineToCar } from '../src/vehicle/packaging.ts';
 
 // The cast aluminium's bump map is drawn on a canvas, which nothing here looks at.
 const context = new Proxy({}, { get: () => () => ({ addColorStop: () => {} }), set: () => true });
 vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => context }) });
-
-/** SceneModel<F> of the whole-car plan («Stage для всіх розділів»), verbatim, until O2b puts it in model-types.ts. */
-interface PlannedSceneModel<F> {
-  group: THREE.Group;
-  update(frame: F): void;
-  setView(view: ViewMode): void;
-  setExplode(amount: number): void;
-  setFailure(part: string | null): void;
-  dispose(): void;
-  anchors?(): Record<string, THREE.Vector3>;
-  setHighlight?(on: boolean): void;
-  setGhost?(alpha: number): void;
-  setRenderBand?(base: number): void;
-}
 
 const BOXES = [
   { id: 'manual-transaxle', car: 'civic-type-r-fk8' },
@@ -218,7 +204,7 @@ describe.each(BOXES)('$id', ({ id, car: carId }) => {
   });
 
   it('has views, ghost, highlight, render bands and anchors without a renderer; the bellhousing faces the engine', () => {
-    const m: PlannedSceneModel<GearboxFrame> & TransaxleModel = new TransaxleModel(box, { quality: 'low' });
+    const m: SceneModel<GearboxFrame> & TransaxleModel = new TransaxleModel(box, { quality: 'low' });
     expect([m.anchors, m.setHighlight, m.setGhost, m.setRenderBand].every((f) => typeof f === 'function')).toBe(true);
     for (const view of ['solid', 'xray', 'mechanism'] as const) m.setView(view);
     m.setGhost(0.15);

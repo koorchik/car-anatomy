@@ -8,23 +8,16 @@
 import * as THREE from 'three';
 import { numberLocale } from '../../i18n/locale.ts';
 import { Arrows, arrowHeadGeometry, arrowShaftGeometry, ON_TOP, outOfFrame, overlayMaterial } from '../arrows.ts';
+import { MEASURE, OVERLAY_WHITE, SUSPENSION_FORCE } from '../palette.ts';
 
 /** Scene units per newton: 1 kN = 40 mm (suspensions plan, 3D overlays). */
 export const FORCE_SCALE = 0.4 / 1000;
 
 /**
  * Colours of the suspension's forces (suspensions plan, 3D overlays; whole-car plan, force arrows: white is a sum,
- * grey a weight, yellow the tyre). The shell's palette.ts takes these over when it arrives.
+ * grey a weight, yellow the tyre), from palette.ts.
  */
-export const FORCE_COLORS = {
-  spring: '#3ccf6e',
-  damper: '#3d8bff',
-  /** The bump stop is an elastic element like the spring: a paler green. */
-  stop: '#a8f0c6',
-  links: '#ff9b3d',
-  tyre: '#ffd23d',
-  weight: '#a3abb0',
-} as const;
+export const FORCE_COLORS = SUSPENSION_FORCE;
 
 /** The arrows every corner has; each link (a wishbone at its ball joint, a rod at its knuckle end) adds one more. */
 export type ForceArrow = 'tyre' | 'spring' | 'damper' | 'stop' | 'strutTop' | 'weight';
@@ -45,7 +38,7 @@ export class ForceArrows {
   private readonly arrows: Arrows;
   private readonly shaftGeo = arrowShaftGeometry();
   private readonly headGeo = arrowHeadGeometry();
-  private readonly material = overlayMaterial('#ffffff');
+  private readonly material = overlayMaterial(OVERLAY_WHITE);
 
   readonly links: number;
 
@@ -94,8 +87,8 @@ export class ForceArrows {
   }
 }
 
-const LASER = '#ff3b30';
-const PLUMB = '#d8e2e6';
+const LASER = MEASURE.laser;
+const PLUMB = MEASURE.plumb;
 const ARC_SEGMENTS = 24;
 /** One metre of laser in the wheel plane (suspensions plan, 3D overlays). */
 const LASER_LENGTH = 10;
