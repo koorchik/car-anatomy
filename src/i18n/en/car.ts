@@ -72,7 +72,7 @@ export const CAR_EN: Record<string, string> = {
   // The overview (stage C1b): the chips, the cards of the systems, the article and the table "All cars".
   'Головна передача й диференціал': 'Final drive and differential',
   'Остання пара шестерень перед колесами та диференціал, який дає колесам крутитися з різною швидкістю в повороті.': 'The last pair of gears before the wheels, and the differential that lets the wheels turn at different speeds in a corner.',
-  'Піввісі': 'Halfshafts',
+  'Піввісі': 'Half-shafts',
   'Вали від диференціала до коліс, із шарнірами рівних кутових швидкостей на обох кінцях.': 'Shafts from the differential to the wheels, with constant-velocity joints at both ends.',
   'Рейка й рульові тяги, що повертають передні колеса.': 'The rack and the tie rods that turn the front wheels.',
   'Колеса й шини': 'Wheels and tires',
@@ -187,6 +187,7 @@ export const CAR_EN: Record<string, string> = {
   'Як вихлоп формує звук, пояснює стаття двигуна.': 'The engine’s article explains how the exhaust shapes the sound.',
   'Олива стікає в піддон під колінвалом, а насос бере її звідти через заборник. У довгому повороті чи на гальмуванні олива хлюпає до стінки піддона, і заборник може хапнути повітря: що з цього виходить на треку, показує сторінка оливи.': 'Oil drains into the pan under the crankshaft, and the pump draws it from there through the pickup. In a long corner or under braking the oil sloshes to the wall of the pan, and the pickup can suck in air: what that leads to on track is shown on the oil page.',
   'Олива збирається в картері, а насос бере її звідти. Що з нею відбувається в поворотах на треку, показує сторінка оливи.': 'Oil collects in the sump, and the pump draws it from there. What happens to it in corners on track is shown on the oil page.',
+  'Олива': 'Oil',
   'Олива з фільтром': 'Oil with filter',
   'повітряне': 'air',
   'Радіатор стоїть у носі, де повітря найбільше. Гаряча рідина від двигуна йде верхнім патрубком у радіатор, а охолоджена нижнім повертається до насоса. Розмір радіатора тут типовий.': 'The radiator sits in the nose, where there is the most air. Hot coolant from the engine goes through the upper hose into the radiator, and the cooled coolant returns to the pump through the lower one. The radiator’s size here is typical.',
