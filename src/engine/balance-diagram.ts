@@ -6,7 +6,7 @@
 //               first chain ended. Each chain closes on its own when that half cancels, and the end of the second is
 //               the view's sum. V, VR, W and boxer engines, and any view with counterweights or shafts, which turn
 //               only one way. A boxer's halves are mirror images too, but its two banks are the point of the picture
-//               («А4», item 5), so it keeps both.
+//               (item 5 of A4 in the build order), so it keeps both.
 //   projection  pistons alone on an inline engine: the chain against the crank is the mirror image of the one with
 //               it (PhasorView.mirror), so only one polygon is drawn, of whole vectors turning with the crank (each
 //               half doubled). The force along the cylinders is its shadow on their axis, as in the textbook picture of
@@ -48,7 +48,11 @@ export type ChainSide = 'plus' | 'minus';
 
 export interface DiagramChain {
   side: ChainSide;
-  /** Elements of the view this chain draws, in the view's order: those with nothing on this side are left out. */
+  /**
+   * Elements of the view this chain draws, those with nothing on this side left out. They go round by direction,
+   * clockwise from +Y at theta = 0: all of a chain turn together, so a chain that closes stays a convex polygon
+   * instead of a path that doubles back on itself, which is hard to see closing.
+   */
   elements: PhasorElement[];
   /**
    * Whether the chain comes back to where it started, as the word says: every chain of a balanced view does, and of a
@@ -103,7 +107,17 @@ export function planDiagram(view: PhasorView, quantity: Quantity, inline: boolea
   const big = view.elements.reduce((m, el) => Math.max(m, amount(el, 'plus'), amount(el, 'minus')), 0);
   const chains: DiagramChain[] = [];
   for (const side of sides) {
-    const elements = view.elements.filter((el) => big > 0 && amount(el, side) > big * EMPTY);
+    const direction = (el: PhasorElement): number => {
+      const k = weightOf(el, quantity);
+      // At theta = 0 a phasor w = Fy + i Fx points atan2(Fx, Fy) clockwise from +Y.
+      const a = Math.atan2(k * el[side].im, k * el[side].re);
+      return a < -1e-9 ? a + 2 * Math.PI : Math.max(a, 0);
+    };
+    const elements = view.elements
+      .filter((el) => big > 0 && amount(el, side) > big * EMPTY)
+      .map((el) => ({ el, a: direction(el) }))
+      .sort((p, q) => p.a - q.a)
+      .map((p) => p.el);
     const locus = sum.locus;
     const closes = locus.shape === 'point' || (!projection && locus.shape === 'circle' && side === (locus.sense > 0 ? 'minus' : 'plus'));
     if (elements.length) chains.push({ side, elements, closes });

@@ -83,7 +83,11 @@ const forcesAtRedline = (engine: Engine): string => {
           : bf.higherLeft()
             ? t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, а {after} 1-й і 2-й порядки гасять одне одного. Лишаються лише слабкі вищі порядки, до {force} Н.', values)
             : t('На межі обертів ({rpm} об/хв) сила інерції одного поршня сягає {piston} Н, але {after} всі вони гасять одна одну.', values);
-  return `<p>${text} <button type="button" class="btn forces-show" data-show-forces>${t('Показати стрілки сил на моделі')}</button></p>`;
+  // The card's force polygon shows what the bars and figures only state: which forces cancel and which are left.
+  const polygon = engine.isRotary
+    ? ''
+    : ` ${t('Чому так, видно в картці сил поруч із моделлю: многокутник складає сили голова до хвоста й замикається лише там, де вони гасять одна одну, а слово під ним каже, як хитає двигун те, що лишилось.')}`;
+  return `<p>${text}${polygon} <button type="button" class="btn forces-show" data-show-forces>${t('Показати сили на моделі й на схемі')}</button></p>`;
 };
 
 const balanceChart = (engine: Engine): string => {
