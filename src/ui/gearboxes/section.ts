@@ -6,7 +6,12 @@
 // Time: the real mode turns the input at the engine's revs, the readable mode slows the whole box by one factor
 // (readableDegreesPerSecond, so every member stays in mesh), slow motion holds the crank at walking pace through
 // Drive.lock, as on the engine pages. Before the engine is first started the box turns as at idle, so the page is not
-// dead on arrival. There are no keys of its own yet: they come with the drive mode through the KeyMap.
+// dead on arrival.
+//
+// The car mode (stage K3a, car-mode.ts, its own chunk) puts the page's car on the crank: the same box, now
+// driven through the clutch to the wheels; the dash shows speed and gear, and the digits are the gears. Only the real
+// time there: a slowed wheel under a car at full speed would look like wheelspin. In the car, muting the sound stops
+// the audio thread and the main-thread copy drives on from where it was (Drive hands the car over both ways).
 
 import * as THREE from 'three';
 import type { Drive } from '../../audio/drive.ts';
@@ -21,20 +26,23 @@ import { layshaftSpec } from '../../drivetrain/layouts/layshaft.ts';
 import { TableDrive } from '../../drivetrain/table-drive.ts';
 import { buildGearbox, type Gearbox } from '../../drivetrain/topology.ts';
 import { buildEngine, type Engine } from '../../engine/kinematics.ts';
+import { withDictionaries } from '../../i18n/dictionaries.ts';
 import { numberLocale } from '../../i18n/locale.ts';
 import { t } from '../../i18n/t.ts';
 import { GearboxModel } from '../../scene/gearbox/gearbox-model.ts';
 import { GEARBOX_PARTS } from '../../scene/gearbox/parts.ts';
 import { registerParts } from '../../scene/parts-registry.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
-import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
+import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, TimeMode, Viewport } from '../../shell/section.ts';
 import { readableDegreesPerSecond } from '../../shell/time.ts';
 import { parseTyreSize, rollingRadiusM } from '../../vehicle/tyre-size.ts';
 import { Ignition } from '../widgets/ignition.ts';
 import { Pedal } from '../widgets/pedal.ts';
 import { Tacho } from '../widgets/tacho.ts';
 import { gearboxArticleHtml } from './article.ts';
+import type { CarMode } from './car-mode.ts';
 import { alwaysTurningSteps, type DemoStep } from './demo.ts';
+import { GEARBOX_KEY_CONTEXTS, gearboxKeys } from './keys.ts';
 import { GEARBOX_PAGES_SHOWN } from './load.ts';
 import { dashHtml, panelHtml, resultsHtml, SLOW_RPM_DEFAULT, statusHtml, SVG_SOUND_OFF, SVG_SOUND_ON, titleHtml, toolsHtml } from './markup.ts';
 import { SetupPanel } from './setup-panel.ts';
@@ -54,6 +62,11 @@ const FIT = 0.8;
 const FIT_PHONE = 0.88;
 /** The gear a demonstration step points at. */
 const MARK = '#ffd27a';
+
+/** The car mode, fetched with the catalogue's torque maps the first time a visitor gets in. */
+const loadCarMode = (): Promise<typeof import('./car-mode.ts')> => withDictionaries(['engines', 'gearboxes', 'presets'], () => import('./car-mode.ts'));
+
+export type GearboxMode = 'table' | 'drive';
 
 const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { maximumFractionDigits: digits, minimumFractionDigits: digits });
 
@@ -101,6 +114,18 @@ export class GearboxSection implements Section {
   private markerMaterial: THREE.MeshBasicMaterial | null = null;
   private markedGear: string | null = null;
   private demo: { steps: DemoStep[]; at: number } | null = null;
+  /** On the table or in the car, as the address has it (m=drive). */
+  mode: GearboxMode = 'table';
+  /** The car mode once loaded; `car.on` while the car is on the crank. */
+  car: CarMode | null = null;
+  /** Counts mode changes, so a car mode that loads late does not override a later choice. */
+  private modeTicket = 0;
+  /** The time mode before the car took it to the real one, to give back on the table. */
+  private timeBefore: TimeMode | null = null;
+  /** The audio thread was stopped for the mute in the car (Drive.pause). */
+  private pausedForMute = false;
+  /** The gear the buttons show pressed, so the DOM is touched only on a change. */
+  private pressedGear = '';
   /** Skeleton texts and states this section changes while it is shown, to give back on leave. */
   private readonly lent = new Map<HTMLElement, { text?: string; hidden?: boolean; current?: boolean }>();
   private fitScaleBefore = 0.68;
@@ -138,6 +163,18 @@ export class GearboxSection implements Section {
     this.pedal = new Pedal(this.el('gbx-pedal-col'), { setThrottle: (value) => this.drive.setPedal(value), press: () => void this.pressThrottle() });
     this.ignition = new Ignition(this.el('gbx-control'), () => void this.toggleIgnition());
     this.listen();
+    const keys = gearboxKeys({
+      gas: (on) => this.pedal.holdKey(on),
+      ignition: () => void this.toggleIgnition(),
+      mute: () => {
+        this.muted = !this.muted;
+        this.syncSound();
+      },
+      gear: (name) => this.selectGear(name),
+      brake: (on) => this.car?.holdBrakeKey(on),
+    });
+    ctx.keys.bind('gearboxes', keys.gearboxes);
+    ctx.keys.bind('gearboxes/drive', keys.drive);
     // The row of view tools wraps on a phone and in the longer language; the first-visit callout and the scale bar stand
     // above it through --tools-h, which on the engine pages their systems view measures.
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.measureTools()).observe(slots.tools.parent);
@@ -156,8 +193,10 @@ export class GearboxSection implements Section {
       this.showPage();
       this.present();
     }
+    const mode: GearboxMode = route.query.m === 'drive' ? 'drive' : 'table';
+    if (mode !== this.mode || (mode === 'drive' && !this.car?.on)) void this.setMode(mode);
     if (from === null || route.query.demo !== from.query.demo) {
-      if (route.query.demo === DEMO_ID) this.startDemo();
+      if (route.query.demo === DEMO_ID && this.mode === 'table') this.startDemo();
       else if (this.demo) this.closeDemo();
     }
   }
@@ -165,6 +204,11 @@ export class GearboxSection implements Section {
   leave(): void {
     this.away = true;
     this.closeDemo();
+    this.modeTicket++;
+    this.car?.leave();
+    this.mode = 'table';
+    if (this.pausedForMute) this.drive.pause(false);
+    this.pausedForMute = false;
     this.pedal.reset();
     const drive = this.drive;
     drive.lock(null);
@@ -206,6 +250,10 @@ export class GearboxSection implements Section {
   }
 
   time(): TimeCapabilities {
+    if (this.mode === 'drive') {
+      const reason = t('В авто час іде справжній');
+      return { modes: ['slow', 'readable', 'real'], unavailable: { slow: reason, readable: reason } };
+    }
     return { modes: ['slow', 'readable', 'real'] };
   }
 
@@ -305,9 +353,9 @@ export class GearboxSection implements Section {
     this.drive.lock(time.mode === 'slow' ? this.slowRpm : null);
     const small = window.innerWidth <= PHONE;
     panels.setOpen('right', !small);
-    panels.setOpen('left', !small && window.innerWidth >= BOTH_PANELS);
+    panels.setOpen('left', !small && window.innerWidth >= BOTH_PANELS && this.mode === 'table');
     panels.relayout();
-    this.ctx.keys.use(['gearboxes']);
+    this.ctx.keys.use(this.mode === 'drive' ? GEARBOX_KEY_CONTEXTS.drive : GEARBOX_KEY_CONTEXTS.table);
   }
 
   /** The height the row of view tools takes above the dash, for what stands over it (--tools-h). */
@@ -343,6 +391,8 @@ export class GearboxSection implements Section {
     if (!sameMembers) this.sinceRebuild = REBUILD_S;
     if (this.demo) this.demo.steps = alwaysTurningSteps(box, this.data.engine.spec.idleRpm);
     this.showDemoStep();
+    // In the car (the phone's settings sheet stays open to it) the car takes the new box, standing in neutral.
+    if (this.car?.on) void this.setMode('drive');
   }
 
   private buildModel(keepCamera: boolean): void {
@@ -366,11 +416,71 @@ export class GearboxSection implements Section {
       .filter((name) => name === 'N' || this.box.states.some((s) => s.name === name))
       .map((name) => `<button type="button" data-gear="${name}" aria-pressed="${name === selected}">${name}</button>`)
       .join('');
+    this.pressedGear = selected;
   }
 
   private selectGear(name: string): void {
+    if (!this.box.states.some((s) => s.name === name)) return;
+    if (this.mode === 'drive') {
+      // The car takes the gear through its auto clutch; the buttons follow what it asks for (frame).
+      this.car?.gear(name);
+      return;
+    }
     this.table.select(name);
+    this.pressGear(name);
+  }
+
+  private pressGear(name: string): void {
+    if (name === this.pressedGear) return;
+    this.pressedGear = name;
     for (const button of this.el('gbx-gears').querySelectorAll<HTMLButtonElement>('button')) button.setAttribute('aria-pressed', String(button.dataset.gear === name));
+  }
+
+  // ---- The car ----
+
+  /** On the table or in the car. The address says which (m=drive); a click writes it, and enter() comes here. */
+  private async setMode(mode: GearboxMode): Promise<void> {
+    const ticket = ++this.modeTicket;
+    const { time, panels, keys } = this.ctx;
+    if (mode === 'drive') {
+      this.closeDemo();
+      const module = await loadCarMode();
+      const record = this.data.page.base;
+      if (ticket !== this.modeTicket || this.away || !record.car) return;
+      this.car ??= new module.CarMode(this.root, () => this.drive);
+      if (this.mode !== 'drive') this.timeBefore = time.mode;
+      this.mode = 'drive';
+      this.car.enter(module.pageCarRecords(record.car, record, this.desc, this.setup.finalDrive));
+      this.demoMode = false;
+      panels.setOpen('left', false);
+      panels.relayout();
+    } else {
+      this.mode = 'table';
+      this.car?.leave();
+      if (this.pausedForMute) this.drive.pause(false);
+      this.pausedForMute = false;
+      // The table's box takes on in the gear the car was in.
+      this.pressedGear = '';
+      this.pressGear(this.table.selected);
+    }
+    time.refresh();
+    if (mode === 'table' && this.timeBefore) {
+      time.set(this.timeBefore);
+      this.timeBefore = null;
+    }
+    keys.use(mode === 'drive' ? GEARBOX_KEY_CONTEXTS.drive : GEARBOX_KEY_CONTEXTS.table);
+    for (const button of this.el('gbx-modes').querySelectorAll<HTMLButtonElement>('button')) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
+    this.el('gbx-mode-text').textContent = mode === 'drive' ? t('двигун через зчеплення й коробку везе авто, зчеплення працює саме') : t('двигун крутить первинний вал, вихід вільний');
+    this.el<HTMLButtonElement>('gbx-setup-toggle').disabled = mode === 'drive';
+    this.el<HTMLButtonElement>('gbx-setup-toggle').title = mode === 'drive' ? t('Коробку налаштовують на столі, а авто їде з нею') : '';
+    this.el<HTMLButtonElement>('gbx-demo-open').hidden = mode === 'drive';
+    this.syncSound();
+  }
+
+  /** A click on the mode buttons: the address changes, and enter() switches. */
+  private routeMode(mode: GearboxMode): void {
+    this.ctx.router.replace({ query: { m: mode === 'drive' ? 'drive' : null, demo: null } });
+    if (mode !== this.mode) void this.setMode(mode);
   }
 
   // ---- Controls ----
@@ -410,6 +520,10 @@ export class GearboxSection implements Section {
       this.muted = !this.muted;
       this.syncSound();
     });
+    this.el('gbx-modes').addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-mode]');
+      if (button) this.routeMode(button.dataset.mode as GearboxMode);
+    });
     this.el('gbx-setup-toggle').addEventListener('click', () => this.toggleSetup());
     this.el('gbx-demo-open').addEventListener('click', () => this.routeDemo(true));
     this.el('gbx-article').addEventListener('click', (event) => {
@@ -436,6 +550,12 @@ export class GearboxSection implements Section {
 
   private syncSound(): void {
     this.drive.setVolume(this.volume, this.muted);
+    // In the car a mute stops the audio thread: the main-thread copy drives on, and the car comes back to it unmuted.
+    const pause = this.muted && this.mode === 'drive';
+    if (pause !== this.pausedForMute) {
+      this.pausedForMute = pause;
+      this.drive.pause(pause);
+    }
     const button = this.el('gbx-mute');
     button.innerHTML = this.muted ? SVG_SOUND_OFF : SVG_SOUND_ON;
     button.setAttribute('aria-pressed', String(this.muted));
@@ -544,10 +664,12 @@ export class GearboxSection implements Section {
         : time.mode === 'readable'
           ? readableDegreesPerSecond(rpm, spec.idleRpm, spec.redlineRpm) / 6
           : rpm;
-    this.table.step(frozen ? 0 : dt, shownRpm);
+    const carPose = this.car?.on ? this.car.frame(frozen ? 0 : dt, snap) : null;
+    if (!this.car?.on) this.table.step(frozen ? 0 : dt, shownRpm);
+    else if (snap?.vehicle) this.pressGear(snap.vehicle.selected);
     if (this.model) {
       if (this.rebuildDue && (this.sinceRebuild += dt) >= REBUILD_S) this.buildModel(true);
-      const pose = this.table.frame();
+      const pose = carPose ?? this.table.frame();
       if (this.glow) this.model.update(pose);
       else {
         this.unlit.angles = pose.angles;
@@ -567,7 +689,7 @@ export class GearboxSection implements Section {
 
     const figuresRpm = time.mode === 'slow' && (running || this.demoMode) ? this.slowRpm : rpm;
     this.tacho.update(this.demoMode ? spec.idleRpm : engineRpm, running && snap!.fuelCut && engineRpm > spec.redlineRpm - 200);
-    this.readouts(figuresRpm);
+    if (!this.car?.on) this.readouts(figuresRpm);
     if (running !== this.ignition.on && !this.demoMode && !this.starting) this.ignition.show(running);
   }
 
