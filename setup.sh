@@ -22,11 +22,11 @@ for remote in $(git -C "$REPO" for-each-ref --format='%(refname:short)' refs/rem
   branch=${remote#origin/}
   if ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$branch"; then
     git -C "$REPO" branch --quiet --track "$branch" "$remote"
-    echo "created $branch from $remote"
+    echo "created $branch from $remote" >&2
   elif git -C "$REPO" merge-base --is-ancestor "$branch" "$remote" && [ "$(git -C "$REPO" rev-parse "$branch")" != "$(git -C "$REPO" rev-parse "$remote")" ]; then
     # Behind the remote: fast-forward, unless a worktree has it checked out (then merge there by hand).
     if git -C "$REPO" branch --quiet -f "$branch" "$remote" 2>/dev/null; then
-      echo "fast-forwarded $branch"
+      echo "fast-forwarded $branch" >&2
     else
       echo "NOTE: $branch is behind $remote but checked out in a worktree; run git merge $remote there" >&2
     fi
@@ -35,10 +35,10 @@ done
 
 if [ ! -d "$WT/next" ]; then
   git -C "$REPO" worktree add --quiet "$WT/next" next
-  echo "worktree $WT/next created"
+  echo "worktree $WT/next created" >&2
 fi
 if [ ! -d "$WT/next/node_modules" ]; then
-  (cd "$WT/next" && npm ci --prefer-offline --silent)
+  (cd "$WT/next" && npm ci --prefer-offline --silent >&2)
 fi
 
 merged=$(git -C "$REPO" log next --merges --format=%s | sed -n 's/^Merge \([A-Za-z0-9-]*\):.*/\1/p' | sort -u | tr '\n' ' ')
