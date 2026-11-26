@@ -19,7 +19,7 @@ import { coneTorque, syncTime } from '../src/drivetrain/synchro-math.ts';
 import { buildGearbox, stateByName } from '../src/drivetrain/topology.ts';
 import { catalogueTorqueMap } from '../src/designer/torque-map.ts';
 import { cardanRatio, singleJoint, twoJoints } from '../src/drivetrain/cardan.ts';
-import { buildCarDrive } from '../src/data/car-drive.ts';
+import { buildCarDrive, buildPowerSplitDrive } from '../src/data/car-drive.ts';
 import { carVehicle, type CarDrive } from '../src/drivetrain/car-model.ts';
 import { DISC } from '../src/drivetrain/core.ts';
 import { stribeckMu } from '../src/drivetrain/elements.ts';
@@ -42,6 +42,9 @@ import { LoadedCrank } from '../src/engine/loaded-crank.ts';
 import { EngineSim } from '../src/engine/sim.ts';
 import { peakTorque } from '../src/engine/torque-map.ts';
 import { VehicleLoad, type VehicleCommand } from '../src/vehicle/vehicle-load.ts';
+import type { MotorLimits } from '../src/drivetrain/control/ths.ts';
+import { ENGINE_CARRIER, MG1_ROTOR, RING } from '../src/drivetrain/layouts/power-split.ts';
+import { hybridRig, hybridRun, mg1Crossing, runRig } from '../src/drivetrain/power-split-runs.ts';
 
 const STEPS = [1 / 3000, 16 / 44100, 32 / 48000, 0.001, 0.005];
 const box = buildGearbox(gearboxSpec(gearboxById('manual-rwd')!));
@@ -802,4 +805,151 @@ describe('17. Cardan joints', () => {
     const one = range((t) => singleJoint(t, 10 * DEG).omega);
     expect(Math.abs(range((t) => twoJoints(t, 10 * DEG, Math.PI / 2)) / one - 2)).toBeLessThan(0.02);
   });
+});
+
+// Whole runs with the real engine at 1 ms (45 s of road in the first): longer than vitest's 5 s on a busy machine.
+describe('11. the Prius power-split hybrid', () => {
+  const pd = buildPowerSplitDrive('toyota-prius-xw30');
+  const k = pd.kin;
+  const RPM_ = 30 / Math.PI;
+
+  it('keeps 30·ω_MG1 + 78·ω_ring = 108·ω_engine on every step of a floored start, and never passes a motor\'s or the battery\'s limits', () => {
+    const b = pd.hybrid.battery;
+    let willis = 0;
+    let steps = 0;
+    const over: string[] = [];
+    let socLo = 1;
+    hybridRun(pd, { seconds: 45, observe: (r) => {
+      const s = r.load.vehicle.solver;
+      const c = r.load.control;
+      const m = (id: string) => s.memberSpeed(s.core.members.indexOf(id));
+      const e = m(ENGINE_CARRIER);
+      willis = Math.max(willis, Math.abs(30 * m(MG1_ROTOR) + 78 * m(RING) - 108 * e) / Math.max(1, Math.abs(108 * e)));
+      steps++;
+      const lim = (name: string, nm: number, w: number, l: MotorLimits) => {
+        if (Math.abs(nm) > l.maxNm + 1e-9) over.push(`${name} torque`);
+        if (Math.abs(nm * w) > l.maxW + 1e-6) over.push(`${name} power`);
+        if (Math.abs(w) > l.maxOmega) over.push(`${name} speed`);
+      };
+      lim('MG1', c.mg1Nm, c.mg1Omega, pd.mg1);
+      lim('MG2', c.mg2Nm, c.mg2Omega, pd.mg2);
+      if (c.batteryW > 1000 * b.maxDischargeKw + 1 || c.batteryW < -1000 * b.maxChargeKw - 1) over.push('battery');
+      socLo = Math.min(socLo, c.soc);
+    } });
+    expect(steps).toBeGreaterThan(10000);
+    expect(willis).toBeLessThan(1e-9);
+    expect([...new Set(over)]).toEqual([]);
+    expect(socLo).toBeGreaterThan(b.socMin - 0.005);
+  }, 60_000);
+
+  it('MG1 stands where the analytic ring speed (108/78)·ω_engine says, with the engine held at 1000 and 2000 rpm', () => {
+    for (const rpm of [1000, 2000]) {
+      const run = mg1Crossing(pd, rpm);
+      expect(run, `${rpm} rpm`).not.toBeNull();
+      expect(Math.abs(run!.ringRpm - (108 / 78) * rpm), `${rpm} rpm`).toBeLessThan(0.5);
+    }
+    // Research §12's example, gens 1–2 share the set: engine 2000 rpm, ring 3000 rpm, MG1 −600 rpm.
+    expect(k.mg1[0] * 2000 + (k.mg1[1] * 3000) / k.ring).toBeCloseTo(-600, 9);
+  }, 60_000);
+
+  it('splits the engine torque 72/28: MG1 holds 30/108 of what the car takes from the crank, the ring gets the rest', () => {
+    const r = hybridRig(pd);
+    const c = r.load.control;
+    c.holdOmega = 2500 / RPM_;
+    c.holdShare = 0.6;
+    c.pedal = 0.3;
+    runRig(r, 8);
+    expect(r.sim.state).toBe('running');
+    const s = r.load.vehicle.solver;
+    const sunIndex = s.core.members.indexOf(MG1_ROTOR);
+    const w0 = s.memberSpeed(sunIndex);
+    r.load.readings();
+    let mg1 = 0;
+    let n = 0;
+    runRig(r, 1, () => {
+      mg1 += c.mg1Nm;
+      n++;
+    });
+    const crank = r.load.readings().crankNm;
+    // The car still gathers speed, so MG1 slows: what its rotor gives up reaches the sun too.
+    const sun = -(mg1 / n) + s.core.inertia[sunIndex]! * (s.memberSpeed(sunIndex) - w0);
+    // The sun holds 28 % of the crank's torque; the set's balance leaves the other 72 % to the ring.
+    expect(Math.abs(sun / crank - 30 / 108)).toBeLessThan(0.01 * (30 / 108));
+  }, 60_000);
+
+  it('pulls away on MG2 alone with the engine at rest, and the floored pedal lights the engine with MG1, never cranking it', () => {
+    const r = hybridRig(pd);
+    r.load.control.pedal = 0.15;
+    const states = new Set<string>();
+    runRig(r, 8, () => void states.add(r.sim.state));
+    expect([...states]).toEqual(['off']);
+    expect(r.load.chassis.v * 3.6).toBeGreaterThan(15);
+    expect(r.sim.rpm).toBe(0);
+    r.load.control.pedal = 1;
+    runRig(r, 3, () => void states.add(r.sim.state));
+    expect(r.sim.state).toBe('running');
+    expect(states.has('cranking')).toBe(false);
+  }, 60_000);
+
+  it('a lifted pedal brings the engine down without a surge of the car or a stall on the way', () => {
+    for (const kmh of [50, 100]) {
+      const r = hybridRig(pd);
+      const c = r.load.control;
+      c.pedal = 1;
+      runRig(r, 30, () => r.load.chassis.v > kmh / 3.6);
+      c.pedal = 0;
+      let t = 0;
+      let lowest = Number.POSITIVE_INFINITY;
+      const at: number[] = [];
+      runRig(r, 3, () => {
+        t += r.dt;
+        // While the control still wants the engine, MG1 brings it down to its target and holds it there.
+        if (c.engineOn) lowest = Math.min(lowest, r.sim.rpm);
+        for (const mark of [0.15, 0.5, 1]) if (at.length < 3 && Math.abs(t - mark) < r.dt / 2) at.push(r.load.chassis.v);
+      });
+      expect(lowest, `${kmh} km/h`).toBeGreaterThan(0.8 * pd.map.idleRpm);
+      // The engine's torque dies with its throttle in tens of milliseconds; after that the car only slows. The
+      // engine's spin-down energy goes into the battery, or the engine comes down more slowly: it does not drive the car.
+      expect(at[1]!, `${kmh} km/h`).toBeLessThan(at[0]!);
+      expect(at[2]!, `${kmh} km/h`).toBeLessThan(at[1]!);
+    }
+  }, 60_000);
+
+  it('the brake pedal stops the car and holds it: recovery only slows it, and MG2 never drives it backward', () => {
+    const r = hybridRig(pd);
+    const c = r.load.control;
+    c.pedal = 0.5;
+    runRig(r, 30, () => r.load.chassis.v > 50 / 3.6);
+    c.pedal = 0;
+    c.brake = 0.4;
+    let vMin = 0;
+    let recovered = 0;
+    let driven = 0;
+    let pushedBack = 0;
+    let t = 0;
+    runRig(r, 10, () => {
+      t += r.dt;
+      const v = r.load.chassis.v;
+      vMin = Math.min(vMin, v);
+      // MG2's mechanical power is negative while it recovers. Once the engine's torque has died away with its
+      // throttle (the manifold empties in tens of milliseconds), MG2 never drives under the brake pedal: an engine
+      // spinning down must not have its energy sent to the wheels against the brakes. Standing or rolling back, MG2
+      // holds no torque (the control sees the speed a step late, hence a newton-metre's slack).
+      const p2 = c.mg2Nm * c.mg2Omega;
+      if (v > 5) recovered = Math.min(recovered, p2);
+      if (t > 0.1) driven = Math.max(driven, p2);
+      if (v <= 0) pushedBack = Math.max(pushedBack, Math.abs(c.mg2Nm));
+    });
+    expect(recovered).toBeLessThan(-10000);
+    expect(driven).toBeLessThan(50);
+    expect(pushedBack).toBeLessThan(1);
+    // The tyres' own spring lets the body settle back a little once the wheels stand, nothing more.
+    expect(vMin * 3.6).toBeGreaterThan(-1);
+    expect(Math.abs(r.load.chassis.v * 3.6)).toBeLessThan(0.05);
+    // Standing on the brake with nothing asked, the motors hold no torque against it.
+    c.brake = 1;
+    runRig(r, 1);
+    expect(Math.abs(c.mg2Nm)).toBe(0);
+    expect(r.load.vehicle.bus.brakeNm.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+  }, 60_000);
 });

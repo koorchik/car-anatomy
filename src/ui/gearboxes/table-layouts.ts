@@ -144,5 +144,7 @@ export function tableLayout(record: GearboxRecord, axleFinalDrive: number | null
     case 'planetary':
       // The planetary automatic has a page of its own (pages.ts), not the layshaft table.
       throw new Error(`${record.id}: a planetary box is shown on its own page, not on the table`);
+    case 'power-split':
+      throw new Error(`${record.id}: a power-split box has no table layout`);
   }
 }

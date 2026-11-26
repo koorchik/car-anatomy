@@ -1,7 +1,8 @@
 // buildGearbox(): everything the gearbox data implies (docs/gearbox-model.md, the derivation section).
 //
 // 1. Members and their inertias (gears add a steel disc on the reference circle).
-// 2. Permanent links A: one row per mesh, z_a(ω_a − ω_c) ± z_b(ω_b − ω_c) = 0, and one per rigid coupling.
+// 2. Permanent links A: one row per mesh, z_a(ω_a − ω_c) ± z_b(ω_b − ω_c) = 0, one per rigid coupling and one per
+//    member bolted to the case (ω = 0).
 // 3. Base coordinates: ω = P·φ̇ over the null space of A, with the input first and the output second, so the base
 //    coordinates mean something (input shaft speed, output speed).
 // 4. Element rows in base coordinates: B_e = P_a − P_b for a clutch, B_e = P_a for a brake.
@@ -91,7 +92,7 @@ export interface Gearbox {
   members: string[];
   /** kg·m², in `members` order: data inertia plus the gears' own. */
   inertia: number[];
-  /** Permanent links in member space: one row per mesh, then one per coupling. */
+  /** Permanent links in member space: one row per mesh, then one per coupling, then one per grounded member. */
   links: Matrix;
   /** ω = P·φ̇, members × base coordinates. */
   P: Matrix;
@@ -212,6 +213,11 @@ export function buildGearbox(spec: GearboxSpec): Gearbox {
     const row = new Array<number>(members.length).fill(0);
     row[at(a, 'coupling')] = 1;
     row[at(b, 'coupling')] = -1;
+    links.push(row);
+  }
+  for (const id of spec.grounded ?? []) {
+    const row = new Array<number>(members.length).fill(0);
+    row[at(id, 'a grounded member')] = 1;
     links.push(row);
   }
 

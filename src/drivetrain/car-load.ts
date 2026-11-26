@@ -26,7 +26,7 @@ const BALANCE_G = 0.8;
  * Brake torque each wheel holds with the pedal floored, N·m: BRAKE_FLOORED_G of the car's weight at the tyres, split
  * front to rear as the axle loads are at BALANCE_G (static share plus the transfer h/L·a/g).
  */
-export function brakeTorques(cd: CarDrive): number[] {
+export function brakeTorques(cd: Pick<CarDrive, 'car' | 'radius'>): number[] {
   const { car } = cd;
   const front = Math.min(0.9, car.body.frontShare + (cgHeightM(car) / car.body.wheelbaseM) * BALANCE_G);
   const force = BRAKE_FLOORED_G * drivingMassKg(car) * G;

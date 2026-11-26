@@ -126,7 +126,7 @@ function transaxleSleeves(n: number): TransaxleSleeveDesc[] {
 }
 
 /** The layout description of a design, as a catalogue record would hold it. */
-export function designLayout(d: GearboxDesign, teeth = designTeeth(d)): Exclude<GearboxLayout, { kind: 'planetary' }> {
+export function designLayout(d: GearboxDesign, teeth = designTeeth(d)): Exclude<GearboxLayout, { kind: 'planetary' | 'power-split' }> {
   const id = 'designer';
   const pair = (p: PickedPair) => ({ teeth: p.teeth, module: p.module, faceWidth: p.faceWidth, shift: p.shift });
   const r = teeth.reverse;

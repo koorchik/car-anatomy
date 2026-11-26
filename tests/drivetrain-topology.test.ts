@@ -12,6 +12,9 @@ import type { GearboxSpec } from '../src/drivetrain/spec.ts';
 import { assemblableCounts, chosenPlanetCount, planetarySpec, type PlanetaryDesc } from '../src/drivetrain/layouts/planetary.ts';
 import { exactEfficiency } from '../src/drivetrain/mesh-losses.ts';
 import { ZF8HP_GEARS } from '../src/data/gearboxes/zf-8hp.ts';
+import {
+  DIFF, ENGINE_CARRIER, MG1, MG1_ROTOR, MG2, MG2_ROTOR, mg1StillOutput, powerSplitSpec, REDUCTION_CARRIER, RING, splitKinematics, type PowerSplitDesc,
+} from '../src/drivetrain/layouts/power-split.ts';
 
 const e30Record = gearboxById('manual-rwd')!;
 const e30 = buildGearbox(gearboxSpec(e30Record));
@@ -482,5 +485,67 @@ describe('ZF 8HP: four planetary sets, five elements', () => {
       gears: [{ name: 'R', closed: ['X'] }],
     }));
     expect(stateByName(box, 'R').ratio!).toBeCloseTo(-set.ring / set.sun, 12);
+  });
+});
+
+describe('Toyota P410: the Prius power-split box', () => {
+  const record = gearboxById('power-split')!;
+  const desc = record.layout.desc as PowerSplitDesc;
+  const box = buildGearbox(gearboxSpec(record));
+  const speed = (id: string, engine: number, out: number) => {
+    const row = box.P[box.members.indexOf(id)]!;
+    return row[0]! * engine + row[1]! * out;
+  };
+
+  it('1. the teeth give 30·ω_MG1 + 78·ω_ring = 108·ω_engine, the MG2 reduction 2.636 and 3.268 from the ring to the differential', () => {
+    for (const [engine, out] of [[0, 1], [1, 0], [209.4, 91.7], [-3, 40]] as const) {
+      const lhs = 30 * speed(MG1_ROTOR, engine, out) + 78 * speed(RING, engine, out);
+      expect(lhs).toBeCloseTo(108 * speed(ENGINE_CARRIER, engine, out), 9);
+      // MG2's carrier stands, so its sun turns against the ring by z_r/z_s.
+      expect(speed(MG2_ROTOR, engine, out)).toBeCloseTo((-58 / 22) * speed(RING, engine, out), 9);
+      expect(Math.abs(speed(REDUCTION_CARRIER, engine, out))).toBe(0);
+    }
+    const k = splitKinematics(box);
+    expect(Math.abs(k.mg2 / k.ring)).toBeCloseTo(2.636, 3);
+    expect(k.ring).toBeCloseTo((77 / 24) * (55 / 54), 12);
+    expect(k.ring).toBeCloseTo(3.268, 3);
+    // Toyota's differential ratio, 3.267, is the same figure cut after three places.
+    expect(Math.abs(k.ring - record.published.finalDrive!)).toBeLessThan(0.001);
+    // MG1 stands where the ring turns (30 + 78)/78 times the engine: research §12's example of 2000 and 3000 rpm.
+    expect(mg1StillOutput(k, 1) * k.ring).toBeCloseTo(108 / 78, 12);
+    expect(speed(MG1_ROTOR, 2000, 3000 / k.ring)).toBeCloseTo((108 * 2000 - 78 * 3000) / 30, 9);
+    expect((108 * 2000 - 78 * 3000) / 30).toBe(-600);
+  });
+
+  it('2. with nothing to close it keeps two motions, the engine and the wheels, and the motors sit on the suns', () => {
+    expect(box.states.map((s) => [s.name, s.kind, s.dof])).toEqual([['D', 'neutral', 2]]);
+    expect(box.basis).toEqual([ENGINE_CARRIER, DIFF]);
+    expect(box.spec.motors!.map((m) => [m.id, m.member])).toEqual([[MG1, MG1_ROTOR], [MG2, MG2_ROTOR]]);
+    // The output turns with the crank: forward is positive, as in every box.
+    expect(speed(DIFF, 0, 1)).toBe(1);
+    expect(speed(RING, 0, 1)).toBeGreaterThan(0);
+  });
+
+  it('6. ORNL\'s four and five planets satisfy the assembly condition; other counts are refused', () => {
+    expect((30 + 78) / 4).toBe(27);
+    expect((22 + 58) / 5).toBe(16);
+    expect(assemblableCounts(desc.split.sun, desc.split.ring)).toContain(desc.split.planets);
+    expect(assemblableCounts(desc.reduction.sun, desc.reduction.ring)).toContain(desc.reduction.planets);
+    expect(box.planets['P1']!.angles).toHaveLength(4);
+    expect(box.planets['P2']!.angles).toHaveLength(5);
+    // Research §2.2: S30/R78 with five planets cannot be assembled.
+    expect(() => buildGearbox(powerSplitSpec({ ...desc, split: { ...desc.split, planets: 5 } }))).toThrow(/assembly condition/);
+    expect(() => buildGearbox(powerSplitSpec({ ...desc, reduction: { ...desc.reduction, planets: 3 } }))).toThrow(/assembly condition/);
+  });
+
+  it('6. the sun is shifted so that 30, 23 and 78 run on one carrier; the reduction set needs no shift', () => {
+    const sun1 = box.spec.gears.find((g) => g.id === 'sun-1')!;
+    const sun2 = box.spec.gears.find((g) => g.id === 'sun-2')!;
+    expect(30 + 2 * 23).toBe(76);
+    expect(sun1.shift).toBeGreaterThan(1);
+    expect(sun1.shift).toBeLessThan(1.25);
+    expect(sun2.shift).toBe(0);
+    // Unshifted, the sun would reach a planet circle one module short of the ring's, and the data would not build.
+    expect(() => buildGearbox({ ...box.spec, gears: box.spec.gears.map((g) => (g.id === 'sun-1' ? { ...g, shift: 0 } : g)) })).toThrow(/runs at/);
   });
 });

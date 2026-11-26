@@ -4,6 +4,7 @@
 
 import { layshaftSpec, type LayshaftDesc } from './layouts/layshaft.ts';
 import { planetarySpec, type PlanetaryDesc } from './layouts/planetary.ts';
+import { powerSplitSpec, type PowerSplitDesc } from './layouts/power-split.ts';
 import { transaxleSpec, type TransaxleDesc } from './layouts/transaxle.ts';
 import type { GearboxSpec } from './spec.ts';
 
@@ -11,7 +12,8 @@ import type { GearboxSpec } from './spec.ts';
 export type GearboxLayout =
   | { kind: 'layshaft'; desc: LayshaftDesc }
   | { kind: 'transaxle'; desc: TransaxleDesc }
-  | { kind: 'planetary'; desc: PlanetaryDesc };
+  | { kind: 'planetary'; desc: PlanetaryDesc }
+  | { kind: 'power-split'; desc: PowerSplitDesc };
 
 /** Figures as published, to compare with what the teeth give. */
 export interface PublishedGearbox {
@@ -71,5 +73,7 @@ export function gearboxSpec(record: GearboxRecord): GearboxSpec {
       return transaxleSpec(record.layout.desc);
     case 'planetary':
       return planetarySpec(record.layout.desc);
+    case 'power-split':
+      return powerSplitSpec(record.layout.desc);
   }
 }
