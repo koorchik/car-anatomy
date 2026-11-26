@@ -238,12 +238,13 @@ export function pullAwayDemo(): CarDemo {
         frame: scripted([
           ...standStill({ autoClutch: false, gradePct: 15 }),
           (_v, c) => (c.gear('1'), true),
-          (v, c, time) => (gasFor(v, c, 2500, 0.7), time >= 0.8),
+          (v, c, time) => (gasFor(v, c, 2000, 0.7), time >= 0.8),
           (v, c, time) => {
-            gasFor(v, c, 2500, 0.7);
-            c.clutch(Math.max(0, 1 - time / 1.8));
-            if (time > 0.7) c.brake(0);
-            return time >= 1.8;
+            // The same foot through the bite as on the level (the first step), so the two heats compare.
+            gasFor(v, c, 2000, 0.8);
+            c.clutch(bitePedal(time, 2.5));
+            if (time > 1.2) c.brake(0);
+            return time >= 2.95;
           },
           (v, c, time) => {
             gasFor(v, c, 3500, 0.7);

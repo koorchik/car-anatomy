@@ -220,6 +220,11 @@ describe('the full dash in the car', () => {
     expect(up.r.sim.state).toBe('running');
     expect(up.r.load.chassis.x).toBeGreaterThan(5);
     expect(up.result).toMatch(/вгору/);
+    // The same foot through the bite at the same revs as on the level: up the hill the disc also holds the car's
+    // weight along the slope, so it slips longer and takes more heat, as the step says.
+    const kj = (result: string) => Number(result.replace(/[\s\u202f\u00a0]/g, '').match(/(\d+,\d+)кДж/)![1]!.replace(',', '.'));
+    const level = runDemoStep(() => pullAwayDemo(), 0);
+    expect(kj(up.result)).toBeGreaterThan(1.2 * kj(level.result));
   }, 120_000);
 
   it('demonstration 3 on the E30: 1→2 at 6750 rpm drops the engine to 6750·2.404/3.717 ≈ 4366, as the model drives it', () => {
