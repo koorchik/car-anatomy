@@ -22,7 +22,10 @@ export function designFromTable(recordId: string, desc: LayshaftDesc | Transaxle
   const record = recordById(recordId);
   if (!record?.car) return null;
   const factory = designFromRecord(record);
-  const same = JSON.stringify(desc) === JSON.stringify(record.layout.desc) && Math.abs(finalDrive - factory.finalDrive) < 1e-6;
+  // A transaxle's final drive is its teeth, already in desc; the design's figure is the published, rounded one (4.111
+  // for 37/9), so comparing the two numbers would call every untouched transaxle changed.
+  const sameFinal = record.layout.kind !== 'layshaft' || Math.abs(finalDrive - factory.finalDrive) < 1e-6;
+  const same = JSON.stringify(desc) === JSON.stringify(record.layout.desc) && sameFinal;
   if (same) return factory;
   const changed = designFromRecord({ ...record, layout: record.layout.kind === 'layshaft' ? { kind: 'layshaft', desc: desc as LayshaftDesc } : { kind: 'transaxle', desc: desc as TransaxleDesc } });
   return resolveGearboxDesign({

@@ -22,6 +22,14 @@ describe('the panel "Set up" carries its box to the designer', () => {
     expect(d.factory).toEqual({ gearbox: 'manual-rwd' });
   });
 
+  it('as the catalogue copy for an untouched transaxle too, whose final drive the panel reads from its teeth', () => {
+    for (const record of GEARBOX_PAGES.find((p) => p.id === 'manual-transaxle')!.variants.concat(civic)) {
+      const desc = record.layout.desc as TransaxleDesc;
+      const d = designFromTable(record.id, desc, desc.final.teeth[1] / desc.final.teeth[0])!;
+      expect(d.factory).toEqual({ gearbox: record.id });
+    }
+  });
+
   it('as a design of its own with the panel\'s teeth and final drive when they were changed', () => {
     const first = e30Desc.speeds[0] as Exclude<LayshaftDesc['speeds'][number], 'direct'>;
     const desc: LayshaftDesc = { ...e30Desc, speeds: [{ ...first, teeth: [first.teeth[0], first.teeth[1] + 1] }, ...e30Desc.speeds.slice(1)] };
