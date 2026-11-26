@@ -3,8 +3,8 @@
 // pins, the ring gear with its rim; the drums and sleeves of the permanent joins; the input and output shafts; a
 // plate pack per brake and clutch; the case.
 //
-// Everything that turns together has one tint (the joins S1 = S2, C1 = R4… of the 8HP), so the mechanism view shows
-// which parts are one body. A closed element's pack closes up and glows in the element's colour (element-colors.ts,
+// Everything that turns together has one tint (the joins S1 = S2, C1 = R4… of the 8HP; element-colors.ts, the same
+// as on the lever diagram), so the mechanism view shows which parts are one body. A closed element's pack closes up and glows in the element's colour (element-colors.ts,
 // the same as its button and its marks on the lever diagram). Meshes that carry torque glow warm as in the other
 // gearbox models.
 //
@@ -22,7 +22,7 @@ import type { Gearbox } from '../../drivetrain/topology.ts';
 import { merge, MM, zCylinder } from '../geometry.ts';
 import { castAluminiumMaterial } from '../materials.ts';
 import { tag, type SceneModel, type ViewMode } from '../model-types.ts';
-import { elementColor } from './element-colors.ts';
+import { bodyTints, elementColor } from './element-colors.ts';
 import { acquireGearGeometry, drawnGear, type MeshQuality } from './gear-mesh.ts';
 import { acquireRingGeometry } from './ring-mesh.ts';
 import { GearboxSceneBase, lathe, ring } from './scene-base.ts';
@@ -53,8 +53,6 @@ const STEEL_PLATE = 1.6;
 const OPEN_GAP = 1.4;
 /** Bars of a join that reaches over other sets. */
 const CAGE_BARS = 8;
-/** Tints of the bodies that turn together, in the order they first appear. */
-const TINTS = ['#9db5d8', '#a5d29b', '#e2b588', '#c5a8e2', '#8fd1cb', '#dccf8d', '#dca2aa', '#b9bdc1'];
 
 const TAU = Math.PI * 2;
 const wrap = (angle: number): number => angle - Math.floor(angle / TAU) * TAU;
@@ -121,7 +119,7 @@ export class PlanetaryModel extends GearboxSceneBase implements SceneModel<Plane
     if (box.spec.kind !== 'planetary') throw new Error(`${box.spec.id}: not a planetary box`);
     this.box = box;
     this.quality = options.quality ?? 'high';
-    const tints = this.tints();
+    const tints = bodyTints(box.spec);
     box.spec.members.forEach((m, index) => {
       if (m.carrier) return;
       const frame = new THREE.Group();
@@ -148,22 +146,6 @@ export class PlanetaryModel extends GearboxSceneBase implements SceneModel<Plane
   }
 
   // ---- Building ----
-
-  /** One tint per body that turns as one: the members joined by the permanent couplings. */
-  private tints(): Map<string, string> {
-    const spec = this.box.spec;
-    const parent = new Map(spec.members.map((m) => [m.id, m.id]));
-    const find = (id: string): string => (parent.get(id) === id ? id : find(parent.get(id)!));
-    for (const [a, b] of spec.couplings) parent.set(find(a), find(b));
-    const tintOf = new Map<string, string>();
-    const out = new Map<string, string>();
-    for (const m of spec.members) {
-      const root = find(m.id);
-      if (!tintOf.has(root)) tintOf.set(root, TINTS[tintOf.size % TINTS.length]!);
-      out.set(m.id, tintOf.get(root)!);
-    }
-    return out;
-  }
 
   private member(id: string): MemberView {
     const m = this.members.find((x) => x.id === id);

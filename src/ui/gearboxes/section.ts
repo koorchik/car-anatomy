@@ -211,7 +211,8 @@ export class GearboxSection implements Section {
     // The gearbox designer's address (#/gearboxes/designer) comes with its own stage.
     if (route.page !== 'catalogue') return null;
     const id = route.path[0] ?? GEARBOX_PAGES_SHOWN[0]!;
-    return GEARBOX_PAGES_SHOWN.includes(id) && GEARBOX_PAGES.some((p) => p.id === id) ? id : null;
+    // The planetary automatic has a page of its own (pages.ts).
+    return GEARBOX_PAGES_SHOWN.includes(id) && GEARBOX_PAGES.some((p) => p.id === id && p.base.layout.kind !== 'planetary') ? id : null;
   }
 
   private pageData(id: string): PageData {

@@ -8,10 +8,10 @@ import type { Section } from '../../shell/section.ts';
  * The gearbox pages built so far, by the id in `#/gearboxes/<page>`: the first is where the menu leads. A page's data
  * may exist before its page does (src/data/gearboxes.ts); it joins this list with the stage that shows it.
  */
-export const GEARBOX_PAGES_SHOWN: readonly string[] = ['manual-rwd'];
+export const GEARBOX_PAGES_SHOWN: readonly string[] = ['manual-rwd', 'automatic'];
 
 /** The engines' dictionary too: the page runs the car's engine from the engine catalogue, which brings its words. */
 export async function loadGearboxes(): Promise<Section> {
-  const { GearboxSection } = await withDictionaries(['engines', 'gearboxes', 'gearbox-parts'], () => import('./section.ts'));
-  return new GearboxSection();
+  const { GearboxPages } = await withDictionaries(['engines', 'gearboxes', 'gearbox-parts', 'gearbox-automatic'], () => import('./pages.ts'));
+  return new GearboxPages();
 }
