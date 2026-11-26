@@ -63,13 +63,13 @@ export function partUi(stage: Stage, { canvas, tip, card, callout }: PartElement
         return;
       }
       lastPick = now;
-      const info = stage.pick(event.clientX, event.clientY);
-      canvas.style.cursor = info ? 'pointer' : '';
-      if (!info) {
+      const picked = stage.pick(event.clientX, event.clientY);
+      canvas.style.cursor = picked ? 'pointer' : '';
+      if (!picked) {
         tip.hidden = true;
         return;
       }
-      tip.innerHTML = `<strong>${info.name}</strong><span>${t('клацни, щоб дізнатись більше')}</span>`;
+      tip.innerHTML = `<strong>${picked.info.name}</strong><span>${t('клацни, щоб дізнатись більше')}</span>`;
       tip.hidden = false;
       const width = tip.offsetWidth;
       tip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - width - 8)}px`;
@@ -88,14 +88,14 @@ export function partUi(stage: Stage, { canvas, tip, card, callout }: PartElement
       const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
       down = null;
       if (moved > 5) return;
-      const info = stage.pick(event.clientX, event.clientY);
-      if (!info) {
+      const picked = stage.pick(event.clientX, event.clientY);
+      if (!picked) {
         card.hidden = true;
         return;
       }
       tip.hidden = true;
       partsLearned();
-      card.innerHTML = `<strong>${info.name}</strong><p>${info.text}</p>`;
+      card.innerHTML = `<strong>${picked.info.name}</strong><p>${picked.info.text}</p>`;
       card.hidden = false;
       const rect = card.getBoundingClientRect();
       const x = Math.min(window.innerWidth - rect.width - 12, Math.max(12, event.clientX + 14));

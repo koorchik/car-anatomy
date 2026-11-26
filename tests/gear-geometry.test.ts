@@ -9,6 +9,7 @@ import {
   inverseInvolute,
   involute,
   pairGeometry,
+  shiftSumForCentre,
   toothOutline,
   undercut,
 } from '../src/drivetrain/gear-geometry.ts';
@@ -79,6 +80,15 @@ describe('centre distance', () => {
       const beta = helixForCentre(a, m, z1, z2, 20, x);
       expect(Number.isFinite(beta)).toBe(true);
       expect(Math.abs(centreDistance(m, z1, z2, beta, 20, x) - a)).toBeLessThan(1e-9);
+    }
+  });
+
+  it('a spur pair whose shift sum was solved for the centre distance is spur, on either side of the rounding', () => {
+    // The designer closes a spur pair's centre distance with a shift sum (shiftSumForCentre): its helix is exactly 0.
+    for (const [a, m, z1, z2] of [[80, 2.25, 30, 41], [76, 2.5, 19, 42], [80, 2.5, 30, 33], [84, 1.75, 40, 55]] as const) {
+      const x = shiftSumForCentre(a, m, z1, z2, 0, 20);
+      expect(helixForCentre(a, m, z1, z2, 20, x)).toBe(0);
+      for (const nudge of [-1e-12, 1e-12]) expect(helixForCentre(a, m, z1, z2, 20, x + nudge)).toBe(0);
     }
   });
 

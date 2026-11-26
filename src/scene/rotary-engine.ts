@@ -3,6 +3,7 @@ import { DEG, cyclePhase, mod, strokeAt, type Cylinder, type Engine } from '../e
 import { MM, extrude, flywheelGeometry, gearShape, merge, pulleyGeometry, roundedRect, tubeAlong, zCylinder } from './geometry.ts';
 import { createMaterials, glowTexture, hotPipeMaterial, type EngineMaterials, type HotPipeUniforms } from './materials.ts';
 import { GAS, disposeTree, markDamaged, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
+import { GAS_COLORS } from './palette.ts';
 import type { RotaryAnchors, SystemsLook } from './systems/anchors.ts';
 import { panDims } from '../systems/sump.ts';
 
@@ -100,7 +101,7 @@ export class RotaryEngineModel implements EngineModel {
     this.buildPlumbing(layout.rotors);
     this.buildPan();
 
-    this.flash = new THREE.PointLight('#ff8a3a', 0, this.R * 6, 2);
+    this.flash = new THREE.PointLight(GAS_COLORS.flame, 0, this.R * 6, 2);
     this.mounted.add(this.flash);
 
     const box = new THREE.Box3().setFromObject(this.mounted);

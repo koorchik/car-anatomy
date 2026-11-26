@@ -5,10 +5,11 @@
 
 import * as THREE from 'three';
 import { castBumpTexture, glassMaterial } from '../materials.ts';
+import { FLUID } from '../palette.ts';
 import { pressOntoRoad, pressedDepthMaterial, type RoadPressUniforms } from './tyre-press.ts';
 
-/** Oil, as in the systems layers and the sump (whole-car plan, colours table). */
-export const OIL_COLOR = '#e8a93a';
+/** Oil, as in the systems layers and the sump (palette.ts). */
+export const OIL_COLOR = FLUID.oil;
 /** Painted coil spring (suspensions plan, 3D materials). */
 export const SPRING_COLOR = '#b8322a';
 

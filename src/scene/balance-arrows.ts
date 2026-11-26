@@ -6,17 +6,10 @@ import * as THREE from 'three';
 import { isShown, type BalanceForces, type ForceArrow, type ForceLayers, type ForceSum } from '../engine/balance-forces.ts';
 import { Arrows, CoupleArcs, ON_TOP, arrowHeadGeometry, arrowShaftGeometry, inert, outOfFrame, overlayMaterial } from './arrows.ts';
 import { MM } from './geometry.ts';
+import { BALANCE_FORCE, OVERLAY_WHITE } from './palette.ts';
 
-/** Colours shared with the legend. */
-export const FORCE_COLORS = {
-  order1: '#ffbf3c',
-  order2: '#b48cff',
-  rotating: '#6fa8ff',
-  counterweight: '#63e28c',
-  shaft: '#4fd2e0',
-  net: '#ffffff',
-  couple: '#ff5c93',
-} as const;
+/** Colours shared with the legend (palette.ts). */
+export const FORCE_COLORS = BALANCE_FORCE;
 
 const colorOf = (a: ForceArrow): string => {
   switch (a.kind) {
@@ -68,13 +61,13 @@ export class BalanceOverlay {
       return m;
     };
     // White, so that each instance's own colour shows as it is.
-    const white = material('#ffffff');
+    const white = material(OVERLAY_WHITE);
     const thin = (def: ForceArrow): boolean => def.kind === 'rotating' || def.kind === 'counterweight' || def.kind === 'shaft';
     const defs = forces.arrows;
     this.arrows = new Arrows(shaftGeo, headGeo, white, defs.map(colorOf), defs.map((def) => b * (thin(def) ? 0.028 : 0.036)));
     this.group.add(this.arrows.shafts, this.arrows.heads);
 
-    const rodMaterial = material('#5d7c84');
+    const rodMaterial = material(BALANCE_FORCE.rod);
     const weightMaterial = material(FORCE_COLORS.shaft);
     const zs = e.cylinders.map((c) => c.z * MM);
     const zFront = Math.max(...zs) + b * 0.25;
