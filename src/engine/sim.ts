@@ -106,6 +106,18 @@ export class EngineSim {
   }
 
   /**
+   * Fuel and spark on an engine that something else already turns (a hybrid's motor, LoadedCrank with `ignition`): it
+   * runs from here at the speed it has, with no starter sequence and no catch flare, since it never stood still.
+   */
+  ignite(): void {
+    if (this.state === 'running') return;
+    this.state = 'running';
+    this.stateTime = 0;
+    this.idleIntegral = 0;
+    this.catchFlare = 0;
+  }
+
+  /**
    * Takes the state and speed of the other copy of this engine, at the hand-over between the audio thread and the
    * main thread (a car's loadRestore). The copy that was not stepped meanwhile may still be cranking from a start the
    * other one finished long ago; a car restored onto it would be dragged by a starter.

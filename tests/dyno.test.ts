@@ -617,6 +617,79 @@ describe('hooks the drivetrain will use', () => {
     expect(sim.state === 'stopping' || sim.state === 'off').toBe(true);
   });
 
+  it('a load that runs the engine lights it by turning it, with no starter, and keeps it once lit', () => {
+    const { sim, stub, crank } = stubbed();
+    sim.stop();
+    run(sim, 3);
+    expect(sim.state).toBe('off');
+    // A hybrid's motor turns the engine; the fuel goes in once it is near idle.
+    stub.torque = -40;
+    stub.request = { ignition: true, throttle: 0.15 };
+    const states = new Set<string>();
+    let litAt = -1;
+    run(sim, 1.5, () => {
+      states.add(sim.state);
+      if (litAt < 0 && sim.state === 'running') litAt = sim.rpm;
+    });
+    expect(states.has('cranking')).toBe(false);
+    expect(litAt).toBeGreaterThan(0.9 * Math.min(mapFor('i4').idleRpm, sim.params.idleRpm) - 30);
+    // The motor lets go: the engine holds itself, still under the load's torque.
+    stub.torque = 0;
+    crank.readings();
+    run(sim, 2);
+    const reading = crank.readings();
+    expect(sim.state).toBe('running');
+    expect(reading.coupled).toBe(true);
+    expect(reading.engineNm).toBeGreaterThan(0);
+    expect(sim.rpm).toBeGreaterThan(0.8 * mapFor('i4').idleRpm);
+  });
+
+  it('ignition off stops a running engine under the load, and the key does not crank an engine the load runs', () => {
+    const { sim, stub } = stubbed();
+    stub.request = { ignition: false };
+    run(sim, 0.01);
+    expect(sim.state).toBe('stopping');
+    run(sim, 4);
+    expect(sim.state).toBe('off');
+    expect(sim.rpm).toBe(0);
+    sim.start();
+    let cranked = false;
+    run(sim, 2, () => {
+      cranked ||= sim.state === 'cranking' && sim.rpm > 50;
+    });
+    expect(cranked).toBe(false);
+    expect(sim.state).toBe('off');
+  });
+
+  it('without ignition in the request, start, cranking and stop are bit for bit what they were', () => {
+    // The same start, run, stop and restart with no request and with requests that leave ignition out.
+    const trace = (request: EngineRequest | null): number[] => {
+      const map = mapFor('i4');
+      const sim = new EngineSim(paramsFor('i4'));
+      const stub = new StubLoad();
+      stub.request = request;
+      sim.attach(new LoadedCrank(map, stub));
+      const out: number[] = [];
+      const sample = () => out.push(sim.rpm, sim.throttle, sim.load, sim.fuelCut ? 1 : 0, ['off', 'cranking', 'running', 'stopping'].indexOf(sim.state));
+      sim.start();
+      run(sim, 2, sample);
+      stub.torque = 30;
+      sim.pedal = 0.4;
+      run(sim, 1, sample);
+      sim.stop();
+      run(sim, 3, sample);
+      sim.start();
+      run(sim, 2, sample);
+      return out;
+    };
+    const none = trace(null);
+    expect(trace({})).toEqual(none);
+    expect(trace({ ignition: undefined })).toEqual(none);
+    // The trace went through every state: the starter cranked it twice, it ran, stopped and stood.
+    const states = new Set(none.filter((_, i) => i % 5 === 4));
+    expect([...states].sort()).toEqual([0, 1, 2, 3]);
+  });
+
   it('a load can turn a stopped engine, as a car rolling in gear would', () => {
     const { sim, stub } = stubbed();
     sim.stop();

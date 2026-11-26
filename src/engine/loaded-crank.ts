@@ -93,6 +93,16 @@ export class LoadedCrank<R extends AnyLoadReadings = LoadReadings> {
     const map = this.map;
     const load = this.load;
     const omega = (sim.rpm * Math.PI) / 30;
+    // A load that runs the engine (EngineRequest.ignition) has no starter to wait for: it lights the engine once it has
+    // turned it up to near idle, and stops it by taking the fuel away. Without the field nothing here happens.
+    const ignition = load.active() ? this.request?.ignition : undefined;
+    if (ignition !== undefined) {
+      if (sim.state === 'cranking' || (!ignition && sim.state === 'running')) sim.stop();
+      if (ignition && sim.state !== 'running' && sim.rpm >= CAUGHT_SHARE * Math.min(map.idleRpm, sim.params.idleRpm)) {
+        sim.ignite();
+        this.caught = true;
+      }
+    }
     if (sim.state === 'cranking') this.caught = false;
     else if (sim.state === 'running' && sim.rpm >= CAUGHT_SHARE * Math.min(map.idleRpm, sim.params.idleRpm)) this.caught = true;
     // Once it has caught, the load stays on through a stall and while the engine runs down or stands.

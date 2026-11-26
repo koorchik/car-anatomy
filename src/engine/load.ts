@@ -33,6 +33,12 @@ export interface EngineRequest {
   cutFuel?: boolean;
   /** Engine torque no higher than this, N·m, as for a torque reduction during a shift. */
   maxNm?: number;
+  /**
+   * The load runs the engine, as a hybrid's control does: true lights it once the load has turned it up to near idle
+   * (no starter), false stops it and leaves the load to bring the crank to rest. Absent: the key and the starter
+   * run the engine as before. Unlike cutFuel, false takes the engine out of 'running' for good.
+   */
+  ignition?: boolean;
 }
 
 /** State of the engine when a load takes hold of it, so its controllers can start without a jolt. */
