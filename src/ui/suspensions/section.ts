@@ -197,7 +197,8 @@ export class SuspensionSection implements Section {
     this.tieDzM = 0;
     this.rack = 0;
     this.$<HTMLInputElement>('susp-rack').value = '0';
-    this.removed = [];
+    // Another corner has all its links: the model too, when it is kept for the same geometry.
+    if (this.removed.length) this.setLinks([]);
     this.travelScene.resetLinks();
     this.travel = 0;
     this.apply();
@@ -209,6 +210,7 @@ export class SuspensionSection implements Section {
     this.model.setLinksRemoved(this.removed);
     // The force arrows stand for a linkage that holds: with links gone they would show forces nothing carries.
     this.model.setOverlays({ forces: !this.removed.length && this.$<HTMLInputElement>('susp-forces').checked });
+    this.$<HTMLInputElement>('susp-forces').disabled = this.removed.length > 0;
     if (!this.removed.length) this.model.setWobble(null);
     this.travelScene.setCorner(this.choice, this.resolved, null, this.tieDzM, this.removed);
   }
@@ -252,7 +254,7 @@ export class SuspensionSection implements Section {
     const { view } = this.ctx;
     this.$<HTMLInputElement>('susp-travel').addEventListener('input', (event) => this.setTravel(Number((event.target as HTMLInputElement).value)));
     this.$<HTMLInputElement>('susp-explode').addEventListener('input', (event) => this.model.setExplode(Number((event.target as HTMLInputElement).value)));
-    const overlays = (): void => this.model.setOverlays({ forces: this.$<HTMLInputElement>('susp-forces').checked, laser: this.$<HTMLInputElement>('susp-laser').checked });
+    const overlays = (): void => this.model.setOverlays({ forces: !this.removed.length && this.$<HTMLInputElement>('susp-forces').checked, laser: this.$<HTMLInputElement>('susp-laser').checked });
     this.$('susp-forces').addEventListener('change', overlays);
     this.$('susp-laser').addEventListener('change', overlays);
     onSegment(this.$('susp-scene'), (v) => this.setScene(v as SceneId));

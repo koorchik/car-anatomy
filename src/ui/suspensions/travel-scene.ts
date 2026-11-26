@@ -154,9 +154,10 @@ export class TravelScene {
       this.before = untouched ? travelCurves(untouched) : null;
       this.rackRange = resolved.axle.spec.linkage.rods.some((r) => r.steer) ? sceneRackRange(resolved.axle) : 0;
       this.joints = jointRange(resolved.axle, this.rackRange);
-      this.motionsAt = Number.NaN;
       this.trail = [];
     }
+    // Another set of links taken away frees other motions: the next wobble computes them again.
+    this.motionsAt = Number.NaN;
     this.removed = [...removed];
     const $ = this.$;
     const lowered = resolved.staticTravelM >= LOWER_M - 1e-6;
