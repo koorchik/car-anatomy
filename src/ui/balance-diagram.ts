@@ -13,6 +13,12 @@ const SVG = 'http://www.w3.org/2000/svg';
 const RADIUS = 43;
 /** Trail of the last turn in this many pieces, fading from the oldest. */
 const TRAIL_PIECES = 6;
+/**
+ * How far a vector of a flat chain (DiagramChain.flat) is moved to its left, in viewBox units: the way out and the way
+ * back then run side by side, a thin loop, instead of one on top of the other.
+ */
+const SIDESTEP = 2.4;
+const ORIGIN: Vec2 = { x: 0, y: 0 };
 
 const FORCE_WORDS: Record<LocusWord, string> = {
   balanced: t('Врівноважено'),
@@ -101,7 +107,7 @@ class Panel {
   private readonly chains = svg('g');
   private readonly word = document.createElement('b');
   /** Per chain, per colour: the path and the elements it draws. */
-  private groups: { chain: number; path: SVGPathElement; elements: number[] }[] = [];
+  private groups: { chain: number; path: SVGPathElement; elements: number[]; sidestep: number }[] = [];
   private plan: DiagramPlan | null = null;
   private frame: DiagramFrame = { chains: [], net: { x: 0, y: 0 }, trail: [] };
   private scale = 1;
@@ -141,7 +147,7 @@ class Panel {
       for (const [color, elements] of byColor) {
         const path = svg('path', { class: `vectors ${chain.side}`, stroke: color });
         this.chains.append(path);
-        this.groups.push({ chain: c, path, elements });
+        this.groups.push({ chain: c, path, elements, sidestep: chain.flat ? SIDESTEP : 0 });
       }
     });
     if (plan.axis !== null) {
@@ -155,14 +161,16 @@ class Panel {
     this.rest.style.display = plan.word === 'balanced' ? '' : 'none';
   }
 
-  private px(p: Vec2): [number, number] {
-    return [p.x * this.scale, -p.y * this.scale];
-  }
-
-  /** An arrow from a to b in viewBox units, as path data; nothing when it is too short to see. */
-  private arrow(a: Vec2, b: Vec2, head: number): string {
-    const [ax, ay] = this.px(a);
-    const [bx, by] = this.px(b);
+  /**
+   * An arrow from a to b in viewBox units, as path data; nothing when it is too short to see. sidestep moves it that far
+   * to its left, so that one pointing back along the same line runs beside it.
+   */
+  private arrow(a: Vec2, b: Vec2, head: number, sidestep = 0): string {
+    const k = this.scale;
+    let ax = a.x * k;
+    let ay = -a.y * k;
+    let bx = b.x * k;
+    let by = -b.y * k;
     const dx = bx - ax;
     const dy = by - ay;
     const len = Math.hypot(dx, dy);
@@ -170,6 +178,11 @@ class Panel {
     const h = Math.min(head, len * 0.45);
     const ux = dx / len;
     const uy = dy / len;
+    // Left of the way it points, on screen (y down).
+    ax += uy * sidestep;
+    ay -= ux * sidestep;
+    bx += uy * sidestep;
+    by -= ux * sidestep;
     const w = h * 0.55;
     const lx = bx - ux * h - uy * w;
     const ly = by - uy * h + ux * w;
@@ -185,19 +198,17 @@ class Panel {
     for (const g of this.groups) {
       const points = frame.chains[g.chain]!;
       let d = '';
-      for (const i of g.elements) d += this.arrow(points[i]!, points[i + 1]!, 4);
+      for (const i of g.elements) d += this.arrow(points[i]!, points[i + 1]!, 4, g.sidestep);
       g.path.setAttribute('d', d);
     }
-    const zero = { x: 0, y: 0 };
     const balanced = plan.word === 'balanced';
-    this.net.setAttribute('d', balanced ? '' : this.arrow(zero, frame.net, 6));
+    this.net.setAttribute('d', balanced ? '' : this.arrow(ORIGIN, frame.net, 6));
     if (plan.axis !== null && frame.chains.length && !balanced) {
       const points = frame.chains[0]!;
       const end = points[points.length - 1]!;
-      this.closing.setAttribute('d', this.arrow(zero, end, 4.5));
-      const [ex, ey] = this.px(end);
-      const [nx, ny] = this.px(frame.net);
-      this.shadow.setAttribute('d', `M${f(ex)} ${f(ey)}L${f(nx)} ${f(ny)}`);
+      this.closing.setAttribute('d', this.arrow(ORIGIN, end, 4.5));
+      const k = this.scale;
+      this.shadow.setAttribute('d', `M${f(end.x * k)} ${f(-end.y * k)}L${f(frame.net.x * k)} ${f(-frame.net.y * k)}`);
     } else {
       this.closing.setAttribute('d', '');
       this.shadow.setAttribute('d', '');
@@ -211,8 +222,8 @@ class Panel {
       }
       let d = '';
       for (let i = Math.round(k * per); i <= Math.round((k + 1) * per); i++) {
-        const [x, y] = this.px(trail[i]!);
-        d += `${d ? 'L' : 'M'}${f(x)} ${f(y)}`;
+        const p = trail[i]!;
+        d += `${d ? 'L' : 'M'}${f(p.x * this.scale)} ${f(-p.y * this.scale)}`;
       }
       piece.setAttribute('d', d);
     });

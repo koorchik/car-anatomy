@@ -126,6 +126,40 @@ describe('diagram points', () => {
     }
   });
 
+  it('mark a chain flat exactly when its vectors lie on one line and some point back, so the card can draw it as a loop', () => {
+    const flat = (id: string, view: BalanceView, o: ViewOptions, q: Quantity = 'force') => planOf(phasors(id), view, o, q).chains.map((c) => c.flat);
+    // Throws at 0° and 180°: the first order goes out and straight back, though it closes.
+    expect(flat('i4', 'order1', BARE)).toEqual([true]);
+    expect(flat('v8-flat', 'order1', BARE)).toEqual([true, true]);
+    expect(flat('b4', 'order1', BARE)).toEqual([true, true]);
+    // All the I4's second-order vectors point the same way: a straight run, nothing on top of anything.
+    expect(flat('i4', 'order2', BARE)).toEqual([false]);
+    // Throws a quarter turn apart make a square, and an I6 a triangle.
+    expect(flat('v8-cross', 'order1', BARE)).toEqual([false, false]);
+    expect(flat('i6', 'order1', BARE)).toEqual([false]);
+    // Read off the points of any angle: flat means every vector of the chain on one line, and at least one pointing back.
+    for (const spec of ENGINES) {
+      const ph = phasors(spec.id);
+      for (const view of ph.views) {
+        for (const o of OPTIONS) {
+          for (const q of QUANTITIES) {
+            const plan = planOf(ph, view, o, q);
+            const frame = diagramAt(plan, 71, undefined, false);
+            plan.chains.forEach((chain, c) => {
+              const points = frame.chains[c]!;
+              const steps = points.slice(1).map((p, i) => ({ x: p.x - points[i]!.x, y: p.y - points[i]!.y }));
+              const first = steps.find((v) => Math.hypot(v.x, v.y) > 0)!;
+              const len = Math.hypot(first.x, first.y);
+              const across = steps.every((v) => Math.abs(v.x * first.y - v.y * first.x) <= 1e-3 * len * Math.hypot(v.x, v.y) + 1e-15);
+              const back = steps.some((v) => v.x * first.x + v.y * first.y < 0);
+              expect(chain.flat, `${spec.id} ${view} ${JSON.stringify(o)} ${q} ${chain.side}`).toBe(steps.length > 1 && across && back);
+            });
+          }
+        }
+      }
+    }
+  });
+
   it('reach as far as the diagram ever gets, and no further', () => {
     for (const id of A4) {
       const ph = phasors(id);

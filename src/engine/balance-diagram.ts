@@ -25,6 +25,8 @@ const EMPTY = 1e-9;
 /** Points of the trail over the last turn, and crank angles sampled to find how far a diagram reaches. */
 const TRAIL = 60;
 const REACH_STEPS = 48;
+/** Vectors within this sine of each other's line count as lying along it. */
+const COLLINEAR = 1e-3;
 
 export function wordOf(locus: Locus): LocusWord {
   switch (locus.shape) {
@@ -59,6 +61,12 @@ export interface DiagramChain {
    * circle the half that is not turning. Read off the locus, so the picture and the word never disagree.
    */
   closes: boolean;
+  /**
+   * Whether all its vectors lie along one line and some of them point back: drawn as they are, the way back would lie
+   * on top of the way out and a chain that closes would look like an open stroke (the first order of an I4, a flat-plane
+   * V8 or a boxer). The card draws such a chain as a thin loop. All of a chain turn together, so this holds at any angle.
+   */
+  flat: boolean;
 }
 
 /** What a diagram of one view draws, worked out once per view; diagramAt gives the points for a crank angle. */
@@ -120,7 +128,7 @@ export function planDiagram(view: PhasorView, quantity: Quantity, inline: boolea
       .map((p) => p.el);
     const locus = sum.locus;
     const closes = locus.shape === 'point' || (!projection && locus.shape === 'circle' && side === (locus.sense > 0 ? 'minus' : 'plus'));
-    if (elements.length) chains.push({ side, elements, closes });
+    if (elements.length) chains.push({ side, elements, closes, flat: flatChain(elements.map(direction)) });
   }
   const plan: DiagramPlan = {
     view,
@@ -141,6 +149,18 @@ export function planDiagram(view: PhasorView, quantity: Quantity, inline: boolea
   }
   plan.reach = reach;
   return plan;
+}
+
+/** Directions (radians) all along one line, with at least one pointing back along it. */
+function flatChain(directions: number[]): boolean {
+  if (directions.length < 2) return false;
+  const first = directions[0]!;
+  let back = false;
+  for (const a of directions) {
+    if (Math.abs(Math.sin(a - first)) > COLLINEAR) return false;
+    if (Math.cos(a - first) < 0) back = true;
+  }
+  return back;
 }
 
 const emptyFrame = (): DiagramFrame => ({ chains: [], net: { x: 0, y: 0 }, trail: [] });
