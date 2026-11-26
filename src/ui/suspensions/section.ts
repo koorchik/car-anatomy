@@ -3,7 +3,8 @@
 // obstacle and plays the run back with its strip chart and numbers; the travel scene (stages P1b and P4) holds the wheel
 // on a rig at the travel a slider picks, with the corner's curves, its front view, the lowering, the tie-rod pad and the
 // five links taken away (travel-scene.ts). The Setup panel (build order, A3) edits
-// the corner's setup in both, and every change shows at once on the arrows, the lasers, the tyre and the numbers. There
+// the corner's setup in both, and every change shows at once on the arrows, the lasers, the tyre and the numbers. The
+// roll scene (stage P7, roll-scene.ts) turns the page's whole car on its own model with its own panel. There
 // is no engine here, so the sound is suspended while the section is shown (the plan of the whole car, its amendments to
 // the suspensions plan, item 9).
 //
@@ -38,6 +39,8 @@ import { SUSPENSION_KEY_CONTEXTS, suspensionKeys } from './keys.ts';
 import { dashHtml, obstacleSize, panelHtml, titleHtml, toolsHtml } from './markup.ts';
 import { carsHtml, choiceOf, stepPage, titleOf, type PageChoice } from './pages.ts';
 import { LOWER_M, TravelScene, travelDashHtml } from './travel-scene.ts';
+import { RollScene, rollDashHtml } from './roll-scene.ts';
+import type { RollModel, RollView } from '../../scene/suspension/roll-model.ts';
 import { DEFAULT_SCENE, sceneOf, stepScene, type SceneId } from './scenes.ts';
 import { SetupPanel } from './setup-panel.ts';
 import { StripChart } from './strip-chart.ts';
@@ -59,6 +62,10 @@ const HOLD_S = 0.6;
 const DASH_PX = { wide: 156, small: 188 };
 /** Height of the travel scene's dash, px; suspensions.css gives --dash-h the same. */
 const TRAVEL_DASH_PX = { wide: 188, small: 210 };
+/** Height of the roll scene's dash, px; suspensions.css gives --dash-h the same. */
+const ROLL_DASH_PX = { wide: 188, small: 196 };
+/** Where the camera looks at the roll scene's model from: an axle head-on, a little from above; the chassis from ahead. */
+const ROLL_HOME: Record<RollView, readonly [number, number, number]> = { front: [0, 0.2, 1], rear: [0, 0.2, -1], car: [0.8, 0.5, 1] };
 /** Real seconds between two writes of the clock. */
 const CLOCK_EVERY_S = 0.1;
 /** Frames the frame-time figure averages over (window.__suspension.section.frameStats). */
@@ -93,6 +100,9 @@ export class SuspensionSection implements Section {
   private rack = 0;
   private removed: string[] = [];
   private travelScene!: TravelScene;
+  private rollScene!: RollScene;
+  /** Which model the stage holds while the section is shown. */
+  private onStage: 'corner' | 'roll' = 'corner';
   /** The geometry of the model on the stage, and the choice it was made for. */
   private modelKey = '';
   private modelPage: PageChoice | null = null;
@@ -149,7 +159,7 @@ export class SuspensionSection implements Section {
     slots.title.add(titleHtml());
     slots.tools.add(toolsHtml(Math.round(range.min * 1000), Math.round(range.max * 1000)));
     slots.panel.add(panelHtml());
-    slots.afterDash.add(dashHtml() + travelDashHtml());
+    slots.afterDash.add(dashHtml() + travelDashHtml() + rollDashHtml());
     slots.table.head.add(allTableHeadHtml());
     this.strip = new StripChart(this.$<HTMLCanvasElement>('susp-strip'));
     this.setupPanel = new SetupPanel(this.$('susp-panel'), factory, () => (this.dirty = true));
@@ -165,11 +175,22 @@ export class SuspensionSection implements Section {
       },
       links: (removed) => this.setLinks(removed),
     });
+    this.rollScene = new RollScene((id) => this.$(id), {
+      viewMode: () => this.ctx.view.mode,
+      showModel: (model, keep) => this.showRollModel(model, keep),
+      timeFactor: () => (this.ctx.time.mode === 'slowdown' ? this.ctx.time.factor : 1),
+      frozen: () => !!this.ctx.time.frozen,
+      clock: (seconds) => this.ctx.time.clock(seconds),
+    });
     this.listen();
     ctx.keys.bind(
       SUSPENSION_KEY_CONTEXTS[0],
       suspensionKeys({
         event: () => {
+          if (this.scene === 'roll') {
+            this.rollScene.swerve();
+            return true;
+          }
           if (this.scene !== 'bump') return false;
           this.restart();
           return true;
@@ -196,6 +217,7 @@ export class SuspensionSection implements Section {
     const current = cars.querySelector<HTMLElement>('.current');
     if (current && cars.scrollWidth > cars.clientWidth) cars.scrollLeft = Math.max(0, current.offsetLeft - cars.offsetLeft - 8);
     this.$('susp-article').innerHTML = pageArticleHtml(choice);
+    this.rollScene.setChoice(choice);
     if (this.ctx.slots.table.isOpen) this.ctx.slots.table.body.innerHTML = allTableHtml(choice);
     if (same) return;
     this.pageCorner = pageCorner(choice.page, choice.car);
@@ -286,7 +308,9 @@ export class SuspensionSection implements Section {
     });
     // The view is the shell's and outlives this section: another section's choice is not drawn here until it is back.
     view.onChange((mode) => {
-      if (this.shown) this.model.setView(mode);
+      if (!this.shown) return;
+      if (this.onStage === 'roll') this.rollScene.current?.setView(mode);
+      else this.model.setView(mode);
     });
   }
 
@@ -352,7 +376,7 @@ export class SuspensionSection implements Section {
     const slider = this.$<HTMLInputElement>('susp-travel');
     slider.min = String(Math.round(range.min * 1000));
     slider.max = String(Math.round(range.max * 1000));
-    if (this.shown) {
+    if (this.shown && this.onStage === 'corner') {
       // The same page with its tie rod moved keeps the camera; another page is framed afresh.
       const samePage = this.modelPage === this.choice;
       this.ctx.stage.setModel(this.model, { home: HOME, keepCamera: samePage, keepScale: samePage });
@@ -423,6 +447,7 @@ export class SuspensionSection implements Section {
     this.borrowed.push(this.borrow(() => body.className, (v) => (body.className = v), own));
     slots.partCard.hidden = true;
     stage.setModel(this.model, { home: HOME });
+    this.onStage = 'corner';
     this.model.setView(view.mode);
     keys.use(SUSPENSION_KEY_CONTEXTS);
     this.setScene(scene, false);
@@ -437,12 +462,26 @@ export class SuspensionSection implements Section {
     const body = document.body;
     body.classList.toggle('susp-scene-bump', scene === 'bump');
     body.classList.toggle('susp-scene-travel', scene === 'travel');
+    body.classList.toggle('susp-scene-roll', scene === 'roll');
     setSegment(this.$('susp-scene'), scene);
     this.$('susp-dash').hidden = scene !== 'bump';
     this.$('susp-travel-dash').hidden = scene !== 'travel';
+    this.$('susp-roll-dash').hidden = scene !== 'roll';
     if (record) this.ctx.router.replace({ query: { s: scene === DEFAULT_SCENE ? null : scene } });
     if (!changed) return;
-    if (scene === 'bump') {
+    // The roll scene has a model of its own: the corner waits off the stage, not disposed.
+    if (scene === 'roll' && this.onStage === 'corner') {
+      this.ctx.stage.release(this.model);
+      this.onStage = 'roll';
+      this.rollScene.enter();
+    } else if (scene !== 'roll' && this.onStage === 'roll') {
+      this.dropRollModel();
+      this.ctx.stage.setModel(this.model, { home: HOME });
+      this.model.setView(this.ctx.view.mode);
+    }
+    if (scene === 'roll') {
+      // The roll scene plays in true time; its sudden turn may be slowed down.
+    } else if (scene === 'bump') {
       // The links taken away belong to the travel scene: the obstacle needs the whole linkage.
       if (this.removed.length) this.setLinks([]);
       this.model.setExplode(0);
@@ -473,10 +512,29 @@ export class SuspensionSection implements Section {
     return () => set(before);
   }
 
+  /** Puts the roll scene's model on the stage in place of whatever roll model was there. */
+  private showRollModel(model: RollModel, keep: boolean): void {
+    if (!this.shown || this.onStage !== 'roll') return;
+    this.ctx.stage.setModel(model, { home: ROLL_HOME[model.view], keepCamera: keep, keepScale: keep });
+    model.setView(this.ctx.view.mode);
+  }
+
+  /** Takes the roll model off the stage and frees it; the corner's goes back on. */
+  private dropRollModel(): void {
+    const roll = this.rollScene.current;
+    if (roll) {
+      this.ctx.stage.release(roll);
+      roll.dispose();
+    }
+    this.rollScene.leave();
+    this.onStage = 'corner';
+  }
+
   leave(_to: Route): void {
     if (!this.shown) return;
     this.shown = false;
     const { stage, slots, time } = this.ctx;
+    if (this.onStage === 'roll') this.dropRollModel();
     stage.release(this.model);
     slots.partCard.hidden = true;
     time.clock(null);
@@ -491,6 +549,7 @@ export class SuspensionSection implements Section {
     const time = this.ctx.time;
     const frozen = time.frozen;
     if (this.scene === 'bump') this.bumpFrame(frozen ? null : dt);
+    else if (this.scene === 'roll') this.rollScene.frame(frozen ? 0 : dt);
     else {
       rigFrame(this.resolved, this.travel, this.frameData);
       this.frameData.rack = this.rack;
@@ -545,18 +604,20 @@ export class SuspensionSection implements Section {
   }
 
   layout(viewport: Viewport): PanelSizes {
-    const dash = viewport.small ? (this.scene === 'bump' ? DASH_PX : TRAVEL_DASH_PX).small : (this.scene === 'bump' ? DASH_PX : TRAVEL_DASH_PX).wide;
+    const px = this.scene === 'bump' ? DASH_PX : this.scene === 'roll' ? ROLL_DASH_PX : TRAVEL_DASH_PX;
+    const dash = viewport.small ? px.small : px.wide;
     return { right: 380, left: 0, dash, rightLabel: t('Налаштувати') };
   }
 
   laidOut(): void {
     this.strip.resize();
     this.travelScene.resize();
+    this.rollScene.resize();
   }
 
   time(): TimeCapabilities {
     // The rig holds the wheel still: true time is all there is. The bump scene adds the slow-down ×k with its clock.
-    return this.scene === 'bump' ? { modes: ['real', 'slowdown'], slowdown: SLOWDOWN } : { modes: ['real'] };
+    return this.scene === 'bump' || this.scene === 'roll' ? { modes: ['real', 'slowdown'], slowdown: SLOWDOWN } : { modes: ['real'] };
   }
 
   /** The numbers under the panel's heading and beside the slider, for the travel the rig holds. */

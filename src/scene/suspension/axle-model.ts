@@ -34,6 +34,12 @@ export interface AxleFrame {
   rack: number;
   /** Left and right wheels turned forward since the start, rad. */
   spin: [number, number];
+  /**
+   * Height of the road under the left and right wheels in the axle's frame, m (0 when left out): a body that heaves
+   * and rolls over the road (the roll scene) sees the road lower under the side that rises, and each tyre is pressed
+   * onto the road where it is.
+   */
+  roadLift?: [number, number];
 }
 
 export const axleFrame = (): AxleFrame => ({ travel: [0, 0], rack: 0, spin: [0, 0] });
@@ -505,6 +511,11 @@ export class IndependentAxleModel implements AxleModel {
       this.frame.rack = frame.rack;
       this.frame.spin[0] = frame.spin[0];
       this.frame.spin[1] = frame.spin[1];
+      if (frame.roadLift) {
+        const lift = (this.frame.roadLift ??= [0, 0]);
+        lift[0] = frame.roadLift[0];
+        lift[1] = frame.roadLift[1];
+      } else this.frame.roadLift = undefined;
     }
     const f = this.frame;
     // The right corner is the left one mirrored: the rack moving left moves its inner joint inboard.
@@ -513,7 +524,7 @@ export class IndependentAxleModel implements AxleModel {
       cf.travel = f.travel[i]!;
       cf.rack = i === 0 ? f.rack : -f.rack;
       cf.spin = f.spin[i]!;
-      cf.roadLift = 0;
+      cf.roadLift = f.roadLift?.[i] ?? 0;
       cf.bodyZ = 0;
       (i === 0 ? this.left : this.right).update(cf);
     }

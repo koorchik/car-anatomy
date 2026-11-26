@@ -1,7 +1,7 @@
 // What the suspension page puts into the shell's slots: the corner's name, its cars and the way to the other pages; the
-// scene switch, the travel slider and the switches under the stage; the bump scene's dash (its event, strip chart and
-// numbers) and the travel scene's (travel-scene.ts); and the panel with the scene's controls, the setup and the
-// article, which the section fills for the page shown.
+// scene switch, the travel slider, the roll scene's tools and the switches under the stage; the bump scene's dash (its
+// event, strip chart and numbers), the travel scene's (travel-scene.ts) and the roll scene's (roll-scene.ts); and the
+// panel with the scene's controls, the setup and the article, which the section fills for the page shown.
 
 import { t } from '../../i18n/t.ts';
 import { BUMP_SPEED_KMH, OBSTACLE_IDS, WHEEL_IDS, type ObstacleId, type WheelId } from '../../suspension/bump.ts';
@@ -9,6 +9,7 @@ import { SCENES, sceneLabel } from './scenes.ts';
 import { setupPanelHtml } from './setup-panel.ts';
 import { stripLegendHtml } from './strip-chart.ts';
 import { travelControlsHtml } from './travel-scene.ts';
+import { rollPanelHtml, rollToolsHtml } from './roll-scene.ts';
 
 export const titleHtml = (): string => `<div class="susp-title">
     <h1 id="susp-title"></h1>
@@ -36,6 +37,7 @@ export const toolsHtml = (minMm: number, maxMm: number): string => `<div class="
       <span class="tool-label">${t('Розібрати')}</span>
       <input type="range" id="susp-explode" min="0" max="1" step="0.01" value="0" />
     </label>
+    ${rollToolsHtml()}
     <div class="susp-checks">
       <label class="check"><input type="checkbox" id="susp-forces" checked /> ${t('Сили')}</label>
       <label class="check"><input type="checkbox" id="susp-laser" checked /> ${t('Лазери')}</label>
@@ -114,6 +116,7 @@ export const panelHtml = (): string => `<div class="panel-scroll susp-panel" id=
         <p class="susp-note">${t('Хід рахується від проєктної висоти кузова, плюс — колесо вгору. Розвал від’ємний, коли верх колеса нахилений до кузова; сходження додатне, коли перед колеса повернутий до середини авто.')}</p>
         ${travelControlsHtml()}
       </section>
+      ${rollPanelHtml()}
       ${setupPanelHtml()}
       <div id="susp-article"></div>
       <p class="susp-note">${t('«Рентген» робить шину, диск і корпус амортизатора скляними, «Механізм» лишає самі ланки й шарніри. Клацни будь-яку деталь, щоб дізнатися, що вона робить.')}</p>
