@@ -211,30 +211,31 @@ describe('pushrod and rocker', () => {
     for (let i = 1; i < mrs.length && travels[i] <= 0.08; i++) expect(mrs[i]).toBeGreaterThan(mrs[i - 1]);
   });
 
-  it('the third spring is squeezed in heave and barely moves in roll', () => {
-    const rocker = new Rocker(spec.spring.rocker!, spec.spring.wheel as [number, number, number]);
-    const point = spec.thirdSpring!.rockerPoint;
-    const body = spec.spring.body;
-    // The rocker's angle at a travel, from the spring's length there (monotonic in the angle near design).
-    const angleAt = (q: number): number => {
-      axle.measureAt(q, s);
-      const want = s.springLen;
-      const E = [0, 0, 0];
-      const lenAt = (t: number): number => {
-        rocker.elementEndAt(t, E);
-        return Math.hypot(E[0] - body[0], E[1] - body[1], E[2] - body[2]);
-      };
-      let lo = -1;
-      let hi = 1;
-      for (let i = 0; i < 80; i++) {
-        const mid = (lo + hi) / 2;
-        // The spring shortens as the rocker turns up.
-        if (lenAt(mid) > want) lo = mid;
-        else hi = mid;
-      }
-      return (lo + hi) / 2;
+  const rocker = new Rocker(spec.spring.rocker!, spec.spring.wheel as [number, number, number]);
+  const point = spec.thirdSpring!.rockerPoint;
+  const body = spec.spring.body;
+  // The rocker's angle at a travel, from the spring's length there (monotonic in the angle near design).
+  const angleAt = (q: number): number => {
+    axle.measureAt(q, s);
+    const want = s.springLen;
+    const E = [0, 0, 0];
+    const lenAt = (t: number): number => {
+      rocker.elementEndAt(t, E);
+      return Math.hypot(E[0] - body[0], E[1] - body[1], E[2] - body[2]);
     };
-    const len = (qL: number, qR: number): number => thirdSpringLength(rocker, point, angleAt(qL), angleAt(qR));
+    let lo = -1;
+    let hi = 1;
+    for (let i = 0; i < 80; i++) {
+      const mid = (lo + hi) / 2;
+      // The spring shortens as the rocker turns up.
+      if (lenAt(mid) > want) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
+  };
+  const len = (qL: number, qR: number): number => thirdSpringLength(rocker, point, angleAt(qL), angleAt(qR));
+
+  it('the third spring is squeezed in heave and barely moves in roll', () => {
     const L0 = len(0, 0);
     const heave = L0 - len(0.02, 0.02);
     const roll = L0 - len(0.02, -0.02);
@@ -243,6 +244,13 @@ describe('pushrod and rocker', () => {
     // a quarter of that at ±10 mm.
     expect(Math.abs(roll)).toBeLessThan(0.1 * heave);
     expect(Math.abs(L0 - len(0.01, -0.01))).toBeLessThan(0.3 * Math.abs(roll));
+  });
+
+  it('the third spring\'s rate gives the wheel rate asked for, by its exact length in heave', () => {
+    // Energy ½·k₃·ΔL₃² over both wheels moving by q: each wheel gets k₃·(dL₃/dq)²/2.
+    const h = 1e-4;
+    const dL = (len(-h, -h) - len(h, h)) / (2 * h);
+    expect((spec.thirdSpring!.rate * dL * dL) / 2 / 30000).toBeCloseTo(1, 3);
   });
 });
 
