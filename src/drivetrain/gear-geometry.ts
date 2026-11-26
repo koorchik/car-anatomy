@@ -15,6 +15,11 @@ const TAU = Math.PI * 2;
 /** Addendum and dedendum of the basic rack, in modules (ISO 53 profile A). */
 export const ADDENDUM = 1;
 export const DEDENDUM = 1.25;
+/**
+ * Addendum of a ring gear, in modules: shorter than the rack's, as internal gears are commonly cut, so that the ring's
+ * tips stay clear of a small planet's flank below its base circle (involute interference of internal pairs).
+ */
+export const RING_ADDENDUM = 0.8;
 /** Root fillet radius of the basic rack, in modules. */
 export const ROOT_FILLET = 0.38;
 /** Undercut shallower than this, in modules, is below grinding tolerance and does not count. */
@@ -106,6 +111,11 @@ export function undercut(teeth: number, shift: number, helixDeg: number, pressur
 /** The shape of one gear, everything in the transverse plane. */
 export interface GearGeometry {
   teeth: number;
+  /**
+   * A ring gear with its teeth inside: the tip circle `ra` is then the inner one and the root circle `rf` the outer
+   * one, and the tooth widens toward the root (halfToothAngle).
+   */
+  internal?: boolean;
   /** Normal module, mm. */
   module: number;
   /** Helix angle, rad (signed: positive is a right hand). */
@@ -134,6 +144,8 @@ export interface GearShape {
   pressureAngle: number;
   shift: number;
   faceWidth: number;
+  /** A ring gear with internal teeth (GearDef.internal). */
+  internal?: boolean;
 }
 
 /**
@@ -142,6 +154,7 @@ export interface GearShape {
  * than it raises the tips.
  */
 export function gearGeometry(gear: GearShape, thinning = 0, tipShortening = 0): GearGeometry {
+  if (gear.internal) return ringGeometry(gear, thinning);
   const beta = gear.helix * DEG;
   const alphaN = gear.pressureAngle * DEG;
   const { mt, alphaT } = transverse(gear.module, Math.abs(gear.helix), gear.pressureAngle);
@@ -164,7 +177,29 @@ export function gearGeometry(gear: GearShape, thinning = 0, tipShortening = 0): 
  */
 export function halfToothAngle(gear: GearGeometry, rho: number): number {
   const alphaRho = rho > gear.rb ? Math.acos(gear.rb / rho) : 0;
+  // A ring's tooth space is an external tooth of the same base circle, so its tooth runs the other way.
+  if (gear.internal) return gear.halfAngle - involute(gear.alphaT) + involute(alphaRho);
   return gear.halfAngle + involute(gear.alphaT) - involute(alphaRho);
+}
+
+/**
+ * Geometry of a ring gear with internal teeth, without profile shift (no planetary set in the catalogue needs one):
+ * the tip circle lies inside the reference circle by RING_ADDENDUM, the root circle outside it by the dedendum, and
+ * the tooth on the reference circle is half a pitch less the backlash allowance, like an external gear's.
+ */
+function ringGeometry(gear: GearShape, thinning: number): GearGeometry {
+  if (gear.shift !== 0) throw new Error(`ring gear ${gear.teeth}: profile shift of internal teeth is not modelled`);
+  const { mt, alphaT } = transverse(gear.module, Math.abs(gear.helix), gear.pressureAngle);
+  const r = (mt * gear.teeth) / 2;
+  const rb = r * Math.cos(alphaT);
+  const ra = r - gear.module * RING_ADDENDUM;
+  if (ra <= rb) throw new Error(`ring gear ${gear.teeth}: its tips reach inside the base circle, too few teeth for the module`);
+  const geometry: GearGeometry = {
+    teeth: gear.teeth, internal: true, module: gear.module, beta: gear.helix * DEG, alphaN: gear.pressureAngle * DEG, alphaT, mt, shift: 0,
+    r, rb, ra, rf: r + gear.module * DEDENDUM, halfAngle: Math.PI / 2 / gear.teeth - thinning / (2 * r), tipHalfAngle: 0, faceWidth: gear.faceWidth,
+  };
+  geometry.tipHalfAngle = halfToothAngle(geometry, ra);
+  return geometry;
 }
 
 /** A pair at its working centre distance. */
@@ -191,6 +226,7 @@ export function pairGeometry(a: GearShape, b: GearShape, thinning = 0): PairGeom
   if (Math.abs(a.module - b.module) > 1e-9 || Math.abs(Math.abs(a.helix) - Math.abs(b.helix)) > 1e-9 || a.pressureAngle !== b.pressureAngle) {
     throw new Error(`gears ${a.teeth} and ${b.teeth} cannot mesh: module, helix or pressure angle differ`);
   }
+  if (a.internal || b.internal) return internalPairGeometry(a, b, thinning);
   if (a.helix !== 0 && Math.sign(a.helix) === Math.sign(b.helix)) {
     throw new Error(`external helical gears ${a.teeth} and ${b.teeth} need opposite hands`);
   }
@@ -210,11 +246,50 @@ export function pairGeometry(a: GearShape, b: GearShape, thinning = 0): PairGeom
 }
 
 /**
+ * A pinion inside a ring gear (a planet in its ring). A helical pair of this kind has one hand on both. The working
+ * centre distance is m_t(z_r − z_p)/2 and the transverse contact ratio
+ * ε_α = (√(r_a1² − r_b1²) − √(r_a2² − r_b2²) + a·sin α_wt)/p_bt, with 2 the ring.
+ */
+function internalPairGeometry(a: GearShape, b: GearShape, thinning: number): PairGeometry {
+  if (a.internal && b.internal) throw new Error(`ring gears ${a.teeth} and ${b.teeth} cannot mesh with each other`);
+  if (a.helix !== 0 && Math.sign(a.helix) !== Math.sign(b.helix)) throw new Error(`a pinion ${a.teeth} and its ring ${b.teeth} need the same hand`);
+  if (a.shift + b.shift !== 0 || a.shift !== 0) throw new Error(`internal pair ${a.teeth}/${b.teeth}: profile shift is not modelled`);
+  const ring = a.internal ? a : b;
+  const pinion = a.internal ? b : a;
+  if (ring.teeth - pinion.teeth < 10) throw new Error(`internal pair ${pinion.teeth}/${ring.teeth}: too few teeth between them, the tips would foul`);
+  const helix = Math.abs(a.helix);
+  const centre = centreDistance(a.module, pinion.teeth, ring.teeth, helix, a.pressureAngle, 0, true);
+  const { mt, alphaT } = transverse(a.module, helix, a.pressureAngle);
+  const gp = gearGeometry(pinion, thinning);
+  const gr = gearGeometry(ring, thinning);
+  const pbt = Math.PI * mt * Math.cos(alphaT);
+  const epsAlpha = (Math.sqrt(gp.ra ** 2 - gp.rb ** 2) - Math.sqrt(gr.ra ** 2 - gr.rb ** 2) + centre * Math.sin(alphaT)) / pbt;
+  const epsBeta = (Math.min(a.faceWidth, b.faceWidth) * Math.sin(helix * DEG)) / (Math.PI * a.module);
+  return { a: a.internal ? gr : gp, b: a.internal ? gp : gr, reference: centre, centre, alphaWt: alphaT, epsAlpha, epsBeta, tipShortening: 0 };
+}
+
+/**
  * Starting angle of the driven gear B so that its teeth fall into A's gaps (research §2.2): with B's centre in the
  * direction φ from A's, θ_B = φ + π + π/z_B − (z_A/z_B)(θ_A − φ). Checked numerically on 19/43, 20/20, 17/31, 29/38.
  */
 export function meshPhase(thetaA: number, teethA: number, teethB: number, phi: number): number {
   return wrap(phi + Math.PI + Math.PI / teethB - (teethA / teethB) * (thetaA - phi));
+}
+
+/**
+ * Internal pair: starting angle of gear B (either the ring or the pinion inside it) so that teeth fall into gaps.
+ * The contact lies on the line of centres beyond the pinion, at direction ψ = φ_pr + π from both centres (φ_pr the
+ * direction from the pinion's centre to the ring's); the pinion's tooth centre there meets the ring's gap centre, and
+ * the two turn the same way, the ring by z_p/z_r of the pinion's turn. `phi` is the direction from A's centre to B's.
+ */
+export function internalMeshPhase(thetaA: number, teethA: number, teethB: number, phi: number, aIsRing: boolean): number {
+  if (!aIsRing) {
+    // A is the pinion, B the ring: φ points from the pinion to the ring centre.
+    const psi = phi + Math.PI;
+    return wrap(psi + Math.PI / teethB + (teethA / teethB) * (thetaA - psi));
+  }
+  // A is the ring, B the pinion: φ points from the ring centre to the pinion, which is ψ itself.
+  return wrap(phi + (teethA / teethB) * (thetaA - phi - Math.PI / teethA));
 }
 
 /** Direction from one axis to another in the gear angle convention (clockwise from +Y, seen from the front). */
@@ -229,7 +304,7 @@ export const wrap = (angle: number): number => ((angle % TAU) + TAU) % TAU;
  * per flank; the 3D extrudes this outline along a helix.
  */
 export function toothOutline(gear: GearGeometry, steps = 10): Float32Array {
-  const tooth = singleTooth(gear, steps);
+  const tooth = gear.internal ? ringTooth(gear, steps) : singleTooth(gear, steps);
   const out = new Float32Array(tooth.length * gear.teeth);
   for (let k = 0; k < gear.teeth; k++) {
     const turn = (TAU * k) / gear.teeth;
@@ -288,6 +363,26 @@ export function singleTooth(gear: GearGeometry, steps: number): number[] {
 }
 
 /**
+ * One tooth of a ring gear from the middle of the gap before it to the middle of the gap after it, as (ρ, angle)
+ * pairs: the root arc on the outer root circle, the flank inward to the tip circle, the tip arc, the other flank out.
+ * The root has no fillet: a planet's tip stays a quarter module short of it.
+ */
+export function ringTooth(gear: GearGeometry, steps: number): number[] {
+  const halfPitch = Math.PI / gear.teeth;
+  const rootHalf = Math.min(halfToothAngle(gear, gear.rf), halfPitch);
+  const tip = Math.max(gear.tipHalfAngle, 0);
+  const left: number[] = [gear.rf, -halfPitch];
+  for (let i = 0; i <= steps; i++) {
+    const r = gear.rf - ((gear.rf - gear.ra) * i) / steps;
+    left.push(r, -Math.min(halfToothAngle(gear, r), i === 0 ? rootHalf : halfPitch));
+  }
+  const points = [...left];
+  for (let i = 1; i < 4; i++) points.push(gear.ra, -tip + (2 * tip * i) / 4);
+  for (let i = left.length - 2; i >= 0; i -= 2) points.push(left[i]!, -left[i + 1]!);
+  return points;
+}
+
+/**
  * How far a point lies inside gear material, mm along the circle (zero or less: outside). The gear sits at
  * `centre` with tooth 0 at angle `theta`. Used by the interference check; the radial flank below the base circle
  * makes it conservative there.
@@ -296,8 +391,14 @@ export function penetration(gear: GearGeometry, centre: { x: number; y: number }
   const dx = px - centre.x;
   const dy = py - centre.y;
   const rho = Math.hypot(dx, dy);
-  if (rho >= gear.ra) return gear.ra - rho;
-  if (rho <= gear.rf) return gear.rf - rho + 1;
+  if (gear.internal) {
+    // A ring: open inside its tip circle, solid outside its root circle.
+    if (rho <= gear.ra) return rho - gear.ra;
+    if (rho >= gear.rf) return rho - gear.rf + 1;
+  } else {
+    if (rho >= gear.ra) return gear.ra - rho;
+    if (rho <= gear.rf) return gear.rf - rho + 1;
+  }
   const pitch = TAU / gear.teeth;
   const local = wrap(Math.atan2(dx, dy) - theta);
   const fromCentre = Math.abs(local - Math.round(local / pitch) * pitch);

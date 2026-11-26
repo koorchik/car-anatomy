@@ -4,4 +4,5 @@
 
 export const GEARBOX_PAGE_NAMES: Readonly<Record<string, string>> = {
   'manual-rwd': 'Getrag 265/5',
+  automatic: 'ZF 8HP51',
 };
