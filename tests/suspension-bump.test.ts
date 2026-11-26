@@ -122,3 +122,25 @@ describe('bump run', () => {
     expect((performance.now() - t0) / 5).toBeLessThan(40);
   });
 });
+
+describe('what the scene says about a run', async () => {
+  const { bumpCaption, bumpRows } = await import('../src/ui/suspensions/bump-text.ts');
+  const rc = resolved();
+
+  it('explains the obstacle by its frequency against the body and the wheel', () => {
+    expect(bumpCaption(runBump(rc, { ...BUMP_DEFAULT, obstacle: 'hump', speedKmh: 10 }).stats)).toContain('перекочується');
+    expect(bumpCaption(runBump(rc, { ...BUMP_DEFAULT, speedKmh: 15 }).stats)).toContain('пружина й амортизатор');
+    expect(bumpCaption(runBump(rc, { ...BUMP_DEFAULT, speedKmh: 60 }).stats)).toContain('вища за підскок');
+    expect(bumpCaption(runBump(rc, { ...BUMP_DEFAULT, obstacle: 'kerb' }).stats)).toContain('сходинка');
+  });
+
+  it('flags the wheel off the road, the bump stop and a corner that never settles', () => {
+    const worn = bumpRows(runBump(resolved({ damper: 'worn' }), BUMP_DEFAULT).stats);
+    expect(worn.find((r) => r.id === 'air')).toMatchObject({ alarm: true, value: expect.stringContaining('відривалося 4 рази') });
+    const punch = bumpRows(runBump(rc, BUMP_PUNCH).stats);
+    expect(punch.find((r) => r.id === 'travel')).toMatchObject({ alarm: true, label: 'Удар у відбійник' });
+    const slow = bumpRows(runBump(rc, { ...BUMP_DEFAULT, speedKmh: 10 }).stats);
+    expect(slow.find((r) => r.id === 'air')).toMatchObject({ alarm: false });
+    expect(slow.find((r) => r.id === 'settle')!.value).toMatch(/^за /);
+  });
+});

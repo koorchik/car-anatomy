@@ -42,7 +42,7 @@ export const SECTIONS: readonly SectionEntry[] = [
       { key: 'sump', href: '#/sump' },
     ],
   },
-  { id: 'suspensions', load: loadSuspensions },
+  { id: 'suspensions', load: loadSuspensions, pages: [{ key: 'catalogue', href: '#/suspensions' }] },
 ];
 
 /** The entry of the section a route belongs to. */

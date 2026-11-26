@@ -6,6 +6,7 @@ import { keyCap, keyHelp, knownKey } from '../src/shell/key-help.ts';
 import { SHELL_KEYS, shellBindings, ShellKeys } from '../src/shell/keys.ts';
 import type { KeyBinding } from '../src/shell/section.ts';
 import { ENGINE_KEY_CONTEXTS, engineKeys } from '../src/ui/engines/keys.ts';
+import { SUSPENSION_KEY_CONTEXTS, suspensionKeys } from '../src/ui/suspensions/keys.ts';
 
 const noop = (): void => undefined;
 
@@ -17,11 +18,16 @@ function siteKeys(): ShellKeys {
   const engines = engineKeys({ gas: noop, ignition: noop, step: noop, table: noop, mute: noop, layer: noop, closeHelp: noop, lap: () => false });
   keys.bind('engines', engines.engines);
   keys.bind('engines/sump', engines.sump);
+  keys.bind(SUSPENSION_KEY_CONTEXTS[0], suspensionKeys({ event: () => true, scene: noop }));
   return keys;
 }
 
 /** The stacks of contexts the pages put in use, the shell's last, as ShellKeys.stack gives them; the shell's alone too. */
-const STACKS: ReadonlyArray<readonly string[]> = [...Object.values(ENGINE_KEY_CONTEXTS).map((contexts) => [...contexts, SHELL_KEYS]), [SHELL_KEYS]];
+const STACKS: ReadonlyArray<readonly string[]> = [
+  ...Object.values(ENGINE_KEY_CONTEXTS).map((contexts) => [...contexts, SHELL_KEYS]),
+  [...SUSPENSION_KEY_CONTEXTS, SHELL_KEYS],
+  [SHELL_KEYS],
+];
 
 const contextsOf = (keys: ShellKeys): string[] => [...new Set(keys.bindings().map((b) => b.context))];
 
@@ -89,5 +95,14 @@ describe('keys of the site', () => {
     // Two keys for the gas share one row.
     const catalogue = keyHelp([...ENGINE_KEY_CONTEXTS.catalogue, SHELL_KEYS], (context) => keys.of(context));
     expect(catalogue[0]!.rows.find((row) => row.caps.includes('↑'))?.caps).toEqual(['Пробіл', '↑']);
+  });
+
+  it('gives the suspension pages the scene on the arrows up and down and V for the views', () => {
+    const keys = siteKeys();
+    const help = keyHelp([...SUSPENSION_KEY_CONTEXTS, SHELL_KEYS], (context) => keys.of(context));
+    const rows = help.flatMap((group) => group.rows);
+    expect(rows.find((row) => row.caps.includes('↑'))?.caps).toEqual(['↑', '↓']);
+    expect(rows.find((row) => row.caps.includes('V'))).toBeDefined();
+    expect(rows.find((row) => row.caps.includes('Пробіл'))).toBeDefined();
   });
 });

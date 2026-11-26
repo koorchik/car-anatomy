@@ -1,4 +1,4 @@
-// The bump scene (suspensions plan, scenes, «Перешкода»): one corner rolls at a steady speed over one obstacle, and
+// The bump scene (suspensions plan, scenes, the bump scene): one corner rolls at a steady speed over one obstacle, and
 // the run is written down whole before it is shown. A run costs a few thousand quarter-car steps and a road segment
 // or two (a few milliseconds), so every change of the setup, the speed, the obstacle or the wheel gives its numbers
 // and its response curve at once, and the page plays the written run back at whatever slow-down the visitor chose:
@@ -54,7 +54,7 @@ export interface BumpScene {
 
 /** What the page opens with (step 1): the 50 mm × 0.5 m bump at 30 km/h on the corner's own wheels. */
 export const BUMP_DEFAULT: BumpScene = { obstacle: 'bump', speedKmh: 30, wheel: 'cast' };
-/** «Пробити» (step 8): a 120 mm kerb at 40 km/h reaches the bump stop. */
+/** The punch-through button (step 8): a 120 mm kerb at 40 km/h reaches the bump stop. */
 export const BUMP_PUNCH: BumpScene = { obstacle: 'kerb-hard', speedKmh: 40, wheel: 'cast' };
 
 /** A scene with every field valid (a link may carry anything). */

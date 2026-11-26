@@ -20,7 +20,7 @@ describe('menu', () => {
   });
 
   it('turns a section into a link once it registers a visible page, and not before', () => {
-    const hidden = menuItems([...SECTIONS, fake('suspensions', [])], parseRoute('#/suspensions'));
+    const hidden = menuItems([...SECTIONS.filter((s) => s.id !== 'suspensions'), fake('suspensions', [])], parseRoute('#/suspensions'));
     expect(hidden.find((item) => item.id === 'suspensions')).toMatchObject({ href: null, current: false });
     const shown = menuItems([...SECTIONS, fake('gearboxes', [{ key: 'catalogue', href: '#/gearboxes/manual-rwd' }]), fake('car', [{ key: 'overview', href: '#/car' }])], parseRoute('#/gearboxes/manual-rwd'));
     expect(shown.map((item) => item.id)).toEqual(['car', 'engines', 'gearboxes', 'suspensions']);
