@@ -105,7 +105,7 @@ export class CarMode {
    * A demonstration driving the car: the step running, whether it has done its part, and whether it still holds the
    * pedals (a finished step leaves the car held where it stopped until the visitor touches a pedal).
    */
-  private demo: { step: CarDemoStep; done: boolean; held: boolean; controls: DemoControls; view: DemoView } | null = null;
+  private demo: { step: CarDemoStep; done: boolean; held: boolean; controls: DemoControls; view: DemoView; clock: number } | null = null;
 
   constructor(root: HTMLElement, drive: () => Drive, runs: RunStore, engineHref: () => string) {
     this.root = root;
@@ -244,7 +244,7 @@ export class CarMode {
       start: () => host.start(),
     };
     const view: DemoView = { rpm: 0, speed: 0, gear: 'N', shift: 'engaged', accel: 0, running: false, launchJ: 0, clutchJ: 0, clutchC: 0, slip: 0 };
-    this.demo = { step, done: false, held: true, controls, view };
+    this.demo = { step, done: false, held: true, controls, view, clock: Number.NaN };
     return step;
   }
 
@@ -389,7 +389,12 @@ export class CarMode {
       v.clutchJ = vehicle.clutchJ;
       v.clutchC = vehicle.clutchC;
       v.slip = wheelSlip(vehicle, this.wheel).slip;
-      demo.done = demo.step.frame(v, demo.controls, dt);
+      // The step's time goes by the car's own clock, as the dash's times do: the page caps a frame at 0.1 s, so on a
+      // device drawing fewer than ten frames a second its time would fall behind the car's ("two seconds" of rolling
+      // back would be ten). The page's time stands in only where the car's clock went back (another car).
+      const clock = vehicle.time - demo.clock;
+      demo.clock = vehicle.time;
+      demo.done = demo.step.frame(v, demo.controls, clock >= 0 ? clock : dt);
     }
     if (this.panel.settings.autoClutch) this.fillClutch(1 - vehicle.clutch);
     this.inset.draw(vehicle, this.wheel);
