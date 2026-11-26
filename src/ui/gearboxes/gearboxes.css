@@ -482,7 +482,10 @@ body.gbx-car .gbx-pedal .latch {
   font-size: 10px;
 }
 
-.gbx-factory {
+.gbx-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 12px;
 }
 

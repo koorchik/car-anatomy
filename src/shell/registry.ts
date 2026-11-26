@@ -55,7 +55,10 @@ export const SECTIONS: readonly SectionEntry[] = [
     id: 'gearboxes',
     load: loadGearboxes,
     openPages: GEARBOX_PAGES_SHOWN,
-    pages: [{ key: 'catalogue', href: `#/gearboxes/${GEARBOX_PAGES_SHOWN[0]!}` }],
+    pages: [
+      { key: 'catalogue', href: `#/gearboxes/${GEARBOX_PAGES_SHOWN[0]!}` },
+      { key: 'designer', href: '#/gearboxes/designer' },
+    ],
   },
   { id: 'suspensions', load: loadSuspensions, openPages: SUSPENSION_PAGE_IDS, pages: [{ key: 'catalogue', href: '#/suspensions' }] },
   // The overview of a car, at its address without a menu item until stage C1c gives it a page.

@@ -35,6 +35,10 @@ import type { FreezeOptions } from '../../shell/freeze.ts';
 import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, TimeMode, Viewport } from '../../shell/section.ts';
 import { readableDegreesPerSecond } from '../../shell/time.ts';
 import { drivenTyreRadiusM } from '../../vehicle/car.ts';
+import { parseTyreSize, rollingRadiusM } from '../../vehicle/tyre-size.ts';
+import type { GearboxDesign } from '../../gearbox-designer/design.ts';
+import type { DesignRun } from '../../gearbox-designer/drive-run.ts';
+import type { GearboxDesignerPage } from '../gearbox-designer/page.ts';
 import { Ignition } from '../widgets/ignition.ts';
 import { Pedal } from '../widgets/pedal.ts';
 import { Tacho } from '../widgets/tacho.ts';
@@ -63,6 +67,14 @@ const FIT = 0.8;
 const FIT_PHONE = 0.88;
 /** The gear a demonstration step points at. */
 const MARK = '#ffd27a';
+
+/**
+ * The designer (#/gearboxes/designer, stage K10): its page, model and presets, fetched the first time it is opened or a
+ * panel "Set up" carries its box there. The loader starts it alongside the section for a designer address.
+ */
+export const loadDesigner = (): Promise<typeof import('../gearbox-designer/page.ts')> =>
+  withDictionaries(['engines', 'gearboxes', 'gearbox-parts', 'gearbox-designer', 'presets'], () => import('../gearbox-designer/page.ts'));
+type DesignerModule = Awaited<ReturnType<typeof loadDesigner>>;
 
 /** The car mode, fetched with the catalogue's torque maps the first time a visitor gets in. */
 const loadCarMode = (): Promise<typeof import('./car-mode.ts')> => withDictionaries(['engines', 'gearboxes', 'presets'], () => import('./car-mode.ts'));
@@ -140,6 +152,14 @@ export class GearboxSection implements Section {
   /** What the readouts were last built from: the texts are built only when it changes, not every frame. */
   private readoutsFor = { rpm: NaN, engaged: '', selected: '', box: null as Gearbox | null };
   private readonly unlit = { angles: [] as ArrayLike<number>, sleeves: {} as Readonly<Record<string, number>>, meshPower: [] as number[] };
+  /** The designer's code and page once loaded; `onDesigner` while its address is shown. */
+  private designerModule: DesignerModule | null = null;
+  designer: GearboxDesignerPage | null = null;
+  onDesigner = false;
+  /** Counts designer entries, so a chunk that loads late does not open the designer over a later address. */
+  private designerTicket = 0;
+  /** The run of "Drive" being played back: its time, s, and who hears it. */
+  private playback: { run: DesignRun; time: number; gear: string; at: (time: number | null) => void } | null = null;
 
   /** The one Drive of the site, as this section uses it. */
   get drive(): Drive {
@@ -190,6 +210,12 @@ export class GearboxSection implements Section {
 
   enter(route: Route, from: Route | null): void {
     if (this.away) this.resume();
+    if (route.page === 'designer') {
+      void this.enterDesigner(route);
+      return;
+    }
+    this.designerTicket++;
+    if (this.onDesigner) this.leaveDesigner();
     let id = this.pageId(route);
     if (!id) {
       // An address of a page not built yet, or of none: the first page, with the address saying so; an unknown
@@ -216,6 +242,9 @@ export class GearboxSection implements Section {
 
   leave(): void {
     this.away = true;
+    this.designerTicket++;
+    this.stopPlayback();
+    this.designer?.leave();
     this.closeDemo();
     this.modeTicket++;
     this.car?.leave();
@@ -249,7 +278,8 @@ export class GearboxSection implements Section {
   private resume(): void {
     this.away = false;
     this.drive.setEngine(this.data.engine);
-    this.present();
+    // The designer's page comes back through enterDesigner, which presents it.
+    if (!this.onDesigner) this.present();
   }
 
   layout({ width, small }: Viewport): PanelSizes {
@@ -259,7 +289,7 @@ export class GearboxSection implements Section {
       // The box is set up on the table: in the car a phone has no settings sheet, as a desktop has its button disabled.
       left: small && this.mode === 'drive' ? 0 : narrow ? 300 : 340,
       dash: this.ctx.slots.dash.parent.offsetHeight,
-      rightLabel: t('Про коробку'),
+      rightLabel: this.onDesigner ? t('Параметри') : t('Про коробку'),
     };
   }
 
@@ -342,6 +372,7 @@ export class GearboxSection implements Section {
         tyre: d.tyre,
         redlineRpm: d.engine.spec.redlineRpm,
         reverse: layout.reverse(layout.factory),
+        openDesigner: () => void this.openDesignerFromPanel(),
       },
       (desc) => this.boxChanged(desc),
     );
@@ -366,13 +397,14 @@ export class GearboxSection implements Section {
   /** The section on screen: the skeleton's labels for this page, the model on the stage, the panels, time and keys. */
   private present(): void {
     const { slots, view, time, panels, stage } = this.ctx;
-    this.lend('#results-open', t('Налаштувати'));
-    this.lend('.results-head h2', t('Налаштувати'));
-    this.lend('#panel-toggle-closed', t('Про коробку'));
+    const designer = this.onDesigner;
+    this.lend('#results-open', designer ? t('Результати') : t('Налаштувати'));
+    this.lend('.results-head h2', designer ? t('Результати') : t('Налаштувати'));
+    this.lend('#panel-toggle-closed', designer ? t('Параметри') : t('Про коробку'));
     this.lendHidden('#results-panel', false);
     this.lendHidden('#hint', true);
-    slots.panelTitle.textContent = t('Про коробку');
-    document.title = t('{title}. Анатомія авто', { title: this.data.layout.title });
+    slots.panelTitle.textContent = designer ? t('Параметри') : t('Про коробку');
+    document.title = t('{title}. Анатомія авто', { title: designer ? (this.designer?.title ?? this.data.layout.title) : this.data.layout.title });
     // Another page of the section shown in place keeps what the section found when it came.
     if (!this.holding) {
       this.holding = true;
@@ -519,13 +551,160 @@ export class GearboxSection implements Section {
    * transaxle (its final drive in the box) stays on the table until the car model learns it.
    */
   private carModeOffered(): boolean {
-    return !!this.data.record.car && this.data.layout.kind === 'layshaft';
+    return !this.onDesigner && !!this.data.record.car && this.data.layout.kind === 'layshaft';
   }
 
   /** A click on the mode buttons: the address changes, and enter() switches. */
   private routeMode(mode: GearboxMode): void {
     this.ctx.router.replace({ query: { m: mode === 'drive' ? 'drive' : null, demo: null } });
     if (mode !== this.mode) void this.setMode(mode);
+  }
+
+  // ---- The designer (stage K10) ----
+
+  /** The designer's address: its page in place of the article and the panel, the design's box on the table. */
+  private async enterDesigner(route: Route): Promise<void> {
+    const ticket = ++this.designerTicket;
+    if (!this.designerModule) {
+      const module = await loadDesigner();
+      if (ticket !== this.designerTicket || this.away) return;
+      this.designerModule = module;
+    }
+    const module = this.designerModule;
+    this.closeDemo();
+    if (this.mode === 'drive') void this.setMode('table');
+    const page = (this.designer ??= this.makeDesigner(module));
+    const wanted = module.GearboxDesignerPage.designFromRoute(route);
+    if (!this.onDesigner) {
+      this.onDesigner = true;
+      this.designerChrome(true);
+      page.enter(wanted);
+      this.present();
+    } else if (wanted && module.gearboxDesignerRoute(page.current).path[0] !== route.path[0]) {
+      // Another design's link opened over this one.
+      page.setDesign(wanted);
+    }
+  }
+
+  private makeDesigner(module: DesignerModule): GearboxDesignerPage {
+    const page = new module.GearboxDesignerPage({
+      showBox: (d) => this.useDesign(d),
+      soundEngine: (d) => this.designEngine(d),
+      heading: (title, sub) => {
+        this.el('gbx-title').textContent = title;
+        this.el('gbx-sub').textContent = sub;
+        document.title = t('{title}. Анатомія авто', { title });
+      },
+      startEngine: () => void this.pressThrottle(),
+      play: (run, at) => {
+        this.stopPlayback();
+        this.demoMode = false;
+        this.playback = { run, time: 0, gear: '', at };
+      },
+      stopPlay: () => this.stopPlayback(),
+    });
+    this.el('gbd-params').append(page.controlsHost);
+    this.el('gbd-results').append(page.results.root);
+    return page;
+  }
+
+  private leaveDesigner(): void {
+    this.stopPlayback();
+    this.designer?.leave();
+    this.onDesigner = false;
+    this.designerChrome(false);
+  }
+
+  /** What the catalogue shows and the designer does not, and the other way round. */
+  private designerChrome(on: boolean): void {
+    this.el('gbd-params').hidden = !on;
+    this.el('gbd-results').hidden = !on;
+    this.el('gbx-article').hidden = on;
+    this.el('gbx-setup').hidden = on;
+    this.el('gbx-modes').parentElement!.hidden = on;
+    this.el('gbx-nav').hidden = on;
+    this.el('gbx-steps').hidden = on;
+    this.el('gbx-designer-link').hidden = on;
+    this.el('gbx-demo-open').hidden = on || !this.data.layout.demo;
+    this.el('gbx-setup-toggle').textContent = on ? t('Результати') : t('Налаштувати');
+  }
+
+  /** A design whose geometry changed: its box on the table, rebuilt in 3D on the next rebuild. */
+  private useDesign(d: GearboxDesign): void {
+    const module = this.designerModule!;
+    const record = module.designTableRecord(d);
+    const layout: TableLayout = { ...tableLayout(record, d.type === 'layshaft' ? d.finalDrive : null), demo: false, title: d.name || t('Своя коробка') };
+    const first = this.data.record.id !== 'designer';
+    const kindChanged = this.data.layout.kind !== layout.kind;
+    this.data = { ...this.data, record, layout, radiusM: rollingRadiusM(parseTyreSize(d.tyreSize)), tyre: d.tyreSize };
+    if (first) {
+      this.desc = layout.factory;
+      this.box = layout.build(layout.factory);
+      this.table = new TableDrive(this.box, 'N');
+      this.renderGears();
+      this.rebuildDue = true;
+      return;
+    }
+    this.boxChanged(layout.factory);
+    // Another layout draws with another model, whatever its member count.
+    if (kindChanged) this.sinceRebuild = REBUILD_S;
+  }
+
+  /** The design's engine on the crank and on the dial: a catalogue engine or one built in the engine designer. */
+  private designEngine(d: GearboxDesign): void {
+    const spec = this.designerModule?.engineSource(d.engine)?.spec;
+    if (!spec) return;
+    const engine = buildEngine(spec);
+    this.data = { ...this.data, engine };
+    this.drive.setEngine(engine);
+    this.tacho.configure(engine.spec.redlineRpm);
+  }
+
+  /** The panel "Set up" carries its box to the designer, as a design of its own when it was changed. */
+  private async openDesignerFromPanel(): Promise<void> {
+    const module = this.designerModule ?? (this.designerModule = await loadDesigner());
+    const d = module.designFromTable(this.data.record.id, this.desc, this.setup.finalDrive);
+    if (d) this.ctx.router.push(module.gearboxDesignerRoute(d));
+  }
+
+  /** One frame of the run's playback: the engine held at the run's speed with its throttle, the box in its gear. */
+  private stepPlayback(dt: number): void {
+    const p = this.playback!;
+    p.time += dt;
+    const samples = p.run.samples;
+    const last = samples[samples.length - 1];
+    if (!last || p.time > last.t) {
+      this.stopPlayback();
+      return;
+    }
+    let lo = 0;
+    let hi = samples.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (samples[mid]!.t <= p.time) lo = mid;
+      else hi = mid - 1;
+    }
+    const s = samples[lo]!;
+    this.drive.lock(s.rpm);
+    this.drive.setPedal(s.throttle);
+    const gear = p.run.gearNames[s.gear - 1] ?? 'N';
+    if (gear !== p.gear) {
+      p.gear = gear;
+      this.table.select(gear);
+      this.pressGear(gear);
+    }
+    p.at(p.time);
+  }
+
+  private stopPlayback(): void {
+    const p = this.playback;
+    if (!p) return;
+    this.playback = null;
+    this.drive.lock(this.ctx.time.mode === 'slow' ? this.slowRpm : null);
+    this.drive.setPedal(0);
+    this.table.select('N');
+    this.pressGear('N');
+    p.at(null);
   }
 
   // ---- Controls ----
@@ -699,6 +878,7 @@ export class GearboxSection implements Section {
     this.pedal.frame(dt);
     const { stage, time } = this.ctx;
     const frozen = time.frozen;
+    if (this.playback) this.stepPlayback(frozen ? 0 : dt);
     const snap = this.ctx.audio.snapshot;
     const spec = this.data.engine.spec;
     const running = snap !== null && (snap.state === 'running' || snap.state === 'cranking');

@@ -2,6 +2,7 @@
 // nothing but the list of pages a visitor can open and the chunk to fetch.
 
 import { withDictionaries } from '../../i18n/dictionaries.ts';
+import type { Route } from '../../shell/routes.ts';
 import type { Section } from '../../shell/section.ts';
 
 /**
@@ -11,8 +12,13 @@ import type { Section } from '../../shell/section.ts';
  */
 export const GEARBOX_PAGES_SHOWN: readonly string[] = ['manual-rwd', 'manual-transaxle', 'automatic'];
 
-/** The engines' dictionary too: the page runs the car's engine from the engine catalogue, which brings its words. */
-export async function loadGearboxes(): Promise<Section> {
-  const { GearboxPages } = await withDictionaries(['engines', 'gearboxes', 'gearbox-parts'], () => import('./pages.ts'));
+/**
+ * The engines' dictionary too: the page runs the car's engine from the engine catalogue, which brings its words. A
+ * designer address (#/gearboxes/designer) fetches the designer's chunk alongside, so its first view is the designer;
+ * the manual pages' section asks for that chunk again should it fail to come.
+ */
+export async function loadGearboxes(route: Route): Promise<Section> {
+  const designer = route.page === 'designer' ? withDictionaries(['engines', 'gearboxes', 'gearbox-parts', 'gearbox-designer', 'presets'], () => import('../gearbox-designer/page.ts')) : null;
+  const [{ GearboxPages }] = await Promise.all([withDictionaries(['engines', 'gearboxes', 'gearbox-parts'], () => import('./pages.ts')), designer?.catch(() => null)]);
   return new GearboxPages();
 }

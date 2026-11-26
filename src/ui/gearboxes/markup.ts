@@ -25,6 +25,7 @@ export const titleHtml = (): string => `<div class="gbx-title" id="gbx-title-blo
     </div>
     <div class="gbx-title-row">
       <button class="btn" id="gbx-setup-toggle" type="button" aria-controls="results-panel">${t('Налаштувати')}</button>
+      <a class="btn" id="gbx-designer-link" href="#/gearboxes/designer">${t('Своя коробка')}</a>
       <button class="btn" id="gbx-demo-open" type="button">${t('Демонстрація')}<span class="gbx-long">: ${t('чому шестерні крутяться завжди')}</span></button>
       <span class="gbx-steps" id="gbx-steps"></span>
     </div>
@@ -55,9 +56,12 @@ export const statusHtml = (): string => `${wheelRoadHtml()}
     </footer>
   </section>`;
 
-export const panelHtml = (): string => `<div class="panel-scroll gbx-article" id="gbx-article" tabindex="0"></div>`;
+// The designer's hosts (#/gearboxes/designer) stand beside the catalogue's article and panel; one pair shows at a time.
+export const panelHtml = (): string => `<div class="panel-scroll gbx-article" id="gbx-article" tabindex="0"></div>
+  <div class="panel-scroll gbd-panel" id="gbd-params" tabindex="0" hidden></div>`;
 
-export const resultsHtml = (): string => `<div class="panel-scroll gbx-setup" id="gbx-setup" tabindex="0"></div>`;
+export const resultsHtml = (): string => `<div class="panel-scroll gbx-setup" id="gbx-setup" tabindex="0"></div>
+  <div class="panel-scroll gbd-panel" id="gbd-results" tabindex="0" hidden></div>`;
 
 export const dashHtml = (): string => `<section class="control-col gbx-control" id="gbx-control">
       ${ignitionHtml()}

@@ -4,7 +4,8 @@
 // of the revs at each upshift. The model of the setup is the layout's (src/drivetrain/layouts/setup-model.ts: the
 // layshaft page and the transaxle page); the panel only shows it, with the words the page gives it.
 //
-// The state is not in the address yet: the designer's codec carries it from K10 on.
+// The state is not in the address: "Open in the designer" carries the box to the gearbox designer, whose link holds it
+// (stage K10).
 
 import type { SetupModel } from '../../drivetrain/layouts/setup-model.ts';
 import { roadSpeedKmh, shiftDrops } from '../../drivetrain/table-figures.ts';
@@ -38,6 +39,8 @@ export interface SetupContext<D, S> {
   redlineRpm: number;
   /** Reverse's ratio in the table, the final drive left out; the panel does not change it. */
   reverse: number | null;
+  /** Carries the panel's box to the gearbox designer (stage K10); left out, the panel has no such button. */
+  openDesigner?: () => void;
 }
 
 export class SetupPanel<D = unknown, S = unknown> {
@@ -118,6 +121,8 @@ export class SetupPanel<D = unknown, S = unknown> {
       this.render();
     } else if (button.id === 'gbx-factory') {
       this.reset();
+    } else if (button.id === 'gbx-open-designer') {
+      this.ctx.openDesigner?.();
     }
   }
 
@@ -173,7 +178,10 @@ export class SetupPanel<D = unknown, S = unknown> {
       <div class="gbx-speed-table" id="gbx-speed-table"></div>
       <h3>${t('Оберти після перемикання')}</h3>
       <div class="gbx-ladder" id="gbx-ladder"></div>
-      <button class="btn gbx-factory" id="gbx-factory" type="button">${t('Заводські')}</button>`;
+      <div class="gbx-setup-actions">
+        <button class="btn gbx-factory" id="gbx-factory" type="button">${t('Заводські')}</button>
+        ${ctx.openDesigner ? `<button class="btn" id="gbx-open-designer" type="button">${t('Відкрити в конструкторі')}</button>` : ''}
+      </div>`;
     this.refresh();
   }
 

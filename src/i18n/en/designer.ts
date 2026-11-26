@@ -494,4 +494,6 @@ export const DESIGNER_EN: Record<string, string> = {
   'Запас до руйнування': 'Failure speed',
   // src/ui/designer/results.ts
   'Цифри вище рахує модель, тому кожна зміна дає фізичну різницю.': 'The figures above come from the model, so every change makes a physical difference.',
+  // The way to the gearbox designer with this engine (stage K10).
+  'Підібрати коробку': 'Match a transmission',
 };

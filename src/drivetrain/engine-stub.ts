@@ -3,7 +3,7 @@
 // part load on the Willans line (brakeTorque), fuel cut at the rev limit, and an idle governor so that a coasting
 // engine settles at idle instead of stopping. No DOM: plain maths on the map.
 
-import { brakeTorque, holdCharge, leakCharge, type EngineTorqueMap } from '../engine/torque-map.ts';
+import { brakeTorque, holdCharge, leakCharge, mapValue, type EngineTorqueMap } from '../engine/torque-map.ts';
 
 const RPM = 30 / Math.PI;
 
@@ -24,5 +24,12 @@ export function stubTorque(map: EngineTorqueMap, omega: number, pedal: number): 
   return brakeTorque(map, rpm, charge);
 }
 
-/** Full-load brake torque at ω, rad/s, without the rev limiter: what the driver can ask of the engine. */
-export const fullLoadTorque = (map: EngineTorqueMap, omega: number): number => brakeTorque(map, Math.min(omega * RPM, map.limitRpm), 1);
+/**
+ * Full-load brake torque at ω, rad/s, without the rev limiter: what the driver can ask of the engine. A charged engine
+ * gives it at the boost its turbo holds in steady running (the map's wotNm, as the gearbox designer's model takes it):
+ * the runs have no turbo lag, and without the boost a turbocharged car would pull as if it had none.
+ */
+export function fullLoadTorque(map: EngineTorqueMap, omega: number): number {
+  const rpm = Math.min(omega * RPM, map.limitRpm);
+  return brakeTorque(map, rpm, Math.max(1, mapValue(map, map.pressureRatio, rpm)));
+}

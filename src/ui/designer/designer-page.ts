@@ -205,7 +205,13 @@ export class DesignerPage {
     this.copyButton.className = 'btn';
     this.copyButton.textContent = t('Копіювати посилання');
     this.copyButton.addEventListener('click', () => void this.copyLink());
-    actions.append(random, reset, this.copyButton);
+    // The gearbox designer takes this engine as its car's (stage K10): #/gearboxes/designer/engine/<code>.
+    const gearbox = document.createElement('button');
+    gearbox.type = 'button';
+    gearbox.className = 'btn';
+    gearbox.textContent = t('Підібрати коробку');
+    gearbox.addEventListener('click', () => router.push({ section: 'gearboxes', page: 'designer', path: ['engine', encodeDesign(this.design)], query: {} }));
+    actions.append(random, reset, this.copyButton, gearbox);
 
     this.factoryNote.className = 'factory-note';
     this.factoryNote.textContent = t('Точна копія двигуна з каталогу: той самий механізм, звук і поведінка. Перша зміна вмикає розрахунок за моделлю.');
