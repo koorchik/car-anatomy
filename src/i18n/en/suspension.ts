@@ -22,10 +22,11 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Хід рахується від проєктної висоти кузова, плюс — колесо вгору. Розвал від’ємний, коли верх колеса нахилений до кузова; сходження додатне, коли перед колеса повернутий до середини авто.':
     'Travel is measured from the design ride height, plus is the wheel moving up. Camber is negative when the top of the wheel leans toward the body; toe is positive when the front of the wheel points toward the middle of the car.',
   'Звідки цифри': 'Where the numbers come from',
-  'Точки кріплення стійки, важеля й рульової тяги виміряні на справжньому компактному передньопривідному авто: JTEKT Engineering Journal 1019E (2023), таблиця 1. Модель авто стаття не називає. Висота центра колеса, пружина, відбійник і піввісь типові: їх у статті немає.':
-    'The mounting points of the strut, the arm and the tie rod were measured on a real compact front-wheel-drive car: JTEKT Engineering Journal 1019E (2023), Table 1. The paper does not name the car. The wheel center height, the spring, the bump stop and the halfshaft are typical: the paper does not give them.',
+  'Точки кріплення стійки, важеля й рульової тяги виміряні на справжньому компактному передньопривідному авто: JTEKT Engineering Journal 1019E (2023), таблиця 1. Модель авто стаття не називає. Висота центра колеса, межі ходу, пружина, відбійник і піввісь типові: їх у статті немає.':
+    'The mounting points of the strut, the arm and the tie rod were measured on a real compact front-wheel-drive car: JTEKT Engineering Journal 1019E (2023), Table 1. The paper does not name the car. The wheel center height, the travel limits, the spring, the bump stop and the halfshaft are typical: the paper does not give them.',
   'Підвіски. Анатомія авто': 'Suspensions. Car Anatomy',
   'Про цей кут': 'About this corner',
+  'Довжина цього відрізка в натурі': 'The real length of this bar',
   'Тривимірна модель підвіски. Перетягуй, щоб обертати, коліщатком наближай.': '3D model of the suspension. Drag to rotate, scroll to zoom.',
   '{value} мм': '{value} mm',
   '{value} кН': '{value} kN',

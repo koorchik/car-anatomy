@@ -112,6 +112,9 @@ export class SuspensionSection implements Section {
     const canvas = stage.renderer.domElement;
     const navCurrent = slots.root.querySelector<HTMLElement>('.sections a.current');
     const results = slots.results.parent;
+    const attribute = (el: Element | null, name: string, value: string): (() => void) | null =>
+      el && this.borrow(() => el.getAttribute(name), (v) => (v === null ? el.removeAttribute(name) : el.setAttribute(name, v)), value);
+    const panelToggle = slots.root.querySelector<HTMLElement>('#panel-toggle-closed');
     this.borrowed = [
       this.borrow(() => document.title, (v) => (document.title = v), t('Підвіски. Анатомія авто')),
       this.borrow(() => slots.panelTitle.textContent ?? '', (v) => (slots.panelTitle.textContent = v), t('Про цей кут')),
@@ -121,6 +124,14 @@ export class SuspensionSection implements Section {
       // A corner held on a rig is studied, not shown off: it stands still unless the visitor turns it.
       this.borrow(() => stage.orbit, (v) => stage.setOrbit(v), false),
     ];
+    // The skeleton names the right panel and its button after the engine, and the scale bar speaks of engines.
+    if (panelToggle) this.borrowed.push(this.borrow(() => panelToggle.textContent ?? '', (v) => (panelToggle.textContent = v), t('Про цей кут')));
+    for (const giveBack of [
+      attribute(slots.root.querySelector('#panel'), 'aria-label', t('Про цей кут')),
+      attribute(slots.root.querySelector('.scale-bar'), 'title', t('Довжина цього відрізка в натурі')),
+    ]) {
+      if (giveBack) this.borrowed.push(giveBack);
+    }
     if (navCurrent) {
       navCurrent.classList.remove('current');
       this.borrowed.push(() => navCurrent.classList.add('current'));
@@ -129,6 +140,9 @@ export class SuspensionSection implements Section {
     const body = document.body;
     const own = [BODY_CLASS, ...(body.classList.contains(PANEL_CLOSED) ? [PANEL_CLOSED] : [])].join(' ');
     this.borrowed.push(this.borrow(() => body.className, (v) => (body.className = v), own));
+    // The shell laid the page out before this: the class has since hidden the speed tool, so the row of tools under
+    // the stage is shorter (on a phone a row fewer), and the corner is framed above the row as it is now.
+    this.ctx.panels.relayout();
     slots.partCard.hidden = true;
     stage.setModel(this.model, { home: HOME });
     this.model.setView(view.mode);
