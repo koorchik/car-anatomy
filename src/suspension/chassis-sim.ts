@@ -6,7 +6,7 @@
 //   body over corner i:  z_ci = z + y_i·φ − (x_i − x_s)·θ,      travel q_i = w_i − W_i − z_ci
 //   m_s·z̈  = Σ S_i − m_s·g
 //   I_xx·φ̈ = Σ S_i·(C_y,i + φ·h) + h·Σ F_y,i − Σ m_u,i·a_y·(h − w_i) + M_prop
-//   I_yy·θ̈ = −Σ S_i·(C_x,i − x_s − θ·h) − h·Σ F_x,i + Σ m_u,i·a_x·(h − w_i) + (h − h_a)·D
+//   I_yy·θ̈ = −Σ S_i·(C_x,i − x_s − θ·h) − h·Σ F_x,i + Σ m_u,i·a_x·(h − w_i) + (h_a − h)·D
 //   m_u,i·ẅ_i = F_z,i − S_i − m_u,i·g ∓ M_prop,k/t_k,      F_z,i = max(0, k_t·δ_i + c_t·δ̇_i)
 //
 // with h = h_s + z the sprung centre of mass above the road, x_s its distance ahead of the whole car's, W_i the wheel
