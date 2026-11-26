@@ -131,7 +131,7 @@ export class RoadScene {
     this.onChange();
   }
 
-  /** Another page's corner: the next apply resolves and runs it afresh. */
+  /** Another page's corner (stage P4): resolved and run again on the next apply, on the same road. */
   setCorner(corner: CornerSpec): void {
     if (corner === this.corner) return;
     this.corner = corner;

@@ -1,5 +1,6 @@
 /* The suspension pages, under body.section-suspensions (suspensions plan, what the section needs of the shell). The
- * section's chunk loads it after the shell's styles. Each scene adds its class (susp-scene-bump, susp-scene-travel). */
+ * section's chunk loads it after the shell's styles. Each scene adds its class (susp-scene-bump, susp-scene-travel,
+ * susp-scene-road, susp-scene-shaker). */
 
 body.section-suspensions {
   --dash-h: 0px;
@@ -325,159 +326,6 @@ body.section-suspensions.susp-scene-shaker {
 
   .susp-number dd {
     text-align: left;
-  }
-}
-
-/* The rough road's dash: the three bars of the ride triangle (longer is worse) and the damping chart beside them. */
-.susp-ride-dash {
-  grid-template-columns: minmax(300px, 1fr) minmax(300px, 1.1fr);
-}
-
-.susp-shaker-dash {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.susp-bars-box {
-  justify-content: space-between;
-}
-
-.susp-bars {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  transition: opacity 0.2s;
-}
-
-.susp-bars.stale {
-  opacity: 0.55;
-}
-
-.susp-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.susp-bar-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.susp-bar-label {
-  color: var(--c);
-  font-weight: 600;
-}
-
-.susp-bar-value {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.susp-bar-track {
-  position: relative;
-  height: 14px;
-  border-radius: 3px;
-  background: rgba(236, 230, 214, 0.08);
-  overflow: hidden;
-}
-
-.susp-bar-track i {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  border-radius: 3px;
-}
-
-.susp-bar-fill {
-  background: var(--c);
-  transition: width 0.25s;
-}
-
-/* The remembered setup: a pale bar behind the current one, with its end marked. */
-.susp-bar-a {
-  background: color-mix(in srgb, var(--c) 30%, transparent);
-  border-right: 2px solid rgba(236, 230, 214, 0.85);
-  z-index: 1;
-}
-
-.susp-bar-a[hidden] {
-  display: none;
-}
-
-.susp-bar-note {
-  margin: 0;
-  font-size: 12px;
-  color: var(--bone-dim);
-  line-height: 1.25;
-}
-
-.susp-bar.alarm .susp-bar-value {
-  color: #ffb36b;
-}
-
-.susp-bars-foot {
-  margin: 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 12.5px;
-  color: var(--bone-dim);
-}
-
-.susp-alarm {
-  color: #ff6b6b;
-  font-weight: 600;
-}
-
-.susp-panel h4 {
-  margin: 14px 0 4px;
-  font-size: 15px;
-}
-
-@media (max-width: 860px) {
-  /* The rough road: the bars over the chart. The shaker: one chart over the other. */
-  .susp-ride-dash,
-  .susp-shaker-dash {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .susp-shaker-dash {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  /* The bump dash puts its chart in the first cell; these dashes flow in order. */
-  .susp-ride-dash > .susp-dash-chart,
-  .susp-shaker-dash > .susp-dash-chart {
-    grid-column: auto;
-    grid-row: auto;
-  }
-
-  .susp-ride-dash > section,
-  .susp-shaker-dash > section {
-    border-bottom: 1px solid var(--rule);
-  }
-
-  .susp-bars {
-    gap: 8px;
-  }
-
-  .susp-bar-head {
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .susp-bar-note {
-    font-size: 10.5px;
-  }
-
-  .susp-bars-foot {
-    font-size: 11px;
   }
 }
 
@@ -839,5 +687,158 @@ body.section-suspensions.susp-scene-shaker {
 
   .susp-nav .btn {
     padding: 3px 10px;
+  }
+}
+
+/* The rough road's dash: the three bars of the ride triangle (longer is worse) and the damping chart beside them. */
+.susp-ride-dash {
+  grid-template-columns: minmax(300px, 1fr) minmax(300px, 1.1fr);
+}
+
+.susp-shaker-dash {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.susp-bars-box {
+  justify-content: space-between;
+}
+
+.susp-bars {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  transition: opacity 0.2s;
+}
+
+.susp-bars.stale {
+  opacity: 0.55;
+}
+
+.susp-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.susp-bar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.susp-bar-label {
+  color: var(--c);
+  font-weight: 600;
+}
+
+.susp-bar-value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.susp-bar-track {
+  position: relative;
+  height: 14px;
+  border-radius: 3px;
+  background: rgba(236, 230, 214, 0.08);
+  overflow: hidden;
+}
+
+.susp-bar-track i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+}
+
+.susp-bar-fill {
+  background: var(--c);
+  transition: width 0.25s;
+}
+
+/* The remembered setup: a pale bar behind the current one, with its end marked. */
+.susp-bar-a {
+  background: color-mix(in srgb, var(--c) 30%, transparent);
+  border-right: 2px solid rgba(236, 230, 214, 0.85);
+  z-index: 1;
+}
+
+.susp-bar-a[hidden] {
+  display: none;
+}
+
+.susp-bar-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bone-dim);
+  line-height: 1.25;
+}
+
+.susp-bar.alarm .susp-bar-value {
+  color: #ffb36b;
+}
+
+.susp-bars-foot {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--bone-dim);
+}
+
+.susp-alarm {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+.susp-panel h4 {
+  margin: 14px 0 4px;
+  font-size: 15px;
+}
+
+@media (max-width: 860px) {
+  /* The rough road: the bars over the chart. The shaker: one chart over the other. */
+  .susp-ride-dash,
+  .susp-shaker-dash {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .susp-shaker-dash {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  /* The bump dash puts its chart in the first cell; these dashes flow in order. */
+  .susp-ride-dash > .susp-dash-chart,
+  .susp-shaker-dash > .susp-dash-chart {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .susp-ride-dash > section,
+  .susp-shaker-dash > section {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .susp-bars {
+    gap: 8px;
+  }
+
+  .susp-bar-head {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .susp-bar-note {
+    font-size: 10.5px;
+  }
+
+  .susp-bars-foot {
+    font-size: 11px;
   }
 }

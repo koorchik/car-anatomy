@@ -1,9 +1,10 @@
 // The suspensions section (`#/suspensions/<page>/<car>`): the corner of a suspension page (macpherson, double-wishbone,
-// multilink; stage P4) or of one of its real cars, in two scenes. The bump scene (stage P1d) rolls the corner over an
-// obstacle and plays the run back with its strip chart and numbers; the travel scene (stages P1b and P4) holds the wheel
-// on a rig at the travel a slider picks, with the corner's curves, its front view, the lowering, the tie-rod pad and the
-// five links taken away (travel-scene.ts). The Setup panel (build order, A3) edits
-// the corner's setup in both, and every change shows at once on the arrows, the lasers, the tyre and the numbers. There
+// multilink; stage P4) or of one of its real cars, in four scenes. The bump scene (stage P1d) rolls the corner over an
+// obstacle and plays the run back with its strip chart and numbers; the rough road and the shaker (stage P3,
+// road-scene.ts and shaker-scene.ts) drive it along an ISO 8608 road and shake it on a stand; the travel scene (stages
+// P1b and P4) holds the wheel on a rig at the travel a slider picks, with the corner's curves, its front view, the
+// lowering, the tie-rod pad and the five links taken away (travel-scene.ts). The Setup panel (build order, A3) edits
+// the corner's setup in all of them, and every change shows at once on the arrows, the lasers, the tyre and the numbers. There
 // is no engine here, so the sound is suspended while the section is shown (the plan of the whole car, its amendments to
 // the suspensions plan, item 9).
 //
@@ -38,9 +39,9 @@ import { SUSPENSION_KEY_CONTEXTS, suspensionKeys } from './keys.ts';
 import { dashHtml, obstacleSize, panelHtml, titleHtml, toolsHtml } from './markup.ts';
 import { carsHtml, choiceOf, stepPage, titleOf, type PageChoice } from './pages.ts';
 import { RoadScene } from './road-scene.ts';
-import { LOWER_M, TravelScene, travelDashHtml } from './travel-scene.ts';
 import { DEFAULT_SCENE, isRideScene, sceneOf, stepScene, type SceneId } from './scenes.ts';
 import { ShakerScene } from './shaker-scene.ts';
+import { LOWER_M, TravelScene, travelDashHtml } from './travel-scene.ts';
 import { SetupPanel } from './setup-panel.ts';
 import { ThirdSpringPanel } from './third-spring-panel.ts';
 import { StripChart } from './strip-chart.ts';
@@ -60,9 +61,8 @@ const OPENING_FACTOR = 0.1;
 const HOLD_S = 0.6;
 /** Height of each scene's dash, px; suspensions.css gives --dash-h the same. */
 const DASH_PX = { wide: 156, small: 188 };
-const RIDE_DASH_PX = { road: { wide: 176, small: 300 }, shaker: { wide: 200, small: 230 } };
-/** Height of the travel scene's dash, px; suspensions.css gives --dash-h the same. */
 const TRAVEL_DASH_PX = { wide: 188, small: 210 };
+const RIDE_DASH_PX = { road: { wide: 176, small: 300 }, shaker: { wide: 200, small: 230 } };
 /** Real seconds between two writes of the clock. */
 const CLOCK_EVERY_S = 0.1;
 /** Frames the frame-time figure averages over (window.__suspension.section.frameStats). */
@@ -165,9 +165,6 @@ export class SuspensionSection implements Section {
     this.setupPanel = new SetupPanel(this.$('susp-panel'), factory, () => (this.dirty = true));
     this.thirdSpring = new ThirdSpringPanel(this.$('susp-panel'));
     this.thirdSpring.setCorner(this.pageCorner);
-    this.road = new RoadScene(slots.root, this.corner, () => (this.dirty = true));
-    this.shaker = new ShakerScene(slots.root, this.corner, this.road.scene.unsprungKg, () => (this.dirty = true));
-    setSegment(this.$('susp-ride-mass'), String(this.road.scene.unsprungKg));
     this.travelScene = new TravelScene((id) => this.$(id), {
       lower: (on) => this.setupPanel.edit({ rideHeightM: on ? -LOWER_M : 0 }),
       tie: (dz) => {
@@ -180,6 +177,9 @@ export class SuspensionSection implements Section {
       },
       links: (removed) => this.setLinks(removed),
     });
+    this.road = new RoadScene(slots.root, this.pageCorner, () => (this.dirty = true));
+    this.shaker = new ShakerScene(slots.root, this.pageCorner, this.road.scene.unsprungKg, () => (this.dirty = true));
+    setSegment(this.$('susp-ride-mass'), String(this.road.scene.unsprungKg));
     this.listen();
     ctx.keys.bind(
       SUSPENSION_KEY_CONTEXTS[0],
@@ -218,15 +218,16 @@ export class SuspensionSection implements Section {
     if (this.ctx.slots.table.isOpen) this.ctx.slots.table.body.innerHTML = allTableHtml(choice);
     if (same) return;
     this.pageCorner = pageCorner(choice.page, choice.car);
-    this.road.setCorner(this.pageCorner);
-    this.shaker.setCorner(this.pageCorner);
-    this.thirdSpring.setCorner(this.pageCorner);
     const spec = this.pageCorner.axle;
     this.setupPanel.setFactory(factorySetup(this.pageCorner));
     this.setupPanel.setAdjusters({ camber: !!spec.linkage.strut, toe: spec.linkage.rods.some((r) => r.steer) });
     this.tieDzM = 0;
     this.rack = 0;
     this.$<HTMLInputElement>('susp-rack').value = '0';
+    // The rough road and the shaker resolve the page's corner on their own wheel.
+    this.road.setCorner(this.pageCorner);
+    this.shaker.setCorner(this.pageCorner);
+    this.thirdSpring.setCorner(this.pageCorner);
     // Another corner has all its links: the model too, when it is kept for the same geometry.
     if (this.removed.length) this.setLinks([]);
     this.travelScene.resetLinks();
@@ -383,22 +384,6 @@ export class SuspensionSection implements Section {
     if (this.scene === 'travel') this.setTravel(Math.round(this.travel * 1000));
   }
 
-  /** The rough road or the shaker resolves the corner on its own wheel; the model and the panel show that corner. */
-  private applyRide(scene: 'road' | 'shaker'): void {
-    const ride = scene === 'road' ? this.road : this.shaker;
-    const setup = this.setupPanel.current;
-    // Only the scene shown resolves now; each compares the setup with its own last one, so coming back costs nothing.
-    const resolved = ride.apply(setup);
-    if (!resolved) {
-      this.setupPanel.show(this.resolved);
-      return;
-    }
-    this.resolved = resolved;
-    if (cornerGeometryKey(resolved) === this.modelKey) this.model.setCorner(resolved);
-    else this.newModel(resolved);
-    this.setupPanel.show(resolved);
-  }
-
   /** A corner of another geometry: a new model in place of the old one, with the view, overlays and links of the page. */
   private newModel(resolved: ResolvedCorner): void {
     const old = this.model;
@@ -419,7 +404,24 @@ export class SuspensionSection implements Section {
     this.model.setOverlays({ forces: !this.removed.length && this.$<HTMLInputElement>('susp-forces').checked, laser: this.$<HTMLInputElement>('susp-laser').checked });
     this.model.setLinksRemoved(this.removed);
     if (this.scene === 'bump') this.model.setRoad(new EventRoad(this.run?.trace.events ?? []));
-    else if (this.scene === 'road') this.model.setRoad(this.road.road);
+    // The rough road's run goes onto the new model on the next frame.
+    this.roadShown = null;
+  }
+
+  /** The rough road or the shaker resolves the corner on its own wheel; the model and the panel show that corner. */
+  private applyRide(scene: 'road' | 'shaker'): void {
+    const ride = scene === 'road' ? this.road : this.shaker;
+    const setup = this.setupPanel.current;
+    // Only the scene shown resolves now; each compares the setup with its own last one, so coming back costs nothing.
+    const resolved = ride.apply(setup);
+    if (!resolved) {
+      this.setupPanel.show(this.resolved);
+      return;
+    }
+    this.resolved = resolved;
+    if (cornerGeometryKey(resolved) === this.modelKey) this.model.setCorner(resolved);
+    else this.newModel(resolved);
+    this.setupPanel.show(resolved);
   }
 
   /** The scene's controls, the line in the dash, the numbers and the caption for the current run. */
@@ -498,16 +500,16 @@ export class SuspensionSection implements Section {
     body.classList.toggle('susp-scene-travel', scene === 'travel');
     setSegment(this.$('susp-scene'), scene);
     this.$('susp-dash').hidden = scene !== 'bump';
+    this.$('susp-travel-dash').hidden = scene !== 'travel';
     this.$('susp-road-dash').hidden = scene !== 'road';
     this.$('susp-shaker-dash').hidden = scene !== 'shaker';
-    this.$('susp-travel-dash').hidden = scene !== 'travel';
     if (record) this.ctx.router.replace({ query: { s: scene === DEFAULT_SCENE ? null : scene } });
     if (!changed) return;
     // Each scene resolves the corner its own way (the bump's wheels, the ride scenes' mass): again on the next frame.
     this.dirty = true;
+    // The links taken away belong to the travel scene: the obstacle, the rough road and the shaker need the whole linkage.
+    if (scene !== 'travel' && this.removed.length) this.setLinks([]);
     if (scene === 'bump') {
-      // The links taken away belong to the travel scene: the obstacle needs the whole linkage.
-      if (this.removed.length) this.setLinks([]);
       this.model.setExplode(0);
       this.$<HTMLInputElement>('susp-explode').value = '0';
       this.model.setRoad(new EventRoad(this.run.trace.events));
@@ -601,8 +603,6 @@ export class SuspensionSection implements Section {
       shown = this.shaker.frame(sim, this.frameData);
       clock = this.shaker.clockS;
     }
-    // The ride scenes hold the wheel straight ahead whatever the travel scene's rack was.
-    this.frameData.rack = 0;
     if (!shown) {
       rigFrame(this.resolved, this.resolved.staticTravelM, this.frameData);
       this.frameData.roadLift = 0;
@@ -661,9 +661,9 @@ export class SuspensionSection implements Section {
 
   laidOut(): void {
     this.strip.resize();
+    this.travelScene.resize();
     this.road.resize();
     this.shaker.resize();
-    this.travelScene.resize();
   }
 
   time(): TimeCapabilities {

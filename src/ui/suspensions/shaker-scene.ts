@@ -137,7 +137,7 @@ export class ShakerScene {
     this.writeHz();
   }
 
-  /** Another page's corner: the next apply draws and measures it afresh. */
+  /** Another page's corner (stage P4): resolved and measured again on the next apply. */
   setCorner(corner: CornerSpec): void {
     if (corner === this.corner) return;
     this.corner = corner;

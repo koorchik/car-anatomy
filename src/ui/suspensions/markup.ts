@@ -1,7 +1,8 @@
 // What the suspension page puts into the shell's slots: the corner's name, its cars and the way to the other pages; the
 // scene switch, the travel slider and the switches under the stage; the bump scene's dash (its event, strip chart and
-// numbers) and the travel scene's (travel-scene.ts); and the panel with the scene's controls, the setup and the
-// article, which the section fills for the page shown.
+// numbers), the travel scene's (travel-scene.ts) and the rough road's and the shaker's (road-scene.ts, shaker-scene.ts);
+// and the panel with the scene's controls, the setup, the ride article and the page's article, which the section fills
+// for the page shown.
 
 import { t } from '../../i18n/t.ts';
 import { BUMP_SPEED_KMH, OBSTACLE_IDS, WHEEL_IDS, type ObstacleId, type WheelId } from '../../suspension/bump.ts';

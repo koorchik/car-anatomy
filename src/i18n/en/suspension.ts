@@ -432,7 +432,6 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Зовнішній ШРУС: кут': 'Outer CV joint: angle',
   'Ступенів свободи кулака': 'Knuckle’s degrees of freedom',
   'Ступенів свободи: {value}': 'Degrees of freedom: {value}',
-  '{value} кг': '{value} kg',
   'Про цю компоновку загалом': 'About this layout in general',
   '{value} мм рейки': '{value} mm of rack',
   // The pushrod page (stage P14): its name and line, its part cards, the third spring's block and unverified names.
