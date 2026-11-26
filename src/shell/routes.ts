@@ -118,6 +118,7 @@ export function parseRoute(hash: string): Route {
 export function formatRoute(route: Route): string {
   const pattern = PATTERNS.find((p) => p.section === route.section && p.page === route.page);
   const words = [...(pattern?.prefix ?? []), ...route.path].map(encodeURIComponent);
-  const query = new URLSearchParams(Object.entries(route.query)).toString();
+  // A list such as l=oil,coolant keeps its commas readable; parseRoute reads them either way.
+  const query = new URLSearchParams(Object.entries(route.query)).toString().replace(/%2C/gi, ',');
   return `#/${words.join('/')}${query ? `?${query}` : ''}`;
 }

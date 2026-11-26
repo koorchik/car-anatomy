@@ -84,7 +84,6 @@ export class SumpMode {
     const { balance, systems, dyno } = s.features;
     this.on = on;
     document.body.classList.toggle('sump-mode', on);
-    $('nav-sump').classList.toggle('current', on);
     for (const id of ['sump-host', 'sump-dash', 'sump-summary']) $(id).hidden = !on;
     if (on) {
       if (s.onDesigner) {
@@ -96,8 +95,6 @@ export class SumpMode {
         $('health').hidden = true;
         $('to-catalog').hidden = true;
       }
-      $('nav-engines').classList.remove('current');
-      $('nav-designer').classList.remove('current');
       $('article').hidden = true;
       $('variants').hidden = true;
       s.ctx.slots.panelTitle.textContent = t('Олива на треку');
@@ -136,7 +133,6 @@ export class SumpMode {
       for (const id of ['prev', 'next', 'to-designer']) $(id).hidden = false;
       stage.fitScale = 0.68;
       stage.setOrbit(!s.reducedMotion);
-      $('nav-engines').classList.add('current');
     }
     // Space plays the lap here and the arrows move through it; the layer keys and the ignition stay off.
     s.useKeys();
