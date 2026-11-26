@@ -9,6 +9,12 @@ import type { CarRecord } from '../../vehicle/car.ts';
 const num = (v: number, digits = 0): string => v.toLocaleString(numberLocale, { maximumFractionDigits: digits, minimumFractionDigits: digits });
 /** A figure to as many places as it was published with, two to three. */
 const fig = (v: number): string => v.toLocaleString(numberLocale, { maximumFractionDigits: 3, minimumFractionDigits: 2 });
+/** Places of a stored figure, at most three: a list keeps the most of its members, so 1.000 among 3.717 stays 1,000. */
+const places = (v: number): number => [0, 1, 2, 3].find((d) => Math.abs(Math.round(v * 10 ** d) - v * 10 ** d) < 1e-6) ?? 3;
+const figs = (vs: readonly number[]): string => {
+  const digits = Math.max(2, ...vs.map(places));
+  return vs.map((v) => num(v, digits)).join(' · ');
+};
 const escapeHtml = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const list = (items: readonly string[]): string => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
 
@@ -48,7 +54,7 @@ export function gearboxArticleHtml(f: ArticleFacts): string {
     rows.push([t('Двигун'), `<a class="sibling" href="${f.engine.href}">${escapeHtml(f.engine.name)}</a>${power}`]);
   }
   if (f.car && f.rollingRadiusMm !== null) rows.push([t('Шини'), t('{size}, радіус кочення {mm} мм', { size: escapeHtml(f.tyre), mm: num(f.rollingRadiusMm) })]);
-  const published = p.ratios.length ? `<p class="note">${t('Опубліковані числа: {ratios}. Числа вище пораховано із зубців, які ми відновили під них.', { ratios: p.ratios.map(fig).join(' · ') })}</p>` : '';
+  const published = p.ratios.length ? `<p class="note">${t('Опубліковані числа: {ratios}. Числа вище пораховано із зубців, які ми відновили під них.', { ratios: figs(p.ratios) })}</p>` : '';
   const verify = record.verifyNote ? `<p class="verify">${escapeHtml(record.verifyNote)}</p>` : '';
   const sources = record.sources.length
     ? `<p class="note small">${t('Джерела: {links}', { links: record.sources.map((url, i) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${i + 1}</a>`).join(', ') })}</p>`

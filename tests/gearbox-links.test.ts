@@ -9,6 +9,7 @@ import { buildEngine } from '../src/engine/kinematics.ts';
 import { pageShown, SECTIONS } from '../src/shell/registry.ts';
 import { parseRoute } from '../src/shell/routes.ts';
 import { articleHtml } from '../src/ui/article.ts';
+import { gearboxArticleHtml } from '../src/ui/gearboxes/article.ts';
 
 describe('the gearbox section', () => {
   it('registers manual-rwd as its first page, so the menu has somewhere to go', () => {
@@ -41,5 +42,19 @@ describe('the gearbox section', () => {
     // A variant's link leads to page/variant.
     expect(articleHtml(buildEngine(engineById('b6/porsche-992-carrera-3-0')!))).toContain('href="#/gearboxes/manual-transaxle/porsche-911-carrera-t-992">Porsche 7MT</a>');
     expect(articleHtml(buildEngine(engineById('i4')!))).not.toContain('#/gearboxes/');
+  });
+
+  it('prints each record\'s published ratios to one precision, the most places any of them has', () => {
+    const published = (id: string): string => {
+      const page = GEARBOX_PAGES.find((p) => id === p.id || id.startsWith(`${p.id}/`))!;
+      const record = [page.base, ...page.variants].find((r) => r.id === id)!;
+      const html = gearboxArticleHtml({ page, record, car: null, ratios: [], reverse: null, finalDrive: null, engine: null, tyre: '', rollingRadiusMm: null, demo: false });
+      return html.match(/Опубліковані числа: ([^.]*\d)\./)![1]!;
+    };
+    // The Getrag 265/5's fifth is published as 1.000 among three-place figures.
+    expect(published('manual-rwd')).toBe('3,717 · 2,404 · 1,766 · 1,264 · 1,000');
+    expect(published('manual-transaxle')).toBe('3,625 · 2,115 · 1,529 · 1,125 · 0,911 · 0,734');
+    // Porsche publishes two places.
+    expect(published('manual-transaxle/porsche-911-carrera-t-992')).toBe('3,91 · 2,29 · 1,58 · 1,18 · 0,94 · 0,79 · 0,62');
   });
 });
