@@ -33,7 +33,7 @@ export const SUSPENSION_EN: Record<string, string> = {
   'Наїхати на перешкоду': 'Drive over the obstacle',
   'Інша сцена': 'Another scene',
   'Пауза': 'Pause',
-  'Далі': 'Resume',
+  'Продовжити': 'Resume',
   'Стрічка за останні 2 с: дорога, центр колеса, кузов і сила в плямі контакту': 'Strip chart of the last 2 s: the road, the wheel center, the body and the contact patch force',
   'Горб 50 мм': '50 mm bump',
   'Лежачий поліцейський': 'Speed bump',

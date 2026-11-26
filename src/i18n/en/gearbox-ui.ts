@@ -37,7 +37,7 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   'швидкість': 'speed',
   'На столі': 'On the bench',
   'двигун крутить первинний вал, вихід вільний': 'the engine turns the input shaft, the output spins free',
-  'Налаштувати': 'Adjust',
+  'Налаштувати': 'Setup',
   'чому шестерні крутяться завжди': 'why the gears always turn',
   'Шлях потужності': 'Power flow',
   'Демонстрація': 'Demonstration',

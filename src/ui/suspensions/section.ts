@@ -213,7 +213,7 @@ export class SuspensionSection implements Section {
     this.clockAge = Infinity;
     const button = this.$('susp-pause');
     button.setAttribute('aria-pressed', String(on));
-    button.textContent = on ? t('Далі') : t('Пауза');
+    button.textContent = on ? t('Продовжити') : t('Пауза');
   }
 
   /**
