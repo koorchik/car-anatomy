@@ -55,6 +55,18 @@ const REFERENCES: ReadonlyArray<{ id: 'macpherson' | 'double-wishbone'; design: 
   { id: 'double-wishbone', design: TYPICAL_RWD },
 ];
 
+/**
+ * Whether the axle's 3D has a place for the bar's link (axle-model.ts, barLayout): a strut, or a link the spring sits on
+ * or that does not steer. A wishbone has neither yet, so a double-wishbone axle turns with its bar in the numbers only.
+ */
+function barSeat(corner: ReturnType<typeof resolveCorner>): boolean {
+  const spec = corner.axle.spec;
+  const link = spec.linkage;
+  if (link.strut) return true;
+  const onId = spec.spring.on ?? link.rods.find((r) => !r.steer)?.id;
+  return link.rods.some((r) => r.id === onId);
+}
+
 // A typographic minus, as the rest of the page writes it.
 const fmt = (v: number, digits: number): string => v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).replace('-', '−');
 
@@ -391,8 +403,8 @@ export class RollScene {
       view: this.view,
       chassis,
       axles: [
-        { which: 'front', corner: corner('F'), antiRollBar: axleOf(design, 'F').barMm > 0 },
-        { which: 'rear', corner: corner('R'), antiRollBar: axleOf(design, 'R').barMm > 0 },
+        { which: 'front', corner: corner('F'), antiRollBar: axleOf(design, 'F').barMm > 0 && barSeat(corner('F')) },
+        { which: 'rear', corner: corner('R'), antiRollBar: axleOf(design, 'R').barMm > 0 && barSeat(corner('R')) },
       ],
       shell,
     });
