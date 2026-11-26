@@ -148,10 +148,14 @@ export function focusForRoute(route: RouteLike, car: CarRecord | undefined): Car
 
 /**
  * The system to bring back into focus: the one the visitor drilled in from (`came`), when the address names the
- * system of the page it led to; otherwise the address's own.
+ * system of the page it led to, or a system whose page is that same page (a layer turned off on the engine's page
+ * turns 'cooling' into 'engine'); otherwise the address's own.
  */
 export function returnFocus(car: CarRecord, asked: CarSystem, came: CarSystem | null, shown: PageShown): CarSystem {
   if (!came || came === asked) return asked;
   const target = drillTarget(car, came, shown);
-  return target && focusForRoute(target, car) === asked ? came : asked;
+  if (!target) return asked;
+  const own = drillTarget(car, asked, shown);
+  const samePage = !!own && own.section === target.section && own.page === target.page && own.path.join('/') === target.path.join('/');
+  return focusForRoute(target, car) === asked || samePage ? came : asked;
 }
