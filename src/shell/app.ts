@@ -141,6 +141,11 @@ export class Shell {
     if (!options) this.stage.freeze(null);
   }
 
+  /** The section shown now. */
+  get section(): Section | null {
+    return this.shown;
+  }
+
   private entryFor(route: Route): SectionEntry {
     return this.sections.find((s) => s.id === route.section) ?? this.sections[0]!;
   }

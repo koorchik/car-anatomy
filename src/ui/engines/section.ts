@@ -13,6 +13,7 @@ import { registerParts } from '../../scene/parts-registry.ts';
 import { PistonEngineModel } from '../../scene/piston-engine.ts';
 import { RotaryEngineModel } from '../../scene/rotary-engine.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
+import { ownSlots, type OwnedSlots } from '../../shell/owned-slots.ts';
 import type { KeyBinding, PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
 import { readableDegreesPerSecond } from '../../shell/time.ts';
 import { shownAdvance, type SystemsFrame } from '../../systems/sim.ts';
@@ -58,6 +59,10 @@ export class EnginesSection implements Section {
   private homedFor: FreezeOptions | null = null;
   /** Between leave() and the next enter(): another section is shown. */
   private away = false;
+  /** What the section put into the skeleton, hidden while another section is shown. */
+  private owned!: OwnedSlots;
+  /** The panel's heading and the document's title as this section left them. */
+  private leftTitles = { panel: '', document: '' };
   /** Reused every frame: the systems step allocates nothing. */
   private readonly systemsFrame: SystemsFrame = { theta: 0, advance: 0, rpm: 0, load: 0, throttle: 0, boost: 0, running: false, cranking: false, fuelCut: true, live: false, dt: 0, timeScale: 1 };
   /** Valve events and firing cylinders for the systems layers, written in place each frame. */
@@ -71,7 +76,8 @@ export class EnginesSection implements Section {
   private textFailed = false;
 
   mount(ctx: SectionContext): void {
-    this.ctx = ctx;
+    this.owned = ownSlots(ctx.slots);
+    this.ctx = ctx = { ...ctx, slots: this.owned.slots };
     // The engines' parts, with the dyno's and the valve gear's; the layers and the oil page add theirs as they load.
     registerParts(PARTS);
     const { slots } = ctx;
@@ -123,12 +129,22 @@ export class EnginesSection implements Section {
     this.drive.lock(null);
     this.drive.stop();
     this.ctx.keys.use([]);
+    this.leftTitles = { panel: this.ctx.slots.panelTitle.textContent ?? '', document: document.title };
+    this.owned.setAway(true);
   }
 
   /** Back from another section, which may have changed the shared view and time while this one was away. */
   private resume(): void {
     this.away = false;
-    const { view, time } = this.ctx;
+    const { view, time, slots } = this.ctx;
+    this.owned.setAway(false);
+    slots.panelTitle.textContent = this.leftTitles.panel;
+    document.title = this.leftTitles.document;
+    // The other section put its own model on the stage, which disposed this one's, and had the Drive play its engine.
+    this.drive.setEngine(this.engine);
+    this.showEngine(this.engine, false);
+    // The shell laid the page out while this section's content was still hidden: the charts measured nothing.
+    this.ctx.panels.relayout();
     this.useKeys();
     this.applyView(view.mode);
     $('slow-tool').hidden = time.mode !== 'slow';
