@@ -188,6 +188,8 @@ export interface RunOptions {
   /** Stop after this long, s. */
   maxS?: number;
   sampleS?: number;
+  /** Sleeve force of the dynamic run's shifts, N (default RUN.sleeveN): the gearbox designer's driver has their own. */
+  sleeveN?: number;
 }
 
 /** Masses of the quasi-static model per gear: everything locked, everything but the engine, and the body alone. */
@@ -345,7 +347,8 @@ export function dynamicRun(cd: CarDrive, o: RunOptions = {}): RunResult {
   core.coords.forEach((id, k) => {
     if (id === CRANK || id === 'disc') s.phiDot[k] = omegaL;
   });
-  s.command[elementIndex(core, cd.gears[0]!.element)] = RUN.sleeveN;
+  const sleeveN = o.sleeveN ?? RUN.sleeveN;
+  s.command[elementIndex(core, cd.gears[0]!.element)] = sleeveN;
   while (veh.time < (o.maxS ?? 60)) {
     feel += (dt / (RUN.feelS + dt)) * (ch.ax - feel);
     const grip = gripForce(cd, veh.bus.fz, veh.bus.surfaceMu);
@@ -376,7 +379,7 @@ export function dynamicRun(cd: CarDrive, o: RunOptions = {}): RunResult {
         s.memberTorque[crank] = 0;
         s.command[clutch] = 0;
         s.command[elementIndex(core, gear.element)] = 0;
-        s.command[elementIndex(core, cd.gears[g + 1]!.element)] = RUN.sleeveN;
+        s.command[elementIndex(core, cd.gears[g + 1]!.element)] = sleeveN;
       } else {
         const ramp = phase === 'lift' ? Math.max(0, 1 - (veh.time - liftT) / RUN.torqueRampS) : Math.min(1, (veh.time - backT) / RUN.torqueRampS);
         const want = ramp * easing() * Math.min(fullLoadTorque(cd.map, omegaE), inputForForce(cd, gear, grip + (masses.locked[g]! - masses.body) * feel, omegaIn));
