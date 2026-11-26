@@ -77,6 +77,12 @@
   opacity: 0.75;
 }
 
+/* The sheet of sections replaces the menu where the bar has no room for it: on a phone, or beside a wide panel. Before
+ * the queries below, which show it: they add no specificity, so a later rule would hide it again. */
+#sections-open {
+  display: none;
+}
+
 /*
  * The bar spans the stage only, so beside the side panel a desktop runs out of room before a phone does. Then the bar
  * gives up, in turn, the sections still to come (without their note they would pass for links), the engine count, the
@@ -103,11 +109,6 @@
   #sections-open {
     display: inline-block;
   }
-}
-
-/* The sheet of sections replaces the menu where the bar has no room for it: on a phone, or beside a wide panel. */
-#sections-open {
-  display: none;
 }
 
 #sections-open .menu-icon {
