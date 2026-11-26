@@ -473,33 +473,77 @@ function outlineGeometry(shape: BodyShape, car: CarRecord): THREE.BufferGeometry
 /** Height of the lid above the shell, m, so the two read as two panels. */
 const LID_LIFT_M = 0.005;
 
-function lidGeometry(shape: BodyShape): THREE.BufferGeometry {
-  const { x0, x1, halfY } = shape.lid;
-  const rows: Array<Array<[number, number, number]>> = [];
-  const nx = 16;
-  const ny = 12;
-  for (let i = 0; i <= nx; i++) {
-    const x = x1 + ((x0 - x1) * i) / nx;
-    const half = shape.section(x);
-    const reach = Math.min(halfY, half[2]![0] * 0.97);
-    const row: Array<[number, number, number]> = [];
-    for (let j = -ny; j <= ny; j++) {
-      const y = (reach * j) / ny;
-      row.push([x, y, topAt(half, Math.abs(y)) + LID_LIFT_M]);
-    }
-    rows.push(row);
-  }
-  return surface(rows);
+/** A rectangle cut out of the lid, front-axle frame (x0 < x1, y0 < y1): where an engine comes up through it. */
+export interface LidCutout {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
 }
 
-function lidOutline(shape: BodyShape): THREE.BufferGeometry {
+/** How far across the lid reaches at x: the bay's half width, within the shell's top. */
+const lidReach = (shape: BodyShape, x: number): number => Math.min(shape.lid.halfY, shape.section(x)[2]![0] * 0.97);
+
+/**
+ * Height of the lid's surface over a half-section at |y|: along the shell's crowned top, just above it, and never under
+ * the bay's top, where the crown falls away toward the lid's edges: an engine that fits the bay stays under its lid.
+ */
+const lidTop = (shape: BodyShape, half: Pt[], y: number): number => Math.max(topAt(half, Math.abs(y)), shape.lid.topZ) + LID_LIFT_M;
+
+/** Height of the lid's surface at (x, y), front-axle frame. */
+export function lidZ(shape: BodyShape, x: number, y: number): number {
+  return lidTop(shape, shape.section(x), Math.min(Math.abs(y), lidReach(shape, x)));
+}
+
+const inCut = (cuts: readonly LidCutout[], x: number, y: number): boolean => cuts.some((c) => x > c.x0 && x < c.x1 && y > c.y0 && y < c.y1);
+
+/**
+ * The lid as a grid over x and y with the cut-outs' edges among its lines, so a hole has exactly the cut-out's edges;
+ * a quad whose middle is inside a cut-out is left out.
+ */
+function lidGeometry(shape: BodyShape, cuts: readonly LidCutout[]): THREE.BufferGeometry {
+  const { x0, x1, halfY } = shape.lid;
+  const nx = 16;
+  const ny = 24;
+  const within = (v: number, lo: number, hi: number): boolean => v > lo && v < hi;
+  const xs = [...Array.from({ length: nx + 1 }, (_, i) => x1 + ((x0 - x1) * i) / nx), ...cuts.flatMap((c) => [c.x0, c.x1]).filter((x) => within(x, x0, x1))];
+  const ys = [...Array.from({ length: ny + 1 }, (_, j) => -halfY + (2 * halfY * j) / ny), ...cuts.flatMap((c) => [c.y0, c.y1]).filter((y) => within(y, -halfY, halfY))];
+  const sortedX = [...new Set(xs)].sort((a, b) => b - a);
+  const sortedY = [...new Set(ys)].sort((a, b) => a - b);
+  const pos: number[] = [];
+  for (const x of sortedX) {
+    const half = shape.section(x);
+    const reach = lidReach(shape, x);
+    for (const yRaw of sortedY) {
+      const y = Math.max(-reach, Math.min(reach, yRaw));
+      scenePoint(x, y, lidTop(shape, half, y), pos, pos.length);
+    }
+  }
+  const nc = sortedY.length;
+  const index: number[] = [];
+  for (let i = 0; i + 1 < sortedX.length; i++) {
+    for (let j = 0; j + 1 < nc; j++) {
+      if (inCut(cuts, (sortedX[i]! + sortedX[i + 1]!) / 2, (sortedY[j]! + sortedY[j + 1]!) / 2)) continue;
+      const a = i * nc + j;
+      const b = a + nc;
+      index.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(index);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function lidOutline(shape: BodyShape, cuts: readonly LidCutout[]): THREE.BufferGeometry {
   const { x0, x1, halfY } = shape.lid;
   const pts: Array<[number, number, number]> = [];
   const n = 16;
   const edge = (x: number, side: number): [number, number, number] => {
     const half = shape.section(x);
     const y = side * Math.min(halfY, half[2]![0] * 0.97);
-    return [x, y, topAt(half, Math.abs(y)) + LID_LIFT_M];
+    return [x, y, lidTop(shape, half, y)];
   };
   for (let i = 0; i <= n; i++) pts.push(edge(x1 + ((x0 - x1) * i) / n, 1));
   for (let i = n; i >= 0; i--) pts.push(edge(x1 + ((x0 - x1) * i) / n, -1));
@@ -508,6 +552,20 @@ function lidOutline(shape: BodyShape): THREE.BufferGeometry {
     const a = pts[i]!;
     const b = pts[(i + 1) % pts.length]!;
     pos.push(a[1] * 10, a[2] * 10, a[0] * 10, b[1] * 10, b[2] * 10, b[0] * 10);
+  }
+  // Round each hole, along the lid's surface.
+  for (const c of cuts) {
+    const ring: Array<[number, number]> = [];
+    const n = 8;
+    for (let i = 0; i < n; i++) ring.push([c.x1 + ((c.x0 - c.x1) * i) / n, c.y0]);
+    for (let i = 0; i < n; i++) ring.push([c.x0, c.y0 + ((c.y1 - c.y0) * i) / n]);
+    for (let i = 0; i < n; i++) ring.push([c.x0 + ((c.x1 - c.x0) * i) / n, c.y1]);
+    for (let i = 0; i < n; i++) ring.push([c.x1, c.y1 + ((c.y0 - c.y1) * i) / n]);
+    for (let i = 0; i < ring.length; i++) {
+      const [xa, ya] = ring[i]!;
+      const [xb, yb] = ring[(i + 1) % ring.length]!;
+      pos.push(ya * 10, lidZ(shape, xa, ya) * 10, xa * 10, yb * 10, lidZ(shape, xb, yb) * 10, xb * 10);
+    }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -571,8 +629,12 @@ export class BodyShell {
   private highlightUndo: Array<() => void> = [];
   private failures: Array<() => void> = [];
 
-  constructor(car: CarRecord, arches: WheelArch[]) {
+  /** Holes in the lid where an engine comes up through it (packaging.ts, bayOverflow). */
+  readonly lidCutouts: readonly LidCutout[];
+
+  constructor(car: CarRecord, arches: WheelArch[], options: { lidCutouts?: readonly LidCutout[] } = {}) {
     this.shape = bodyShape(car, arches);
+    this.lidCutouts = options.lidCutouts ?? [];
     const lidKey = this.shape.lid.kind === 'bonnet' ? 'car.bonnet' : 'car.engine-lid';
     this.parts = { 'car.body': BODY_PARTS['car.body']!, [lidKey]: BODY_PARTS[lidKey]!, 'car.bulkhead': BODY_PARTS['car.bulkhead']! };
     const glass = shellGlass;
@@ -580,10 +642,10 @@ export class BodyShell {
     // The X-ray keeps the outline and the Fresnel edge only (whole-car plan, transparency).
     this.xray = { shell: glass('#bcd9e4', 0, 0.26), lid: glass('#d3e9f1', 0.02, 0.32), bulkhead: glass('#bcd9e4', 0, 0.22) };
     this.shell = tag(new THREE.Mesh(shellGeometry(this.shape), this.solid.shell), 'car.body');
-    this.lid = tag(new THREE.Mesh(lidGeometry(this.shape), this.solid.lid), lidKey);
+    this.lid = tag(new THREE.Mesh(lidGeometry(this.shape, this.lidCutouts), this.solid.lid), lidKey);
     this.bulkhead = tag(new THREE.Mesh(bulkheadGeometry(this.shape), this.solid.bulkhead), 'car.bulkhead');
     this.lines = new THREE.LineSegments(outlineGeometry(this.shape, car), this.lineMaterial);
-    this.lidLines = new THREE.LineSegments(lidOutline(this.shape), this.lineMaterial);
+    this.lidLines = new THREE.LineSegments(lidOutline(this.shape, this.lidCutouts), this.lineMaterial);
     // Lines are not parts: a click goes through them to the panel.
     for (const l of [this.lines, this.lidLines]) l.raycast = () => {};
     this.lid.add(this.lidLines);
