@@ -390,7 +390,7 @@ export class BalancePanel {
       <p class="forces-about">${aboutView(view, rotary)}</p>
       <p class="forces-legend">${legend.join('')}</p>
       ${verdict || note ? `<p class="forces-verdict">${[verdict, note].filter(Boolean).join(' ')}</p>` : ''}
-      <details class="forces-note"${this.noteOpen ? ' open' : ''}><summary>${t('Як читати стрілки')}</summary>${t('Тонкі стрілки — сили вибраного виду там, де вони діють, а велика біла стрілка в центрі колінвала — їхня сума. Дуга моменту така, як сила, що дала б цей момент на плечі між сусідніми циліндрами. Довжина стрілок від обертів не залежить: усі сили ростуть із квадратом обертів однаково. Три види разом — уся сила інерції двигуна. Маси деталей оцінено за їхніми розмірами.')}</details>`;
+      <details class="forces-note"${this.noteOpen ? ' open' : ''}><summary>${t('Як читати стрілки')}</summary>${t('Тонкі стрілки — сили вибраного виду там, де вони діють, а велика біла стрілка в центрі колінвала — їхня сума. Дуга моменту така, як сила, що дала б цей момент на плечі між сусідніми циліндрами. Довжина стрілок від обертів не залежить: усі сили ростуть із квадратом обертів однаково. Три види разом — уся сила інерції двигуна, крім слабких вищих порядків, яких не показує жоден. Маси деталей оцінено за їхніми розмірами.')}</details>`;
     this.card.querySelector('details')!.addEventListener('toggle', (event) => (this.noteOpen = (event.target as HTMLDetailsElement).open));
     this.updateNow();
   }
