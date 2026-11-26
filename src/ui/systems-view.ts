@@ -3,7 +3,7 @@
 
 import type { Engine } from '../engine/kinematics.ts';
 import { isDieselSystem } from '../engine/systems-spec.ts';
-import { withDictionaries } from '../i18n/dictionaries.ts';
+import { LAYER_CODE } from './engines/chunks.ts';
 import { numberLocale } from '../i18n/locale.ts';
 import { t } from '../i18n/t.ts';
 import type { EngineModel, ViewMode } from '../scene/model-types.ts';
@@ -71,8 +71,6 @@ interface Section {
 export class SystemsView {
   readonly sim = new SystemsSim();
   private layers: SystemsLayers | null = null;
-  /** The layers' code, loaded the first time a layer is wanted: most visits never switch one on. */
-  private static layersCode: Promise<typeof import('../scene/systems/index.ts')> | null = null;
   /** The engine and model on stage, which the layers are built for. */
   private target: { engine: Engine; model: EngineModel } | null = null;
   private readonly on = new Set<LayerId>();
@@ -214,8 +212,8 @@ export class SystemsView {
   private buildLayers(): void {
     const target = this.target;
     if (!target || this.layers) return;
-    SystemsView.layersCode ??= withDictionaries(['engines', 'systems'], () => import('../scene/systems/index.ts'));
-    void SystemsView.layersCode.then(({ SystemsLayers }) => {
+    // Loaded the first time a layer is wanted, as most visits never switch one on; an address with `l=` starts it early.
+    void LAYER_CODE.load().then(({ SystemsLayers }) => {
       // Another engine may have come on stage meanwhile; its own attach builds its layers.
       if (this.target !== target || this.layers) return;
       const layers = new SystemsLayers(target.engine, target.model, this.reducedMotion);
