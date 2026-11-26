@@ -10,6 +10,10 @@
 // - near idle in a gear it lets go the same way, so the car brakes to a stop without stalling, as the auto clutches of
 //   small cars did.
 //
+// Rev matching (the pages' «Підгазовка» helper, stage K3b; Honda's Rev-Match on the Civic Type R): while the clutch is
+// (nearly) open and the lever asks for a gear that needs the engine faster than it turns, the control asks for
+// throttle (`blip`, read by VehicleLoad.engineRequest) until the engine meets the input speed that gear will have.
+//
 // It steps on the audio thread inside VehicleLoad: plain numbers, no allocation, no text.
 
 import type { CrankInput } from '../../engine/load.ts';
@@ -34,6 +38,8 @@ export interface ManualSpec {
   clutch: number;
   /** The gearbox input shaft, a member index: the speed the clutch has to meet. */
   input: number;
+  /** The gearbox output shaft, a member index: the rev matching reads the speed a gear will need from it. */
+  output?: number;
   gears: ManualGear[];
   /** Sleeve force of a firm shift, N. */
   sleeveN: number;
@@ -63,8 +69,20 @@ const LAUNCH_GAIN = 8;
 const LET_GO_SHARE = 1.1;
 const HOLD_SHARE = 1.25;
 
+/** The blip opens the throttle fully until the engine is within this share of the speed it is to meet [estimate]. */
+const BLIP_BAND = 0.15;
+/** No blip for a gap smaller than this share: the engine is close enough. */
+const BLIP_DEADBAND = 0.02;
+/**
+ * The blip looks this far ahead, s, at the engine's present acceleration: the throttle closes about this slowly
+ * (EngineSim), so a blip that waited for the engine to arrive would overshoot [estimate].
+ */
+const BLIP_LEAD_S = 0.12;
+/** The blip waits for the clutch to open this far: a blip through a clamped clutch pushes the car [estimate]. */
+const BLIP_CLAMP = 0.2;
+
 const RAD = Math.PI / 30;
-const CONTROL_SIZE = 8;
+const CONTROL_SIZE = 9;
 
 export class ManualControl {
   readonly spec: ManualSpec;
@@ -82,6 +100,12 @@ export class ManualControl {
   phase: ShiftPhase = 'engaged';
   /** Share of the full clamp the clutch has. */
   clamp = 1;
+  /** Rev matching on: the control blips the throttle for a gear that needs the engine faster. */
+  revMatch = false;
+  /** The throttle the rev matching asks for on the coming step, 0 none. */
+  blip = 0;
+  /** Engine speed on the last step, rad/s, for its acceleration. */
+  private lastOmega = 0;
 
   constructor(spec: ManualSpec) {
     this.spec = spec;
@@ -158,8 +182,21 @@ export class ManualControl {
       }
     }
     s.command[sp.clutch] = this.clamp;
+    this.blip = this.revMatch ? this.blipFor(s, input, dt) : 0;
+    this.lastOmega = input.omega;
 
     for (let i = 0; i < WHEELS; i++) bus.brakeNm[i] = this.brake * sp.brakeNm[i]!;
+  }
+
+  /** The rev matching's throttle: open while the gear asked for needs the engine faster and the clutch can slip. */
+  private blipFor(s: DrivetrainSolver, input: CrankInput, dt: number): number {
+    const sp = this.spec;
+    if (sp.output === undefined || this.target < 0 || this.clamp > BLIP_CLAMP || input.state !== 'running') return 0;
+    const want = s.memberSpeed(sp.output) * sp.gears[this.target]!.ratio;
+    const rising = Math.max(0, (input.omega - this.lastOmega) / dt);
+    const gap = want - input.omega - rising * BLIP_LEAD_S;
+    if (want <= sp.idleRpm * RAD || gap <= BLIP_DEADBAND * want) return 0;
+    return Math.min(1, gap / (BLIP_BAND * want));
   }
 
   private close(dt: number): void {
@@ -181,6 +218,7 @@ export class ManualControl {
     out[o + 5] = this.brake;
     out[o + 6] = PHASES.indexOf(this.phase);
     out[o + 7] = this.clamp;
+    out[o + 8] = this.revMatch ? 1 : 0;
   }
 
   restore(from: Float64Array, o: number): void {
@@ -192,5 +230,6 @@ export class ManualControl {
     this.brake = from[o + 5]!;
     this.phase = PHASES[from[o + 6]!] ?? 'engaged';
     this.clamp = from[o + 7]!;
+    this.revMatch = from[o + 8]! !== 0;
   }
 }

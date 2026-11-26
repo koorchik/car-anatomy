@@ -46,6 +46,8 @@ export type VehicleCommand =
   /** The driver's clutch pedal, 0 released … 1 floored; it acts only with the auto clutch off. */
   | { kind: 'vehicle'; action: 'clutch'; pedal: number }
   | { kind: 'vehicle'; action: 'autoClutch'; on: boolean }
+  /** Rev matching: the control blips the throttle for a gear that needs the engine faster (stage K3b). */
+  | { kind: 'vehicle'; action: 'revMatch'; on: boolean }
   | { kind: 'vehicle'; action: 'brake'; value: number }
   /** Grade along the road, rad, uphill positive, and each wheel's surface as a share of dry friction. */
   | { kind: 'vehicle'; action: 'road'; gradeRad: number; surfaceMu: [number, number, number, number] };
@@ -66,6 +68,8 @@ export interface VehicleReadings {
   clutch: number;
   clutchSlip: number;
   clutchC: number;
+  /** Heat the clutch has taken since the car was put on the crank, J, at the end. */
+  clutchJ: number;
   /** Mean torque the car took from the crank, N·m, and the mean drive torque on the driven hubs together, N·m. */
   crankNm: number;
   wheelNm: number;
@@ -87,6 +91,9 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
   crankSpeed = 0;
   private readonly damper: number;
   private readonly torque: LoadTorque = { torqueNm: 0, dTorque: 0 };
+  private readonly request: EngineRequest = {};
+  /** The driver's pedal on the last step: a blip never closes the throttle the driver holds open. */
+  private pedal = 0;
   private sum = { samples: 0, seconds: 0, crankNm: 0, wheelNm: 0 };
 
   constructor(spec: VehicleLoadSpec) {
@@ -118,6 +125,7 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
     const s = veh.solver;
     this.crankAngle += dt * input.omega;
     this.crankSpeed = input.omega;
+    this.pedal = input.pedal;
     s.anchorAngle[CRANK_SLOT] = this.crankAngle;
     s.anchorSpeed[CRANK_SLOT] = input.omega;
     this.control.step(s, veh.bus, input, dt);
@@ -135,8 +143,12 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
     return t;
   }
 
+  /** The rev matching's blip, when it asks for more than the driver's pedal (control/manual.ts). */
   engineRequest(): EngineRequest | null {
-    return null;
+    const blip = this.control.blip;
+    if (!(blip > this.pedal)) return null;
+    this.request.throttle = blip;
+    return this.request;
   }
 
   command(cmd: LoadCommand): void {
@@ -153,6 +165,10 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
         break;
       case 'autoClutch':
         c.autoClutch = cmd.on;
+        break;
+      case 'revMatch':
+        c.revMatch = cmd.on;
+        if (!cmd.on) c.blip = 0;
         break;
       case 'brake':
         c.brake = Math.min(1, Math.max(0, cmd.value));
@@ -185,6 +201,7 @@ export class VehicleLoad implements CrankLoad<VehicleReadings> {
       clutch: c.clamp,
       clutchSlip: s.slip[clutch]!,
       clutchC: s.temperature[clutch]!,
+      clutchJ: s.energy[clutch]!,
       crankNm: sum.crankNm / n,
       wheelNm: sum.wheelNm / n,
     };

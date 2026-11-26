@@ -40,6 +40,7 @@ export function manualSpec(cd: CarDrive, core: DrivetrainCore): ManualSpec {
     kind: 'manual',
     clutch: elementIndex(core, CLUTCH),
     input: memberIndex(core, cd.box.spec.input),
+    output: memberIndex(core, cd.box.spec.output),
     gears: cd.box.states
       .filter((s) => s.kind === 'gear' && s.ratio !== null)
       .map((s) => ({ name: s.name, element: elementIndex(core, s.closed[0]!), ratio: s.ratio! })),
