@@ -17,6 +17,7 @@ import { typicalChassis, type TypicalCar } from '../src/suspension/templates/typ
 import { G } from '../src/vehicle/constants.ts';
 import { CANONICAL_LAP_LEVEL, newLapSample, sampleLap, simulateLap, timeAtDistance, type LapTrace } from '../src/vehicle/lap.ts';
 import { roadLoadN } from '../src/vehicle/road-load.ts';
+import { buildTrack, TEST_CIRCUIT, type TrackDef } from '../src/vehicle/track.ts';
 import { lateralPeakN } from '../src/vehicle/tyre.ts';
 import { TYRE_IDS, TYRES, type TyreId } from '../src/vehicle/vehicle.ts';
 
@@ -129,6 +130,26 @@ describe('the lap with weight transfer', () => {
       most = Math.max(most, (fz[0]! + fz[1]!) / (gc.massKg * G * gc.frontShare));
     }
     expect(most).toBeGreaterThan(1.15);
+  });
+
+  it('keeps the tyres on the road over a crest, as the point lap does', () => {
+    // The test circuit's crest, sharpened to R_v 100 m: the car leaves the road above √(g·R) ≈ 31 m/s.
+    const radius = 100;
+    const def: TrackDef = {
+      ...TEST_CIRCUIT,
+      id: 'sharp-crest',
+      pieces: TEST_CIRCUIT.pieces.map((p) => (p.kind === 'straight' && p.crest ? { ...p, crest: { ...p.crest, radius } } : p)),
+    };
+    const track = buildTrack(def, 1);
+    const c = SUMP_CARS[0]!;
+    const pt = lapPowertrain(designOf(c), hpOf(c), c.vehicle);
+    const l2 = transferLap(track, c.vehicle, TYRES.street, pt, gripChassisFor(recordOf(c)));
+    let crest = 0;
+    for (let i = 0; i < track.n; i++) {
+      expect(G + l2.av[i]!, `sample ${i}`).toBeGreaterThan(0);
+      if (track.kappaV[i]! < 0) crest = Math.max(crest, l2.v[i]!);
+    }
+    expect(crest).toBeLessThanOrEqual(Math.sqrt(G * radius) + 1e-6);
   });
 
   it('is computed in a fraction of a second', () => {

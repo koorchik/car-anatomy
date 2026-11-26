@@ -298,7 +298,11 @@ export function simulateLap(track: Track, car: VehicleSpec, tyre: TyreSpec, pt: 
 function gripCornerSpeed(grip: GripModel, lim: GripLimit, kappa: number, normalAt: (v: number) => number, holdAt: (v: number) => number): number {
   const fits = (v: number): boolean => {
     const ay = v * v * kappa;
-    grip.limit(v, 0, ay, normalAt(v), lim);
+    const nv = normalAt(v);
+    // Over a crest the tyres must stay on the road, as in the point lap's limit (n = 0 there). Without this a speed
+    // past the limiter, where the engine gives nothing to hold, would pass on unloaded wheels and the car would fly.
+    if (!(nv > 0)) return false;
+    grip.limit(v, 0, ay, nv, lim);
     return Math.abs(ay) <= lim.ayMax && lim.driveMax >= holdAt(v);
   };
   if (fits(V_CAP)) return V_CAP;
