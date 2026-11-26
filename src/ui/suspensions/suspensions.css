@@ -414,3 +414,15 @@ body.susp-scene-tyre .susp-not-tyre {
 .susp-tyre-article h3:first-child {
   margin-top: 6px;
 }
+
+/* The four tyres fit one row of the 380 px panel when their buttons share it. */
+#tyre-choice {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
+#tyre-choice button {
+  flex: 1 1 auto;
+  padding-inline: 6px;
+  white-space: nowrap;
+}
