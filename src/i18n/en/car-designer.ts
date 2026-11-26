@@ -111,6 +111,7 @@ export const CAR_DESIGNER_EN: Record<string, string> = {
   '0–100 км/год': '0–100 km/h',
   '0–400 м': '0–400 m',
   "80–120 км/год на п'ятій": '80–120 km/h in fifth',
+  '80–120 км/год на {gear}-й передачі': '80–120 km/h in gear {gear}',
   'Максимальна швидкість': 'Top speed',
   'км/год': 'km/h',
   'Час кола': 'Lap time',

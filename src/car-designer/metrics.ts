@@ -29,7 +29,8 @@ export function carMetrics(p: CarPerformance): CarMetric[] {
     val('cgHeight', t('Висота центру мас'), p.cgHeightM * 1000, t('мм'), 0, 20, 'estimate'),
     val('zeroTo100', t('0–100 км/год'), p.zeroTo100S, s, 2, 0.5, 'quasi-static'),
     val('zeroTo400', t('0–400 м'), p.zeroTo400mS, s, 2, 0.5, 'quasi-static'),
-    val('eightyTo120', t('80–120 км/год на п\'ятій'), p.eightyTo120S, s, 2, 0.5, 'quasi-static'),
+    // Fifth gear, or the top one of a box with fewer.
+    val('eightyTo120', p.elasticGear === 5 ? t('80–120 км/год на п\'ятій') : t('80–120 км/год на {gear}-й передачі', { gear: String(p.elasticGear) }), p.eightyTo120S, s, 2, 0.5, 'quasi-static'),
     val('vmax', t('Максимальна швидкість'), p.vmaxKmh, t('км/год'), 0, 10, 'quasi-static'),
     val('lap', t('Час кола'), p.lapTimeS, s, 2, 1, 'lap'),
     val('fuel90', t('Витрата на 90 км/год'), p.fuel90, t('л/100 км'), 1, 0.5, 'estimate'),
