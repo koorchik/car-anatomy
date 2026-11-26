@@ -600,6 +600,8 @@ describe('the factory record and edits', () => {
 
   it('a renamed copy keeps its record; the first engineering change drops it', () => {
     expect(editGearboxDesign(e30, { name: 'mine' }).factory).toEqual({ gearbox: 'manual-rwd' });
+    // A panel echoing a value the design already has changes nothing.
+    expect(editGearboxDesign(e30, { clampN: e30.clampN, cones: [...e30.cones] }).factory).toEqual({ gearbox: 'manual-rwd' });
     expect(editGearboxDesign(e30, { clampN: e30.clampN + 100 }).factory).toBeNull();
     expect(editGearboxDesign(e30, { cones: e30.cones.map(() => 2) }).factory).toBeNull();
   });

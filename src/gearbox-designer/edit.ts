@@ -91,7 +91,9 @@ export function editGearboxDesign(d: GearboxDesign, patch: Partial<GearboxDesign
     if (!('mainModule' in patch)) next.mainModule = next.drive === 'rwd' ? 6.5 : 2.5;
   }
   if ((has('car') || has('drive')) && !('tyreSize' in patch)) next.tyreSize = drivenSize(next.car, next.drive);
-  // The first engineering change hands over from the factory record to the model's own figures.
-  if (Object.keys(patch).some((key) => !COSMETIC.has(key as keyof GearboxDesign))) next.factory = null;
+  // The first engineering change hands over from the factory record to the model's own figures. A patch that sets a
+  // value it already has (a panel echoing its own state) changes nothing and keeps the record.
+  const changed = (key: keyof GearboxDesign): boolean => JSON.stringify(patch[key]) !== JSON.stringify(d[key]);
+  if ((Object.keys(patch) as Array<keyof GearboxDesign>).some((key) => !COSMETIC.has(key) && changed(key))) next.factory = null;
   return resolveGearboxDesign(next);
 }
