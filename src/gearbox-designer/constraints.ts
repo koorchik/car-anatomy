@@ -149,8 +149,9 @@ export function paramRange(d: GearboxDesign, key: NumericKey): Range {
   }
 }
 
-const floorTo = (v: number, step: number): number => Math.floor(v / step + 1e-9) * step;
-const ceilTo = (v: number, step: number): number => Math.ceil(v / step - 1e-9) * step;
+// Rounded to ten places, so a module on the 0.05 mm grid reads 3.05 in a link, not 3.0500000000000003.
+const floorTo = (v: number, step: number): number => Number((Math.floor(v / step + 1e-9) * step).toFixed(10));
+const ceilTo = (v: number, step: number): number => Number((Math.ceil(v / step - 1e-9) * step).toFixed(10));
 
 /** Modules between the finest that keeps the big gears within MAX_TEETH and the coarsest that leaves the pinions room. */
 function moduleRange(min: number, max: number): Range {
@@ -284,7 +285,9 @@ export function resolveGearboxDesign(input: GearboxDesign): GearboxDesign {
   for (const key of ['lockDrive', 'lockCoast', 'preloadNm', 'tbr'] as const) d[key] = clamp(num(key), FIXED[key]!);
 
   const factory = isObject(raw.factory) && typeof raw.factory.gearbox === 'string' ? gearboxById(raw.factory.gearbox) : undefined;
-  d.factory = factory && factory.car ? { gearbox: factory.id } : null;
+  // A record whose published figures cannot sit beside this design (another type or number of gears) is dropped.
+  const fits = factory && factory.car && factory.layout.kind === d.type && factory.layout.desc.speeds.length === d.gears;
+  d.factory = fits ? { gearbox: factory.id } : null;
 
   return buildable(d);
 }

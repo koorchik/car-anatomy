@@ -320,6 +320,10 @@ describe('catalogue copies and presets', () => {
     expect(strip(gears(ours))).toEqual(strip(gears(theirs)));
     expect(resolveGearboxDesign(c.design)).toEqual(c.design);
     expect(c.design.factory).toEqual({ gearbox: id });
+    // A link that keeps the record but changes the type or the number of gears loses it: its figures would not match.
+    const other = c.design.type === 'layshaft' ? 'transaxle' : 'layshaft';
+    expect(resolveGearboxDesign({ ...c.design, type: other }).factory).toBeNull();
+    expect(resolveGearboxDesign({ ...c.design, gears: c.design.gears + 1 }).factory).toBeNull();
     const e = evaluateGearbox(c.design);
     e.gears.forEach((g, i) => expect(Math.abs(g.ratio - record.published.ratios[i]!)).toBeLessThan(0.0051));
     if (record.published.finalDrive) expect(e.finalDrive).toBeCloseTo(record.published.finalDrive, 2);
