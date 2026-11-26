@@ -48,8 +48,11 @@ export interface TransaxleSetup {
 
 export const factoryTransaxleSetup = (factory: TransaxleDesc): TransaxleSetup => ({ speeds: factory.speeds.length, teeth: {}, final: null });
 
+/** Teeth set for a speed the box has now: an added speed's teeth wait in the setup after the count drops again. */
+const editsShown = (setup: TransaxleSetup): number => Object.keys(setup.teeth).filter((i) => Number(i) < setup.speeds).length;
+
 export const isFactoryTransaxle = (factory: TransaxleDesc, setup: TransaxleSetup): boolean =>
-  setup.speeds === factory.speeds.length && Object.keys(setup.teeth).length === 0 && setup.final === null;
+  setup.speeds === factory.speeds.length && editsShown(setup) === 0 && setup.final === null;
 
 /** A speed's own ratio: output gear over input gear. */
 export const transaxleRatios = (desc: TransaxleDesc): number[] => desc.speeds.map((s) => s.teeth[1] / s.teeth[0]);
@@ -208,7 +211,7 @@ export function transaxleSetupDesc(factory: TransaxleDesc, setup: TransaxleSetup
   const counted = setup.speeds === own ? edited : withTransaxleSpeedCount(edited, setup.speeds);
   const speeds = counted.speeds.map((s, i) => (i >= own ? withTeeth(setup, s, i) : s));
   const final = setup.final ? { ...factory.final, teeth: [setup.final[0], setup.final[1]] as [number, number] } : factory.final;
-  return setup.final === null && setup.speeds === own && Object.keys(setup.teeth).length === 0 ? factory : { ...counted, speeds, final };
+  return isFactoryTransaxle(factory, setup) ? factory : { ...counted, speeds, final };
 }
 
 /** The setup with a speed's teeth set; the factory pair's teeth drop the entry, and no change gives the same setup back. */

@@ -142,6 +142,22 @@ describe.each(BOXES)('the settings of %s', (id) => {
     expect(model.setSpeeds(model.factory, factory.speeds.length)).toBe(model.factory);
   });
 
+  it('call the box factory again when only an added speed\'s teeth wait in the setup', () => {
+    const seven = model.setSpeeds(model.factory, 7);
+    const teeth = model.stepTeeth(model.desc(seven), 6, 0, 1) ?? model.stepTeeth(model.desc(seven), 6, 0, -1);
+    const edited = model.setTeeth(seven, 6, teeth!);
+    const back = model.setSpeeds(edited, factory.speeds.length);
+    if (factory.speeds.length === 7) {
+      // The 911's seventh is its own: the edit shows.
+      expect(model.isFactory(edited)).toBe(false);
+      return;
+    }
+    expect(model.isFactory(back)).toBe(true);
+    expect(model.desc(back)).toBe(factory);
+    // And the edit comes back with the seventh.
+    expect(model.desc(model.setSpeeds(back, 7)).speeds[6]!.teeth).toEqual(teeth);
+  });
+
   it('give «Заводські» back as the factory box after any change', () => {
     let setup = model.setSpeeds(model.factory, 7);
     setup = model.setTeeth(setup, 0, model.teethForRatio(factory, 0, 3)!);
