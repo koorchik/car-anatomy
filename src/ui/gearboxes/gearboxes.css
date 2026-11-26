@@ -266,6 +266,14 @@ body.gbx-car .gbx-pedal .latch {
   }
 }
 
+/* On a short or narrow stage the first-visit note about parts stands where the inset does, as on the dyno: the car keeps
+   the inset. */
+@media (max-height: 820px), (max-width: 860px) {
+  body.gbx-car .parts-callout {
+    display: none;
+  }
+}
+
 /* A line of the figures can be a hair wider than the panel. */
 .gbx-article {
   overflow-x: hidden;

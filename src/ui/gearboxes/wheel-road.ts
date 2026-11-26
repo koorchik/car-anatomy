@@ -67,7 +67,8 @@ export class WheelRoad {
     g.clearRect(0, 0, w, h);
 
     const roadY = h - 14;
-    const radius = Math.min(roadY - 6, w / 4);
+    // The wheel stands on the road, so its whole height (the diameter) has to fit above it.
+    const radius = Math.min((roadY - 4) / 2, w / 4);
     const cx = w / 2;
     const cy = roadY - radius;
     const perMetre = radius / Math.max(0.1, frame.wheelRadius[i]!);
