@@ -13,7 +13,6 @@ import { registerParts } from '../../scene/parts-registry.ts';
 import { PistonEngineModel } from '../../scene/piston-engine.ts';
 import { RotaryEngineModel } from '../../scene/rotary-engine.ts';
 import type { FreezeOptions } from '../../shell/freeze.ts';
-import { ownSlots, type OwnedSlots } from '../../shell/owned-slots.ts';
 import type { PanelSizes, Route, Section, SectionContext, TimeCapabilities, Viewport } from '../../shell/section.ts';
 import { readableDegreesPerSecond } from '../../shell/time.ts';
 import { shownAdvance, type SystemsFrame } from '../../systems/sim.ts';
@@ -32,6 +31,9 @@ import './engines.css';
 
 /** No cylinder resting, shared so that the frame does not make a new list each time. */
 const NONE_RESTING: number[] = [];
+
+/** The classes on <body> with which the engine pages and features style the shared skeleton. */
+const BODY_CLASSES = ['sump-mode', 'designer-mode', 'dyno-mode', 'forces-on'];
 
 export class EnginesSection implements Section {
   readonly id = 'engines' as const;
@@ -60,8 +62,8 @@ export class EnginesSection implements Section {
   private homedFor: FreezeOptions | null = null;
   /** Between leave() and the next enter(): another section is shown. */
   away = false;
-  /** What the section put into the skeleton, hidden while another section is shown. */
-  private owned!: OwnedSlots;
+  /** The body classes of BODY_CLASSES that were on when the section left, put back when it returns. */
+  private leftBodyClasses: string[] = [];
   /** The panel's heading and the document's title as this section left them. */
   private leftTitles = { panel: '', document: '' };
   /** Reused every frame: the systems step allocates nothing. */
@@ -77,9 +79,7 @@ export class EnginesSection implements Section {
   private textFailed = false;
 
   mount(ctx: SectionContext): void {
-    // The body classes its pages and features style the skeleton with: none of them may stay on under another section.
-    this.owned = ownSlots(ctx.slots, ['sump-mode', 'designer-mode', 'dyno-mode', 'forces-on']);
-    this.ctx = ctx = { ...ctx, slots: this.owned.slots };
+    this.ctx = ctx;
     // The engines' parts, with the dyno's and the valve gear's; the layers and the oil page add theirs as they load.
     registerParts(PARTS);
     const { slots } = ctx;
@@ -132,14 +132,19 @@ export class EnginesSection implements Section {
     // The engine and what hangs on it (the layers, the oil page's scene) wait off the stage for coming back.
     if (this.model) this.ctx.stage.release(this.model);
     this.leftTitles = { panel: this.ctx.slots.panelTitle.textContent ?? '', document: document.title };
-    this.owned.setAway(true);
+    // Its pages style the shared skeleton through these (sump-mode hides the dash and the view tools): none stays on
+    // under another section. The shell hides the section's own markup (section-dom.ts).
+    const body = document.body.classList;
+    this.leftBodyClasses = BODY_CLASSES.filter((c) => body.contains(c));
+    for (const c of this.leftBodyClasses) body.remove(c);
   }
 
   /** Back from another section, which may have changed the shared view and time while this one was away. */
   private resume(): void {
     this.away = false;
     const { view, time, slots } = this.ctx;
-    this.owned.setAway(false);
+    for (const c of this.leftBodyClasses) document.body.classList.add(c);
+    this.leftBodyClasses = [];
     slots.panelTitle.textContent = this.leftTitles.panel;
     document.title = this.leftTitles.document;
     // The other section may have had the Drive play its own engine (the gearbox page runs its car's).
