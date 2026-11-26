@@ -36,12 +36,14 @@ import {
 } from './geometry.ts';
 import { createMaterials, glowTexture, hotPipeMaterial, type EngineMaterials, type HotPipeUniforms } from './materials.ts';
 import { GAS, disposeTree, markDamaged, tag, type EngineModel, type FrameState, type ViewMode } from './model-types.ts';
-import { GAS_COLORS } from './palette.ts';
+import { GAS_COLORS, HIGHLIGHT } from './palette.ts';
 import type { PistonAnchors, SystemsLook, TurboAnchor } from './systems/anchors.ts';
 import { panDims, panShape, type PanShape } from '../systems/sump.ts';
 import { systemsOf } from '../engine/systems-spec.ts';
 import { liveScratch, liveTiming, type ValveState } from '../engine/valve-control.ts';
 import { VariableValveGear } from './variable-valves.ts';
+import { blockBackZMm } from '../vehicle/gearbox-place.ts';
+import { crankFrontZMm } from '../vehicle/packaging.ts';
 
 /** No cylinder resting. */
 const NONE_RESTING: readonly number[] = [];
@@ -155,6 +157,8 @@ export class PistonEngineModel implements EngineModel {
     filter: null as PistonAnchors['filter'],
     /** Intake manifold and charge pipes: glass while the air or fuel layer shows. */
     intake: [] as THREE.Mesh[],
+    /** Open ends of the down-pipes, where a car's exhaust line takes over (anchors). */
+    exhaustEnds: [] as THREE.Vector3[],
   };
   private systemsLook: SystemsLook = { intakeGlass: false, ownSparks: true };
 
@@ -783,6 +787,7 @@ export class PistonEngineModel implements EngineModel {
       const outPoints = [collector, collector.clone().add(new THREE.Vector3(0, -b * 0.15, -b * 0.55)), collector.clone().add(new THREE.Vector3(0, -b * 0.35, -b * 1.5))];
       const { material: downMaterial, uniforms: downUniforms } = hotPipeMaterial();
       const down = tag(new THREE.Mesh(tubeAlong(outPoints, pipeR * 1.5, 16, 10), downMaterial), 'header');
+      this.record.exhaustEnds.push(outPoints[2]!.clone());
       down.castShadow = true;
       this.mounted.add(down);
       this.peripheral.push(down);
@@ -828,6 +833,7 @@ export class PistonEngineModel implements EngineModel {
       const downPoints = [out, out.clone().add(new THREE.Vector3(0, -b * 0.1, -b * 0.3)), out.clone().add(new THREE.Vector3(0, -b * 0.6, -b * 1.1))];
       const { material: downMaterial, uniforms: downUniforms } = hotPipeMaterial();
       const down = tag(new THREE.Mesh(tubeAlong(downPoints, size * 0.17, 16, 12), downMaterial), 'header');
+      this.record.exhaustEnds.push(downPoints[2]!.clone());
       down.castShadow = true;
       this.mounted.add(down);
       this.peripheral.push(down);
@@ -1005,6 +1011,56 @@ export class PistonEngineModel implements EngineModel {
       filter: r.filter,
       pan: panDims(e),
     };
+  }
+
+  /**
+   * Named points in the group's frame, for joining the engine to other models (model-types.ts): `crankFront`, the crank
+   * pulley's outer face, where a car record's packaging.crankFront sits (packaging.ts); `flywheel`, the block's back
+   * face on the crank axis, where the flywheel turns and a gearbox's bellhousing bolts on (gearbox-place.ts); and
+   * `exhaust`, `exhaust.1`, … the open ends of the down-pipes, where a car's exhaust line takes over.
+   */
+  anchors(): Record<string, THREE.Vector3> {
+    const at = this.mounted.position;
+    const onCrank = (zMm: number): THREE.Vector3 => new THREE.Vector3(0, 0, zMm * MM).add(at);
+    const out: Record<string, THREE.Vector3> = { crankFront: onCrank(crankFrontZMm(this.engine)), flywheel: onCrank(blockBackZMm(this.engine)) };
+    this.record.exhaustEnds.forEach((end, i) => (out[i === 0 ? 'exhaust' : `exhaust.${i}`] = end.clone().add(at)));
+    return out;
+  }
+
+  private readonly ownOrders = new Map<THREE.Object3D, number>();
+  private highlightUndo: Array<() => void> = [];
+
+  /** Tints the whole engine for the car overview's hover and click (model-types.ts); the engine page never calls it. */
+  setHighlight(on: boolean): void {
+    for (const undo of this.highlightUndo) undo();
+    this.highlightUndo = [];
+    if (!on) return;
+    const tint = new THREE.Color(HIGHLIGHT.engine).multiplyScalar(0.22);
+    const seen = new Set<THREE.Material>();
+    this.mounted.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
+        if (seen.has(mat) || !(mat instanceof THREE.MeshStandardMaterial)) continue;
+        seen.add(mat);
+        const before = mat.emissive.clone();
+        const intensity = mat.emissiveIntensity;
+        mat.emissive.add(tint);
+        mat.emissiveIntensity = 1;
+        this.highlightUndo.push(() => {
+          mat.emissive.copy(before);
+          mat.emissiveIntensity = intensity;
+        });
+      }
+    });
+  }
+
+  /**
+   * Adds `base` to every renderOrder the model set while building (2–7), so that in a car its glass sorts in a band of
+   * its own (the whole-car plan, transparency). The engine page leaves the base at 0.
+   */
+  setRenderBand(base: number): void {
+    if (this.ownOrders.size === 0) this.mounted.traverse((o) => this.ownOrders.set(o, o.renderOrder));
+    for (const [o, order] of this.ownOrders) o.renderOrder = order + base;
   }
 
   /** The pan as built, for the oil-on-track page. */

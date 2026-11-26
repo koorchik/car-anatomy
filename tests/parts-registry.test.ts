@@ -7,7 +7,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GEARBOX_PARTS } from '../src/scene/gearbox/parts.ts';
-import { BODY_PARTS } from '../src/scene/car/parts.ts';
+import { BODY_PARTS, CAR_PARTS } from '../src/scene/car/parts.ts';
 import { SUMP_PARTS } from '../src/scene/lubrication/parts.ts';
 import { PARTS } from '../src/scene/parts-info.ts';
 import { partInfo, registerParts, type PartDictionary } from '../src/scene/parts-registry.ts';
@@ -20,7 +20,7 @@ const SECTIONS: Array<{ name: string; prefix: string | null; dictionaries: PartD
   { name: 'engines', prefix: null, dictionaries: [PARTS, SYSTEM_PARTS, SUMP_PARTS] },
   { name: 'gearboxes', prefix: 'gbx-', dictionaries: [GEARBOX_PARTS] },
   { name: 'suspensions', prefix: 'susp.', dictionaries: [SUSPENSION_REGISTERED] },
-  { name: 'car', prefix: 'car.', dictionaries: [BODY_PARTS] },
+  { name: 'car', prefix: 'car.', dictionaries: [BODY_PARTS, CAR_PARTS] },
 ];
 const PREFIXES = SECTIONS.flatMap((s) => (s.prefix ? [s.prefix] : []));
 
