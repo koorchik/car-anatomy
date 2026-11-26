@@ -68,7 +68,11 @@ export class ShellMenu {
     if (back !== null) el.back.href = back;
     else if (on) el.back.href = on.href;
     el.sheetBody.innerHTML = [
-      back === null ? '' : `<a class="sheet-back" href="${esc(back)}">${t('← До авто')}</a>`,
+      back !== null
+        ? `<a class="sheet-back" href="${esc(back)}">${t('← До авто')}</a>`
+        : on
+          ? `<a class="sheet-back" href="${esc(on.href)}">${esc(t('На авто: {car} · ціле авто', { car: on.name }))}</a>`
+          : '',
       ...items.map((item) => `<div class="sheet-section${item.current ? ' current' : ''}">${itemHtml(item)}${item.tabs.length > 1 ? `<div class="sheet-tabs">${tabsHtml(item)}</div>` : ''}</div>`),
     ].join('');
   }
