@@ -1,4 +1,4 @@
-// The full dynamic run of a design (gearbox plan, stage 10: the button «Проїхати»): the whole core on the longitudinal
+// The full dynamic run of a design (gearbox plan, stage 10: the button "Drive"): the whole core on the longitudinal
 // chassis, driven by the scripted driver of runs.ts, on the car the quasi-static model drives (vehicle.ts). The page
 // shows its speed over time and plays its engine speed back through the sound, and the plan asks that its 0–100 km/h
 // lands within 3 % of the panel's quasi-static figure (tests/gearbox-designer-run).

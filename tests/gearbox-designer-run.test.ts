@@ -1,4 +1,4 @@
-// The gearbox designer's «Проїхати» (gearbox plan, stage 10): the whole core drives the design, and its standing start
+// The gearbox designer's "Drive" (gearbox plan, stage 10): the whole core drives the design, and its standing start
 // lands within 3 % of the panel's quasi-static figure. The rear-engined 911 is left out: in first gear it is held by
 // its tyres, and the scripted driver of runs.ts lets the rear wheels hop there (open issue of stage K10).
 import { describe, expect, it } from 'vitest';

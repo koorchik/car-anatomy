@@ -112,4 +112,8 @@ export const GEARBOX_UI_EN: Record<string, string> = {
   'Колесо й дорога': 'Wheel and road',
   'колесо {wheel} · дорога {road} км/год ·': 'wheel {wheel} · road {road} km/h ·',
   'ковзання {slip} %': 'slip {slip}%',
+
+  // The gearbox designer's place in the section (stage K10).
+  'Результати': 'Results',
+  'Відкрити в конструкторі': 'Open in the designer',
 };
